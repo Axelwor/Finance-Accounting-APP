@@ -1,20 +1,13 @@
 /**
- * Lapisan API klien (M1, mock).
+ * Lapisan API klien (M1, hybrid).
  *
- * Seluruh akses data di aplikasi melewati file ini. Saat ini semua fungsi
- * berjalan di sisi klien (localStorage + delay buatan) sehingga UI dapat
- * dibangun dan diuji tanpa backend. Nanti, fungsi-fungsi di bawah cukup
- * diarahkan ke endpoint REST yang sesuai (lihat ARCHITECTURE.md, API surface):
+ * Auth (register/login/logout) sudah terhubung ke backend:
+ *   POST /api/v1/auth/register
+ *   POST /api/v1/auth/login
+ *   POST /api/v1/auth/logout
  *
- *   api.register          -> POST /api/v1/auth/register
- *   api.login             -> POST /api/v1/auth/login
- *   api.logout            -> POST /api/v1/auth/logout
- *   api.getDashboard      -> GET  /api/v1/tenants/:id/dashboard
- *   api.createTransaction -> POST /api/v1/transactions
- *   api.listTransactions  -> GET  /api/v1/transactions
- *   api.listCategories    -> GET  /api/v1/categories
- *   api.listAccounts      -> GET  /api/v1/accounts
- *   api.completeOnboarding-> POST /api/v1/tenants (setup usaha + periode + saldo awal)
+ * Dashboard/transaksi/kategori/onboarding masih memakai data lokal (mock)
+ * sampai endpoint transaksi & onboarding backend tersedia.
  */
 
 import type {
@@ -31,10 +24,10 @@ import type {
   Usaha,
 } from "./types";
 
-/** Simulasikan latensi jaringan agar state loading dapat terlihat di UI. */
-const LATENCY_MS = 450;
-
+const LATENCY_MS = 200;
 const STORAGE_KEY = "pembukuan-mudah.m1.v1";
+const TOKEN_KEY = "pembukuan-mudah.tokens";
+const API_BASE = "/api/v1";
 
 const MOCK_CATEGORIES: Category[] = [
   { id: "cat-penjualan", nama: "Penjualan", jenis: "uang-masuk" },
@@ -58,6 +51,12 @@ interface PersistedState {
   user: { id: string; email: string; namaUsaha: string } | null;
   usaha: Usaha | null;
   transactions: Transaction[];
+}
+
+interface AuthResponse {
+  access_token: string;
+  refresh_token?: string;
+  family_id?: string;
 }
 
 const nowIso = () => new Date().toISOString();
@@ -103,96 +102,105 @@ function fmtRupiah(n: number): string {
   }).format(n);
 }
 
-/** Transaksi contoh agar dashboard tidak kosong saat pertama kali dibuka. */
-function seedTransactions(usahaNama: string): Transaction[] {
-  const t = (tanggal: string, nominal: number, keterangan: string, kategoriId: string): Transaction => {
-    const kategori = MOCK_CATEGORIES.find((c) => c.id === kategoriId);
-    const jenis = kategori?.jenis ?? "uang-masuk";
-    return {
-      id: fakeId("trx"),
-      jenis,
-      nominal,
-      tanggal,
-      keterangan,
-      kategoriId,
-      kategoriNama: kategori?.nama,
-      dari: jenis === "uang-keluar" ? "Kas" : undefined,
-      ke: jenis === "uang-masuk" ? "Kas" : undefined,
-      createdAt: `${tanggal}T09:00:00.000Z`,
-    };
-  };
+/* ------------------------------------------------------------------ */
+/* HTTP helper untuk backend API                                      */
+/* ------------------------------------------------------------------ */
 
-  const d = new Date();
-  const d30 = new Date(d.getTime() - 30 * 86400000);
-  const iso = (x: Date) => {
-    const m = String(x.getMonth() + 1).padStart(2, "0");
-    const day = String(x.getDate()).padStart(2, "0");
-    return `${x.getFullYear()}-${m}-${day}`;
-  };
+async function http<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
+    ...options,
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const code = (body as ApiError)?.code ?? "REQUEST_FAILED";
+    const message = (body as ApiError)?.message ?? "Terjadi kesalahan. Coba lagi.";
+    throw makeError(code, message);
+  }
+  return body as T;
+}
 
-  const cat = (prefix: string) =>
-    MOCK_CATEGORIES.find((c) => c.id.startsWith(prefix))?.id ?? "";
+function storeSession(tokens: AuthResponse): void {
+  localStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
+}
 
-  return [
-    t(iso(new Date(d.getTime() - 1 * 86400000)), 850000, `Penjualan harian ${usahaNama}`, cat("cat-penjualan")),
-    t(iso(new Date(d.getTime() - 2 * 86400000)), 320000, "Belanja bahan baku mingguan", cat("cat-bahan")),
-    t(iso(new Date(d.getTime() - 3 * 86400000)), 1500000, "Setoran modal pemilik", cat("cat-modal")),
-    t(iso(new Date(d.getTime() - 4 * 86400000)), 275000, "Tagihan listrik dan air", cat("cat-listrik")),
-    t(iso(new Date(d.getTime() - 5 * 86400000)), 1250000, "Penjualan pesanan pelanggan", cat("cat-penjualan")),
-    t(iso(new Date(d.getTime() - 6 * 86400000)), 600000, "Sewa tempat usaha", cat("cat-sewa")),
-    t(iso(new Date(d.getTime() - 7 * 86400000)), 950000, "Penjualan harian", cat("cat-penjualan")),
-    t(iso(new Date(d.getTime() - 9 * 86400000)), 1100000, "Penjualan harian", cat("cat-penjualan")),
-    t(iso(new Date(d.getTime() - 11 * 86400000)), 250000, "Gaji karyawan", cat("cat-gaji")),
-    t(iso(new Date(d.getTime() - 14 * 86400000)), 450000, "Belanja barang dagang", cat("cat-belanja")),
-  ].map((x) => ({ ...x, createdAt: `${x.tanggal}T09:00:00.000Z` }));
+function getAccessToken(): string | null {
+  try {
+    const raw = localStorage.getItem(TOKEN_KEY);
+    if (!raw) return null;
+    return (JSON.parse(raw) as AuthResponse).access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function readRefreshToken(): string | null {
+  try {
+    const raw = localStorage.getItem(TOKEN_KEY);
+    if (!raw) return null;
+    return (JSON.parse(raw) as AuthResponse).refresh_token ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /* ------------------------------------------------------------------ */
-/* Implementasi mock API (ganti dengan fetch nyata saat backend siap).  */
+/* Implementasi API (auth nyata; lainnya mock)                        */
 /* ------------------------------------------------------------------ */
 
 export const api = {
-  /** Mendaftarkan pengguna baru dan langsung membuka sesi. */
+  /** Mendaftarkan pengguna baru di backend dan membuka sesi lokal. */
   async register(input: RegisterInput): Promise<{ user: { id: string; email: string; namaUsaha: string } }> {
     const email = input.email.trim().toLowerCase();
     if (!email || !input.password || !input.namaUsaha.trim()) {
       throw makeError("VALIDATION_ERROR", "Lengkapi alamat email, kata sandi, dan nama usaha.");
     }
-    if (input.password.length < 6) {
-      throw makeError("VALIDATION_ERROR", "Kata sandi minimal 6 karakter.");
+    if (input.password.length < 8) {
+      throw makeError("VALIDATION_ERROR", "Kata sandi minimal 8 karakter.");
     }
-    const state = loadState();
-    if (state.user) {
-      throw makeError("ALREADY_LOGGED_IN", "Anda sudah masuk. Keluar dulu untuk mendaftar akun baru.");
-    }
-    const user = { id: fakeId("usr"), email, namaUsaha: input.namaUsaha.trim() };
-    saveState({ ...state, user });
+    const response = await http<AuthResponse>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password: input.password, full_name: input.namaUsaha.trim() }),
+    });
+    storeSession(response);
+    const user = { id: "usr-" + (response.family_id ?? Date.now()), email, namaUsaha: input.namaUsaha.trim() };
+    saveState({ ...loadState(), user });
     return delay({ user });
   },
 
-  /** Membuka sesi. Mock: email dan kata sandi apa pun diterima (selama terisi). */
+  /** Membuka sesi via backend; menyimpan access + refresh token. */
   async login(input: LoginInput): Promise<{ user: { id: string; email: string; namaUsaha: string } }> {
     const email = input.email.trim().toLowerCase();
     if (!email || !input.password) {
       throw makeError("VALIDATION_ERROR", "Masukkan alamat email dan kata sandi.");
     }
-    const state = loadState();
-    if (state.user) {
-      throw makeError("ALREADY_LOGGED_IN", "Anda sudah masuk. Keluar dulu untuk masuk sebagai akun lain.");
-    }
-    const user = { id: fakeId("usr"), email, namaUsaha: email.split("@")[0] || "Usaha saya" };
-    saveState({ ...state, user });
+    const response = await http<AuthResponse>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password: input.password }),
+    });
+    storeSession(response);
+    const user = { id: "usr-" + (response.family_id ?? Date.now()), email, namaUsaha: email.split("@")[0] || "Usaha saya" };
+    saveState({ ...loadState(), user });
     return delay({ user });
   },
 
-  /** Menutup sesi (data lokal tetap tersimpan). */
+  /** Menutup sesi: revoke refresh token di backend + hapus data lokal. */
   async logout(): Promise<void> {
+    const refreshToken = readRefreshToken();
+    if (refreshToken) {
+      await fetch(`${API_BASE}/auth/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      }).catch(() => undefined);
+      localStorage.removeItem(TOKEN_KEY);
+    }
     const state = loadState();
     saveState({ ...state, user: null });
     return delay(undefined);
   },
 
-  /** Ringkasan dashboard: kartu + transaksi terbaru. */
+  /** Ringkasan dashboard dari data lokal (mock sampai endpoint tersedia). */
   async getDashboard(): Promise<DashboardSummary> {
     const state = loadState();
     const sorted = [...state.transactions].sort((a, b) => b.tanggal.localeCompare(a.tanggal));
@@ -205,7 +213,6 @@ export const api = {
             : acc,
       0,
     );
-
     const now = new Date();
     const isBulanIni = (tanggal: string) => {
       const [y, m] = tanggal.split("-").map(Number);
@@ -214,7 +221,6 @@ export const api = {
     const untungRugiBulanIni = sorted
       .filter((trx) => isBulanIni(trx.tanggal) && trx.jenis !== "pindah-uang")
       .reduce((acc, trx) => acc + (trx.jenis === "uang-masuk" ? trx.nominal : -trx.nominal), 0);
-
     return delay({
       saldoKasBank,
       untungRugiBulanIni,
@@ -224,7 +230,7 @@ export const api = {
     });
   },
 
-  /** Menyimpan catatan baru dan mengembalikan daftar transaksi terbaru. */
+  /** Menyimpan catatan baru di lokal (mock sampai backend transaksi tersedia). */
   async createTransaction(input: TransactionInput): Promise<{ transaksi: Transaction; transaksiTerbaru: Transaction[] }> {
     if (!input.nominal || input.nominal <= 0) {
       throw makeError("VALIDATION_ERROR", "Nominal harus lebih besar dari nol.");
@@ -257,17 +263,17 @@ export const api = {
     return delay({ transaksi, transaksiTerbaru: sorted.slice(0, 8) });
   },
 
-  /** Daftar kategori untuk form Uang Masuk / Uang Keluar. */
+  /** Daftar kategori (mock sampai backend kategori terhubung UI). */
   async listCategories(): Promise<Category[]> {
     return delay(MOCK_CATEGORIES);
   },
 
-  /** Daftar rekening (Kas & Bank) untuk form Pindah Uang. */
+  /** Daftar rekening (mock). */
   async listAccounts(): Promise<AccountItem[]> {
     return delay(MOCK_ACCOUNTS);
   },
 
-  /** Menyelesaikan onboarding: data usaha + periode buku + saldo awal ringkas. */
+  /** Menyelesaikan onboarding: data usaha + periode (mock, backend belum lengkap). */
   async completeOnboarding(input: OnboardingInput): Promise<{ usaha: Usaha }> {
     if (!input.usaha.nama.trim() || !input.usaha.jenisUsaha.trim()) {
       throw makeError("VALIDATION_ERROR", "Nama usaha dan jenis usaha wajib diisi.");
@@ -284,13 +290,13 @@ export const api = {
     return delay({ usaha });
   },
 
-  /**
-   * Membaca status setup dari penyimpanan lokal.
-   * (Pembantu untuk router; bukan bagian dari kontrak backend.)
-   */
+  /** Membaca status setup dari penyimpanan lokal. */
   getLocalState(): PersistedState {
     return loadState();
   },
+
+  /** Token akses untuk panggilan API terproteksi (dipakai nanti). */
+  getAccessToken,
 };
 
 export const mockHelpers = {
