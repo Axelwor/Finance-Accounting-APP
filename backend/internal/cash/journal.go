@@ -147,6 +147,7 @@ func (service *Service) post(writer http.ResponseWriter, request *http.Request, 
 		return nil
 	})
 	if err != nil {
+		fmt.Printf("cash post error: %v\n", err)
 		status, code, message := errorFor(err)
 		writeError(writer, status, code, message)
 		return
