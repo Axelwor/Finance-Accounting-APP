@@ -1,0 +1,14 @@
+DROP TABLE IF EXISTS ledger_chain_heads;
+DROP TABLE IF EXISTS outbox_events;
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS journal_lines;
+DROP TABLE IF EXISTS journal_entries;
+DROP TABLE IF EXISTS categories;
+DROP TABLE IF EXISTS report_mappings;
+DROP TABLE IF EXISTS accounts;
+DROP TABLE IF EXISTS accounting_periods;
+DROP TABLE IF EXISTS document_numbering;
+DROP TABLE IF EXISTS user_tenants;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS tenants;
+DROP EXTENSION IF EXISTS btree_gist;

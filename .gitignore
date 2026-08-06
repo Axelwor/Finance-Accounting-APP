@@ -1,0 +1,21 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Go
+backend/bin/
+backend/coverage.out
+
+# Node
+web/node_modules/
+web/dist/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Local database
+.pgdata/
+web/tsconfig.tsbuildinfo
