@@ -30,3 +30,4 @@
 - M5: added the M1 frontend (login/register, onboarding wizard, dashboard, transaction forms) with a typed API stub, responsive layout, and accessibility states.
 - Swapped tenant sourcing from the temporary `X-Tenant-ID` header to the JWT auth middleware context across cash and COA endpoints; all tenant-scoped routes now sit behind auth middleware.
 - Added balance-sheet and cash-flow report endpoints (trial balance and profit/loss already present).
+- Added refresh-token rotation and revocation: login returns access+refresh, refresh rotates within the same family and revokes the old token, logout revokes; new `user_tokens` migration (000002) applied and verified on the VPS test database with integration invariants still passing.
