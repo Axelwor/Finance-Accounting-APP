@@ -32,3 +32,4 @@
 - Added balance-sheet and cash-flow report endpoints (trial balance and profit/loss already present).
 - Added refresh-token rotation and revocation: login returns access+refresh, refresh rotates within the same family and revokes the old token, logout revokes; new `user_tokens` migration (000002) applied and verified on the VPS test database with integration invariants still passing.
 - Deployed to the VPS with Docker: `api` (Go), `web` (nginx static), and `postgres` (16) containers; application is live at `http://119.28.116.123` with `/healthz`, register, and login verified externally. Production secrets live in `.env.prod` on the VPS and are not committed.
+- Frontend register/login/logout now call the backend API (`POST /api/v1/auth/*`); dashboard and transactions still use local mock data until the corresponding backend endpoints are wired into the UI.
