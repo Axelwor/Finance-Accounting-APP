@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -40,6 +41,7 @@ type postingResult struct {
 // together on any failure.
 func (service *Service) post(writer http.ResponseWriter, request *http.Request, tenant int64, idem string, build postingFunc, reversalOfID int64) {
 	var result postingResult
+	userID, _ := auth.UserIDFromContext(request.Context())
 	err := db.WithTransaction(request.Context(), service.pool, func(tx pgx.Tx) error {
 		// Scope RLS to this tenant for the whole transaction (temporary until
 		// JWT auth carries the tenant; matches the coa handler pattern).
@@ -119,7 +121,7 @@ func (service *Service) post(writer http.ResponseWriter, request *http.Request, 
 			IdempotencyKey: uuid(idem),
 			Hash:           journal.Hash,
 			PrevHash:       journal.PreviousHash,
-			CreatedBy:      pgtype.Int8{},
+			CreatedBy:      int8(userID),
 		})
 		if err != nil {
 			return err
@@ -159,7 +161,7 @@ func (service *Service) post(writer http.ResponseWriter, request *http.Request, 
 				UPDATE journal_entries
 				SET status = 'VOID', void_reason = 'reversed', voided_by = $1, voided_at = now()
 				WHERE tenant_id = $2 AND id = $3
-			`, entry.CreatedBy, tenant, reversalOfID); err != nil {
+			`, userID, tenant, reversalOfID); err != nil {
 				return err
 			}
 		}
@@ -336,6 +338,11 @@ func parseDate(raw string) pgtype.Date {
 // text converts a string into a pgtype.Text (NULL for empty).
 func text(value string) pgtype.Text {
 	return pgtype.Text{String: value, Valid: value != ""}
+}
+
+// int8 converts an int64 into a pgtype.Int8 (NULL for zero).
+func int8(value int64) pgtype.Int8 {
+	return pgtype.Int8{Int64: value, Valid: value != 0}
 }
 
 // uuid converts a validated UUID string into a pgtype.UUID.
