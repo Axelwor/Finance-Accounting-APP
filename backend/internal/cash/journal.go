@@ -48,10 +48,6 @@ func (service *Service) post(writer http.ResponseWriter, request *http.Request, 
 		if _, err := tx.Exec(request.Context(), `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tenant, 10)); err != nil {
 			return err
 		}
-		var actual string
-		if err := tx.QueryRow(request.Context(), `SELECT COALESCE(current_setting('app.tenant_id', true), '')`).Scan(&actual); err == nil {
-			fmt.Printf("cash post: tenant=%d current_setting=%q\n", tenant, actual)
-		}
 		// Idempotent replay: an identical retry returns the stored journal
 		// instead of creating a second one.
 		if existing, err := db.New(tx).GetJournalByIdempotencyKey(request.Context(), db.GetJournalByIdempotencyKeyParams{
@@ -183,7 +179,6 @@ func (service *Service) post(writer http.ResponseWriter, request *http.Request, 
 		return nil
 	})
 	if err != nil {
-		fmt.Printf("cash post error: %v\n", err)
 		status, code, message := errorFor(err)
 		writeError(writer, status, code, message)
 		return
@@ -213,7 +208,6 @@ func loadAccount(ctx context.Context, tx pgx.Tx, tenantID, accountID int64) (db.
 		&row.ParentID, &row.IsGroup, &row.IsActive, &row.ValidFrom, &row.ValidTo,
 	)
 	if err != nil {
-		fmt.Printf("loadAccount: tenant=%d account=%d err=%v\n", tenantID, accountID, err)
 		return db.Account{}, err
 	}
 	return row, nil
