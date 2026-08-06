@@ -35,3 +35,5 @@
 - Frontend register/login/logout now call the backend API (`POST /api/v1/auth/*`); dashboard and transactions still use local mock data until the corresponding backend endpoints are wired into the UI.
 - Added Caddy reverse proxy (HTTP on :80, HTTPS-ready with domain); removed the `postgres-test` dev container from the VPS.
 - Registration with `tenant_name` now creates the tenant and owner membership in one transaction; JWT carries `tenant_id`; login resolves the user's default tenant. Frontend accounts, categories, transactions, and reports call the real API with Bearer token and idempotency keys, with mock fallback on network failure.
+- New tenant registrations now receive a seeded default chart of accounts (17 core accounts) and 9 UI categories inside the same transaction.
+- Production domains configured in Caddyfile: `tikuma.net`, `www.tikuma.net`, `accounting.tikuma.net`; automatic Let's Encrypt certificates verified for the first two (the `accounting` subdomain needs a DNS A record).
