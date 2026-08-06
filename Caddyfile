@@ -1,27 +1,8 @@
-# Caddyfile untuk Finance Accounting App
+# Caddyfile untuk Finance Accounting App (akses via IP / HTTP)
 #
-# Jika APP_DOMAIN diisi (mis. akuntansi.example.com), Caddy otomatis
-# mengurus sertifikat HTTPS (Let's Encrypt) dan redirect HTTP→HTTPS.
-#
-# Jika APP_DOMAIN kosong (akses via IP), Caddy melayani HTTP di :80.
-# Untuk IP tanpa domain, Let's Encrypt tidak dapat diterbitkan; gunakan
-# port 80 langsung atau pasang domain + DNS A record.
-
-{$APP_DOMAIN} {
-	encode gzip
-
-	handle /api/* {
-		reverse_proxy api:8080
-	}
-
-	handle /healthz {
-		reverse_proxy api:8080/healthz
-	}
-
-	handle {
-		reverse_proxy web:80
-	}
-}
+# Untuk HTTPS dengan Let's Encrypt, ganti :80 dengan domain Anda
+# (mis. akuntansi.example.com) dan set DNS A record ke IP VPS.
+# Caddy otomatis menerbitkan dan memperbarui sertifikat.
 
 :80 {
 	encode gzip
