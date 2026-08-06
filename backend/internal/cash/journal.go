@@ -181,6 +181,7 @@ func loadAccount(ctx context.Context, tx pgx.Tx, tenantID, accountID int64) (db.
 		&row.ParentID, &row.IsGroup, &row.IsActive, &row.ValidFrom, &row.ValidTo,
 	)
 	if err != nil {
+		fmt.Printf("loadAccount: tenant=%d account=%d err=%v\n", tenantID, accountID, err)
 		return db.Account{}, err
 	}
 	return row, nil
