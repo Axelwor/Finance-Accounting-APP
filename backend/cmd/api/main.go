@@ -40,6 +40,7 @@ func main() {
 		router.Post("/auth/register", authService.Register)
 		router.Post("/auth/login", authService.Login)
 		router.Post("/auth/refresh", authService.Refresh)
+		router.Post("/auth/logout", authService.Logout)
 		router.Post("/tenants", tenantHandler.Create)
 
 		router.Group(func(router chi.Router) {

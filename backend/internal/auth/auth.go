@@ -2,6 +2,10 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -86,16 +90,25 @@ func (service *Service) Login(writer http.ResponseWriter, request *http.Request)
 		writeError(writer, http.StatusUnauthorized, "INVALID_CREDENTIALS", "email or password is incorrect")
 		return
 	}
-	token, err := service.issueToken(userID, 0, 15*time.Minute)
+	accessToken, err := service.issueToken(userID, 0, 15*time.Minute)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue token")
 		return
 	}
-	writeJSON(writer, http.StatusOK, map[string]any{"access_token": token})
+	refreshToken, familyID, err := service.issueRefreshToken(request.Context(), userID, request.RemoteAddr, request.UserAgent())
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue refresh token")
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+		"family_id":     familyID,
+	})
 }
 
 type RefreshRequest struct {
-	AccessToken string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 func (service *Service) Refresh(writer http.ResponseWriter, request *http.Request) {
@@ -104,17 +117,80 @@ func (service *Service) Refresh(writer http.ResponseWriter, request *http.Reques
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	claims, err := service.parseToken(req.AccessToken)
-	if err != nil {
-		writeError(writer, http.StatusUnauthorized, "INVALID_TOKEN", "token is invalid or expired")
+	hash := hashToken(req.RefreshToken)
+	var userID int64
+	var tokenID int64
+	var familyID string
+	var expiresAt time.Time
+	err := service.pool.QueryRow(request.Context(), `
+		SELECT id, user_id, family_id, expires_at
+		FROM user_tokens
+		WHERE token_hash = $1 AND token_type = 'refresh' AND revoked_at IS NULL
+	`, hash).Scan(&tokenID, &userID, &familyID, &expiresAt)
+	if err != nil || time.Now().After(expiresAt) {
+		writeError(writer, http.StatusUnauthorized, "INVALID_REFRESH", "refresh token is invalid or expired")
 		return
 	}
-	token, err := service.issueToken(claims.UserID, claims.TenantID, 15*time.Minute)
+	// Rotate: revoke the old token and store a new one in the same family.
+	newRefresh, newFamily, err := service.rotateRefreshToken(request.Context(), tokenID, userID, familyID, request.RemoteAddr, request.UserAgent())
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not rotate refresh token")
+		return
+	}
+	accessToken, err := service.issueToken(userID, 0, 15*time.Minute)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue token")
 		return
 	}
-	writeJSON(writer, http.StatusOK, map[string]any{"access_token": token})
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"access_token":  accessToken,
+		"refresh_token": newRefresh,
+		"family_id":     newFamily,
+	})
+}
+
+// Logout revokes the presented refresh token.
+func (service *Service) Logout(writer http.ResponseWriter, request *http.Request) {
+	var req RefreshRequest
+	if err := decodeJSON(request, &req); err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	if _, err := service.pool.Exec(request.Context(),
+		`UPDATE user_tokens SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL`,
+		hashToken(req.RefreshToken)); err != nil {
+		writeError(writer, http.StatusInternalServerError, "LOGOUT_FAILED", "could not revoke token")
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (service *Service) issueRefreshToken(ctx context.Context, userID int64, ip, agent string) (token, family string, err error) {
+	token = randomToken()
+	family = randomUUID()
+	if _, err = service.pool.Exec(ctx, `
+		INSERT INTO user_tokens (user_id, token_type, token_hash, family_id, expires_at, ip_address, user_agent)
+		VALUES ($1, 'refresh', $2, $3, now() + interval '30 days', $4, $5)
+	`, userID, hashToken(token), family, ip, agent); err != nil {
+		return "", "", err
+	}
+	return token, family, nil
+}
+
+func (service *Service) rotateRefreshToken(ctx context.Context, oldID, userID int64, family, ip, agent string) (token, newFamily string, err error) {
+	token = randomToken()
+	newFamily = family
+	if _, err = service.pool.Exec(ctx, `
+		INSERT INTO user_tokens (user_id, token_type, token_hash, family_id, expires_at, replaced_by, ip_address, user_agent)
+		VALUES ($1, 'refresh', $2, $3, now() + interval '30 days', $4, $5, $6)
+	`, userID, hashToken(token), family, oldID, ip, agent); err != nil {
+		return "", "", err
+	}
+	if _, err = service.pool.Exec(ctx,
+		`UPDATE user_tokens SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL`, oldID); err != nil {
+		return "", "", err
+	}
+	return token, newFamily, nil
 }
 
 func (service *Service) issueToken(userID, tenantID int64, duration time.Duration) (string, error) {
@@ -169,6 +245,29 @@ func bearerToken(request *http.Request) string {
 		return header[len(prefix):]
 	}
 	return ""
+}
+
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+func randomToken() string {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(raw)
+}
+
+func randomUUID() string {
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		return ""
+	}
+	raw[6] = (raw[6] & 0x0f) | 0x40
+	raw[8] = (raw[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", raw[0:4], raw[4:6], raw[6:8], raw[8:10], raw[10:16])
 }
 
 // TenantIDFromContext returns the tenant id set by Middleware.
