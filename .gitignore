@@ -19,3 +19,6 @@ web/dist/
 # Local database
 .pgdata/
 web/tsconfig.tsbuildinfo
+
+# Temporary scratch
+fix_it.md
