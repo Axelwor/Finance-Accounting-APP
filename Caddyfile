@@ -7,7 +7,7 @@
 :80 {
 	encode gzip
 
-	handle_path /healthz {
+	handle /healthz {
 		reverse_proxy api:8080
 	}
 
