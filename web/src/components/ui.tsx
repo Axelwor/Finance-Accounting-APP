@@ -1,0 +1,368 @@
+import { useEffect, useId, useRef, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+
+interface ButtonProps {
+  type?: "button" | "submit";
+  variant?: ButtonVariant;
+  fullWidth?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+  to?: string;
+  children: ReactNode;
+}
+
+/** Tombol dengan dukungan tautan (to) dan fokus keyboard yang jelas. */
+export function Button({
+  type = "button",
+  variant = "primary",
+  fullWidth = false,
+  disabled = false,
+  onClick,
+  to,
+  children,
+}: ButtonProps) {
+  const className = [
+    "btn",
+    `btn--${variant}`,
+    fullWidth ? "btn--full" : "",
+    disabled ? "is-disabled" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  if (to) {
+    return (
+      <Link className={className} to={to} aria-disabled={disabled}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <button type={type} className={className} disabled={disabled} onClick={onClick}>
+      {children}
+    </button>
+  );
+}
+
+/** Tombol aksi utama pada mobile / halaman tertentu. */
+export function ActionBar({
+  children,
+  label,
+}: {
+  children: ReactNode;
+  label?: string;
+}) {
+  return (
+    <nav className="action-bar" aria-label={label ?? "Tindakan utama"}>
+      {children}
+    </nav>
+  );
+}
+
+interface FieldShellProps {
+  label: string;
+  htmlFor?: string;
+  hint?: string;
+  error?: string;
+  children: ReactNode;
+}
+
+export function FieldShell({ label, htmlFor, hint, error, children }: FieldShellProps) {
+  const errorId = error ? `${htmlFor ?? "field"}-error` : undefined;
+  return (
+    <div className={`field${error ? " field--invalid" : ""}`}>
+      <label className="field__label" htmlFor={htmlFor}>
+        {label}
+      </label>
+      {children}
+      {hint && !error ? <p className="field__hint">{hint}</p> : null}
+      {error ? (
+        <p className="field__error" id={errorId} role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+interface TextFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: "text" | "email" | "password";
+  placeholder?: string;
+  hint?: string;
+  error?: string;
+  autoComplete?: string;
+  inputMode?: "text" | "numeric" | "email";
+}
+
+export function TextField({
+  label,
+  value,
+  onChange,
+  type = "text",
+  placeholder,
+  hint,
+  error,
+  autoComplete,
+  inputMode,
+}: TextFieldProps) {
+  const id = useId();
+  return (
+    <FieldShell label={label} htmlFor={id} hint={hint} error={error}>
+      <input
+        id={id}
+        className="input"
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        autoComplete={autoComplete}
+        inputMode={inputMode}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
+      />
+    </FieldShell>
+  );
+}
+
+interface RupiahFieldProps {
+  label: string;
+  value: string;
+  onChange: (raw: string) => void;
+  hint?: string;
+  error?: string;
+  placeholder?: string;
+}
+
+/** Input nominal rupiah: memformat angka ribuan saat mengetik, nilai disimpan mentah. */
+export function RupiahField({
+  label,
+  value,
+  onChange,
+  hint,
+  error,
+  placeholder,
+}: RupiahFieldProps) {
+  const id = useId();
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const caret = el.selectionStart ?? value.length;
+    el.setSelectionRange(caret, caret);
+  }, [value]);
+
+  const handleChange = (raw: string) => {
+    const digits = raw.replace(/[^\d]/g, "").slice(0, 15);
+    onChange(digits);
+  };
+
+  const tampilan = value ? Number(value).toLocaleString("id-ID") : "";
+
+  return (
+    <FieldShell label={label} htmlFor={id} hint={hint} error={error}>
+      <div className="input-suffix">
+        <input
+          ref={ref}
+          id={id}
+          className="input input--rupiah"
+          type="text"
+          inputMode="numeric"
+          value={tampilan}
+          placeholder={placeholder ?? "0"}
+          onChange={(e) => handleChange(e.target.value)}
+          aria-invalid={error ? true : undefined}
+        />
+        <span className="input-suffix__label">Rp</span>
+      </div>
+    </FieldShell>
+  );
+}
+
+interface DateFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+  max?: string;
+}
+
+export function DateField({ label, value, onChange, error, max }: DateFieldProps) {
+  const id = useId();
+  return (
+    <FieldShell label={label} htmlFor={id} error={error}>
+      <input
+        id={id}
+        className="input"
+        type="date"
+        value={value}
+        max={max}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error ? true : undefined}
+      />
+    </FieldShell>
+  );
+}
+
+interface SelectFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+  error?: string;
+}
+
+export function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder = "Pilih...",
+  error,
+}: SelectFieldProps) {
+  const id = useId();
+  return (
+    <FieldShell label={label} htmlFor={id} error={error}>
+      <select
+        id={id}
+        className="input"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error ? true : undefined}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </FieldShell>
+  );
+}
+
+interface TextareaFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  hint?: string;
+}
+
+export function TextareaField({ label, value, onChange, placeholder, hint }: TextareaFieldProps) {
+  const id = useId();
+  return (
+    <FieldShell label={label} htmlFor={id} hint={hint}>
+      <textarea
+        id={id}
+        className="input"
+        rows={3}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </FieldShell>
+  );
+}
+
+export function FormError({ message }: { message: string | null }) {
+  if (!message) return null;
+  return (
+    <p className="form-error" role="alert">
+      {message}
+    </p>
+  );
+}
+
+/** Status loading untuk seluruh halaman data (dashboard, daftar, dll). */
+export function LoadingState({ label = "Memuat..." }: { label?: string }) {
+  return (
+    <div className="loading-state" role="status" aria-live="polite">
+      <span className="loading-state__spinner" aria-hidden="true" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+/** Skelet placeholder yang menyerupai bentuk daftar baris transaksi. */
+export function ListSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="list-skeleton" aria-hidden="true">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div className="list-skeleton__row" key={i}>
+          <div className="list-skeleton__line list-skeleton__line--wide" />
+          <div className="list-skeleton__line list-skeleton__line--narrow" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Pesan ketika suatu daftar kosong, dengan ajakan bertindak. */
+export function EmptyState({
+  title,
+  message,
+  action,
+}: {
+  title: string;
+  message: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="empty-state">
+      <h3 className="empty-state__title">{title}</h3>
+      <p className="empty-state__message">{message}</p>
+      {action}
+    </div>
+  );
+}
+
+/** Pesan kesalahan yang dapat dimuat ulang. */
+export function ErrorState({
+  title = "Terjadi kesalahan",
+  message,
+  onRetry,
+}: {
+  title?: string;
+  message: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <div className="error-state" role="alert">
+      <h3 className="error-state__title">{title}</h3>
+      <p className="error-state__message">{message}</p>
+      {onRetry ? (
+        <Button variant="secondary" onClick={onRetry}>
+          Coba lagi
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+interface CardProps {
+  title?: string;
+  description?: string;
+  children: ReactNode;
+  className?: string;
+}
+
+export function Card({ title, description, children, className }: CardProps) {
+  return (
+    <section className={`card${className ? ` ${className}` : ""}`}>
+      {title ? (
+        <header className="card__header">
+          <h2 className="card__title">{title}</h2>
+          {description ? <p className="card__description">{description}</p> : null}
+        </header>
+      ) : null}
+      {children}
+    </section>
+  );
+}

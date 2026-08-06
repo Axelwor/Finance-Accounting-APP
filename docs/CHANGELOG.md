@@ -24,3 +24,7 @@
 - Added a database integration test harness and updated `make test-integration` to require a non-superuser `TEST_DATABASE_URL`.
 - Prepared VPS and Docker integration: added `postgres-test` dev service to `docker-compose.yml` (with migration volume mount and memory limits), added non-superuser `TEST_DATABASE_URL` to `.env.example`, created VS Code Remote SSH alias `finance-accounting-vps` with SSH config, and added `db-migrate-test` Makefile target.
 - Verified integration tests on the VPS against a dedicated non-superuser `app_test` role: tenant isolation, balanced journal commit, unbalanced rollback, posted-journal immutability, and idempotency uniqueness all pass. The harness sets tenant context transaction-locally to match production RLS middleware.
+- M1: added JWT auth backend (register/login/refresh, middleware) and reporting endpoints (trial balance, profit/loss).
+- M2: added COA/category/report-mapping backend endpoints with RLS-scoped transactions.
+- M3: added cash service backend (cash-in/out, transfer, opening balance, reverse) with idempotency keys, single-transaction journaling, chain head locking, and outbox events.
+- M5: added the M1 frontend (login/register, onboarding wizard, dashboard, transaction forms) with a typed API stub, responsive layout, and accessibility states.
