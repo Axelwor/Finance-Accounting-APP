@@ -73,7 +73,23 @@ func (service *Service) post(writer http.ResponseWriter, request *http.Request, 
 		// same tenant serialize on one row and the hash chain stays linear.
 		head, err := db.New(tx).LockLedgerChainHead(request.Context(), tenant)
 		if err != nil {
-			return err
+			if isNoRows(err) {
+				// First posting for this tenant: seed the chain head with the
+				// genesis hash and continue.
+				if _, err := tx.Exec(request.Context(), `
+					INSERT INTO ledger_chain_heads (tenant_id, last_journal_id, last_hash)
+					VALUES ($1, NULL, 'genesis')
+					ON CONFLICT (tenant_id) DO NOTHING
+				`, tenant); err != nil {
+					return err
+				}
+				head, err = db.New(tx).LockLedgerChainHead(request.Context(), tenant)
+				if err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
 		}
 		journal, err := build(request.Context(), tx)
 		if err != nil {
