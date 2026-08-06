@@ -3,13 +3,15 @@ package main
 import (
 	"net/http/httptest"
 	"testing"
+
+	"finance-accounting-app/backend/internal/tenant"
 )
 
 func TestHealthHandler(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest("GET", "/healthz", nil)
 
-	healthHandler(recorder, request)
+	tenant.Health(recorder, request)
 
 	if recorder.Code != 200 {
 		t.Fatalf("expected status 200, got %d", recorder.Code)

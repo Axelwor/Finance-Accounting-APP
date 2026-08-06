@@ -1,19 +1,36 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"finance-accounting-app/backend/internal/config"
+	"finance-accounting-app/backend/internal/tenant"
 )
 
-func healthHandler(writer http.ResponseWriter, request *http.Request) {
-	writer.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(writer).Encode(map[string]string{"status": "ok"})
-}
-
 func main() {
-	http.HandleFunc("/healthz", healthHandler)
+	cfg := config.Load()
+	if cfg.DatabaseURL == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
 
-	log.Println("api listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	pool, err := pgxpool.New(nil, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("database pool: %v", err)
+	}
+	defer pool.Close()
+
+	tenantHandler := tenant.NewHandler(pool)
+
+	router := chi.NewRouter()
+	router.Get("/healthz", tenant.Health)
+	router.Route("/api/v1", func(router chi.Router) {
+		router.Post("/tenants", tenantHandler.Create)
+	})
+
+	log.Printf("api listening on %s", cfg.HTTPAddr)
+	log.Fatal(http.ListenAndServe(cfg.HTTPAddr, router))
 }
