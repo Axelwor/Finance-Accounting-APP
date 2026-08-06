@@ -97,6 +97,10 @@ func (service *Service) Register(writer http.ResponseWriter, request *http.Reque
 			writeError(writer, http.StatusInternalServerError, "REGISTER_FAILED", "could not assign tenant ownership")
 			return
 		}
+		if err = seedDefaultCOA(ctx, tx, tenantID); err != nil {
+			writeError(writer, http.StatusInternalServerError, "REGISTER_FAILED", "could not provision chart of accounts")
+			return
+		}
 	}
 
 	if err = tx.Commit(ctx); err != nil {
