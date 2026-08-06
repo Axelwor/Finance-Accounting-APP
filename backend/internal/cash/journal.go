@@ -139,13 +139,27 @@ func (service *Service) post(writer http.ResponseWriter, request *http.Request, 
 			}
 		}
 		if reversalOfID > 0 {
-			// One reversal per original is enforced by the
-			// journal_entries_one_reversal partial unique index.
+			// Authorize the reversal procedure and record the reversal link on
+			// the new journal, then mark the original VOID. The
+			// app.void_context setting lets the immutable trigger accept both
+			// changes (migration 000004).
+			if _, err := tx.Exec(request.Context(), `
+				SELECT set_config('app.void_context', '1', true)
+			`); err != nil {
+				return err
+			}
 			if _, err := tx.Exec(request.Context(), `
 				UPDATE journal_entries
 				SET reversal_of_id = $1
 				WHERE tenant_id = $2 AND id = $3
-			`, entry.ID, tenant, reversalOfID); err != nil {
+			`, reversalOfID, tenant, entry.ID); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(request.Context(), `
+				UPDATE journal_entries
+				SET status = 'VOID', void_reason = 'reversed', voided_by = $1, voided_at = now()
+				WHERE tenant_id = $2 AND id = $3
+			`, entry.CreatedBy, tenant, reversalOfID); err != nil {
 				return err
 			}
 		}
