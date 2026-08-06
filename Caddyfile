@@ -1,10 +1,7 @@
-# Caddyfile untuk Finance Accounting App (akses via IP / HTTP)
-#
-# Untuk HTTPS dengan Let's Encrypt, ganti :80 dengan domain Anda
-# (mis. akuntansi.example.com) dan set DNS A record ke IP VPS.
-# Caddy otomatis menerbitkan dan memperbarui sertifikat.
+# Caddyfile untuk Finance Accounting App
+# Domain utama + www + subdomain accounting
 
-:80 {
+tikuma.net, www.tikuma.net, accounting.tikuma.net {
 	encode gzip
 
 	handle /healthz {
