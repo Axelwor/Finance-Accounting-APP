@@ -182,3 +182,9 @@ func UserIDFromContext(ctx context.Context) (int64, bool) {
 	value, ok := ctx.Value(userIDKey).(int64)
 	return value, ok
 }
+
+// ContextKeyTenantID exposes the tenant context key for tests and other
+// packages that need to inject the same value the middleware sets.
+func ContextKeyTenantID() contextKey {
+	return tenantIDKey
+}

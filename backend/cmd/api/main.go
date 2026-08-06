@@ -42,23 +42,26 @@ func main() {
 		router.Post("/auth/refresh", authService.Refresh)
 		router.Post("/tenants", tenantHandler.Create)
 
-		router.Get("/accounts", coaHandler.List)
-		router.Post("/accounts", coaHandler.Create)
-		router.Post("/accounts/{id}/deactivate", coaHandler.Deactivate)
-		router.Get("/categories", coaHandler.ListCategories)
-		router.Post("/categories", coaHandler.CreateCategory)
-		router.Post("/report-mappings", coaHandler.CreateReportMapping)
-
-		router.Post("/cash-in", cashHandler.CashIn)
-		router.Post("/cash-out", cashHandler.CashOut)
-		router.Post("/transfers", cashHandler.Transfer)
-		router.Post("/opening-balances", cashHandler.OpeningBalance)
-		router.Post("/journal-entries/{id}/reverse", cashHandler.Reverse)
-
 		router.Group(func(router chi.Router) {
 			router.Use(authService.Middleware)
+
+			router.Post("/cash-in", cashHandler.CashIn)
+			router.Post("/cash-out", cashHandler.CashOut)
+			router.Post("/transfers", cashHandler.Transfer)
+			router.Post("/opening-balances", cashHandler.OpeningBalance)
+			router.Post("/journal-entries/{id}/reverse", cashHandler.Reverse)
+
+			router.Get("/accounts", coaHandler.List)
+			router.Post("/accounts", coaHandler.Create)
+			router.Post("/accounts/{id}/deactivate", coaHandler.Deactivate)
+			router.Get("/categories", coaHandler.ListCategories)
+			router.Post("/categories", coaHandler.CreateCategory)
+			router.Post("/report-mappings", coaHandler.CreateReportMapping)
+
 			router.Get("/reports/trial-balance", reportingHandler.TrialBalance)
 			router.Get("/reports/profit-loss", reportingHandler.ProfitLoss)
+			router.Get("/reports/balance-sheet", reportingHandler.BalanceSheet)
+			router.Get("/reports/cash-flow", reportingHandler.CashFlow)
 		})
 	})
 

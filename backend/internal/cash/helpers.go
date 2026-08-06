@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -36,18 +37,14 @@ func writeError(writer http.ResponseWriter, status int, code, message string) {
 	writeJSON(writer, status, errorResponse{Code: code, Message: message})
 }
 
-// tenantID parses the X-Tenant-ID header. It is temporary until JWT auth
-// carries the tenant on these routes.
+// tenantID reads the tenant id from the authenticated request context. The
+// auth middleware injects it from JWT claims.
 func tenantID(request *http.Request) (int64, error) {
-	raw := request.Header.Get("X-Tenant-ID")
-	if raw == "" {
-		return 0, errors.New("X-Tenant-ID header is required")
+	tenant, ok := auth.TenantIDFromContext(request.Context())
+	if !ok || tenant <= 0 {
+		return 0, errors.New("tenant context is required")
 	}
-	id, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
-	if err != nil || id <= 0 {
-		return 0, errors.New("X-Tenant-ID must be a positive integer")
-	}
-	return id, nil
+	return tenant, nil
 }
 
 // idempotencyKey validates the required Idempotency-Key header and returns it

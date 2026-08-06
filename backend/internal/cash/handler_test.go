@@ -1,6 +1,7 @@
 package cash
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+
+	"finance-accounting-app/backend/internal/auth"
 )
 
 // ---------------------------------------------------------------------------
@@ -167,20 +170,23 @@ func TestIdempotencyKeyValidation(t *testing.T) {
 	}
 }
 
+// withTenant injects the tenant id into the request context the same way the
+// auth middleware does, so handlers read it from JWT claims context.
+func withTenant(request *http.Request, tenantID int64) *http.Request {
+	ctx := context.WithValue(request.Context(), auth.ContextKeyTenantID(), tenantID)
+	return request.WithContext(ctx)
+}
+
 func TestTenantIDValidation(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/cash-in", nil)
 	if _, err := tenantID(request); err == nil {
-		t.Fatal("expected error when header is missing")
+		t.Fatal("expected error when tenant context is missing")
 	}
-	request.Header.Set("X-Tenant-ID", "abc")
-	if _, err := tenantID(request); err == nil {
-		t.Fatal("expected error for non-numeric tenant")
-	}
-	request.Header.Set("X-Tenant-ID", "0")
+	request = withTenant(request, 0)
 	if _, err := tenantID(request); err == nil {
 		t.Fatal("expected error for non-positive tenant")
 	}
-	request.Header.Set("X-Tenant-ID", "7")
+	request = withTenant(request, 7)
 	id, err := tenantID(request)
 	if err != nil {
 		t.Fatal(err)
@@ -237,7 +243,7 @@ func TestCashInHandlerRejectsMissingIdempotencyKey(t *testing.T) {
 	service := newTestService()
 	body := strings.NewReader(`{"source_ref":"BK-1","entry_date":"2026-08-06","cash_account_id":1101,"counter_account_id":4101,"amount_cents":500000}`)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/cash-in", body)
-	request.Header.Set("X-Tenant-ID", "1")
+	request = withTenant(request, 1)
 	recorder := httptest.NewRecorder()
 
 	service.CashIn(recorder, request)
@@ -250,7 +256,7 @@ func TestCashInHandlerRejectsMissingIdempotencyKey(t *testing.T) {
 func TestCashInHandlerRejectsInvalidBody(t *testing.T) {
 	service := newTestService()
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/cash-in", strings.NewReader(`{invalid json`))
-	request.Header.Set("X-Tenant-ID", "1")
+	request = withTenant(request, 1)
 	request.Header.Set("Idempotency-Key", "1d1b9a44-9c3a-4f2f-9a54-4d4f4d4e4f50")
 	recorder := httptest.NewRecorder()
 
@@ -265,7 +271,7 @@ func TestCashInHandlerRejectsInvalidPayload(t *testing.T) {
 	service := newTestService()
 	body := strings.NewReader(`{"source_ref":"","entry_date":"2026-08-06","cash_account_id":1101,"counter_account_id":4101,"amount_cents":500000}`)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/cash-in", body)
-	request.Header.Set("X-Tenant-ID", "1")
+	request = withTenant(request, 1)
 	request.Header.Set("Idempotency-Key", "1d1b9a44-9c3a-4f2f-9a54-4d4f4d4e4f50")
 	recorder := httptest.NewRecorder()
 
@@ -282,7 +288,7 @@ func TestCashInHandlerRejectsInvalidPayload(t *testing.T) {
 func TestReverseHandlerRejectsInvalidPathID(t *testing.T) {
 	service := newTestService()
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/journal-entries/abc/reverse", strings.NewReader(`{"source_ref":"REV-1","entry_date":"2026-08-07"}`))
-	request.Header.Set("X-Tenant-ID", "1")
+	request = withTenant(request, 1)
 	request.Header.Set("Idempotency-Key", "1d1b9a44-9c3a-4f2f-9a54-4d4f4d4e4f50")
 	recorder := httptest.NewRecorder()
 
