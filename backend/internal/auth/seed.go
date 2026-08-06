@@ -83,5 +83,15 @@ func seedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 			return err
 		}
 	}
+
+	// Open the current calendar year as the default accounting period so the
+	// tenant can post immediately.
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO accounting_periods (tenant_id, period_start, period_end, status)
+		VALUES ($1, date_trunc('year', current_date)::date, (date_trunc('year', current_date) + interval '1 year - 1 day')::date, 'OPEN')
+		ON CONFLICT (tenant_id, period_start, period_end) DO NOTHING
+	`, tenantID); err != nil {
+		return err
+	}
 	return nil
 }
