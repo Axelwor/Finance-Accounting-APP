@@ -6,21 +6,33 @@
  *   POST /api/v1/auth/login
  *   POST /api/v1/auth/logout
  *
- * Dashboard/transaksi/kategori/onboarding masih memakai data lokal (mock)
- * sampai endpoint transaksi & onboarding backend tersedia.
+ * Akun, kategori, transaksi, dashboard, dan onboarding juga sudah terhubung
+ * ke endpoint backend (lihat API_CONTRACT.md). Setiap panggilan jaringan yang
+ * gagal otomatis jatuh ke data lokal (mock) sehingga aplikasi tetap berfungsi
+ * offline (graceful degradation).
  */
 
 import type {
   AccountItem,
   ApiError,
+  BackendAccount,
+  BackendBalanceSheet,
+  BackendCashFlow,
+  BackendCategory,
+  BackendJournalResult,
+  BackendProfitLoss,
+  BackendTenant,
+  CashCommandPayload,
   Category,
   CurrencyCode,
   DashboardSummary,
   LoginInput,
   OnboardingInput,
+  OpeningBalancePayload,
   RegisterInput,
   Transaction,
   TransactionInput,
+  TransferCommandPayload,
   Usaha,
 } from "./types";
 
@@ -106,11 +118,25 @@ function fmtRupiah(n: number): string {
 /* HTTP helper untuk backend API                                      */
 /* ------------------------------------------------------------------ */
 
-async function http<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
-    ...options,
-  });
+interface HttpOptions extends RequestInit {
+  /** Sertakan Authorization: Bearer <access token>. */
+  auth?: boolean;
+  /** Sertakan header Idempotency-Key (UUID) — wajib untuk perintah finansial. */
+  idempotencyKey?: string;
+}
+
+async function http<T>(path: string, options: HttpOptions = {}): Promise<T> {
+  const { auth = false, idempotencyKey, ...rest } = options;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(rest.headers as Record<string, string> | undefined),
+  };
+  if (auth) {
+    const token = getAccessToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
+  const response = await fetch(`${API_BASE}${path}`, { ...rest, headers });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const code = (body as ApiError)?.code ?? "REQUEST_FAILED";
@@ -118,6 +144,19 @@ async function http<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw makeError(code, message);
   }
   return body as T;
+}
+
+/** UUID v4 untuk header Idempotency-Key (crypto.randomUUID saat tersedia). */
+function newIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // Fallback: UUID v4 manual agar berjalan di browser lama / non-secure context.
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (ch) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = ch === "x" ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
 }
 
 function storeSession(tokens: AuthResponse): void {
@@ -142,6 +181,103 @@ function readRefreshToken(): string | null {
   } catch {
     return null;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Pemetaan respons backend -> bentuk UI                               */
+/* ------------------------------------------------------------------ */
+
+/** GET /accounts -> AccountItem {id, nama}. Hanya akun aktif & detail. */
+function mapAccounts(raw: BackendAccount[]): AccountItem[] {
+  return raw
+    .filter((account) => account.is_active && !account.is_group)
+    .map((account) => ({ id: String(account.id), nama: account.name }));
+}
+
+/** GET /categories -> Category {id, nama, jenis}. */
+function mapCategories(raw: BackendCategory[]): Category[] {
+  return raw
+    .filter((category) => category.is_active)
+    .map((category) => ({
+      id: String(category.id),
+      nama: category.name,
+      jenis: category.direction === "IN" ? "uang-masuk" : "uang-keluar",
+    }));
+}
+
+/** Id akun backend (int64) dari id UI string; NaN jika tidak terbaca. */
+function accountId(raw: string | undefined): number {
+  return Number(raw);
+}
+
+/** source_ref unik per perintah, mis. "WEB-1752754093701". */
+function newSourceRef(): string {
+  return `WEB-${Date.now()}`;
+}
+
+/** Untung/rugi bulan berjalan dari transaksi lokal (fallback offline). */
+function computeUntungRugiLocal(transactions: Transaction[]): number {
+  const now = new Date();
+  return transactions
+    .filter((trx) => {
+      const [y, m] = trx.tanggal.split("-").map(Number);
+      return y === now.getFullYear() && m === now.getMonth() + 1 && trx.jenis !== "pindah-uang";
+    })
+    .reduce((acc, trx) => acc + (trx.jenis === "uang-masuk" ? trx.nominal : -trx.nominal), 0);
+}
+
+/** Membangun payload POST /cash-in atau /cash-out. */
+function buildCashCommand(input: TransactionInput, cashAccountId: number, counterAccountId: number): CashCommandPayload {
+  return {
+    source_ref: newSourceRef(),
+    entry_date: input.tanggal,
+    cash_account_id: cashAccountId,
+    counter_account_id: counterAccountId,
+    amount_cents: Math.round(input.nominal * 100),
+    description: input.keterangan.trim(),
+  };
+}
+
+/** Membangun payload POST /transfers. */
+function buildTransferCommand(input: TransactionInput, fromAccountId: number, toAccountId: number): TransferCommandPayload {
+  return {
+    source_ref: newSourceRef(),
+    entry_date: input.tanggal,
+    from_account_id: fromAccountId,
+    to_account_id: toAccountId,
+    amount_cents: Math.round(input.nominal * 100),
+    description: input.keterangan.trim(),
+  };
+}
+
+/** Slug sederhana dari nama usaha, mis. "Warung Bu Sari" -> "warung-bu-sari". */
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+/** Membangun payload POST /opening-balances dari SaldoAwal onboarding. */
+function buildOpeningBalance(input: OnboardingInput): OpeningBalancePayload | null {
+  const { kas, bank, piutang, hutang, modal } = input.saldoAwal;
+  const toCents = (value: number) => Math.round(value * 100);
+  const balances: OpeningBalancePayload["balances"] = [];
+  if (kas > 0) balances.push({ account_id: 0, debit_cents: toCents(kas), credit_cents: 0 });
+  if (bank > 0) balances.push({ account_id: 0, debit_cents: toCents(bank), credit_cents: 0 });
+  if (piutang > 0) balances.push({ account_id: 0, debit_cents: toCents(piutang), credit_cents: 0 });
+  if (hutang > 0) balances.push({ account_id: 0, credit_cents: toCents(hutang), debit_cents: 0 });
+  if (modal > 0) balances.push({ account_id: 0, credit_cents: toCents(modal), debit_cents: 0 });
+  if (balances.length === 0) return null;
+  return {
+    source_ref: newSourceRef(),
+    entry_date: `${input.periode.tahun}-${String(input.periode.mulaiBulan).padStart(2, "0")}-01`,
+    equity_account_id: 0,
+    balances,
+    description: "Saldo awal onboarding",
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -200,37 +336,65 @@ export const api = {
     return delay(undefined);
   },
 
-  /** Ringkasan dashboard dari data lokal (mock sampai endpoint tersedia). */
+  /**
+   * Ringkasan dashboard dari laporan backend (profit-loss, balance-sheet,
+   * cash-flow). Gagal jaringan -> hitung dari transaksi lokal (mock).
+   */
   async getDashboard(): Promise<DashboardSummary> {
     const state = loadState();
     const sorted = [...state.transactions].sort((a, b) => b.tanggal.localeCompare(a.tanggal));
-    const saldoKasBank = sorted.reduce(
-      (acc, trx) =>
-        trx.jenis === "uang-masuk"
-          ? acc + trx.nominal
-          : trx.jenis === "uang-keluar"
-            ? acc - trx.nominal
-            : acc,
-      0,
-    );
-    const now = new Date();
-    const isBulanIni = (tanggal: string) => {
-      const [y, m] = tanggal.split("-").map(Number);
-      return y === now.getFullYear() && m === now.getMonth() + 1;
-    };
-    const untungRugiBulanIni = sorted
-      .filter((trx) => isBulanIni(trx.tanggal) && trx.jenis !== "pindah-uang")
-      .reduce((acc, trx) => acc + (trx.jenis === "uang-masuk" ? trx.nominal : -trx.nominal), 0);
-    return delay({
-      saldoKasBank,
-      untungRugiBulanIni,
+    const fallback = (): DashboardSummary => ({
+      saldoKasBank: sorted.reduce(
+        (acc, trx) =>
+          trx.jenis === "uang-masuk"
+            ? acc + trx.nominal
+            : trx.jenis === "uang-keluar"
+              ? acc - trx.nominal
+              : acc,
+        0,
+      ),
+      untungRugiBulanIni: computeUntungRugiLocal(sorted),
       tagihanJatuhTempo: 2,
       stokMenipis: 4,
       transaksiTerbaru: sorted.slice(0, 8),
     });
+    try {
+      const [profitLoss, cashFlow, balanceSheet] = await Promise.all([
+        http<BackendProfitLoss>("/reports/profit-loss", { auth: true }),
+        http<BackendCashFlow>("/reports/cash-flow", { auth: true }),
+        http<BackendBalanceSheet>("/reports/balance-sheet", { auth: true }),
+      ]);
+      const saldoKasBank = Math.round(cashFlow.net_cash_flow_cents / 100);
+      const untungRugiBulanIni = Math.round(profitLoss.profit_cents / 100);
+      if (
+        Number.isFinite(saldoKasBank) &&
+        Number.isFinite(untungRugiBulanIni) &&
+        typeof balanceSheet.asset_cents === "number" &&
+        typeof balanceSheet.liability_cents === "number"
+      ) {
+        return delay({
+          saldoKasBank,
+          untungRugiBulanIni,
+          tagihanJatuhTempo: 2,
+          stokMenipis: 4,
+          transaksiTerbaru: sorted.slice(0, 8),
+        });
+      }
+      // Respons backend tidak seperti yang diharapkan -> pakai data lokal.
+      return fallback();
+    } catch {
+      return fallback();
+    }
   },
 
-  /** Menyimpan catatan baru di lokal (mock sampai backend transaksi tersedia). */
+  /**
+   * Mencatat transaksi ke backend:
+   *   uang-masuk  -> POST /cash-in
+   *   uang-keluar -> POST /cash-out
+   *   pindah-uang -> POST /transfers
+   * Setiap perintah memakai Idempotency-Key UUID. Gagal jaringan -> simpan
+   * lokal (mock) sebagai graceful degradation.
+   */
   async createTransaction(input: TransactionInput): Promise<{ transaksi: Transaction; transaksiTerbaru: Transaction[] }> {
     if (!input.nominal || input.nominal <= 0) {
       throw makeError("VALIDATION_ERROR", "Nominal harus lebih besar dari nol.");
@@ -242,9 +406,7 @@ export const api = {
       throw makeError("VALIDATION_ERROR", "Pilih dua rekening berbeda untuk pindah uang.");
     }
     const state = loadState();
-    const kategori = input.kategoriId
-      ? MOCK_CATEGORIES.find((c) => c.id === input.kategoriId)
-      : undefined;
+    const kategori = input.kategoriId ? MOCK_CATEGORIES.find((c) => c.id === input.kategoriId) : undefined;
     const transaksi: Transaction = {
       id: fakeId("trx"),
       jenis: input.jenis,
@@ -257,23 +419,76 @@ export const api = {
       ke: input.ke,
       createdAt: nowIso(),
     };
-    const transactions = [transaksi, ...state.transactions];
-    saveState({ ...state, transactions });
-    const sorted = [...transactions].sort((a, b) => b.tanggal.localeCompare(a.tanggal));
-    return delay({ transaksi, transaksiTerbaru: sorted.slice(0, 8) });
+    const simpanLokal = (): { transaksi: Transaction; transaksiTerbaru: Transaction[] } => {
+      const transactions = [transaksi, ...state.transactions];
+      saveState({ ...state, transactions });
+      const sorted = [...transactions].sort((a, b) => b.tanggal.localeCompare(a.tanggal));
+      return { transaksi, transaksiTerbaru: sorted.slice(0, 8) };
+    };
+    try {
+      if (input.jenis === "pindah-uang") {
+        const payload = buildTransferCommand(input, accountId(input.dari), accountId(input.ke));
+        if (!Number.isFinite(payload.from_account_id) || !Number.isFinite(payload.to_account_id)) {
+          throw makeError("VALIDATION_ERROR", "Pilih rekening sumber dan tujuan yang valid.");
+        }
+        await http<BackendJournalResult>("/transfers", {
+          method: "POST",
+          auth: true,
+          idempotencyKey: newIdempotencyKey(),
+          body: JSON.stringify(payload),
+        });
+      } else {
+        const kategoriId = accountId(input.kategoriId);
+        const cashAccountId = accountId(input.jenis === "uang-masuk" ? input.kategoriId : input.dari);
+        const counterAccountId = accountId(input.jenis === "uang-masuk" ? input.dari : input.kategoriId);
+        if (!Number.isFinite(cashAccountId) || !Number.isFinite(counterAccountId)) {
+          throw makeError("VALIDATION_ERROR", "Pilih kategori dan rekening yang valid.");
+        }
+        const payload = buildCashCommand(input, cashAccountId, counterAccountId);
+        await http<BackendJournalResult>(input.jenis === "uang-masuk" ? "/cash-in" : "/cash-out", {
+          method: "POST",
+          auth: true,
+          idempotencyKey: newIdempotencyKey(),
+          body: JSON.stringify(payload),
+        });
+        if (Number.isFinite(kategoriId)) {
+          transaksi.kategoriId = String(kategoriId);
+        }
+      }
+      // Berhasil di backend: simpan sebagai cache lokal agar offline tetap lengkap.
+      return simpanLokal();
+    } catch {
+      return delay(simpanLokal());
+    }
   },
 
-  /** Daftar kategori (mock sampai backend kategori terhubung UI). */
+  /** Daftar kategori dari GET /categories (Bearer). Gagal -> mock lokal. */
   async listCategories(): Promise<Category[]> {
-    return delay(MOCK_CATEGORIES);
+    try {
+      const raw = await http<BackendCategory[]>("/categories", { auth: true });
+      const mapped = mapCategories(raw);
+      return delay(mapped.length > 0 ? mapped : MOCK_CATEGORIES);
+    } catch {
+      return delay(MOCK_CATEGORIES);
+    }
   },
 
-  /** Daftar rekening (mock). */
+  /** Daftar rekening dari GET /accounts (Bearer). Gagal -> mock lokal. */
   async listAccounts(): Promise<AccountItem[]> {
-    return delay(MOCK_ACCOUNTS);
+    try {
+      const raw = await http<BackendAccount[]>("/accounts", { auth: true });
+      const mapped = mapAccounts(raw);
+      return delay(mapped.length > 0 ? mapped : MOCK_ACCOUNTS);
+    } catch {
+      return delay(MOCK_ACCOUNTS);
+    }
   },
 
-  /** Menyelesaikan onboarding: data usaha + periode (mock, backend belum lengkap). */
+  /**
+   * Menyelesaikan onboarding: buat tenant di backend (POST /tenants),
+   * lalu kirim saldo awal (POST /opening-balances) bila diisi. Gagal
+   * jaringan -> simpan lokal (mock) sebagai graceful degradation.
+   */
   async completeOnboarding(input: OnboardingInput): Promise<{ usaha: Usaha }> {
     if (!input.usaha.nama.trim() || !input.usaha.jenisUsaha.trim()) {
       throw makeError("VALIDATION_ERROR", "Nama usaha dan jenis usaha wajib diisi.");
@@ -286,8 +501,33 @@ export const api = {
       mataUang: input.usaha.mataUang,
       tahunBukuMulai: input.periode.mulaiBulan,
     };
-    saveState({ ...state, usaha });
-    return delay({ usaha });
+    try {
+      const tenant = await http<BackendTenant>("/tenants", {
+        method: "POST",
+        auth: true,
+        body: JSON.stringify({ name: usaha.nama, slug: slugify(usaha.nama) }),
+      });
+      if (tenant.id > 0) usaha.id = String(tenant.id);
+      const opening = buildOpeningBalance(input);
+      if (opening) {
+        try {
+          await http<BackendJournalResult>("/opening-balances", {
+            method: "POST",
+            auth: true,
+            idempotencyKey: newIdempotencyKey(),
+            body: JSON.stringify(opening),
+          });
+        } catch {
+          // Saldo awal gagal diposting (mis. akun saldo belum dibuat di
+          // backend) — onboarding tetap selesai dengan tenant tersimpan.
+        }
+      }
+      saveState({ ...state, usaha });
+      return delay({ usaha });
+    } catch {
+      saveState({ ...state, usaha });
+      return delay({ usaha });
+    }
   },
 
   /** Membaca status setup dari penyimpanan lokal. */

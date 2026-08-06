@@ -56,3 +56,33 @@ func TestRandomUUIDFormat(t *testing.T) {
 		t.Fatalf("expected 5 parts, got %q", uuid)
 	}
 }
+
+func TestSlugify(t *testing.T) {
+	cases := []struct {
+		name string
+		want string
+	}{
+		{"Acme Corp", "acme-corp"},
+		{"  Acme   Corp  ", "acme-corp"},
+		{"PT. Maju Jaya & Sons", "pt-maju-jaya-sons"},
+		{"Café Über", "caf-ber"},
+		{"---", "tenant"},
+		{"", "tenant"},
+		{"Toko123", "toko123"},
+	}
+	for _, tc := range cases {
+		if got := slugify(tc.name); got != tc.want {
+			t.Errorf("slugify(%q) = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestRandomSuffixIsHex(t *testing.T) {
+	suffix := randomSuffix()
+	if len(suffix) != 4 {
+		t.Fatalf("expected 4 hex chars, got %q", suffix)
+	}
+	if _, err := hex.DecodeString(suffix); err != nil {
+		t.Fatalf("suffix is not valid hex: %v", err)
+	}
+}

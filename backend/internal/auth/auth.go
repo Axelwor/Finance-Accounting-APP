@@ -5,12 +5,15 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -41,6 +44,10 @@ type RegisterRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	FullName string `json:"full_name"`
+	// TenantName optionally creates a tenant during registration and makes the
+	// new user its owner. When omitted the user is created without a tenant
+	// and the issued token carries tenant_id 0.
+	TenantName string `json:"tenant_name"`
 }
 
 func (service *Service) Register(writer http.ResponseWriter, request *http.Request) {
@@ -58,8 +65,17 @@ func (service *Service) Register(writer http.ResponseWriter, request *http.Reque
 		writeError(writer, http.StatusInternalServerError, "REGISTER_FAILED", "could not hash password")
 		return
 	}
+
+	ctx := request.Context()
+	tx, err := service.pool.Begin(ctx)
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "REGISTER_FAILED", "could not start transaction")
+		return
+	}
+	defer tx.Rollback(ctx) // no-op after a successful commit
+
 	var userID int64
-	err = service.pool.QueryRow(request.Context(),
+	err = tx.QueryRow(ctx,
 		`INSERT INTO users (email, password_hash, full_name) VALUES ($1, $2, $3) RETURNING id`,
 		req.Email, string(hash), req.FullName,
 	).Scan(&userID)
@@ -67,7 +83,95 @@ func (service *Service) Register(writer http.ResponseWriter, request *http.Reque
 		writeError(writer, http.StatusConflict, "EMAIL_EXISTS", "email is already registered")
 		return
 	}
-	writeJSON(writer, http.StatusCreated, map[string]any{"id": userID, "email": req.Email})
+
+	tenantID := int64(0)
+	if tenantName := strings.TrimSpace(req.TenantName); tenantName != "" {
+		tenantID, err = insertTenant(ctx, tx, tenantName)
+		if err != nil {
+			writeError(writer, http.StatusInternalServerError, "REGISTER_FAILED", "could not create tenant")
+			return
+		}
+		if _, err = tx.Exec(ctx,
+			`INSERT INTO user_tenants (user_id, tenant_id, role) VALUES ($1, $2, 'owner')`,
+			userID, tenantID); err != nil {
+			writeError(writer, http.StatusInternalServerError, "REGISTER_FAILED", "could not assign tenant ownership")
+			return
+		}
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		writeError(writer, http.StatusInternalServerError, "REGISTER_FAILED", "could not commit registration")
+		return
+	}
+
+	accessToken, err := service.issueToken(userID, tenantID, 15*time.Minute)
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue token")
+		return
+	}
+	writeJSON(writer, http.StatusCreated, map[string]any{
+		"id":           userID,
+		"email":        req.Email,
+		"tenant_id":    tenantID,
+		"access_token": accessToken,
+	})
+}
+
+// insertTenant inserts a tenant row inside tx, deriving a unique lowercase
+// slug from name. If the derived slug already exists (unique_violation on
+// tenants.slug), a random suffix is appended and the insert is retried.
+func insertTenant(ctx context.Context, tx pgx.Tx, name string) (int64, error) {
+	base := slugify(name)
+	slug := base
+	for attempt := 0; attempt < 5; attempt++ {
+		var tenantID int64
+		err := tx.QueryRow(ctx,
+			`INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id`,
+			name, slug).Scan(&tenantID)
+		if err == nil {
+			return tenantID, nil
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
+			slug = base + "-" + randomSuffix()
+			continue
+		}
+		return 0, err
+	}
+	return 0, fmt.Errorf("could not allocate a unique slug for tenant %q", name)
+}
+
+// slugify converts a tenant display name into a URL-safe lowercase slug.
+// ASCII letters and digits are kept; everything else becomes a hyphen and
+// runs of hyphens collapse. Falls back to "tenant" when nothing remains.
+func slugify(name string) string {
+	var b strings.Builder
+	prevDash := false
+	for _, r := range strings.ToLower(strings.TrimSpace(name)) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+			prevDash = false
+		default:
+			if !prevDash {
+				b.WriteByte('-')
+				prevDash = true
+			}
+		}
+	}
+	slug := strings.Trim(b.String(), "-")
+	if slug == "" {
+		slug = "tenant"
+	}
+	return slug
+}
+
+func randomSuffix() string {
+	raw := make([]byte, 2)
+	if _, err := rand.Read(raw); err != nil {
+		return "0000"
+	}
+	return hex.EncodeToString(raw)
 }
 
 type LoginRequest struct {
@@ -82,15 +186,22 @@ func (service *Service) Login(writer http.ResponseWriter, request *http.Request)
 		return
 	}
 	var userID int64
+	var tenantID int64
 	var passwordHash string
 	err := service.pool.QueryRow(request.Context(),
-		`SELECT id, password_hash FROM users WHERE email = $1 AND is_active = true`, req.Email,
-	).Scan(&userID, &passwordHash)
+		`SELECT u.id, u.password_hash, COALESCE(ut.tenant_id, 0)
+		   FROM users u
+		   LEFT JOIN user_tenants ut ON ut.user_id = u.id
+		  WHERE u.email = $1 AND u.is_active = true
+		  ORDER BY ut.id
+		  LIMIT 1`,
+		req.Email,
+	).Scan(&userID, &passwordHash, &tenantID)
 	if err != nil || bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) != nil {
 		writeError(writer, http.StatusUnauthorized, "INVALID_CREDENTIALS", "email or password is incorrect")
 		return
 	}
-	accessToken, err := service.issueToken(userID, 0, 15*time.Minute)
+	accessToken, err := service.issueToken(userID, tenantID, 15*time.Minute)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue token")
 		return
@@ -119,14 +230,21 @@ func (service *Service) Refresh(writer http.ResponseWriter, request *http.Reques
 	}
 	hash := hashToken(req.RefreshToken)
 	var userID int64
+	var tenantID int64
 	var tokenID int64
 	var familyID string
 	var expiresAt time.Time
 	err := service.pool.QueryRow(request.Context(), `
-		SELECT id, user_id, family_id, expires_at
-		FROM user_tokens
-		WHERE token_hash = $1 AND token_type = 'refresh' AND revoked_at IS NULL
-	`, hash).Scan(&tokenID, &userID, &familyID, &expiresAt)
+		SELECT t.id, t.user_id, t.family_id, t.expires_at,
+		       COALESCE((
+		           SELECT ut.tenant_id FROM user_tenants ut
+		            WHERE ut.user_id = t.user_id
+		            ORDER BY ut.id
+		            LIMIT 1
+		       ), 0)
+		  FROM user_tokens t
+		 WHERE t.token_hash = $1 AND t.token_type = 'refresh' AND t.revoked_at IS NULL
+	`, hash).Scan(&tokenID, &userID, &familyID, &expiresAt, &tenantID)
 	if err != nil || time.Now().After(expiresAt) {
 		writeError(writer, http.StatusUnauthorized, "INVALID_REFRESH", "refresh token is invalid or expired")
 		return
@@ -137,7 +255,9 @@ func (service *Service) Refresh(writer http.ResponseWriter, request *http.Reques
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not rotate refresh token")
 		return
 	}
-	accessToken, err := service.issueToken(userID, 0, 15*time.Minute)
+	// Preserve the tenant claim: re-issue the access token with the user's
+	// default tenant (resolved above) instead of tenant_id 0.
+	accessToken, err := service.issueToken(userID, tenantID, 15*time.Minute)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue token")
 		return
