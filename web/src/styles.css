@@ -1401,8 +1401,6 @@ select.input {
   flex-direction: column;
   gap: 2px;
   padding: var(--u-3) 0;
-  overflow-y: auto;
-  overflow-x: clip;
 }
 
 /* Icon button — compact by default, expands on hover */
