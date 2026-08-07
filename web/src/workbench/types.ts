@@ -42,7 +42,12 @@ export interface EntryTab extends TabBase {
   entryId?: string | number;
 }
 
-export type Tab = ListTab | EntryTab;
+/** Dashboard overview — opens by default when the user first lands. */
+export interface DashboardTab extends TabBase {
+  kind: "dashboard";
+}
+
+export type Tab = DashboardTab | ListTab | EntryTab;
 
 export interface SubItem {
   id: string;

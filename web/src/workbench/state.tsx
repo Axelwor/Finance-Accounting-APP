@@ -31,16 +31,48 @@ type Action =
   | { type: "open-list"; subKind: ListSubKind }
   | { type: "open-entry-draft"; subKind: EntrySubKind }
   | { type: "open-entry-existing"; subKind: EntrySubKind; entryId: string | number; title: string; status?: string }
+  | { type: "open-dashboard" }
   | { type: "close"; id: string }
   | { type: "activate"; id: string }
   | { type: "replace-draft"; id: string; title: string; status: string }
   | { type: "mark-unsaved"; id: string; unsaved: boolean }
-  | { type: "hydrate"; state: State };
+  | { type: "hydrate"; state: State }
+  | { type: "ensure-dashboard" };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "hydrate": {
       return action.state;
+    }
+    case "ensure-dashboard": {
+      // Always keep the Dashboard tab as the first tab. If it was closed
+      // (or never opened), re-add it and activate it. This guarantees the
+      // workbench always lands on the Dashboard.
+      const existing = state.tabs.find((t) => t.kind === "dashboard");
+      if (existing) {
+        if (state.activeId && state.activeId !== existing.id) return state;
+        return { ...state, activeId: existing.id };
+      }
+      const tab: Tab = {
+        id: "tab-dashboard",
+        kind: "dashboard",
+        moduleId: "cash-bank",
+        title: "Dashboard",
+        createdAt: Date.now(),
+      };
+      return { tabs: [tab, ...state.tabs], activeId: tab.id };
+    }
+    case "open-dashboard": {
+      const existing = state.tabs.find((t) => t.kind === "dashboard");
+      if (existing) return { ...state, activeId: existing.id };
+      const tab: Tab = {
+        id: "tab-dashboard",
+        kind: "dashboard",
+        moduleId: "cash-bank",
+        title: "Dashboard",
+        createdAt: Date.now(),
+      };
+      return { tabs: [tab, ...state.tabs], activeId: tab.id };
     }
     case "open-list": {
       const existing = state.tabs.find((t) => t.kind === "list" && t.subKind === action.subKind);
@@ -129,6 +161,7 @@ interface WorkbenchApi {
   tabs: Tab[];
   activeId: string | null;
   activeTab: Tab | null;
+  openDashboard: () => void;
   openList: (sub: ListSubKind) => void;
   openEntryDraft: (sub: EntrySubKind) => void;
   openEntryExisting: (sub: EntrySubKind, entryId: string | number, title: string, status?: string) => void;
@@ -160,7 +193,12 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
     if (hydrated.current) return;
     hydrated.current = true;
     const restored = loadFromStorage();
-    if (restored) dispatch({ type: "hydrate", state: restored });
+    if (restored) {
+      dispatch({ type: "hydrate", state: restored });
+    }
+    // Always make sure the Dashboard tab exists and is active on first
+    // load (or after a refresh that wiped all tabs).
+    dispatch({ type: "ensure-dashboard" });
   }, []);
 
   useEffect(() => {
@@ -179,6 +217,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
       dispatch({ type: "open-entry-existing", subKind: sub, entryId, title, status }),
     [],
   );
+  const openDashboard = useCallback(() => dispatch({ type: "open-dashboard" }), []);
   const close = useCallback((id: string) => {
     const tab = state.tabs.find((t) => t.id === id);
     if (tab?.unsaved && !window.confirm("Close without saving? Unsaved changes will be lost.")) return;
@@ -200,6 +239,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
       tabs: state.tabs,
       activeId: state.activeId,
       activeTab,
+      openDashboard,
       openList,
       openEntryDraft,
       openEntryExisting,
@@ -208,7 +248,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
       replaceDraft,
       markUnsaved,
     };
-  }, [state, openList, openEntryDraft, openEntryExisting, close, activate, replaceDraft, markUnsaved]);
+  }, [state, openDashboard, openList, openEntryDraft, openEntryExisting, close, activate, replaceDraft, markUnsaved]);
 
   return <WorkbenchContext.Provider value={api}>{children}</WorkbenchContext.Provider>;
 }

@@ -26,8 +26,11 @@ function TabPill({ tab }: { tab: Tab }) {
   const workbench = useWorkbench();
   const isActive = tab.id === workbench.activeId;
   const listMeta = tab.kind === "list" ? findSubItemByList(tab.subKind) : undefined;
-  const kind = tab.kind === "list" ? "LIST" : tab.draft ? "NEW" : "ENTRY";
-  const status = tab.status ?? (tab.kind === "list" ? "OPEN" : "EDIT");
+  const kind = tab.kind === "dashboard" ? "HOME" : tab.kind === "list" ? "LIST" : tab.draft ? "NEW" : "ENTRY";
+  const status =
+    tab.kind === "dashboard"
+      ? "LIVE"
+      : tab.status ?? (tab.kind === "list" ? "OPEN" : "EDIT");
 
   return (
     <div
@@ -36,7 +39,9 @@ function TabPill({ tab }: { tab: Tab }) {
       aria-selected={isActive}
       onClick={() => workbench.activate(tab.id)}
     >
-      <span className={`tabpill__kind tabpill__kind--${tab.kind === "list" ? "list" : tab.draft ? "draft" : "entry"}`}>
+      <span className={`tabpill__kind tabpill__kind--${
+        tab.kind === "dashboard" ? "list" : tab.kind === "list" ? "list" : tab.draft ? "draft" : "entry"
+      }`}>
         {kind}
       </span>
       <span className="tabpill__title" title={tab.title}>{tab.title}</span>

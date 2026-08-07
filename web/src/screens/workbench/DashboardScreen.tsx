@@ -1,37 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { api } from "../api";
-import { useAppState } from "../state";
-import { ErrorState, LoadingState } from "../components/ui";
-import { PeriodCard } from "../components/period";
-import { TransactionRow } from "../components/transactions";
-import { formatIDR } from "../lib/format";
-import type { DashboardSummary, Transaction } from "../types";
-
-const wordmark = "Ledgerly";
+import { api } from "../../api";
+import { useAppState } from "../../state";
+import { useWorkbench } from "../../workbench/state";
+import { ErrorState, LoadingState } from "../../components/ui";
+import { PeriodCard } from "../../components/period";
+import { TransactionRow } from "../../components/transactions";
+import { formatIDR } from "../../lib/format";
+import type { DashboardSummary } from "../../types";
 
 const todayStamp = new Intl.DateTimeFormat("en-US", {
-  weekday: "short",
+  weekday: "long",
+  day: "2-digit",
+  month: "long",
+  year: "numeric",
+}).format(new Date());
+
+const shortDateStamp = new Intl.DateTimeFormat("en-US", {
   day: "2-digit",
   month: "short",
   year: "numeric",
 }).format(new Date()).toUpperCase();
 
-const clockStamp = new Intl.DateTimeFormat("en-US", {
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-}).format(new Date());
-
-const sessionStamp = `SES-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-01`;
-
-interface SparkProps {
-  values: number[];
-  tone: "pos" | "neg" | "acc";
-  ariaLabel: string;
-}
-
-function Spark({ values, tone, ariaLabel }: SparkProps) {
+function Spark({ values, tone }: { values: number[]; tone: "pos" | "neg" | "acc" }) {
   if (values.length < 2) return null;
   const width = 220;
   const height = 28;
@@ -46,16 +36,27 @@ function Spark({ values, tone, ariaLabel }: SparkProps) {
       return `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
     })
     .join(" ");
+  const cls = tone === "neg" ? "spark spark--neg" : tone === "acc" ? "spark spark--acc" : "spark";
   return (
-    <div className={`spark ${tone === "neg" ? "spark--neg" : tone === "acc" ? "spark--acc" : ""}`}>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={ariaLabel}>
+    <div className={cls}>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-hidden="true">
         <path d={path} />
       </svg>
     </div>
   );
 }
 
-interface StatusCellProps {
+function StatusCell({
+  label,
+  value,
+  delta,
+  deltaTone,
+  tone,
+  spark,
+  sparkTone,
+  lead,
+  meta,
+}: {
   label: string;
   value: string;
   delta: string;
@@ -65,56 +66,61 @@ interface StatusCellProps {
   sparkTone?: "pos" | "neg" | "acc";
   lead?: boolean;
   meta: string;
-}
-
-function StatusCell({ label, value, delta, deltaTone, tone, spark, sparkTone, lead, meta }: StatusCellProps) {
+}) {
   const dotClass =
     tone === "pos" ? "" : tone === "neg" ? "dot--neg" : tone === "warn" ? "dot--warn" : tone === "acc" ? "dot--acc" : "";
+  const valueCls =
+    tone === "pos" ? "is-positive" : tone === "neg" ? "is-negative" : tone === "warn" ? "is-warning" : "";
   return (
     <div className={`status-cell${lead ? " status-cell--lead" : ""}`}>
       <div className="status-cell__label">
         <span className={`dot ${dotClass}`} aria-hidden="true" />
         <span>{label}</span>
       </div>
-      <p className={`status-cell__value${tone === "pos" ? " is-positive" : tone === "neg" ? " is-negative" : tone === "warn" ? " is-warning" : ""}`}>
-        {value}
-      </p>
+      <p className={`status-cell__value${valueCls ? " " + valueCls : ""}`}>{value}</p>
       <div className="status-cell__delta">
         <span>{delta}</span>
         <strong className={`is-${deltaTone}`}>{meta}</strong>
       </div>
-      {spark && sparkTone ? (
-        <Spark values={spark} tone={sparkTone} ariaLabel={`${label} trend`} />
-      ) : null}
+      {spark && sparkTone ? <Spark values={spark} tone={sparkTone} /> : null}
     </div>
   );
 }
 
-interface KpiRowProps {
+function KpiRow({
+  label,
+  note,
+  value,
+  tone,
+  dotTone,
+}: {
   label: string;
   note: string;
   value: string;
   tone: "pos" | "neg" | "muted";
   dotTone: "pos" | "neg" | "warn" | "neutral";
-}
-
-function KpiRow({ label, note, value, tone, dotTone }: KpiRowProps) {
-  const dotClass =
+}) {
+  const dotCls =
     dotTone === "pos" ? "is-pos" : dotTone === "neg" ? "is-neg" : dotTone === "warn" ? "is-warn" : "";
+  const valueCls = tone ? ` is-${tone}` : "";
   return (
     <div className="kpi-list__row">
       <div className="kpi-list__label">
         <span className="kpi-list__label-title">{label}</span>
         <span className="kpi-list__label-note">{note}</span>
       </div>
-      <span className={`kpi-list__value${tone ? ` is-${tone}` : ""}`}>{value}</span>
-      <span className={`kpi-list__dot ${dotClass}`} aria-hidden="true" />
+      <span className={`kpi-list__value${valueCls}`}>{value}</span>
+      <span className={`kpi-list__dot ${dotCls}`} aria-hidden="true" />
     </div>
   );
 }
 
-/** Dashboard = status rail + kpi list + recent entries table + period stamp. */
+/**
+ * Dashboard content. Rendered inside the workbench as the default tab.
+ * Owns no chrome — page head lives on the tab pill + section heads.
+ */
 export function DashboardScreen() {
+  const workbench = useWorkbench();
   const { user, business, transactions } = useAppState();
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -134,16 +140,9 @@ export function DashboardScreen() {
     void load();
   }, [load, retryKey, transactions]);
 
-  useEffect(() => {
-    document.title = business ? `${business.name} - ${wordmark}` : wordmark;
-  }, [business]);
-
   const businessName = business?.name || user?.businessName || "Your business";
+  const recent = data?.recentTransactions ?? [];
 
-  const recent = useMemo(() => data?.recentTransactions ?? [], [data]);
-
-  // Synthesize a deterministic 14-step spark from local data so the rail shows a
-  // visible trend without a real history endpoint.
   const spark = useMemo<number[]>(() => {
     if (!data) return [];
     const base = Math.max(1, Math.abs(data.cashAndBankBalance) / 1_000_000);
@@ -167,24 +166,31 @@ export function DashboardScreen() {
         <div className="page-head__left">
           <p className="page-head__meta">
             <strong>{todayStamp}</strong>
-            <span> &middot; </span>
-            <span>CLOCK {clockStamp}</span>
-            <span> &middot; </span>
-            <span>SESSION {sessionStamp}</span>
           </p>
           <h1 className="page-title">
             <span>{businessName}</span>
             <span className="page-title__sep">/</span>
-            <span className="page-title__sub">today's console</span>
+            <span className="page-title__sub">today's ledger</span>
           </h1>
+          <p className="page-sub">
+            A ruled summary of the books. Read positions, rule entries, close periods — all from a single source.
+          </p>
         </div>
         <div className="page-head__actions">
-          <Link className="btn btn--secondary" to="/transactions">
+          <button
+            type="button"
+            className="btn btn--secondary"
+            onClick={() => workbench.openList("cash-other-payment")}
+          >
             Open ledger
-          </Link>
-          <Link className="btn btn--primary" to="/record/money-in">
+          </button>
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => workbench.openEntryDraft("money-in")}
+          >
             New entry
-          </Link>
+          </button>
         </div>
       </header>
 
@@ -204,7 +210,7 @@ export function DashboardScreen() {
               tone={data.cashAndBankBalance >= 0 ? "pos" : "neg"}
               spark={spark}
               sparkTone={data.cashAndBankBalance >= 0 ? "pos" : "neg"}
-              meta={`${todayStamp.split(" ")[1] || ""} END-OF-DAY`}
+              meta={`${shortDateStamp} END-OF-DAY`}
             />
             <StatusCell
               label="MTD P&L"
@@ -242,9 +248,13 @@ export function DashboardScreen() {
               </h2>
               <span className="section-head__meta">{recent.length} total &middot; top 5 shown</span>
               {recent.length > 5 ? (
-                <Link className="section-head__action" to="/transactions">
+                <button
+                  type="button"
+                  className="section-head__action"
+                  onClick={() => workbench.openList("cash-other-payment")}
+                >
                   View ledger
-                </Link>
+                </button>
               ) : null}
             </div>
 
@@ -254,9 +264,13 @@ export function DashboardScreen() {
                 <p className="empty-state__message">
                   Open the book with your first money in or money out. The console reads from every line you rule.
                 </p>
-                <Link className="btn btn--primary" to="/record/money-in">
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() => workbench.openEntryDraft("money-in")}
+                >
                   Record first entry
-                </Link>
+                </button>
               </div>
             ) : (
               <div className="ledger-table">

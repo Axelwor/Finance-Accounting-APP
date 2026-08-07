@@ -64,15 +64,18 @@ const Icon = ({ name }: { name: Module["icon"] }) => {
 };
 
 /**
- * Left sidebar with module tree. Hover or focus on a module row reveals
- * its sub-item popup on the right (desktop) or expands in place (mobile).
- * Sub-items open list tabs in the work area.
+ * Left sidebar with module tree. Hover, focus, or click on a module row
+ * reveals its sub-item popup on the right. The popup stays open while the
+ * pointer is on either the trigger or the popup itself (with an offset
+ * bridge that hides the gap). On mobile the popup expands inline.
  */
 export function Sidebar() {
   const workbench = useWorkbench();
   const [openModule, setOpenModule] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  /** Tracks whether focus is inside the module (so blur doesn't snap the popup shut). */
+  const insideRef = useRef(false);
 
   // Close popup on click outside or Escape.
   useEffect(() => {
@@ -95,6 +98,22 @@ export function Sidebar() {
     workbench.openList(sub.openList);
     setOpenModule(null);
     setMobileOpen(false);
+  };
+
+  const handleModuleEnter = (id: string) => {
+    setOpenModule(id);
+  };
+  const handleModuleLeave = (id: string) => {
+    // Defer to allow pointer to traverse the offset bridge into the popup.
+    // If a focus event arrives before the timer fires we keep the popup
+    // open (keyboard navigation must not snap shut).
+    setTimeout(() => {
+      if (!insideRef.current) setOpenModule(null);
+    }, 120);
+    // Optimistically set to null if leaving this exact module
+    if (openModule === id && !insideRef.current) {
+      // do nothing yet — wait for timeout
+    }
   };
 
   return (
@@ -122,49 +141,80 @@ export function Sidebar() {
           <span className="sidebar__brand-label">Console</span>
         </div>
         <nav className="sidebar__nav">
-          {MODULES.map((mod) => (
-            <div
-              key={mod.id}
-              className={`sidebar-module${openModule === mod.id ? " is-open" : ""}${mobileOpen && openModule === mod.id ? " is-mobile-open" : ""}`}
-              onMouseEnter={() => setOpenModule(mod.id)}
-              onMouseLeave={() => setOpenModule((current) => (current === mod.id && !mobileOpen ? null : current))}
-            >
-              <button
-                type="button"
-                className="sidebar-module__trigger"
-                aria-haspopup="menu"
-                aria-expanded={openModule === mod.id}
-                onFocus={() => setOpenModule(mod.id)}
-                onClick={() => setOpenModule((current) => (current === mod.id ? null : mod.id))}
+          {MODULES.map((mod) => {
+            const isOpen = openModule === mod.id;
+            return (
+              <div
+                key={mod.id}
+                className={`sidebar-module${isOpen ? " is-open" : ""}${
+                  mobileOpen && isOpen ? " is-mobile-open" : ""
+                }`}
+                onMouseEnter={() => handleModuleEnter(mod.id)}
+                onMouseLeave={() => handleModuleLeave(mod.id)}
               >
-                <span className="sidebar-module__icon" aria-hidden="true">
-                  <Icon name={mod.icon} />
-                </span>
-                <span className="sidebar-module__label">{mod.label}</span>
-                <span className="sidebar-module__count">{mod.items.length}</span>
-                <span className="sidebar-module__chevron" aria-hidden="true">›</span>
-              </button>
-              <div className="sidebar-module__popup" role="menu">
-                <p className="sidebar-module__popup-title">{mod.label}</p>
-                <ul className="sidebar-module__items">
-                  {mod.items.map((sub) => (
-                    <li key={sub.id}>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="sidebar-subitem"
-                        onClick={() => handleSubClick(sub)}
-                      >
-                        <span className="sidebar-subitem__label">{sub.label}</span>
-                        {sub.hint ? <span className="sidebar-subitem__hint">{sub.hint}</span> : null}
-                        {sub.mockData ? <span className="sidebar-subitem__mock">DEMO</span> : null}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <button
+                  type="button"
+                  className="sidebar-module__trigger"
+                  aria-haspopup="menu"
+                  aria-expanded={isOpen}
+                  onFocus={() => {
+                    insideRef.current = true;
+                    setOpenModule(mod.id);
+                  }}
+                  onBlur={() => {
+                    insideRef.current = false;
+                    setTimeout(() => {
+                      if (!insideRef.current) setOpenModule(null);
+                    }, 50);
+                  }}
+                  onClick={() => setOpenModule((current) => (current === mod.id ? null : mod.id))}
+                >
+                  <span className="sidebar-module__icon" aria-hidden="true">
+                    <Icon name={mod.icon} />
+                  </span>
+                  <span className="sidebar-module__label">{mod.label}</span>
+                  <span className="sidebar-module__count">{mod.items.length}</span>
+                  <span className="sidebar-module__chevron" aria-hidden="true">›</span>
+                </button>
+                {/*
+                  Popup is always rendered (display controlled by CSS); it has
+                  an offset bridge so the pointer can travel from the trigger
+                  to the popup without re-entering the parent and firing
+                  mouseleave on the bridge element.
+                */}
+                <div
+                  className="sidebar-module__popup"
+                  role="menu"
+                  onMouseEnter={() => {
+                    insideRef.current = true;
+                    setOpenModule(mod.id);
+                  }}
+                  onMouseLeave={() => {
+                    insideRef.current = false;
+                    setOpenModule(null);
+                  }}
+                >
+                  <p className="sidebar-module__popup-title">{mod.label}</p>
+                  <ul className="sidebar-module__items">
+                    {mod.items.map((sub) => (
+                      <li key={sub.id}>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="sidebar-subitem"
+                          onClick={() => handleSubClick(sub)}
+                        >
+                          <span className="sidebar-subitem__label">{sub.label}</span>
+                          {sub.hint ? <span className="sidebar-subitem__hint">{sub.hint}</span> : null}
+                          {sub.mockData ? <span className="sidebar-subitem__mock">DEMO</span> : null}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </nav>
       </aside>
     </>
