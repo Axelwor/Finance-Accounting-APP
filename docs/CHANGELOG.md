@@ -43,3 +43,13 @@
 - Added `POST /api/v1/periods/close`: posts the closing entry (P&L → 3301 → 3201 retained earnings) and locks the period in one transaction; verified end-to-end — period CLOSED, balance-sheet balanced with equity 289k, P&L 0 after close, trial balance 1,989,000 = 1,989,000.
 - Added `POST /api/v1/periods/unlock`: reopens a closed period by posting a PERIOD_REOPEN reversal of the closing entry (linked via `reversal_of_id`) and restoring the period to OPEN; verified end-to-end — P&L restored to 289k, balance-sheet balanced.
 - Opening balances now resolve the seeded equity account (3101) server-side when `equity_account_id` is omitted, so onboarding clients don't need tenant account ids; added unit tests. Frontend added "Tutup Buku"/"Buka Periode" buttons on the dashboard and fixed the onboarding opening-balance payload to fetch real account ids.
+
+## Ledgerly v0.2.0 — English UI + Accurate-style redesign
+
+- App rebranded to **Ledgerly** (was "Pembukuan Mudah"): new wordmark, HTML title, and meta description.
+- UI language switched from Indonesian to English across all screens, components, API error strings, mock data, formatting (`en-US`), and seed data.
+- Code identifiers, types, routes (`/transactions`, `/record/:kindParam`), and localStorage keys renamed to English (`ledgerly.m1.v1`, `ledgerly.tokens`).
+- Redesigned in the style of Accurate Online: cool light-gray background (`#f5f7fa`) with a single blue accent (`#1e6fd9`), fixed left sidebar navigation (collapsible slide-over under 900px), tighter radii, and a blue-tinted auth hero.
+- Backend seed COA and categories now use English names (applies to new tenants; existing tenant data is unchanged).
+- Specs updated to match: `docs/UI_CONTRACT.md` v0.2.0 (English, Accurate-style tokens, sidebar layout), `GLOSSARY.md` v1.3 (English two-layer term map), and `README.md`.
+- Known notes: no i18n framework (hardcoded English, per zero-dep frontend); existing tenants keep Indonesian COA/category names in the DB; users lose cached local state once after deploy due to new storage keys.

@@ -227,7 +227,7 @@ func (service *Service) OpeningBalance(writer http.ResponseWriter, request *http
 		return
 	}
 	service.post(writer, request, tenant, idem, func(ctx context.Context, tx pgx.Tx) (accounting.Journal, error) {
-		// The equity account defaults to the seeded "Modal" account (code 3101)
+		// The equity account defaults to the seeded "Capital" account (code 3101)
 		// when the client does not send one: the seed runs on registration, so
 		// the tenant's own equity id is not known to onboarding clients.
 		equityAccountID := req.EquityAccountID

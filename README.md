@@ -1,6 +1,6 @@
 # Finance Accounting App
 
-Finance accounting app dengan UI sederhana berbahasa Indonesia dan accounting engine double-entry berbasis Go.
+Finance accounting app with a simple English UI and a Go-based double-entry accounting engine.
 
 ## Workspace Status
 

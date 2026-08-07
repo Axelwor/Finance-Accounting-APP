@@ -1,45 +1,45 @@
-/** Utilitas format untuk UI (bahasa Indonesia). */
+/** Formatting utilities for the UI (English, IDR currency). */
 
-export function formatRupiah(nilai: number): string {
-  return new Intl.NumberFormat("id-ID", {
+export function formatIDR(value: number): string {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
-  }).format(nilai);
+  }).format(value);
 }
 
-/** Format "15 Juni 2026". */
-export function formatTanggal(tanggal: string): string {
-  const [tahun, bulan, hari] = tanggal.split("-").map(Number);
-  if (!tahun || !bulan || !hari) return tanggal;
-  const d = new Date(tahun, bulan - 1, hari);
-  return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "long", year: "numeric" }).format(d);
+/** Format "June 15, 2026". */
+export function formatDate(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  if (!year || !month || !day) return date;
+  const d = new Date(year, month - 1, day);
+  return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long", year: "numeric" }).format(d);
 }
 
-/** Tanggal hari ini dalam format yyyy-mm-dd (lokal). */
+/** Today's date in yyyy-mm-dd format (local). */
 export function todayISO(): string {
   const d = new Date();
   const m = String(d.getMonth() + 1).padStart(2, "0");
-  const hari = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${hari}`;
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
 }
 
-/** "Hari ini" / "Kemarin" / "12 Juni 2026" untuk daftar transaksi. */
-export function formatTanggalRelatif(tanggal: string): string {
-  const [tahun, bulan, hari] = tanggal.split("-").map(Number);
-  if (!tahun || !bulan || !hari) return tanggal;
-  const d = new Date(tahun, bulan - 1, hari);
-  const sekarang = new Date();
-  const awalHariIni = new Date(sekarang.getFullYear(), sekarang.getMonth(), sekarang.getDate());
-  const selisih = Math.round((awalHariIni.getTime() - d.getTime()) / 86400000);
-  if (selisih === 0) return "Hari ini";
-  if (selisih === 1) return "Kemarin";
-  return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(d);
+/** "Today" / "Yesterday" / "Jun 12, 2026" for the transaction list. */
+export function formatRelativeDate(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  if (!year || !month || !day) return date;
+  const d = new Date(year, month - 1, day);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.round((startOfToday.getTime() - d.getTime()) / 86400000);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", year: "numeric" }).format(d);
 }
 
-/** Parsing input angka dari form menjadi bilangan bulat rupiah (0 bila kosong). */
-export function parseRupiahInput(teks: string): number {
-  const bersih = teks.replace(/[^\d]/g, "");
-  if (!bersih) return 0;
-  return parseInt(bersih, 10);
+/** Parse numeric form input into a whole amount (0 when empty). */
+export function parseAmountInput(text: string): number {
+  const clean = text.replace(/[^\d]/g, "");
+  if (!clean) return 0;
+  return parseInt(clean, 10);
 }

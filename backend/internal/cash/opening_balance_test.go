@@ -20,7 +20,7 @@ func TestValidateOpeningBalanceValid(t *testing.T) {
 			{AccountID: 1101, DebitCents: 2000000},
 			{AccountID: 2101, CreditCents: 500000},
 		},
-		Description: "Saldo awal",
+		Description: "Opening balance",
 	}
 	if code, message := validateOpeningBalanceRequest(req); code != "" {
 		t.Fatalf("expected valid opening balance, got %s: %s", code, message)

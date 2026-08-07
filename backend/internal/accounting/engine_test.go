@@ -84,7 +84,7 @@ func TestReverse(t *testing.T) {
 		CashAccount:    testAccount(1101, AccountCash),
 		CounterAccount: testAccount(4101, AccountRevenue),
 		AmountCents:    500000,
-		Description:    "Penjualan",
+		Description:    "Sales",
 	})
 	if err != nil {
 		t.Fatal(err)

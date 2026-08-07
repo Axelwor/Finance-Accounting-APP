@@ -71,7 +71,7 @@ func (service *Service) ProfitLoss(writer http.ResponseWriter, request *http.Req
 
 // BalanceSheet aggregates asset, liability, and equity groups. Current-period
 // profit (revenue − expense) is added to equity so the balance sheet balances
-// before the period is closed (engine §21.2: laba berjalan real-time).
+// before the period is closed (engine §21.2: current earnings real-time).
 func (service *Service) BalanceSheet(writer http.ResponseWriter, request *http.Request) {
 	tenantID := tenantFrom(request)
 	rows, err := service.pool.Query(request.Context(), `

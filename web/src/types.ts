@@ -1,74 +1,75 @@
 /**
- * Tipe data bersama untuk seluruh aplikasi web.
+ * Shared data types for the whole web app.
  *
- * Ini adalah kontrak frontend sementara (M1). Ketika backend tersedia, tipe ini
- * akan diselaraskan dengan kontrak API Go (lihat ARCHITECTURE.md, shared types).
+ * This is the temporary frontend contract (M1). Once the backend is fully
+ * available, these types will be aligned with the Go API contract
+ * (see ARCHITECTURE.md, shared types).
  */
 
-/** Bahasa ramah pengguna untuk setiap jenis catatan (tanpa istilah debet/kredit). */
-export type TransactionKind = "uang-masuk" | "uang-keluar" | "pindah-uang";
+/** User-friendly label for each record kind (no debit/credit terms). */
+export type TransactionKind = "money-in" | "money-out" | "transfer";
 
 export type CurrencyCode = "IDR";
 
-export interface Usaha {
+export interface Business {
   id: string;
-  nama: string;
-  jenisUsaha: string;
-  mataUang: CurrencyCode;
-  /** Bulan (1-12) saat tahun buku dimulai. */
-  tahunBukuMulai: number;
+  name: string;
+  businessType: string;
+  currency: CurrencyCode;
+  /** Month (1-12) when the fiscal year starts. */
+  fiscalYearStart: number;
 }
 
-/** Periode pembukuan (buku). */
-export interface PeriodeBuku {
-  /** Tahun buku, mis. 2026. */
-  tahun: number;
-  /** Bulan (1-12) saat periode dimulai. */
-  mulaiBulan: number;
+/** Accounting book period. */
+export interface BookPeriod {
+  /** Fiscal year, e.g. 2026. */
+  year: number;
+  /** Month (1-12) when the period starts. */
+  startMonth: number;
 }
 
-export interface SaldoAwal {
-  kas: number;
+export interface OpeningBalance {
+  cash: number;
   bank: number;
-  piutang: number;
-  hutang: number;
-  modal: number;
+  receivables: number;
+  payables: number;
+  equity: number;
 }
 
 export interface User {
   id: string;
   email: string;
-  namaUsaha: string;
+  businessName: string;
 }
 
 export interface Category {
   id: string;
-  nama: string;
-  /** Hanya relevan untuk Uang Masuk / Uang Keluar. */
-  jenis: "uang-masuk" | "uang-keluar";
+  name: string;
+  /** Only relevant for Money In / Money Out. */
+  kind: "money-in" | "money-out";
 }
 
 export interface Transaction {
   id: string;
-  jenis: TransactionKind;
-  nominal: number;
-  tanggal: string;
-  keterangan: string;
-  kategoriId?: string;
-  kategoriNama?: string;
-  /** Sumber dana, mis. "Kas" atau nama rekening bank. */
-  dari?: string;
-  /** Tujuan dana, mis. "Kas" atau nama rekening bank. */
-  ke?: string;
+  kind: TransactionKind;
+  amount: number;
+  date: string;
+  description: string;
+  categoryId?: string;
+  categoryName?: string;
+  /** Source of funds, e.g. "Cash" or a bank account name. */
+  from?: string;
+  /** Destination of funds, e.g. "Cash" or a bank account name. */
+  to?: string;
   createdAt: string;
 }
 
 export interface DashboardSummary {
-  saldoKasBank: number;
-  untungRugiBulanIni: number;
-  tagihanJatuhTempo: number;
-  stokMenipis: number;
-  transaksiTerbaru: Transaction[];
+  cashAndBankBalance: number;
+  monthlyProfitLoss: number;
+  dueBills: number;
+  lowStock: number;
+  recentTransactions: Transaction[];
 }
 
 export interface ApiError {
@@ -79,7 +80,7 @@ export interface ApiError {
 export interface RegisterInput {
   email: string;
   password: string;
-  namaUsaha: string;
+  businessName: string;
 }
 
 export interface LoginInput {
@@ -88,36 +89,36 @@ export interface LoginInput {
 }
 
 export interface OnboardingInput {
-  usaha: {
-    nama: string;
-    jenisUsaha: string;
-    mataUang: CurrencyCode;
+  business: {
+    name: string;
+    businessType: string;
+    currency: CurrencyCode;
   };
-  periode: PeriodeBuku;
-  saldoAwal: SaldoAwal;
+  period: BookPeriod;
+  openingBalance: OpeningBalance;
 }
 
 export interface TransactionInput {
-  jenis: TransactionKind;
-  nominal: number;
-  tanggal: string;
-  keterangan: string;
-  kategoriId?: string;
-  dari?: string;
-  ke?: string;
+  kind: TransactionKind;
+  amount: number;
+  date: string;
+  description: string;
+  categoryId?: string;
+  from?: string;
+  to?: string;
 }
 
-/** Daftar rekening/kas untuk dropdown pada form Pindah Uang. */
+/** List of accounts/cash for the Transfer form dropdown. */
 export interface AccountItem {
   id: string;
-  nama: string;
+  name: string;
 }
 
 /* ------------------------------------------------------------------ */
-/* Tipe kontrak backend (Go JSON di /api/v1) — dipetakan ke tipe UI.  */
+/* Backend contract types (Go JSON at /api/v1) — mapped to UI types.  */
 /* ------------------------------------------------------------------ */
 
-/** Baris akun dari GET /api/v1/accounts (coa.account struct). */
+/** Account row from GET /api/v1/accounts (coa.account struct). */
 export interface BackendAccount {
   id: number;
   code: string;
@@ -131,7 +132,7 @@ export interface BackendAccount {
   valid_to: string | null;
 }
 
-/** Baris kategori dari GET /api/v1/categories (coa.category struct). */
+/** Category row from GET /api/v1/categories (coa.category struct). */
 export interface BackendCategory {
   id: number;
   name: string;
@@ -141,14 +142,14 @@ export interface BackendCategory {
   is_active: boolean;
 }
 
-/** Respons dari POST /api/v1/tenants. */
+/** Response from POST /api/v1/tenants. */
 export interface BackendTenant {
   id: number;
   name: string;
   slug: string;
 }
 
-/** Payload umum perintah keuangan (POST /cash-in, /cash-out). */
+/** Common financial command payload (POST /cash-in, /cash-out). */
 export interface CashCommandPayload {
   source_ref: string;
   entry_date: string;
@@ -168,7 +169,7 @@ export interface TransferCommandPayload {
   description: string;
 }
 
-/** Respons posting jurnal (cash.postingResult). */
+/** Journal posting response (cash.postingResult). */
 export interface BackendJournalResult {
   id: number;
   number: string;
@@ -179,14 +180,14 @@ export interface BackendJournalResult {
   is_reversal: boolean;
 }
 
-/** Respons GET /api/v1/reports/profit-loss. */
+/** Response GET /api/v1/reports/profit-loss. */
 export interface BackendProfitLoss {
   revenue_cents: number;
   expense_cents: number;
   profit_cents: number;
 }
 
-/** Respons GET /api/v1/reports/balance-sheet. */
+/** Response GET /api/v1/reports/balance-sheet. */
 export interface BackendBalanceSheet {
   asset_cents: number;
   liability_cents: number;
@@ -194,14 +195,14 @@ export interface BackendBalanceSheet {
   balanced: boolean;
 }
 
-/** Respons GET /api/v1/reports/cash-flow. */
+/** Response GET /api/v1/reports/cash-flow. */
 export interface BackendCashFlow {
   inflow_cents: number;
   outflow_cents: number;
   net_cash_flow_cents: number;
 }
 
-/** Baris saldo awal untuk POST /api/v1/opening-balances. */
+/** Opening balance line for POST /api/v1/opening-balances. */
 export interface OpeningBalanceLine {
   account_id: number;
   debit_cents: number;
@@ -217,7 +218,7 @@ export interface OpeningBalancePayload {
   description: string;
 }
 
-/** Hasil perintah tutup/buka periode (POST /api/v1/periods/close|unlock). */
+/** Result of period close/open commands (POST /api/v1/periods/close|unlock). */
 export interface PeriodResult {
   period_id: number;
   status: string;

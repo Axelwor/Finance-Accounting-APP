@@ -17,7 +17,7 @@ func TestValidateAccountInput(t *testing.T) {
 			name: "valid detail account",
 			request: createAccountRequest{
 				Code:        "1101",
-				Name:        "Kas",
+				Name:        "Cash",
 				ReportGroup: "asset",
 				AccountType: "CASH",
 			},
@@ -26,7 +26,7 @@ func TestValidateAccountInput(t *testing.T) {
 			name: "valid group account",
 			request: createAccountRequest{
 				Code:        "1100",
-				Name:        "Kas dan Bank",
+				Name:        "Cash and Bank",
 				ReportGroup: "asset",
 				IsGroup:     true,
 			},
@@ -35,7 +35,7 @@ func TestValidateAccountInput(t *testing.T) {
 			name: "valid with parent and validity window",
 			request: createAccountRequest{
 				Code:        "1102",
-				Name:        "Bank BCA",
+				Name:        "BCA Bank",
 				ReportGroup: "asset",
 				AccountType: "BANK",
 				ParentID:    int64Ptr(1100),
@@ -46,7 +46,7 @@ func TestValidateAccountInput(t *testing.T) {
 		{
 			name: "missing code",
 			request: createAccountRequest{
-				Name:        "Kas",
+				Name:        "Cash",
 				ReportGroup: "asset",
 				AccountType: "CASH",
 			},
@@ -65,7 +65,7 @@ func TestValidateAccountInput(t *testing.T) {
 			name: "code with surrounding whitespace",
 			request: createAccountRequest{
 				Code:        " 1101",
-				Name:        "Kas",
+				Name:        "Cash",
 				ReportGroup: "asset",
 				AccountType: "CASH",
 			},
@@ -75,7 +75,7 @@ func TestValidateAccountInput(t *testing.T) {
 			name: "code too long",
 			request: createAccountRequest{
 				Code:        strings.Repeat("1", 65),
-				Name:        "Kas",
+				Name:        "Cash",
 				ReportGroup: "asset",
 				AccountType: "CASH",
 			},
@@ -85,7 +85,7 @@ func TestValidateAccountInput(t *testing.T) {
 			name: "unknown report group",
 			request: createAccountRequest{
 				Code:        "1101",
-				Name:        "Kas",
+				Name:        "Cash",
 				ReportGroup: "contra_asset",
 				AccountType: "CASH",
 			},
@@ -95,7 +95,7 @@ func TestValidateAccountInput(t *testing.T) {
 			name: "missing account type on detail",
 			request: createAccountRequest{
 				Code:        "1101",
-				Name:        "Kas",
+				Name:        "Cash",
 				ReportGroup: "asset",
 			},
 			wantError: "INVALID_REQUEST",
@@ -104,7 +104,7 @@ func TestValidateAccountInput(t *testing.T) {
 			name: "group account must not carry account type",
 			request: createAccountRequest{
 				Code:        "1100",
-				Name:        "Kas dan Bank",
+				Name:        "Cash and Bank",
 				ReportGroup: "asset",
 				AccountType: "CASH",
 				IsGroup:     true,
@@ -115,7 +115,7 @@ func TestValidateAccountInput(t *testing.T) {
 			name: "valid_to before valid_from",
 			request: createAccountRequest{
 				Code:        "1101",
-				Name:        "Kas",
+				Name:        "Cash",
 				ReportGroup: "asset",
 				AccountType: "CASH",
 				ValidFrom:   timePtr(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)),
@@ -147,7 +147,7 @@ func TestValidateCategoryInput(t *testing.T) {
 		{
 			name: "valid IN category",
 			request: createCategoryRequest{
-				Name:                   "Penjualan Tunai",
+				Name:                   "Cash Sales",
 				Direction:              "IN",
 				DefaultDebitAccountID:  1101,
 				DefaultCreditAccountID: 4101,
@@ -156,7 +156,7 @@ func TestValidateCategoryInput(t *testing.T) {
 		{
 			name: "valid OUT category with single account",
 			request: createCategoryRequest{
-				Name:                  "Sewa",
+				Name:                  "Rent",
 				Direction:             "OUT",
 				DefaultDebitAccountID: 5101,
 			},
@@ -183,7 +183,7 @@ func TestValidateCategoryInput(t *testing.T) {
 		{
 			name: "no default accounts",
 			request: createCategoryRequest{
-				Name:      "Kosong",
+				Name:      "Empty",
 				Direction: "IN",
 			},
 			wantError: "INVALID_REQUEST",
@@ -191,7 +191,7 @@ func TestValidateCategoryInput(t *testing.T) {
 		{
 			name: "negative account id",
 			request: createCategoryRequest{
-				Name:                   "Negatif",
+				Name:                   "Negative",
 				Direction:              "IN",
 				DefaultDebitAccountID:  -1,
 				DefaultCreditAccountID: 4101,

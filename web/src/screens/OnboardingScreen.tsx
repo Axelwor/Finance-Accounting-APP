@@ -2,84 +2,84 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAppState } from "../state";
-import { Button, FormError, RupiahField, SelectField, TextField } from "../components/ui";
+import { AmountField, Button, FormError, SelectField, TextField } from "../components/ui";
 import type { CurrencyCode } from "../types";
-import { formatRupiah } from "../lib/format";
+import { formatIDR } from "../lib/format";
 
-type SaldoKey = "kas" | "bank" | "piutang" | "hutang" | "modal";
+type BalanceKey = "cash" | "bank" | "receivables" | "payables" | "equity";
 
-const SALDO_FIELDS: { key: SaldoKey; label: string; hint?: string }[] = [
-  { key: "kas", label: "Uang tunai di kas", hint: "Uang fisik yang ada di tangan." },
-  { key: "bank", label: "Saldo rekening bank" },
-  { key: "piutang", label: "Piutang (uang yang akan diterima)" },
-  { key: "hutang", label: "Hutang (uang yang harus dibayar)" },
-  { key: "modal", label: "Modal awal usaha" },
+const BALANCE_FIELDS: { key: BalanceKey; label: string; hint?: string }[] = [
+  { key: "cash", label: "Cash on hand", hint: "Physical money you hold." },
+  { key: "bank", label: "Bank account balance" },
+  { key: "receivables", label: "Receivables (money to be received)" },
+  { key: "payables", label: "Payables (money to be paid)" },
+  { key: "equity", label: "Starting capital" },
 ];
 
-const JENIS_USAHA = [
-  "Warung / toko kelontong",
-  "Kafe / rumah makan",
+const BUSINESS_TYPES = [
+  "Grocery / convenience store",
+  "Cafe / restaurant",
   "Online shop",
-  "Jasa",
-  "Bengkel",
-  "Lainnya",
+  "Services",
+  "Workshop",
+  "Other",
 ];
 
-const MATA_UANG: { value: CurrencyCode; label: string }[] = [{ value: "IDR", label: "Rupiah (Rp)" }];
+const CURRENCIES: { value: CurrencyCode; label: string }[] = [{ value: "IDR", label: "Rupiah (Rp)" }];
 
-/** Alur onboarding 3 langkah: data usaha, periode buku, saldo awal ringkas. */
+/** 3-step onboarding flow: business details, book period, opening balance. */
 export function OnboardingScreen() {
   const [step, setStep] = useState(0);
-  const [nama, setNama] = useState("");
-  const [jenisUsaha, setJenisUsaha] = useState("");
-  const [mataUang, setMataUang] = useState<CurrencyCode>("IDR");
-  const [tahun, setTahun] = useState(String(new Date().getFullYear()));
-  const [bulanMulai, setBulanMulai] = useState("1");
-  const [saldo, setSaldo] = useState<Record<SaldoKey, string>>({
-    kas: "",
+  const [name, setName] = useState("");
+  const [businessType, setBusinessType] = useState("");
+  const [currency, setCurrency] = useState<CurrencyCode>("IDR");
+  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [startMonth, setStartMonth] = useState("1");
+  const [balance, setBalance] = useState<Record<BalanceKey, string>>({
+    cash: "",
     bank: "",
-    piutang: "",
-    hutang: "",
-    modal: "",
+    receivables: "",
+    payables: "",
+    equity: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [finishing, setFinishing] = useState(false);
 
   const navigate = useNavigate();
-  const { setUsaha } = useAppState();
+  const { setBusiness } = useAppState();
 
-  const jumlahHarta = (saldo.kas ? Number(saldo.kas) : 0) + (saldo.bank ? Number(saldo.bank) : 0) + (saldo.piutang ? Number(saldo.piutang) : 0);
-  const jumlahKewajibanModal = (saldo.hutang ? Number(saldo.hutang) : 0) + (saldo.modal ? Number(saldo.modal) : 0);
+  const totalAssets = (balance.cash ? Number(balance.cash) : 0) + (balance.bank ? Number(balance.bank) : 0) + (balance.receivables ? Number(balance.receivables) : 0);
+  const totalLiabilitiesEquity = (balance.payables ? Number(balance.payables) : 0) + (balance.equity ? Number(balance.equity) : 0);
 
-  const bulanLabels = [
-    "Januari",
-    "Februari",
-    "Maret",
+  const monthLabels = [
+    "January",
+    "February",
+    "March",
     "April",
-    "Mei",
-    "Juni",
-    "Juli",
-    "Agustus",
+    "May",
+    "June",
+    "July",
+    "August",
     "September",
-    "Oktober",
+    "October",
     "November",
-    "Desember",
+    "December",
   ];
 
   const stepValid = (): boolean => {
-    if (step === 0) return nama.trim().length > 0 && jenisUsaha.trim().length > 0;
+    if (step === 0) return name.trim().length > 0 && businessType.trim().length > 0;
     if (step === 1) {
-      const t = Number(tahun);
-      return t >= 2000 && t <= 2100 && bulanMulai !== "";
+      const y = Number(year);
+      return y >= 2000 && y <= 2100 && startMonth !== "";
     }
     return true;
   };
 
-  const lanjut = () => {
+  const next = () => {
     setError(null);
     if (step === 0 && !stepValid()) {
-      setError("Lengkapi nama usaha dan jenis usaha untuk melanjutkan.");
+      setError("Please fill in business name and business type to continue.");
       return;
     }
     if (step < 2) setStep((s) => s + 1);
@@ -90,47 +90,47 @@ export function OnboardingScreen() {
     setFinishing(true);
     try {
       await api.completeOnboarding({
-        usaha: { nama: nama.trim(), jenisUsaha: jenisUsaha.trim(), mataUang },
-        periode: { tahun: Number(tahun), mulaiBulan: Number(bulanMulai) },
-        saldoAwal: {
-          kas: Number(saldo.kas || 0),
-          bank: Number(saldo.bank || 0),
-          piutang: Number(saldo.piutang || 0),
-          hutang: Number(saldo.hutang || 0),
-          modal: Number(saldo.modal || 0),
+        business: { name: name.trim(), businessType: businessType.trim(), currency },
+        period: { year: Number(year), startMonth: Number(startMonth) },
+        openingBalance: {
+          cash: Number(balance.cash || 0),
+          bank: Number(balance.bank || 0),
+          receivables: Number(balance.receivables || 0),
+          payables: Number(balance.payables || 0),
+          equity: Number(balance.equity || 0),
         },
       });
       const state = api.getLocalState();
-      setUsaha(state.usaha);
+      setBusiness(state.business);
       setLoading(true);
       navigate("/dashboard", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Terjadi kesalahan. Coba lagi.");
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
       setFinishing(false);
     }
   };
 
-  const setSaldoField = (key: SaldoKey, raw: string) => {
-    setSaldo((s) => ({ ...s, [key]: raw.replace(/[^\d]/g, "").slice(0, 15) }));
+  const setBalanceField = (key: BalanceKey, raw: string) => {
+    setBalance((s) => ({ ...s, [key]: raw.replace(/[^\d]/g, "").slice(0, 15) }));
   };
 
   const renderStep = () => {
     if (step === 0) {
       return (
         <div className="form-stack">
-          <TextField label="Nama usaha" value={nama} onChange={setNama} placeholder="mis. Warung Bu Sari" />
+          <TextField label="Business name" value={name} onChange={setName} placeholder="e.g. Sari Corner Store" />
           <SelectField
-            label="Jenis usaha"
-            value={jenisUsaha}
-            onChange={setJenisUsaha}
-            options={JENIS_USAHA.map((j) => ({ value: j, label: j }))}
-            placeholder="Pilih jenis usaha"
+            label="Business type"
+            value={businessType}
+            onChange={setBusinessType}
+            options={BUSINESS_TYPES.map((t) => ({ value: t, label: t }))}
+            placeholder="Select business type"
           />
           <SelectField
-            label="Mata uang"
-            value={mataUang}
-            onChange={(v) => setMataUang(v as CurrencyCode)}
-            options={MATA_UANG}
+            label="Currency"
+            value={currency}
+            onChange={(v) => setCurrency(v as CurrencyCode)}
+            options={CURRENCIES}
           />
         </div>
       );
@@ -139,48 +139,48 @@ export function OnboardingScreen() {
       return (
         <div className="form-stack">
           <TextField
-            label="Tahun buku"
-            value={tahun}
-            onChange={(v) => setTahun(v.replace(/[^\d]/g, "").slice(0, 4))}
+            label="Fiscal year"
+            value={year}
+            onChange={(v) => setYear(v.replace(/[^\d]/g, "").slice(0, 4))}
             inputMode="numeric"
-            hint="Tahun saat pembukuan dimulai."
+            hint="The year your bookkeeping starts."
           />
           <SelectField
-            label="Periode buku dimulai pada bulan"
-            value={bulanMulai}
-            onChange={setBulanMulai}
-            options={bulanLabels.map((b, i) => ({ value: String(i + 1), label: b }))}
+            label="Book period starts in month"
+            value={startMonth}
+            onChange={setStartMonth}
+            options={monthLabels.map((m, i) => ({ value: String(i + 1), label: m }))}
           />
           <p className="field-note">
-            Periode buku: {bulanLabels[Number(bulanMulai) - 1]} {tahun} sampai{" "}
-            {bulanLabels[(Number(bulanMulai) + 10) % 12]} {Number(bulanMulai) === 1 ? Number(tahun) : Number(tahun) + 1}.
+            Book period: {monthLabels[Number(startMonth) - 1]} {year} through{" "}
+            {monthLabels[(Number(startMonth) + 10) % 12]} {Number(startMonth) === 1 ? year : Number(year) + 1}.
           </p>
         </div>
       );
     }
     return (
       <div className="form-stack">
-        {SALDO_FIELDS.map((f) => (
-          <RupiahField
+        {BALANCE_FIELDS.map((f) => (
+          <AmountField
             key={f.key}
             label={f.label}
-            value={saldo[f.key]}
-            onChange={(raw) => setSaldoField(f.key, raw)}
+            value={balance[f.key]}
+            onChange={(raw) => setBalanceField(f.key, raw)}
             hint={f.hint}
           />
         ))}
-        <div className="saldo-ringkasan">
-          <p className="saldo-ringkasan__label">Ringkasan</p>
-          <div className="saldo-ringkasan__row">
-            <span>Total harta (kas + bank + piutang)</span>
-            <strong>{formatRupiah(jumlahHarta)}</strong>
+        <div className="balance-summary">
+          <p className="balance-summary__label">Summary</p>
+          <div className="balance-summary__row">
+            <span>Total assets (cash + bank + receivables)</span>
+            <strong>{formatIDR(totalAssets)}</strong>
           </div>
-          <div className="saldo-ringkasan__row">
-            <span>Hutang + modal</span>
-            <strong>{formatRupiah(jumlahKewajibanModal)}</strong>
+          <div className="balance-summary__row">
+            <span>Payables + capital</span>
+            <strong>{formatIDR(totalLiabilitiesEquity)}</strong>
           </div>
-          <p className="saldo-ringkasan__note">
-            Perbedaan kecil antara kedua angka akan diseimbangkan otomatis oleh sistem.
+          <p className="balance-summary__note">
+            Small differences between the two figures are balanced automatically by the system.
           </p>
         </div>
       </div>
@@ -188,9 +188,9 @@ export function OnboardingScreen() {
   };
 
   const stepMeta = [
-    { label: "Data usaha", desc: "Nama, jenis, dan mata uang." },
-    { label: "Periode buku", desc: "Kapan tahun buku dimulai." },
-    { label: "Saldo awal", desc: "Ringkasan posisi keuangan hari pertama." },
+    { label: "Business details", desc: "Name, type, and currency." },
+    { label: "Book period", desc: "When your fiscal year starts." },
+    { label: "Opening balance", desc: "A summary of your day-one financial position." },
   ];
 
   return (
@@ -198,13 +198,13 @@ export function OnboardingScreen() {
       <div className="onboarding__head">
         <p className="onboarding__brand">
           <span className="brand__mark" aria-hidden="true" />
-          <span className="brand__name">Pembukuan Mudah</span>
+          <span className="brand__name">Ledgerly</span>
         </p>
-        <h1 className="onboarding__title">Siapkan buku usaha Anda</h1>
-        <p className="onboarding__sub">Tiga langkah singkat, sekitar 2 menit.</p>
+        <h1 className="onboarding__title">Set up your business books</h1>
+        <p className="onboarding__sub">Three short steps, about 2 minutes.</p>
       </div>
 
-      <ol className="stepper" aria-label="Langkah onboarding">
+      <ol className="stepper" aria-label="Onboarding steps">
         {stepMeta.map((s, i) => (
           <li key={s.label} className={`stepper__item${i === step ? " is-active" : i < step ? " is-done" : ""}`}>
             <span className="stepper__num" aria-hidden="true">
@@ -220,7 +220,7 @@ export function OnboardingScreen() {
         onSubmit={(e) => {
           e.preventDefault();
           if (step === 2) void handleFinish();
-          else lanjut();
+          else next();
         }}
         noValidate
       >
@@ -235,13 +235,13 @@ export function OnboardingScreen() {
         <div className="onboarding-card__actions">
           {step > 0 ? (
             <Button variant="secondary" onClick={() => setStep((s) => s - 1)}>
-              Kembali
+              Back
             </Button>
           ) : (
             <span />
           )}
           <Button type="submit" variant="primary" disabled={loading || finishing}>
-            {step < 2 ? "Lanjut" : finishing ? "Menyimpan..." : "Selesai, buka dashboard"}
+            {step < 2 ? "Next" : finishing ? "Saving..." : "Finish, open dashboard"}
           </Button>
         </div>
       </form>

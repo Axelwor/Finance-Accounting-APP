@@ -3,59 +3,59 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import { useAppState } from "../state";
 import {
+  AmountField,
   Button,
   DateField,
   ErrorState,
   FormError,
   LoadingState,
-  RupiahField,
   SelectField,
   TextareaField,
 } from "../components/ui";
 import { todayISO } from "../lib/format";
 import type { AccountItem, Category, TransactionKind } from "../types";
 
-const JENIS_META: Record<
+const KIND_META: Record<
   TransactionKind,
   { title: string; sub: string; icon: string; submit: string }
 > = {
-  "uang-masuk": {
-    title: "Catat uang masuk",
-    sub: "Uang yang diterima usaha, misalnya hasil penjualan.",
+  "money-in": {
+    title: "Record money in",
+    sub: "Money received by the business, e.g. sales.",
     icon: "+",
-    submit: "Simpan uang masuk",
+    submit: "Save money in",
   },
-  "uang-keluar": {
-    title: "Catat uang keluar",
-    sub: "Uang yang dikeluarkan usaha, misalnya belanja atau sewa.",
+  "money-out": {
+    title: "Record money out",
+    sub: "Money spent by the business, e.g. purchases or rent.",
     icon: "-",
-    submit: "Simpan uang keluar",
+    submit: "Save money out",
   },
-  "pindah-uang": {
-    title: "Pindah uang",
-    sub: "Memindahkan uang antar rekening atau kas, tanpa untung maupun rugi.",
+  transfer: {
+    title: "Transfer money",
+    sub: "Move money between accounts or cash, without profit or loss.",
     icon: "⇄",
-    submit: "Simpan pemindahan",
+    submit: "Save transfer",
   },
 };
 
-/** Form input transaksi: uang masuk / uang keluar / pindah uang. */
+/** Transaction input form: money in / money out / transfer. */
 export function TransactionFormScreen() {
-  const { jenisParam } = useParams<{ jenisParam: string }>();
-  const jenis: TransactionKind =
-    jenisParam === "uang-keluar"
-      ? "uang-keluar"
-      : jenisParam === "pindah-uang"
-        ? "pindah-uang"
-        : "uang-masuk";
-  const meta = JENIS_META[jenis];
+  const { kindParam } = useParams<{ kindParam: string }>();
+  const kind: TransactionKind =
+    kindParam === "money-out"
+      ? "money-out"
+      : kindParam === "transfer"
+        ? "transfer"
+        : "money-in";
+  const meta = KIND_META[kind];
 
-  const [nominal, setNominal] = useState("");
-  const [tanggal, setTanggal] = useState(todayISO());
-  const [keterangan, setKeterangan] = useState("");
-  const [kategoriId, setKategoriId] = useState("");
-  const [dari, setDari] = useState("");
-  const [ke, setKe] = useState("");
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(todayISO());
+  const [description, setDescription] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
@@ -68,33 +68,33 @@ export function TransactionFormScreen() {
   const { setTransactions } = useAppState();
 
   useEffect(() => {
-    document.title = `${meta.title} - Pembukuan Mudah`;
+    document.title = `${meta.title} - Ledgerly`;
   }, [meta.title]);
 
-  const muatMaster = useCallback(async () => {
+  const loadMaster = useCallback(async () => {
     setLoadError(null);
     try {
-      const [kategori, rekening] = await Promise.all([
+      const [cats, accts] = await Promise.all([
         api.listCategories(),
         api.listAccounts(),
       ]);
-      setCategories(kategori);
-      setAccounts(rekening);
+      setCategories(cats);
+      setAccounts(accts);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Gagal memuat data. Coba lagi.");
+      setLoadError(err instanceof Error ? err.message : "Failed to load data. Try again.");
     }
   }, []);
 
   useEffect(() => {
-    void muatMaster();
-  }, [muatMaster, jenis]);
+    void loadMaster();
+  }, [loadMaster, kind]);
 
-  const kategoriOptions =
-    jenis === "pindah-uang"
+  const categoryOptions =
+    kind === "transfer"
       ? []
-      : categories.filter((c) => c.jenis === jenis).map((c) => ({ value: c.id, label: c.nama }));
+      : categories.filter((c) => c.kind === kind).map((c) => ({ value: c.id, label: c.name }));
 
-  const accountOptions = accounts.map((a) => ({ value: a.id, label: a.nama }));
+  const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }));
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -102,25 +102,25 @@ export function TransactionFormScreen() {
     setSaving(true);
     setSaved(false);
     try {
-      const { transaksiTerbaru } = await api.createTransaction({
-        jenis,
-        nominal: Number(nominal || 0),
-        tanggal,
-        keterangan,
-        kategoriId: jenis === "pindah-uang" ? undefined : kategoriId || undefined,
-        dari: jenis === "pindah-uang" ? dari || undefined : undefined,
-        ke: jenis === "pindah-uang" ? ke || undefined : undefined,
+      const { recentTransactions } = await api.createTransaction({
+        kind,
+        amount: Number(amount || 0),
+        date,
+        description,
+        categoryId: kind === "transfer" ? undefined : categoryId || undefined,
+        from: kind === "transfer" ? from || undefined : undefined,
+        to: kind === "transfer" ? to || undefined : undefined,
       });
-      setTransactions(transaksiTerbaru);
+      setTransactions(recentTransactions);
       setSaved(true);
-      setNominal("");
-      setKeterangan("");
-      setKategoriId("");
-      setDari("");
-      setKe("");
+      setAmount("");
+      setDescription("");
+      setCategoryId("");
+      setFrom("");
+      setTo("");
       setTimeout(() => navigate("/dashboard"), 1100);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Terjadi kesalahan. Coba lagi.");
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
       setSaving(false);
     }
   };
@@ -135,52 +135,52 @@ export function TransactionFormScreen() {
       </header>
 
       {loadError ? (
-        <ErrorState message={loadError} onRetry={() => void muatMaster()} />
+        <ErrorState message={loadError} onRetry={() => void loadMaster()} />
       ) : categories.length === 0 ? (
-        <LoadingState label="Menyiapkan form..." />
+        <LoadingState label="Preparing the form..." />
       ) : (
         <form className="form-card" onSubmit={handleSubmit} noValidate>
-          <RupiahField label="Nominal (Rp)" value={nominal} onChange={setNominal} placeholder="0" />
+          <AmountField label="Amount (IDR)" value={amount} onChange={setAmount} placeholder="0" />
 
-          <DateField label="Tanggal" value={tanggal} onChange={setTanggal} max={todayISO()} />
+          <DateField label="Date" value={date} onChange={setDate} max={todayISO()} />
 
-          {jenis === "pindah-uang" ? (
+          {kind === "transfer" ? (
             <div className="field-row">
-              <SelectField label="Dari rekening" value={dari} onChange={setDari} options={accountOptions} placeholder="Pilih rekening" />
-              <SelectField label="Ke rekening" value={ke} onChange={setKe} options={accountOptions} placeholder="Pilih rekening" />
+              <SelectField label="From account" value={from} onChange={setFrom} options={accountOptions} placeholder="Select account" />
+              <SelectField label="To account" value={to} onChange={setTo} options={accountOptions} placeholder="Select account" />
             </div>
           ) : (
             <SelectField
-              label="Kategori"
-              value={kategoriId}
-              onChange={setKategoriId}
-              options={kategoriOptions}
-              placeholder="Pilih kategori"
+              label="Category"
+              value={categoryId}
+              onChange={setCategoryId}
+              options={categoryOptions}
+              placeholder="Select category"
             />
           )}
 
           <TextareaField
-            label="Keterangan"
-            value={keterangan}
-            onChange={setKeterangan}
-            placeholder="mis. Penjualan tunai hari ini"
-            hint="Catatan singkat agar mudah dikenali nanti."
+            label="Description"
+            value={description}
+            onChange={setDescription}
+            placeholder="e.g. Today's cash sales"
+            hint="A short note so you can recognize it later."
           />
 
           <FormError message={error} />
 
           <div className="form-card__actions">
             <Button variant="secondary" to="/dashboard">
-              Batal
+              Cancel
             </Button>
             <Button type="submit" variant="primary" disabled={saving || saved}>
-              {saving ? "Menyimpan..." : saved ? "Tersimpan ✓" : meta.submit}
+              {saving ? "Saving..." : saved ? "Saved ✓" : meta.submit}
             </Button>
           </div>
 
           {saved ? (
             <p className="form-card__success" role="status">
-              Tersimpan. Mengarahkan ke ringkasan...
+              Saved. Taking you to the summary...
             </p>
           ) : null}
         </form>

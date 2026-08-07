@@ -3,57 +3,57 @@ import { api } from "../api";
 import { Button, Card, FormError } from "./ui";
 import type { PeriodResult } from "../types";
 
-type AksiPeriode = "tutup" | "buka";
+type PeriodAction = "close" | "reopen";
 
-const KONFIRMASI: Record<AksiPeriode, string> = {
-  tutup:
-    "Tutup buku periode berjalan? Setelah ditutup, periode tidak dapat menerima transaksi baru sampai dibuka kembali.",
-  buka:
-    "Buka kembali periode yang sudah ditutup? Jurnal penutup akan dibatalkan otomatis oleh sistem.",
+const CONFIRMATIONS: Record<PeriodAction, string> = {
+  close:
+    "Close the current book period? After closing, the period cannot accept new transactions until it is reopened.",
+  reopen:
+    "Reopen a closed period? The closing journal will be reversed automatically by the system.",
 };
 
-/** Kartu kecil "Periode buku": menutup / membuka periode dari dashboard. */
+/** Small "Book period" card: closes / reopens the period from the dashboard. */
 export function PeriodCard() {
-  const [sibuk, setSibuk] = useState<AksiPeriode | null>(null);
-  const [hasil, setHasil] = useState<PeriodResult | null>(null);
+  const [busy, setBusy] = useState<PeriodAction | null>(null);
+  const [result, setResult] = useState<PeriodResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const jalankan = async (aksi: AksiPeriode) => {
-    if (!window.confirm(KONFIRMASI[aksi])) return;
+  const run = async (action: PeriodAction) => {
+    if (!window.confirm(CONFIRMATIONS[action])) return;
     setError(null);
-    setSibuk(aksi);
+    setBusy(action);
     try {
-      const result = aksi === "tutup" ? await api.closePeriod() : await api.unlockPeriod();
-      setHasil(result);
+      const res = action === "close" ? await api.closePeriod() : await api.unlockPeriod();
+      setResult(res);
     } catch (err) {
-      setHasil(null);
-      setError(err instanceof Error ? err.message : "Gagal memproses periode. Coba lagi.");
+      setResult(null);
+      setError(err instanceof Error ? err.message : "Failed to process the period. Try again.");
     } finally {
-      setSibuk(null);
+      setBusy(null);
     }
   };
 
-  const sedangProses = sibuk !== null;
+  const processing = busy !== null;
 
   return (
     <Card
       className="period-card"
-      title="Periode buku"
-      description="Tutup buku saat periode selesai, atau buka kembali bila ada koreksi."
+      title="Book period"
+      description="Close the books when a period ends, or reopen when a correction is needed."
     >
       <div className="quick-actions">
-        <Button variant="primary" disabled={sedangProses} onClick={() => void jalankan("tutup")}>
-          {sibuk === "tutup" ? "Menutup buku..." : "Tutup Buku"}
+        <Button variant="primary" disabled={processing} onClick={() => void run("close")}>
+          {busy === "close" ? "Closing books..." : "Close Books"}
         </Button>
-        <Button variant="secondary" disabled={sedangProses} onClick={() => void jalankan("buka")}>
-          {sibuk === "buka" ? "Membuka periode..." : "Buka Periode"}
+        <Button variant="secondary" disabled={processing} onClick={() => void run("reopen")}>
+          {busy === "reopen" ? "Reopening period..." : "Reopen Period"}
         </Button>
       </div>
 
-      {hasil ? (
+      {result ? (
         <p className="period-card__status" role="status">
-          Periode #{hasil.period_id} {hasil.status === "CLOSED" ? "ditutup" : "dibuka kembali"} — jurnal{" "}
-          <code>{hasil.number}</code> tercatat.
+          Period #{result.period_id} {result.status === "CLOSED" ? "closed" : "reopened"} — journal{" "}
+          <code>{result.number}</code> recorded.
         </p>
       ) : null}
       <FormError message={error} />

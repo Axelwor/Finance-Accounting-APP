@@ -240,8 +240,8 @@ func (service *Service) Deactivate(writer http.ResponseWriter, request *http.Req
 }
 
 // ensureNoJournalHistory blocks deactivation when the account is referenced by
-// any journal line, per US-005 ("akun bertransaksi hanya dinonaktifkan, bukan
-// dihapus" is enforced as: an account with history stays active).
+// any journal line, per US-005 (accounts with transaction history can only be
+// deactivated, not deleted).
 func ensureNoJournalHistory(ctx context.Context, tx pgx.Tx, accountID int64) error {
 	var referenced bool
 	err := tx.QueryRow(ctx, `

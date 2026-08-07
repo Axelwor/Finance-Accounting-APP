@@ -5,28 +5,30 @@ import { Button, EmptyState } from "../components/ui";
 import { TransactionList } from "../components/transactions";
 import type { TransactionKind } from "../types";
 
-const FILTERS: { value: TransactionKind | "semua"; label: string }[] = [
-  { value: "semua", label: "Semua" },
-  { value: "uang-masuk", label: "Uang masuk" },
-  { value: "uang-keluar", label: "Uang keluar" },
-  { value: "pindah-uang", label: "Pindah uang" },
+const FILTERS: { value: TransactionKind | "all"; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "money-in", label: "Money in" },
+  { value: "money-out", label: "Money out" },
+  { value: "transfer", label: "Transfers" },
 ];
 
-/** Daftar seluruh catatan transaksi dengan filter dan penghapusan lokal. */
+/** Full transaction record list with filters and local deletion. */
 export function TransactionsScreen() {
   const { transactions, setTransactions } = useAppState();
-  const [filter, setFilter] = useState<TransactionKind | "semua">("semua");
+  const [filter, setFilter] = useState<TransactionKind | "all">("all");
 
   useEffect(() => {
-    document.title = "Catatan - Pembukuan Mudah";
+    document.title = "Transactions - Ledgerly";
   }, []);
 
-  const tampil = useMemo(() => {
-    const urut = [...transactions].sort((a, b) => b.tanggal.localeCompare(a.tanggal) || b.createdAt.localeCompare(a.createdAt));
-    return filter === "semua" ? urut : urut.filter((t) => t.jenis === filter);
+  const visible = useMemo(() => {
+    const sorted = [...transactions].sort(
+      (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),
+    );
+    return filter === "all" ? sorted : sorted.filter((t) => t.kind === filter);
   }, [transactions, filter]);
 
-  const hapus = (id: string) => {
+  const remove = (id: string) => {
     setTransactions(transactions.filter((t) => t.id !== id));
   };
 
@@ -34,12 +36,12 @@ export function TransactionsScreen() {
     <div className="list-page">
       <header className="page-head">
         <div>
-          <h1 className="page-title">Catatan transaksi</h1>
-          <p className="page-sub">Semua uang masuk, uang keluar, dan pemindahan.</p>
+          <h1 className="page-title">Transactions</h1>
+          <p className="page-sub">All money in, money out, and transfers.</p>
         </div>
       </header>
 
-      <div className="filter-row" role="group" aria-label="Filter catatan">
+      <div className="filter-row" role="group" aria-label="Filter records">
         {FILTERS.map((f) => (
           <button
             key={f.value}
@@ -54,31 +56,31 @@ export function TransactionsScreen() {
       </div>
 
       <div className="list-card">
-        {tampil.length === 0 ? (
+        {visible.length === 0 ? (
           <EmptyState
-            title={filter === "semua" ? "Belum ada catatan" : "Tidak ada catatan untuk filter ini"}
-            message="Catatan uang masuk, uang keluar, atau pemindahan akan muncul di sini."
+            title={filter === "all" ? "No records yet" : "No records for this filter"}
+            message="Money in, money out, or transfers will show up here."
             action={
-              <Link className="btn btn--primary" to="/catat/uang-masuk">
-                Catat transaksi
+              <Link className="btn btn--primary" to="/record/money-in">
+                Record transaction
               </Link>
             }
           />
         ) : (
           <>
-            <TransactionList transaksi={tampil} onHapus={hapus} />
-            <p className="list-card__footer">Total {tampil.length} catatan</p>
+            <TransactionList transactions={visible} onDelete={remove} />
+            <p className="list-card__footer">Total {visible.length} records</p>
           </>
         )}
       </div>
 
       <div className="quick-actions">
-        <Button to="/catat/uang-masuk">Uang masuk</Button>
-        <Button to="/catat/uang-keluar" variant="secondary">
-          Uang keluar
+        <Button to="/record/money-in">Money in</Button>
+        <Button to="/record/money-out" variant="secondary">
+          Money out
         </Button>
-        <Button to="/catat/pindah-uang" variant="secondary">
-          Pindah uang
+        <Button to="/record/transfer" variant="secondary">
+          Transfer
         </Button>
       </div>
     </div>

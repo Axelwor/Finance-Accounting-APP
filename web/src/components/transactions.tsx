@@ -1,50 +1,50 @@
 import type { Transaction } from "../types";
-import { formatRupiah, formatTanggalRelatif } from "../lib/format";
+import { formatIDR, formatRelativeDate } from "../lib/format";
 
-const JENIS_LABEL: Record<Transaction["jenis"], string> = {
-  "uang-masuk": "Uang masuk",
-  "uang-keluar": "Uang keluar",
-  "pindah-uang": "Pindah uang",
+const KIND_LABEL: Record<Transaction["kind"], string> = {
+  "money-in": "Money in",
+  "money-out": "Money out",
+  transfer: "Transfer",
 };
 
 interface TransactionRowProps {
-  transaksi: Transaction;
-  /** Elemen aksi opsional di sisi kanan baris (mis. tombol hapus). */
+  transaction: Transaction;
+  /** Optional action element on the right side of the row (e.g. delete button). */
   action?: React.ReactNode;
 }
 
-/** Satu baris dalam daftar transaksi. */
-export function TransactionRow({ transaksi, action }: TransactionRowProps) {
-  const positif = transaksi.jenis === "uang-masuk";
-  const netral = transaksi.jenis === "pindah-uang";
+/** One row in the transaction list. */
+export function TransactionRow({ transaction, action }: TransactionRowProps) {
+  const positive = transaction.kind === "money-in";
+  const neutral = transaction.kind === "transfer";
 
   return (
     <li className="transaction-row">
-      <span className={`transaction-row__badge transaction-row__badge--${transaksi.jenis}`}>
-        {transaksi.jenis === "uang-masuk"
-          ? "Masuk"
-          : transaksi.jenis === "uang-keluar"
-            ? "Keluar"
-            : "Pindah"}
+      <span className={`transaction-row__badge transaction-row__badge--${transaction.kind}`}>
+        {transaction.kind === "money-in"
+          ? "In"
+          : transaction.kind === "money-out"
+            ? "Out"
+            : "Transfer"}
       </span>
       <div className="transaction-row__body">
-        <p className="transaction-row__keterangan">
-          {transaksi.keterangan || JENIS_LABEL[transaksi.jenis]}
+        <p className="transaction-row__description">
+          {transaction.description || KIND_LABEL[transaction.kind]}
         </p>
         <p className="transaction-row__meta">
-          {transaksi.kategoriNama ?? JENIS_LABEL[transaksi.jenis]}
+          {transaction.categoryName ?? KIND_LABEL[transaction.kind]}
           <span aria-hidden="true"> · </span>
-          {formatTanggalRelatif(transaksi.tanggal)}
+          {formatRelativeDate(transaction.date)}
         </p>
       </div>
       <div className="transaction-row__amount">
-        <p className={`transaction-row__nominal${positif ? " is-positif" : netral ? " is-netral" : ""}`}>
-          {positif ? "+" : netral ? "" : "-"}
-          {formatRupiah(transaksi.nominal)}
+        <p className={`transaction-row__nominal${positive ? " is-positive" : neutral ? " is-neutral" : ""}`}>
+          {positive ? "+" : neutral ? "" : "-"}
+          {formatIDR(transaction.amount)}
         </p>
-        {transaksi.dari && transaksi.ke ? (
+        {transaction.from && transaction.to ? (
           <p className="transaction-row__meta">
-            {transaksi.dari} ke {transaksi.ke}
+            {transaction.from} to {transaction.to}
           </p>
         ) : null}
       </div>
@@ -53,23 +53,29 @@ export function TransactionRow({ transaksi, action }: TransactionRowProps) {
   );
 }
 
-/** Daftar transaksi lengkap (digunakan pada halaman Catatan). */
-export function TransactionList({ transaksi, onHapus }: { transaksi: Transaction[]; onHapus?: (id: string) => void }) {
+/** Full transaction list (used on the Transactions page). */
+export function TransactionList({
+  transactions,
+  onDelete,
+}: {
+  transactions: Transaction[];
+  onDelete?: (id: string) => void;
+}) {
   return (
     <ul className="transaction-list">
-      {transaksi.map((t) => (
+      {transactions.map((t) => (
         <TransactionRow
           key={t.id}
-          transaksi={t}
+          transaction={t}
           action={
-            onHapus ? (
+            onDelete ? (
               <button
                 type="button"
-                className="transaction-row__hapus"
-                aria-label={`Hapus catatan ${t.keterangan || "tanpa keterangan"}`}
-                onClick={() => onHapus(t.id)}
+                className="transaction-row__delete"
+                aria-label={`Delete record ${t.description || "without description"}`}
+                onClick={() => onDelete(t.id)}
               >
-                Hapus
+                Delete
               </button>
             ) : undefined
           }

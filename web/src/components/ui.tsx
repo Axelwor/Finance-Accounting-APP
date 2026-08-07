@@ -13,7 +13,7 @@ interface ButtonProps {
   children: ReactNode;
 }
 
-/** Tombol dengan dukungan tautan (to) dan fokus keyboard yang jelas. */
+/** Button with link support (to) and clear keyboard focus. */
 export function Button({
   type = "button",
   variant = "primary",
@@ -46,7 +46,7 @@ export function Button({
   );
 }
 
-/** Tombol aksi utama pada mobile / halaman tertentu. */
+/** Primary action bar for mobile / specific pages. */
 export function ActionBar({
   children,
   label,
@@ -55,7 +55,7 @@ export function ActionBar({
   label?: string;
 }) {
   return (
-    <nav className="action-bar" aria-label={label ?? "Tindakan utama"}>
+    <nav className="action-bar" aria-label={label ?? "Primary actions"}>
       {children}
     </nav>
   );
@@ -129,7 +129,7 @@ export function TextField({
   );
 }
 
-interface RupiahFieldProps {
+interface AmountFieldProps {
   label: string;
   value: string;
   onChange: (raw: string) => void;
@@ -138,15 +138,15 @@ interface RupiahFieldProps {
   placeholder?: string;
 }
 
-/** Input nominal rupiah: memformat angka ribuan saat mengetik, nilai disimpan mentah. */
-export function RupiahField({
+/** IDR amount input: formats thousands while typing, stores raw digits. */
+export function AmountField({
   label,
   value,
   onChange,
   hint,
   error,
   placeholder,
-}: RupiahFieldProps) {
+}: AmountFieldProps) {
   const id = useId();
   const ref = useRef<HTMLInputElement>(null);
 
@@ -162,7 +162,7 @@ export function RupiahField({
     onChange(digits);
   };
 
-  const tampilan = value ? Number(value).toLocaleString("id-ID") : "";
+  const display = value ? Number(value).toLocaleString("en-US") : "";
 
   return (
     <FieldShell label={label} htmlFor={id} hint={hint} error={error}>
@@ -170,10 +170,10 @@ export function RupiahField({
         <input
           ref={ref}
           id={id}
-          className="input input--rupiah"
+          className="input input--amount"
           type="text"
           inputMode="numeric"
-          value={tampilan}
+          value={display}
           placeholder={placeholder ?? "0"}
           onChange={(e) => handleChange(e.target.value)}
           aria-invalid={error ? true : undefined}
@@ -223,7 +223,7 @@ export function SelectField({
   value,
   onChange,
   options,
-  placeholder = "Pilih...",
+  placeholder = "Select...",
   error,
 }: SelectFieldProps) {
   const id = useId();
@@ -280,8 +280,8 @@ export function FormError({ message }: { message: string | null }) {
   );
 }
 
-/** Status loading untuk seluruh halaman data (dashboard, daftar, dll). */
-export function LoadingState({ label = "Memuat..." }: { label?: string }) {
+/** Loading status for whole data pages (dashboard, lists, etc.). */
+export function LoadingState({ label = "Loading..." }: { label?: string }) {
   return (
     <div className="loading-state" role="status" aria-live="polite">
       <span className="loading-state__spinner" aria-hidden="true" />
@@ -290,7 +290,7 @@ export function LoadingState({ label = "Memuat..." }: { label?: string }) {
   );
 }
 
-/** Skelet placeholder yang menyerupai bentuk daftar baris transaksi. */
+/** Skeleton placeholder that mimics a list of transaction rows. */
 export function ListSkeleton({ rows = 4 }: { rows?: number }) {
   return (
     <div className="list-skeleton" aria-hidden="true">
@@ -304,7 +304,7 @@ export function ListSkeleton({ rows = 4 }: { rows?: number }) {
   );
 }
 
-/** Pesan ketika suatu daftar kosong, dengan ajakan bertindak. */
+/** Message when a list is empty, with a call to action. */
 export function EmptyState({
   title,
   message,
@@ -323,9 +323,9 @@ export function EmptyState({
   );
 }
 
-/** Pesan kesalahan yang dapat dimuat ulang. */
+/** Reloadable error message. */
 export function ErrorState({
-  title = "Terjadi kesalahan",
+  title = "Something went wrong",
   message,
   onRetry,
 }: {
@@ -339,7 +339,7 @@ export function ErrorState({
       <p className="error-state__message">{message}</p>
       {onRetry ? (
         <Button variant="secondary" onClick={onRetry}>
-          Coba lagi
+          Try again
         </Button>
       ) : null}
     </div>

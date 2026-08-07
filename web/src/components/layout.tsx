@@ -1,74 +1,92 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAppState } from "../state";
 import { api } from "../api";
 
-const wordmark = "Pembukuan Mudah";
+const wordmark = "Ledgerly";
 
-/** Judul aplikasi di bilah atas (halaman yang sudah masuk). */
+const NAV_ITEMS = [
+  { to: "/dashboard", label: "Dashboard" },
+  { to: "/transactions", label: "Transactions" },
+  { to: "/record/money-in", label: "Money In" },
+  { to: "/record/money-out", label: "Money Out" },
+  { to: "/record/transfer", label: "Transfer" },
+];
+
+/** Brand mark shown in the sidebar and auth/onboarding headers. */
 export function Brand() {
   return (
-    <Link to="/" className="brand" aria-label={`${wordmark} - kembali ke beranda`}>
+    <Link to="/" className="brand" aria-label={`${wordmark} - back to home`}>
       <span className="brand__mark" aria-hidden="true" />
       <span className="brand__name">{wordmark}</span>
     </Link>
   );
 }
 
-const NAV_ITEMS = [
-  { to: "/dashboard", label: "Ringkasan" },
-  { to: "/transaksi", label: "Catatan" },
-  { to: "/catat/uang-masuk", label: "Uang Masuk" },
-  { to: "/catat/uang-keluar", label: "Uang Keluar" },
-  { to: "/catat/pindah-uang", label: "Pindah Uang" },
-];
-
-/** Bilah navigasi utama untuk pengguna yang sudah masuk. */
+/** Main navigation shell for signed-in users (left sidebar). */
 export function AppShell() {
-  const { user, usaha, setUser, setUsaha, setTransactions } = useAppState();
+  const { user, business, setUser, setBusiness, setTransactions } = useAppState();
   const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    document.title = usaha ? `${usaha.nama} - ${wordmark}` : `${wordmark}`;
+    document.title = business ? `${business.name} - ${wordmark}` : `${wordmark}`;
     return () => {
       document.title = wordmark;
     };
-  }, [usaha]);
+  }, [business]);
+
+  const closeSidebar = () => setSidebarOpen(false);
 
   const handleLogout = async () => {
     await api.logout();
     setUser(null);
-    setUsaha(null);
+    setBusiness(null);
     setTransactions([]);
     navigate("/login");
   };
 
   return (
-    <div className="app">
-      <header className="app-bar">
-        <div className="app-bar__inner">
+    <div className="app-shell">
+      <button
+        type="button"
+        className="app-sidebar__toggle"
+        aria-expanded={sidebarOpen}
+        aria-label={sidebarOpen ? "Close menu" : "Open menu"}
+        onClick={() => setSidebarOpen((open) => !open)}
+      >
+        ☰
+      </button>
+      <div
+        className={`app-sidebar__scrim${sidebarOpen ? " is-visible" : ""}`}
+        aria-hidden="true"
+        onClick={closeSidebar}
+      />
+      <aside className={`app-sidebar${sidebarOpen ? " is-open" : ""}`}>
+        <div className="app-sidebar__brand">
           <Brand />
-          <nav className="app-nav" aria-label="Menu utama">
-            {NAV_ITEMS.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) => `app-nav__link${isActive ? " is-active" : ""}`}
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-          <div className="app-bar__actions">
-            <span className="app-bar__user" title={user?.email}>
-              {user?.namaUsaha}
-            </span>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={handleLogout}>
-              Keluar
-            </button>
-          </div>
         </div>
-      </header>
+        <nav className="app-sidebar__nav" aria-label="Main menu">
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) => `app-sidebar__link${isActive ? " is-active" : ""}`}
+              onClick={closeSidebar}
+            >
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="app-sidebar__footer">
+          <span className="app-sidebar__user" title={user?.email}>
+            {user?.businessName}
+          </span>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={handleLogout}>
+            Sign out
+          </button>
+        </div>
+      </aside>
       <main className="app-main">
         <div className="app-main__inner">
           <Outlet />

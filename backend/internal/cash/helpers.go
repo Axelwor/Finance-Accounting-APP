@@ -119,7 +119,7 @@ func accountForEngine(row db.Account) accounting.Account {
 	}
 }
 
-// equityAccountCode is the seeded "Modal" account used as the default equity
+// equityAccountCode is the seeded "Capital" account used as the default equity
 // plug target for opening balances. The seed provisions it on registration.
 const equityAccountCode = "3101"
 

@@ -68,8 +68,8 @@ func seedMVPDatabase(t *testing.T, ctx context.Context, conn *pgx.Conn) {
 		INSERT INTO accounting_periods (tenant_id, period_start, period_end, status)
 		VALUES (1, DATE '2026-01-01', DATE '2026-12-31', 'OPEN');
 		INSERT INTO accounts (tenant_id, code, name, report_group, account_type)
-		VALUES (1, '1101', 'Kas', 'asset', 'CASH'),
-		       (1, '4101', 'Pendapatan', 'revenue', 'REVENUE');
+		VALUES (1, '1101', 'Cash', 'asset', 'CASH'),
+		       (1, '4101', 'Revenue', 'revenue', 'REVENUE');
 	`)
 }
 

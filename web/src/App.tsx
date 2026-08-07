@@ -16,7 +16,7 @@ function ShellRoute({ children }: { children: React.ReactNode }) {
           <div className="app-main__inner">
             <p className="loading-state" role="status">
               <span className="loading-state__spinner" aria-hidden="true" />
-              <span>Memuat...</span>
+              <span>Loading...</span>
             </p>
           </div>
         </main>
@@ -28,20 +28,20 @@ function ShellRoute({ children }: { children: React.ReactNode }) {
 }
 
 function DashboardRoute() {
-  const { usaha } = useAppState();
-  if (!usaha) return <Navigate to="/onboarding" replace />;
+  const { business } = useAppState();
+  if (!business) return <Navigate to="/onboarding" replace />;
   return <DashboardScreen />;
 }
 
 function TransactionsRoute() {
-  const { usaha } = useAppState();
-  if (!usaha) return <Navigate to="/onboarding" replace />;
+  const { business } = useAppState();
+  if (!business) return <Navigate to="/onboarding" replace />;
   return <TransactionsScreen />;
 }
 
 function TransactionFormRoute() {
-  const { usaha } = useAppState();
-  if (!usaha) return <Navigate to="/onboarding" replace />;
+  const { business } = useAppState();
+  if (!business) return <Navigate to="/onboarding" replace />;
   return <TransactionFormScreen />;
 }
 
@@ -62,8 +62,8 @@ export default function App() {
           >
             <Route index element={<DashboardRoute />} />
             <Route path="dashboard" element={<DashboardRoute />} />
-            <Route path="transaksi" element={<TransactionsRoute />} />
-            <Route path="catat/:jenisParam" element={<TransactionFormRoute />} />
+            <Route path="transactions" element={<TransactionsRoute />} />
+            <Route path="record/:kindParam" element={<TransactionFormRoute />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

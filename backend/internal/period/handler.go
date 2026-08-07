@@ -102,7 +102,7 @@ func (service *Service) unlockPeriod(ctx context.Context, tenantID, userID int64
 			SourceRef:   fmt.Sprintf("UNLOCK-%d", periodID),
 			IntentType:  accounting.IntentType("PERIOD_REOPEN"),
 			EntryDate:   time.Now().Format("2006-01-02"),
-			Description: "Pembatalan jurnal penutup (reopen periode)",
+			Description: "Closing journal reversal (period reopen)",
 			Lines:       reversed,
 		}
 
@@ -244,7 +244,7 @@ func (service *Service) closePeriod(ctx context.Context, tenantID, userID int64,
 			SourceRef:   fmt.Sprintf("CLOSE-%d", periodID),
 			IntentType:  accounting.IntentType("PERIOD_CLOSE"),
 			EntryDate:   time.Now().Format("2006-01-02"),
-			Description: "Jurnal penutup periode",
+			Description: "Period closing journal",
 			Lines:       lines,
 		}
 		if err := accounting.BalanceCheck(journal.Lines); err != nil {

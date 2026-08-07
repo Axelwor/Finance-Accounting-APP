@@ -16,23 +16,23 @@ func seedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		reportGroup string
 		accountType string
 	}{
-		{"1101", "Kas", "asset", "CASH"},
+		{"1101", "Cash", "asset", "CASH"},
 		{"1102", "Bank", "asset", "BANK"},
-		{"1201", "Piutang Usaha", "asset", "AR"},
-		{"1301", "Persediaan", "asset", "INVENTORY"},
-		{"1401", "Aset Tetap", "asset", "FIXED_ASSET"},
-		{"2101", "Hutang Usaha", "liability", "AP"},
-		{"2202", "Utang PPN", "liability", "TAX_PAYABLE"},
-		{"3101", "Modal", "equity", "EQUITY"},
-		{"3201", "Laba Ditahan", "equity", "EQUITY"},
-		{"3301", "Laba Berjalan", "equity", "EQUITY"},
-		{"4101", "Pendapatan Penjualan", "revenue", "REVENUE"},
-		{"5101", "HPP", "expense", "COGS"},
-		{"5201", "Beban Gaji", "expense", "EXPENSE"},
-		{"5202", "Beban Sewa", "expense", "EXPENSE"},
-		{"5203", "Beban Transport", "expense", "EXPENSE"},
-		{"5204", "Beban Listrik & Air", "expense", "EXPENSE"},
-		{"5205", "Beban Lain-lain", "expense", "EXPENSE"},
+		{"1201", "Accounts Receivable", "asset", "AR"},
+		{"1301", "Inventory", "asset", "INVENTORY"},
+		{"1401", "Fixed Assets", "asset", "FIXED_ASSET"},
+		{"2101", "Accounts Payable", "liability", "AP"},
+		{"2202", "VAT Payable", "liability", "TAX_PAYABLE"},
+		{"3101", "Capital", "equity", "EQUITY"},
+		{"3201", "Retained Earnings", "equity", "EQUITY"},
+		{"3301", "Current Earnings", "equity", "EQUITY"},
+		{"4101", "Sales Revenue", "revenue", "REVENUE"},
+		{"5101", "COGS", "expense", "COGS"},
+		{"5201", "Salary Expense", "expense", "EXPENSE"},
+		{"5202", "Rent Expense", "expense", "EXPENSE"},
+		{"5203", "Transportation Expense", "expense", "EXPENSE"},
+		{"5204", "Utilities Expense", "expense", "EXPENSE"},
+		{"5205", "Other Expenses", "expense", "EXPENSE"},
 	}
 	accountIDs := make(map[string]int64, len(accounts))
 	for _, account := range accounts {
@@ -64,15 +64,15 @@ func seedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		debitCode  string
 		creditCode string
 	}{
-		{"Penjualan", "IN", "1101", "4101"},
-		{"Terima piutang", "IN", "1101", "1201"},
-		{"Modal tambahan", "IN", "1101", "3101"},
-		{"Belanja barang dagang", "OUT", "1301", "1101"},
-		{"Gaji karyawan", "OUT", "5201", "1101"},
-		{"Sewa tempat", "OUT", "5202", "1101"},
-		{"Transport", "OUT", "5203", "1101"},
-		{"Listrik dan air", "OUT", "5204", "1101"},
-		{"Pengeluaran lain", "OUT", "5205", "1101"},
+		{"Sales", "IN", "1101", "4101"},
+		{"Receive receivables", "IN", "1101", "1201"},
+		{"Additional capital", "IN", "1101", "3101"},
+		{"Purchase of goods", "OUT", "1301", "1101"},
+		{"Employee salaries", "OUT", "5201", "1101"},
+		{"Rent", "OUT", "5202", "1101"},
+		{"Transportation", "OUT", "5203", "1101"},
+		{"Electricity and water", "OUT", "5204", "1101"},
+		{"Other expenses", "OUT", "5205", "1101"},
 	}
 	for _, category := range categories {
 		if _, err := tx.Exec(ctx, `
