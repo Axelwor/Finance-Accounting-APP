@@ -44,6 +44,24 @@
 - Added `POST /api/v1/periods/unlock`: reopens a closed period by posting a PERIOD_REOPEN reversal of the closing entry (linked via `reversal_of_id`) and restoring the period to OPEN; verified end-to-end — P&L restored to 289k, balance-sheet balanced.
 - Opening balances now resolve the seeded equity account (3101) server-side when `equity_account_id` is omitted, so onboarding clients don't need tenant account ids; added unit tests. Frontend added "Tutup Buku"/"Buka Periode" buttons on the dashboard and fixed the onboarding opening-balance payload to fetch real account ids.
 
+## DBG-UI-002 — Cash & Bank layout = Accurate Online pattern
+
+- **Form layout (CashEntryForm + MockEntryForm)** rewritten to mirror the Accurate Online reference:
+  - 2-column header grid: left = Cash/Bank (or party) + Date; right = Auto-number toggle + Document number + Ambil button.
+  - Full-width Keterangan / Description field below the header.
+  - "Cari/Pilih Akun Perkiraan..." search bar above the detail grid (filters the account picker in the grid).
+  - Detail grid simplified to 3 columns (Akun | Nama Akun | Nilai) — the cash side is implied from the header; the grid renders counter lines only. Multi-counter still works (1+ lines, sum equals cash amount).
+  - Bottom-right "Nilai" total shows the running sum.
+  - Right-side vertical action rail: Save (primary, posts to backend), Save & New (resets for the next entry), Document / Attach / More (placeholders, disabled).
+  - Transfers render only the header (From + To + Amount) — the detail grid is hidden.
+- **List view (CashEntryList)** rewritten to the same pattern:
+  - Filter pill row (Tanggal: Semua · Kas/Bank: Semua · more filters toggle).
+  - Action toolbar: + Tambah, Reload, Export ↓, Print 🖨, Settings ⚙, Search "Ketik dan [Enter]", count badge.
+  - 6-column table: Nomor # | Tanggal | Kas/Bank | No Cek # | Keterangan | Nilai.
+  - Empty state "Belum ada data".
+- **CSS additions**: `.entrytab--accurate`, `.entrytab__header-grid`, `.entrytab__search`, `.entrytab__detail`, `.detail-grid` (3 cols), `.entrytab__total`, `.action-rail` + variants, `.listtab--accurate`, `.filter-pill`, `.listtab__actions`, `.listtab__search`, `.listtab__count`, `.btn--icon`, `.ledger-table` 6-column grid, `.listtab__demo`.
+- Verified live on `accounting.tikuma.net` (commit `883ff0c`): bundle `index-CVnFSe5x.css` (52.9 kB) + `index-DwI7s6rY.js` (314 kB). Multi-counter verified end-to-end: 2 counter lines (300k + 200k) → HTTP 201, journal 16 posted with hash chain.
+
 ## DBG-UI-001 — UI/UX debug pass + multi-counter + nested tabs
 
 - **Multi-counter line support (backend)**: `CashIntent` now accepts `CounterLines []CounterLine`. `CashIn`/`CashOut` distribute the counter side across one or more accounts when provided; the single `CounterAccount` field is preserved as a fallback. New request shape `counter_lines: [{account_id, amount_cents, description}]` for `POST /cash-in` and `POST /cash-out`; validation enforces that the sum of `counter_lines[].amount_cents` equals `amount_cents` and that each line has a positive account_id and amount. Ledger hash chain and balance invariant unchanged. New unit tests for split-counter success, amount mismatch, non-postable account, and CashOut debit-side distribution.
