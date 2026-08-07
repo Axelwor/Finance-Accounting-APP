@@ -7,8 +7,9 @@ import type { NestedTab } from "./types";
  * and entry forms) so the user can switch between them without leaving
  * the module.
  *
- * Plus, an entry form's "Add" button can request a new draft by clicking
- * the sub-strip's `+` affordance (handled by the parent screen).
+ * Accurate-style layout: the list tab is an icon-only button (green when
+ * active); entry tabs show their title with a close button; the + button
+ * adds a new entry draft.
  */
 export function NestedTabStrip({
   parentId,
@@ -26,6 +27,7 @@ export function NestedTabStrip({
   const workbench = useWorkbench();
 
   if (children.length === 0 && !onAdd) return null;
+  void parentId;
 
   return (
     <nav className="nested-tabstrip" aria-label="Open items in this module">
@@ -33,14 +35,19 @@ export function NestedTabStrip({
         {children.map((child) => (
           <NestedTabPill
             key={child.id}
-            parentId={parentId}
             tab={child}
             isActive={child.id === activeChildId}
           />
         ))}
         {onAdd ? (
-          <button type="button" className="nested-tabstrip__add" onClick={onAdd} aria-label={addLabel ?? "Add entry"}>
-            + {addLabel ?? "New entry"}
+          <button
+            type="button"
+            className="nested-tabstrip__add"
+            onClick={onAdd}
+            aria-label={addLabel ?? "Add entry"}
+            title={addLabel ?? "New entry"}
+          >
+            +
           </button>
         ) : null}
       </div>
@@ -49,21 +56,31 @@ export function NestedTabStrip({
 }
 
 function NestedTabPill({
-  parentId,
   tab,
   isActive,
 }: {
-  parentId: string;
   tab: NestedTab;
   isActive: boolean;
 }) {
   const workbench = useWorkbench();
-  const kindLabel = tab.kind === "list" ? "LIST" : tab.draft ? "NEW" : "ENTRY";
-  const status =
-    tab.kind === "list"
-      ? "OPEN"
-      : tab.status ?? (tab.draft ? "EDIT" : "POSTED");
 
+  // List tabs: icon-only, no text, no close button.
+  if (tab.kind === "list") {
+    return (
+      <button
+        type="button"
+        className={`nested-icon-tab${isActive ? " is-active" : ""}`}
+        role="tab"
+        aria-selected={isActive}
+        title={tab.title}
+        onClick={() => workbench.activate(tab.id)}
+      >
+        <ListIcon />
+      </button>
+    );
+  }
+
+  // Entry tabs: title + close button.
   return (
     <div
       className={`nested-tabpill${isActive ? " is-active" : ""}${tab.unsaved ? " is-unsaved" : ""}`}
@@ -71,24 +88,27 @@ function NestedTabPill({
       aria-selected={isActive}
       onClick={() => workbench.activate(tab.id)}
     >
-      <span className={`nested-tabpill__kind nested-tabpill__kind--${tab.kind === "list" ? "list" : tab.draft ? "draft" : "entry"}`}>
-        {kindLabel}
-      </span>
       <span className="nested-tabpill__title" title={tab.title}>{tab.title}</span>
-      <span className="nested-tabpill__status">{status}</span>
-      {tab.kind === "entry" ? (
-        <button
-          type="button"
-          className="nested-tabpill__close"
-          aria-label={`Close ${tab.title}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            workbench.close(tab.id);
-          }}
-        >
-          ×
-        </button>
-      ) : null}
+      {tab.unsaved ? <span className="nested-tabpill__dot" aria-hidden="true" /> : null}
+      <button
+        type="button"
+        className="nested-tabpill__close"
+        aria-label={`Close ${tab.title}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          workbench.close(tab.id);
+        }}
+      >
+        ×
+      </button>
     </div>
+  );
+}
+
+function ListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
+    </svg>
   );
 }
