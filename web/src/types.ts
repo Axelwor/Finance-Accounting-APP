@@ -9,6 +9,35 @@
 /** User-friendly label for each record kind (no debit/credit terms). */
 export type TransactionKind = "money-in" | "money-out" | "transfer";
 
+/** Workbench list sub-kind identifiers (drives the sidebar + tab dispatch). */
+export type ListSubKind =
+  | "cash-other-receipt"
+  | "cash-other-payment"
+  | "cash-transfer"
+  | "sales-invoice"
+  | "sales-receipt"
+  | "purchase-invoice"
+  | "purchase-payment"
+  | "inventory-items"
+  | "stock-movements"
+  | "asset-register"
+  | "report-trial-balance"
+  | "report-profit-loss"
+  | "report-balance-sheet"
+  | "report-cash-flow";
+
+/** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
+export type EntrySubKind =
+  | "money-in"
+  | "money-out"
+  | "cash-transfer"
+  | "sales-invoice"
+  | "sales-receipt"
+  | "purchase-invoice"
+  | "purchase-payment"
+  | "inventory-item"
+  | "asset-register";
+
 export type CurrencyCode = "IDR";
 
 export interface Business {
@@ -207,6 +236,48 @@ export interface OpeningBalanceLine {
   account_id: number;
   debit_cents: number;
   credit_cents: number;
+}
+
+/** Cash & bank history list item returned by GET /api/v1/cash-entries. */
+export interface CashEntryListItem {
+  id: number;
+  number: string;
+  kind: "money-in" | "money-out" | "transfer";
+  entry_date: string;
+  status: string;
+  description: string;
+  amount_cents: number;
+  cash_account_id: number;
+  cash_account_code: string;
+  cash_account_name: string;
+  counter_account_id: number;
+  counter_account_code: string;
+  counter_account_name: string;
+  from_account_id: number;
+  from_account_code: string;
+  from_account_name: string;
+  to_account_id: number;
+  to_account_code: string;
+  to_account_name: string;
+  reference: string;
+  reversal_of_id: number;
+}
+
+export interface CashEntryListResponse {
+  items: CashEntryListItem[];
+  limit: number;
+  offset: number;
+  count: number;
+}
+
+export interface ListCashEntriesParams {
+  kind?: "money-in" | "money-out" | "transfer";
+  from?: string;
+  to?: string;
+  account_id?: number;
+  q?: string;
+  limit?: number;
+  offset?: number;
 }
 
 /** Payload POST /api/v1/opening-balances. */

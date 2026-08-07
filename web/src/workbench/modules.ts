@@ -12,8 +12,8 @@ const cashBank: Module = {
   label: "Cash & Bank",
   icon: "wallet",
   items: [
-    { id: "cb-receipt", label: "Other Receipt", hint: "M+", openList: "cash-other-receipt", openEntry: "cash-receipt" },
-    { id: "cb-payment", label: "Other Payment", hint: "M-", openList: "cash-other-payment", openEntry: "cash-payment" },
+    { id: "cb-receipt", label: "Other Receipt", hint: "M+", openList: "cash-other-receipt", openEntry: "money-in" },
+    { id: "cb-payment", label: "Other Payment", hint: "M-", openList: "cash-other-payment", openEntry: "money-out" },
     { id: "cb-transfer", label: "Bank Transfer", hint: "Xfer", openList: "cash-transfer", openEntry: "cash-transfer" },
   ],
 };
@@ -124,9 +124,9 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
 /** Default tab title for a draft entry. */
 export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): string {
   switch (entryKind) {
-    case "cash-receipt":
+    case "money-in":
       return "Other Receipt";
-    case "cash-payment":
+    case "money-out":
       return "Other Payment";
     case "cash-transfer":
       return "Bank Transfer";
@@ -148,8 +148,8 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
 /** Stable draft number per entry kind, e.g. "OP-DRAFT". */
 export function draftNumber(entryKind: import("./types").EntrySubKind): string {
   switch (entryKind) {
-    case "cash-receipt": return "OR-DRAFT";
-    case "cash-payment": return "OP-DRAFT";
+    case "money-in": return "OR-DRAFT";
+    case "money-out": return "OP-DRAFT";
     case "cash-transfer": return "BT-DRAFT";
     case "sales-invoice": return "SI-DRAFT";
     case "sales-receipt": return "SR-DRAFT";

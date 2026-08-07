@@ -26,6 +26,7 @@ func NewHandler(pool *pgxpool.Pool) *Service {
 
 // Routes registers the cash endpoints on the chi router.
 func (service *Service) Routes(router chi.Router) {
+	router.Get("/cash-entries", service.ListCashEntries)
 	router.Post("/cash-in", service.CashIn)
 	router.Post("/cash-out", service.CashOut)
 	router.Post("/transfers", service.Transfer)

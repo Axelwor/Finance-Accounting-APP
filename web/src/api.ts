@@ -23,6 +23,7 @@ import type {
   BackendProfitLoss,
   BackendTenant,
   CashCommandPayload,
+  CashEntryListItem,
   Category,
   CurrencyCode,
   DashboardSummary,
@@ -530,6 +531,91 @@ export const api = {
     }
   },
 
+  /**
+   * Posts a CASH_IN journal via the backend. Used by the workbench
+   * entry form when the user presses Post on an Other Receipt draft.
+   */
+  async postCashIn(payload: {
+    entry_date: string;
+    description: string;
+    cash_account_id: number;
+    counter_account_id: number;
+    amount_cents: number;
+  }): Promise<BackendJournalResult> {
+    return http<BackendJournalResult>("/cash-in", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify({
+        source_ref: `WEB-${Date.now()}`,
+        entry_date: payload.entry_date,
+        cash_account_id: payload.cash_account_id,
+        counter_account_id: payload.counter_account_id,
+        amount_cents: payload.amount_cents,
+        description: payload.description,
+      }),
+    });
+  },
+
+  /** Posts a CASH_OUT journal via the backend. */
+  async postCashOut(payload: {
+    entry_date: string;
+    description: string;
+    cash_account_id: number;
+    counter_account_id: number;
+    amount_cents: number;
+  }): Promise<BackendJournalResult> {
+    return http<BackendJournalResult>("/cash-out", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify({
+        source_ref: `WEB-${Date.now()}`,
+        entry_date: payload.entry_date,
+        cash_account_id: payload.cash_account_id,
+        counter_account_id: payload.counter_account_id,
+        amount_cents: payload.amount_cents,
+        description: payload.description,
+      }),
+    });
+  },
+
+  /** Posts a TRANSFER journal via the backend. */
+  async postTransfer(payload: {
+    entry_date: string;
+    description: string;
+    from_account_id: number;
+    to_account_id: number;
+    amount_cents: number;
+  }): Promise<BackendJournalResult> {
+    return http<BackendJournalResult>("/transfers", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify({
+        source_ref: `WEB-${Date.now()}`,
+        entry_date: payload.entry_date,
+        from_account_id: payload.from_account_id,
+        to_account_id: payload.to_account_id,
+        amount_cents: payload.amount_cents,
+        description: payload.description,
+      }),
+    });
+  },
+
+  /** Reverses a posted journal via POST /journal-entries/{id}/reverse. */
+  async reverseCash(journalId: number): Promise<BackendJournalResult> {
+    return http<BackendJournalResult>(`/journal-entries/${journalId}/reverse`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify({
+        source_ref: `REV-${Date.now()}`,
+        entry_date: mockHelpers.today(),
+      }),
+    });
+  },
+
   /** Category list from GET /categories (Bearer). Failure -> local mock. */
   async listCategories(): Promise<Category[]> {
     try {
@@ -549,6 +635,32 @@ export const api = {
       return delay(mapped.length > 0 ? mapped : MOCK_ACCOUNTS);
     } catch {
       return delay(MOCK_ACCOUNTS);
+    }
+  },
+
+  /**
+   * Cash & bank history list from GET /api/v1/cash-entries (Bearer).
+   * Returns the unified list of CASH_IN, CASH_OUT, and TRANSFER journals
+   * with resolved account names. Failure -> empty list (graceful degradation).
+   */
+  async listCashEntries(params: import("./types").ListCashEntriesParams = {}): Promise<CashEntryListItem[]> {
+    const search = new URLSearchParams();
+    if (params.kind) search.set("kind", params.kind);
+    if (params.from) search.set("from", params.from);
+    if (params.to) search.set("to", params.to);
+    if (params.account_id) search.set("account_id", String(params.account_id));
+    if (params.q) search.set("q", params.q);
+    if (params.limit) search.set("limit", String(params.limit));
+    if (params.offset) search.set("offset", String(params.offset));
+    const query = search.toString();
+    try {
+      const response = await http<import("./types").CashEntryListResponse>(
+        `/cash-entries${query ? `?${query}` : ""}`,
+        { auth: true },
+      );
+      return delay(response.items ?? []);
+    } catch {
+      return delay([]);
     }
   },
 

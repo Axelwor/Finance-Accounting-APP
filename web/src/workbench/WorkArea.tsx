@@ -1,6 +1,8 @@
 import { useWorkbench } from "./state";
 import { EmptyState } from "../components/ui";
 import type { Tab } from "./types";
+import { CashEntryList } from "../screens/list/CashEntryList";
+import { CashEntryForm } from "../screens/entry/CashEntryForm";
 
 /**
  * Work area: renders the active tab's content, or an empty state when
@@ -31,16 +33,59 @@ export function WorkArea() {
 
 function TabContent({ tab }: { tab: Tab }) {
   if (tab.kind === "list") {
-    // Lazy import would be nicer for bundle, but we ship all list screens inline
-    // so a single switch keeps the dispatch explicit.
     switch (tab.subKind) {
-      // Step 3 fills these in. For Step 1 we render a placeholder so the
-      // shell can be visually verified end-to-end.
+      case "cash-other-receipt":
+        return (
+          <CashEntryList
+            listKind={tab.subKind}
+            title="Other Receipt"
+            description="Money received from sources other than sales (capital, loans, other income)."
+            entrySubKind="money-in"
+            fixedKind="money-in"
+          />
+        );
+      case "cash-other-payment":
+        return (
+          <CashEntryList
+            listKind={tab.subKind}
+            title="Other Payment"
+            description="Money paid out for expenses, assets, or settlements other than purchases."
+            entrySubKind="money-out"
+            fixedKind="money-out"
+          />
+        );
+      case "cash-transfer":
+        return (
+          <CashEntryList
+            listKind={tab.subKind}
+            title="Bank Transfer"
+            description="Move money between cash and bank accounts."
+            entrySubKind="cash-transfer"
+            fixedKind="transfer"
+          />
+        );
+      // Reports (read-only) and mocked modules get placeholder for now.
       default:
-        return <PlaceholderTab title={tab.title} sub="list" />;
+        return <PlaceholderTab title={tab.title} sub={`list · ${tab.subKind}`} />;
     }
   }
-  return <PlaceholderTab title={tab.title} sub={tab.draft ? "entry-draft" : "entry"} />;
+
+  // Entry tabs
+  switch (tab.subKind) {
+    case "money-in":
+    case "money-out":
+    case "cash-transfer":
+      return (
+        <CashEntryForm
+          tabId={tab.id}
+          subKind={tab.subKind}
+          entryId={tab.entryId}
+          initialTitle={tab.title}
+        />
+      );
+    default:
+      return <PlaceholderTab title={tab.title} sub={`entry · ${tab.subKind}`} />;
+  }
 }
 
 function PlaceholderTab({ title, sub }: { title: string; sub: string }) {
@@ -48,10 +93,10 @@ function PlaceholderTab({ title, sub }: { title: string; sub: string }) {
     <div className="tab-placeholder">
       <p className="tab-placeholder__title">{title}</p>
       <p className="tab-placeholder__sub">
-        Step 1 scaffold · <code>{sub}</code> view
+        Coming next &middot; <code>{sub}</code>
       </p>
       <p className="tab-placeholder__hint">
-        The list/entry component for this tab will be wired in step 3 (Cash & Bank), step 4 (Reports), and step 5 (Sales, Purchases, Inventory, Fixed Assets).
+        This tab will be wired in the next step of the workbench rebuild (reports in step 4, sales/purchases/inventory/fixed-assets in step 5).
       </p>
     </div>
   );

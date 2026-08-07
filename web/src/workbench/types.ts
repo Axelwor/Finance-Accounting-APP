@@ -6,6 +6,10 @@
  * sessionStorage can persist the open set.
  */
 
+import type { EntrySubKind, ListSubKind } from "../types";
+
+export type { EntrySubKind, ListSubKind };
+
 export type ModuleId =
   | "cash-bank"
   | "sales"
@@ -15,33 +19,6 @@ export type ModuleId =
   | "reports";
 
 export type TabKind = "list" | "entry";
-
-export type EntrySubKind =
-  | "cash-receipt"
-  | "cash-payment"
-  | "cash-transfer"
-  | "sales-invoice"
-  | "sales-receipt"
-  | "purchase-invoice"
-  | "purchase-payment"
-  | "inventory-item"
-  | "asset-register";
-
-export type ListSubKind =
-  | "cash-other-receipt"
-  | "cash-other-payment"
-  | "cash-transfer"
-  | "sales-invoice"
-  | "sales-receipt"
-  | "purchase-invoice"
-  | "purchase-payment"
-  | "inventory-items"
-  | "stock-movements"
-  | "asset-register"
-  | "report-trial-balance"
-  | "report-profit-loss"
-  | "report-balance-sheet"
-  | "report-cash-flow";
 
 export interface TabBase {
   id: string;
