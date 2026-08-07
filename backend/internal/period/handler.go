@@ -30,6 +30,164 @@ func NewHandler(pool *pgxpool.Pool) *Service {
 
 func (service *Service) Routes(router chi.Router) {
 	router.Post("/periods/close", service.Close)
+	router.Post("/periods/unlock", service.Unlock)
+}
+
+// Unlock reopens a CLOSED period: it reverses the closing entry journal and
+// sets the period back to OPEN. Idempotent via the PERIOD_CLOSE source ref.
+func (service *Service) Unlock(writer http.ResponseWriter, request *http.Request) {
+	tenantID, ok := auth.TenantIDFromContext(request.Context())
+	if !ok || tenantID <= 0 {
+		writeError(writer, http.StatusUnauthorized, "TENANT_REQUIRED", "tenant context is required")
+		return
+	}
+	userID, _ := auth.UserIDFromContext(request.Context())
+	idem := request.Header.Get("Idempotency-Key")
+
+	result, err := service.unlockPeriod(request.Context(), tenantID, userID, idem)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "UNLOCK_FAILED", err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, result)
+}
+
+func (service *Service) unlockPeriod(ctx context.Context, tenantID, userID int64, idem string) (map[string]any, error) {
+	var result map[string]any
+	err := db.WithTransaction(ctx, service.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tenantID, 10)); err != nil {
+			return err
+		}
+
+		var periodID int64
+		if err := tx.QueryRow(ctx, `
+			SELECT id FROM accounting_periods
+			WHERE tenant_id = $1 AND status = 'CLOSED'
+			ORDER BY period_start DESC LIMIT 1
+		`, tenantID).Scan(&periodID); err != nil {
+			return fmt.Errorf("no closed period: %w", err)
+		}
+
+		// Locate the closing journal for this period.
+		var closingJournalID int64
+		err := tx.QueryRow(ctx, `
+			SELECT id FROM journal_entries
+			WHERE tenant_id = $1 AND intent_type = 'PERIOD_CLOSE' AND source_ref = $2
+			ORDER BY id DESC LIMIT 1
+		`, tenantID, fmt.Sprintf("CLOSE-%d", periodID)).Scan(&closingJournalID)
+		if err != nil {
+			return fmt.Errorf("closing journal not found: %w", err)
+		}
+
+		// Build a reversal of the closing journal.
+		lines, err := loadJournalLines(ctx, tx, tenantID, closingJournalID)
+		if err != nil {
+			return err
+		}
+		var reversed []accounting.Line
+		for _, line := range lines {
+			reversed = append(reversed, accounting.Line{
+				AccountID:     line.AccountID,
+				DebitCents:    line.CreditCents,
+				CreditCents:   line.DebitCents,
+				SourceLineRef: "rev-" + line.SourceLineRef,
+			})
+		}
+		if err := accounting.BalanceCheck(reversed); err != nil {
+			return err
+		}
+
+		journal := accounting.Journal{
+			TenantID:    tenantID,
+			SourceRef:   fmt.Sprintf("UNLOCK-%d", periodID),
+			IntentType:  accounting.IntentType("PERIOD_REOPEN"),
+			EntryDate:   time.Now().Format("2006-01-02"),
+			Description: "Pembatalan jurnal penutup (reopen periode)",
+			Lines:       reversed,
+		}
+
+		head, err := lockOrSeedChainHead(ctx, tx, tenantID)
+		if err != nil {
+			return err
+		}
+		journal.PreviousHash = head.LastHash
+		journal.Hash = computeHash(journal)
+
+		number, err := nextJournalNumber(ctx, tx, tenantID)
+		if err != nil {
+			return err
+		}
+
+		// Set void context so the immutable trigger accepts linking the
+		// original closing journal as reversed.
+		if _, err := tx.Exec(ctx, `SELECT set_config('app.void_context', '1', true)`); err != nil {
+			return err
+		}
+		var entryID int64
+		err = tx.QueryRow(ctx, `
+			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, reversal_of_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			RETURNING id
+		`, tenantID, number, journal.EntryDate, periodID, journal.Description,
+			journal.SourceRef, string(journal.IntentType), idem, journal.Hash, journal.PreviousHash, userID, closingJournalID).Scan(&entryID)
+		if err != nil {
+			return err
+		}
+		for _, line := range journal.Lines {
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO journal_lines (tenant_id, entry_id, account_id, debit_cents, credit_cents, source_line_ref)
+				VALUES ($1, $2, $3, $4, $5, $6)
+			`, tenantID, entryID, line.AccountID, line.DebitCents, line.CreditCents, line.SourceLineRef); err != nil {
+				return err
+			}
+		}
+
+		// Reopen the period.
+		if _, err := tx.Exec(ctx, `
+			UPDATE accounting_periods SET status = 'OPEN', closed_at = NULL, closed_by = NULL
+			WHERE id = $1
+		`, periodID); err != nil {
+			return err
+		}
+		if err := upsertChainHead(ctx, tx, tenantID, entryID, journal.Hash); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO outbox_events (tenant_id, topic, payload) VALUES ($1, 'period.reopened', $2::jsonb)`,
+			tenantID, mustJSON(map[string]any{"period_id": periodID, "journal_id": entryID, "number": number})); err != nil {
+			return err
+		}
+
+		result = map[string]any{
+			"period_id":  periodID,
+			"status":     "OPEN",
+			"journal_id": entryID,
+			"number":     number,
+			"hash":       journal.Hash,
+		}
+		return nil
+	})
+	return result, err
+}
+
+func loadJournalLines(ctx context.Context, tx pgx.Tx, tenantID, entryID int64) ([]accounting.Line, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT account_id, debit_cents, credit_cents, source_line_ref
+		FROM journal_lines
+		WHERE tenant_id = $1 AND entry_id = $2
+	`, tenantID, entryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var lines []accounting.Line
+	for rows.Next() {
+		var line accounting.Line
+		if err := rows.Scan(&line.AccountID, &line.DebitCents, &line.CreditCents, &line.SourceLineRef); err != nil {
+			return nil, err
+		}
+		lines = append(lines, line)
+	}
+	return lines, rows.Err()
 }
 
 func (service *Service) Close(writer http.ResponseWriter, request *http.Request) {

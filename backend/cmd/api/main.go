@@ -67,6 +67,7 @@ func main() {
 			router.Get("/reports/cash-flow", reportingHandler.CashFlow)
 
 			router.Post("/periods/close", periodHandler.Close)
+			router.Post("/periods/unlock", periodHandler.Unlock)
 		})
 	})
 
