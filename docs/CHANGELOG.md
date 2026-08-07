@@ -44,6 +44,19 @@
 - Added `POST /api/v1/periods/unlock`: reopens a closed period by posting a PERIOD_REOPEN reversal of the closing entry (linked via `reversal_of_id`) and restoring the period to OPEN; verified end-to-end — P&L restored to 289k, balance-sheet balanced.
 - Opening balances now resolve the seeded equity account (3101) server-side when `equity_account_id` is omitted, so onboarding clients don't need tenant account ids; added unit tests. Frontend added "Tutup Buku"/"Buka Periode" buttons on the dashboard and fixed the onboarding opening-balance payload to fetch real account ids.
 
+## DBG-UI-003 — Compact density + filled active tabs + accent-strip headers
+
+Audit-driven refresh of Cash & Bank visual hierarchy to match the Accurate Online reference while keeping the Wave Corporate brand. Three user-confirmed decisions drove the work: Save button = `#2f80ed` brand blue, density = compact, active tab = filled `--accent` background.
+
+- **Compact density**: form padding 20px → 16px, section gap 16px → 12px, field input 36px → 32px, label uppercase tightened, detail-grid row padding 8/12 → 4/12 with 32px min-height and hover accent-soft, module/content gap 16px → 8px, workarea padding 24px → 16px.
+- **Active tab filled**: top-level `.tabpill.is-active` becomes `var(--accent)` background + white text; nested-tabpill gets the same treatment for visual continuity. Tabstrip height 40px → 44px. Inactive `.tabpill__kind`, `.tabpill__status`, `.tabpill__close` recolor to white. `.tabpill__title::after` (unsaved dot) stays warning amber for legibility on the blue background.
+- **Accent-strip header**: `.entrytab__head` and `.listtab__head` get a 3px `--accent` top border so the form/list is unmistakably identified. Status badge thickens (1px → 2px border, sans font, 700 weight). Number becomes an accent-soft pill with accent border. Date stamp is a chip on panel background.
+- **Detail-grid + ledger-table grid**: detail-grid header switches from gray panel to accent-soft with accent-deep text + 2px accent bottom border. Ledger-table rebuilt with full outer border, accent-soft header band with 2px accent underline, row cells now carry right-rule grid lines (Accurate-style full grid), hover uses accent-soft.
+- **Action rail**: width 76px → 96px, button min-height 56px, larger 20px icons. Save primary brand blue with 1px accent-deep box-shadow; Save & New warning amber. SVG stroke forced white for icon legibility on colored backgrounds.
+- **Filter pills**: border upgraded to `--rule-strong`, label uppercase 2xs, value bold ink-deep, caret in accent, hover accent-soft background.
+- **Nested-tabstrip**: replaced margin-bottom 16px with a 2px `--rule-strong` bottom border to match the main tabstrip's rhythm.
+- Verified live on `accounting.tikuma.net` (commit `cb2723a`): bundle `index-CMVDfZ7T.css` (56.9 kB) + `index-BulEM3pP.js` (314 kB). Both form and list views match the Accurate Online reference's hierarchy.
+
 ## DBG-UI-002 — Cash & Bank layout = Accurate Online pattern
 
 - **Form layout (CashEntryForm + MockEntryForm)** rewritten to mirror the Accurate Online reference:
