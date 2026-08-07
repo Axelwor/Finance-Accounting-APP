@@ -796,7 +796,9 @@ select.input {
   padding-right: var(--u-6);
 }
 
-.form-stack { display: flex; flex-direction: column; gap: var(--u-5); }
+.form-stack { display: flex; flex-direction: column; gap: var(--u-4); }
+.onboarding .form-stack { gap: var(--u-4); }
+.onboarding .input { min-height: 32px; padding: 0; }
 .form-error {
   padding: var(--u-3) var(--u-4);
   background: var(--negative-soft);
@@ -1087,13 +1089,14 @@ select.input {
   background: var(--paper-elev);
   border: 1px solid var(--rule);
   border-radius: var(--radius-md);
-  padding: var(--u-6);
+  padding: var(--u-5);
   display: flex;
   flex-direction: column;
-  gap: var(--u-5);
+  gap: var(--u-4);
   box-shadow: var(--shadow-card);
 }
-.auth-card__tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-bottom: 1px solid var(--rule); }
+.auth-card__tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-bottom: 1px solid var(--rule); margin-bottom: calc(-1 * var(--u-2)); }
+.auth-card .input { min-height: 32px; padding: 0; }
 .auth-card__tab {
   padding: var(--u-3) 0;
   background: transparent;

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- VIS-002: applied DBG-UI-002/003 polish to Auth, Onboarding, and Ledger screens. Auth and Onboarding adopt compact density (form padding 24px → 16px, gap 16px → 12px, input height 40px → 32px) without changing structure or copy. Ledger (`/transactions`) now uses the Accurate-style listtab layout (filter pill, action toolbar with reload-style buttons and search, 6-column ruled table, net total footer) matching Cash & Bank; the 5-col "LEDGER · X of Y" meta header is gone. Tokens stay on the live Accurate-blue palette; `make web-build` passes (CSS 57.08 kB, JS 314.36 kB).
 - SPEC-001: synced durable design docs to the live Accurate-inspired corporate direction. `docs/UI_CONTRACT.md` bumped to v0.4.0 with the actual `web/src/styles.css` token set (canvas `#f5f7fa`, accent `#2f80ed`, navy ink, Inter + IBM Plex Mono). `.commandcode/design/brief.md` rewritten to mark the previous Wave-teal / cream / Source Serif / ruled-sheet direction as superseded and to record Accurate Online as the authoritative layout reference. `.commandcode/design/handoff.md` heading and "Expected absent" tokens updated. No source-code change; `web/src/styles.css` was already the source of truth and remains unchanged.
 - Bootstrapped the Go backend and React/Vite frontend skeleton.
 - Added durable AI Agent task ledger and repository governance.
