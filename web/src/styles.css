@@ -1645,8 +1645,10 @@ select.input {
   min-height: 0;
   padding: 0;
   background: var(--canvas);
+  margin-left: calc(-1 * var(--u-6));
+  margin-right: calc(-1 * var(--u-6));
 }
-.workarea--empty { display: flex; align-items: center; justify-content: center; }
+.workarea--empty { display: flex; align-items: center; justify-content: center; padding: var(--u-6); }
 
 .tab-placeholder {
   max-width: 560px;
@@ -2572,6 +2574,8 @@ select.input {
   overflow-y: hidden;
   scrollbar-width: thin;
   border-bottom: 2px solid var(--rule-strong);
+  margin-left: calc(-1 * var(--u-6));
+  margin-right: calc(-1 * var(--u-6));
 }
 .nested-tabstrip__inner {
   display: flex;
@@ -2705,6 +2709,8 @@ select.input {
   .app-shell { grid-template-columns: 1fr; grid-template-areas: "topbar" "workarea"; }
   .tabstrip { display: none; }
   .sidebar { display: none; }
+  .nested-tabstrip { margin: 0; }
+  .workarea { margin: 0; }
   .sidebar-toggle { display: inline-flex; }
   .sidebar.is-open { display: flex; position: fixed; inset: 56px auto 0 0; width: 260px; z-index: 30; }
   .sidebar-scrim.is-visible { display: block; }
@@ -2722,7 +2728,8 @@ select.input {
 }
 
 @media (max-width: 640px) {
-  .workarea { padding: var(--u-4) var(--u-3); }
+  .workarea { padding: var(--u-4) var(--u-3); margin: 0; }
+  .nested-tabstrip { margin: 0; }
   .topbar__indicator--clock,
   .topbar__indicator--session { display: none; }
   .entrytab__section { grid-template-columns: 1fr; }
