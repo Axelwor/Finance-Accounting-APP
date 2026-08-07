@@ -106,12 +106,11 @@ func (service *Service) BalanceSheet(writer http.ResponseWriter, request *http.R
 	}
 
 	// Current-period profit: revenue − expense from posted journals.
+	// Revenue normally credits, expense normally debits, so (credit − debit)
+	// summed across both groups yields revenue − expense.
 	var profit int64
 	err = service.pool.QueryRow(request.Context(), `
-		SELECT COALESCE(SUM(CASE
-			WHEN a.report_group = 'revenue' THEN jl.credit_cents - jl.debit_cents
-			WHEN a.report_group = 'expense' THEN jl.debit_cents - jl.credit_cents
-			ELSE 0 END), 0)
+		SELECT COALESCE(SUM(jl.credit_cents - jl.debit_cents), 0)
 		FROM journal_lines jl
 		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
 		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
