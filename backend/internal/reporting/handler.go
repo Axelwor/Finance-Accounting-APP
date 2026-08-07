@@ -69,7 +69,9 @@ func (service *Service) ProfitLoss(writer http.ResponseWriter, request *http.Req
 	writeJSON(writer, http.StatusOK, result)
 }
 
-// BalanceSheet aggregates asset, liability, and equity groups.
+// BalanceSheet aggregates asset, liability, and equity groups. Current-period
+// profit (revenue − expense) is added to equity so the balance sheet balances
+// before the period is closed (engine §21.2: laba berjalan real-time).
 func (service *Service) BalanceSheet(writer http.ResponseWriter, request *http.Request) {
 	tenantID := tenantFrom(request)
 	rows, err := service.pool.Query(request.Context(), `
@@ -87,7 +89,12 @@ func (service *Service) BalanceSheet(writer http.ResponseWriter, request *http.R
 	}
 	defer rows.Close()
 
-	result := map[string]any{"asset_cents": int64(0), "liability_cents": int64(0), "equity_cents": int64(0)}
+	result := map[string]any{
+		"asset_cents":     int64(0),
+		"liability_cents": int64(0),
+		"equity_cents":    int64(0),
+		"profit_cents":    int64(0),
+	}
 	for rows.Next() {
 		var group string
 		var amount int64
@@ -97,7 +104,30 @@ func (service *Service) BalanceSheet(writer http.ResponseWriter, request *http.R
 		}
 		result[group+"_cents"] = amount
 	}
-	result["balanced"] = result["asset_cents"].(int64) == result["liability_cents"].(int64)+result["equity_cents"].(int64)
+
+	// Current-period profit: revenue − expense from posted journals.
+	var profit int64
+	err = service.pool.QueryRow(request.Context(), `
+		SELECT COALESCE(SUM(CASE
+			WHEN a.report_group = 'revenue' THEN jl.credit_cents - jl.debit_cents
+			WHEN a.report_group = 'expense' THEN jl.debit_cents - jl.credit_cents
+			ELSE 0 END), 0)
+		FROM journal_lines jl
+		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
+		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
+		  AND a.report_group IN ('revenue', 'expense')
+	`, tenantID).Scan(&profit)
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
+		return
+	}
+	result["profit_cents"] = profit
+
+	assets := result["asset_cents"].(int64)
+	liabilities := result["liability_cents"].(int64)
+	equity := result["equity_cents"].(int64)
+	result["balanced"] = assets == liabilities+equity+profit
 	writeJSON(writer, http.StatusOK, result)
 }
 
