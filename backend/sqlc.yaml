@@ -1,7 +1,11 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    schema: "migrations/000001_mvp_foundation.up.sql"
+    schema:
+      - "migrations/000001_mvp_foundation.up.sql"
+      - "migrations/000002_user_tokens.up.sql"
+      - "migrations/000004_allow_reversal_link.up.sql"
+      - "migrations/000005_customer_item_sales.up.sql"
     queries: "queries"
     gen:
       go:

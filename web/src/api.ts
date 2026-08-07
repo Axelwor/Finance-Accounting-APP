@@ -38,6 +38,11 @@ import type {
   TransactionInput,
   TransferCommandPayload,
   Business,
+  Customer,
+  Item,
+  Quotation,
+  QuotationCreateInput,
+  QuotationListItem,
 } from "./types";
 
 const LATENCY_MS = 200;
@@ -697,6 +702,63 @@ export const api = {
   /** Cash Flow report (GET /reports/cash-flow). */
   async getCashFlow(): Promise<BackendCashFlow> {
     return http<BackendCashFlow>("/reports/cash-flow", { auth: true });
+  },
+
+  /** Customer list (GET /customers). Failure -> empty array. */
+  async listCustomers(): Promise<Customer[]> {
+    try {
+      return await http<Customer[]>("/customers", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Item list (GET /items). Failure -> empty array. */
+  async listItems(): Promise<Item[]> {
+    try {
+      return await http<Item[]>("/items", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Quotation list (GET /quotations). Optional status filter. Failure -> empty array. */
+  async listQuotations(status?: QuotationListItem["status"]): Promise<QuotationListItem[]> {
+    const query = status ? `?status=${status}` : "";
+    try {
+      return await http<QuotationListItem[]>(`/quotations${query}`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Get one quotation with lines (GET /quotations/{id}). */
+  async getQuotation(id: number): Promise<Quotation> {
+    return http<Quotation>(`/quotations/${id}`, { auth: true });
+  },
+
+  /** Create a quotation (POST /quotations). SQ posts no journal. */
+  async createQuotation(input: QuotationCreateInput): Promise<Quotation & { id: number; number: string }> {
+    return http<Quotation & { id: number; number: string }>("/quotations", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify({
+        ...input,
+        source_ref: input.source_ref ?? `WEB-${Date.now()}`,
+        quotation_date: input.quotation_date || mockHelpers.today(),
+      }),
+    });
+  },
+
+  /** Send a quotation (DRAFT -> SENT). */
+  async sendQuotation(id: number): Promise<{ id: number; status: string }> {
+    return http<{ id: number; status: string }>(`/quotations/${id}/send`, { method: "POST", auth: true });
+  },
+
+  /** Cancel a quotation (DRAFT/SENT -> CANCELLED). */
+  async cancelQuotation(id: number): Promise<{ id: number; status: string }> {
+    return http<{ id: number; status: string }>(`/quotations/${id}/cancel`, { method: "POST", auth: true });
   },
 
   /**

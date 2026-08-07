@@ -14,6 +14,7 @@ import { DashboardScreen } from "../screens/workbench/DashboardScreen";
 import {
   SalesInvoiceList,
   SalesReceiptList,
+  QuotationList,
 } from "../screens/list/Sales";
 import {
   PurchaseInvoiceList,
@@ -25,6 +26,7 @@ import {
 } from "../screens/list/Inventory";
 import { AssetRegisterList } from "../screens/list/Assets";
 import { MockEntryForm } from "../screens/entry/MockEntryForm";
+import { QuotationForm } from "../screens/entry/QuotationForm";
 import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
@@ -150,6 +152,8 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <SalesInvoiceList />;
     case "sales-receipt":
       return <SalesReceiptList />;
+    case "sales-quotation":
+      return <QuotationList />;
     case "purchase-invoice":
       return <PurchaseInvoiceList />;
     case "purchase-payment":
@@ -201,6 +205,8 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
           initialTitle={tab.title}
         />
       );
+    case "sales-quotation-entry":
+      return <QuotationForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     default:
       return <PlaceholderTab title={tab.title} sub={`entry · ${subKind}`} />;
   }

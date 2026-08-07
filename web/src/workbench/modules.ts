@@ -23,6 +23,7 @@ const sales: Module = {
   label: "Sales",
   icon: "sale",
   items: [
+    { id: "sl-quotation", label: "Quotations", hint: "SQ", openList: "sales-quotation", openEntry: "sales-quotation-entry" },
     { id: "sl-invoice", label: "Sales Invoices", hint: "INV", openList: "sales-invoice", openEntry: "sales-invoice", mockData: true },
     { id: "sl-receipt", label: "Sales Receipts", hint: "RCP", openList: "sales-receipt", openEntry: "sales-receipt", mockData: true },
   ],
@@ -100,6 +101,8 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Sales Invoices";
     case "sales-receipt":
       return "Sales Receipts";
+    case "sales-quotation":
+      return "Quotations";
     case "purchase-invoice":
       return "Purchase Invoices";
     case "purchase-payment":
@@ -134,6 +137,8 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Sales Invoice";
     case "sales-receipt":
       return "Sales Receipt";
+    case "sales-quotation-entry":
+      return "Quotation";
     case "purchase-invoice":
       return "Purchase Invoice";
     case "purchase-payment":
@@ -153,6 +158,7 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "cash-transfer": return "BT-DRAFT";
     case "sales-invoice": return "SI-DRAFT";
     case "sales-receipt": return "SR-DRAFT";
+    case "sales-quotation-entry": return "SQ-DRAFT";
     case "purchase-invoice": return "PI-DRAFT";
     case "purchase-payment": return "PP-DRAFT";
     case "inventory-item": return "IT-DRAFT";

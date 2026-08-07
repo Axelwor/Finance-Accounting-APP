@@ -16,6 +16,7 @@ export type ListSubKind =
   | "cash-transfer"
   | "sales-invoice"
   | "sales-receipt"
+  | "sales-quotation"
   | "purchase-invoice"
   | "purchase-payment"
   | "inventory-items"
@@ -33,6 +34,7 @@ export type EntrySubKind =
   | "cash-transfer"
   | "sales-invoice"
   | "sales-receipt"
+  | "sales-quotation-entry"
   | "purchase-invoice"
   | "purchase-payment"
   | "inventory-item"
@@ -323,4 +325,75 @@ export interface PeriodResult {
   journal_id: number;
   number: string;
   hash?: string;
+}
+
+/** Customer master data (GET/POST /api/v1/customers). */
+export interface Customer {
+  id: number;
+  code: string;
+  name: string;
+  payment_term_id?: number | null;
+  is_active: boolean;
+}
+
+/** Item master data (GET /api/v1/items). */
+export interface Item {
+  id: number;
+  code: string;
+  name: string;
+  item_type: "goods" | "service";
+  is_tracked_stock: boolean;
+}
+
+/** Sales quotation list row (GET /api/v1/quotations). */
+export interface QuotationListItem {
+  id: number;
+  number: string;
+  customer_id: number;
+  customer_name?: string;
+  quotation_date: string;
+  valid_until?: string;
+  payment_term_id?: number | null;
+  status: "DRAFT" | "SENT" | "CONVERTED" | "EXPIRED" | "CANCELLED";
+  total_cents: number;
+}
+
+/** A quotation line as returned by GET /api/v1/quotations/{id}. */
+export interface QuotationLine {
+  id: number;
+  item_id?: number | null;
+  item_code?: string;
+  item_name?: string;
+  qty: string;
+  unit_price_cents: number;
+  discount_cents: number;
+  tax_rate: string;
+  line_total_cents: number;
+  description?: string | null;
+}
+
+/** Full quotation with lines (GET /api/v1/quotations/{id}). */
+export interface Quotation extends QuotationListItem {
+  lines: QuotationLine[];
+}
+
+/** Input line for POST /api/v1/quotations. */
+export interface QuotationLineInput {
+  item_id: number;
+  qty: number;
+  unit_price_cents: number;
+  discount_cents: number;
+  tax_rate: number;
+  description?: string;
+}
+
+/** Payload POST /api/v1/quotations. */
+export interface QuotationCreateInput {
+  customer_id: number;
+  quotation_date: string;
+  valid_until?: string;
+  payment_term_id?: number;
+  notes?: string;
+  source_ref?: string;
+  lines: QuotationLineInput[];
 }

@@ -12,8 +12,11 @@ import (
 	"finance-accounting-app/backend/internal/cash"
 	"finance-accounting-app/backend/internal/coa"
 	"finance-accounting-app/backend/internal/config"
+	"finance-accounting-app/backend/internal/customer"
+	"finance-accounting-app/backend/internal/item"
 	"finance-accounting-app/backend/internal/period"
 	"finance-accounting-app/backend/internal/reporting"
+	"finance-accounting-app/backend/internal/sales"
 	"finance-accounting-app/backend/internal/tenant"
 )
 
@@ -35,6 +38,9 @@ func main() {
 	coaHandler := coa.NewHandler(pool)
 	cashHandler := cash.NewHandler(pool)
 	periodHandler := period.NewHandler(pool)
+	customerHandler := customer.NewHandler(pool)
+	itemHandler := item.NewHandler(pool)
+	salesHandler := sales.NewHandler(pool)
 
 	router := chi.NewRouter()
 	router.Get("/healthz", tenant.Health)
@@ -68,6 +74,26 @@ func main() {
 
 			router.Post("/periods/close", periodHandler.Close)
 			router.Post("/periods/unlock", periodHandler.Unlock)
+
+			router.Get("/customers", customerHandler.ListCustomers)
+			router.Post("/customers", customerHandler.CreateCustomer)
+			router.Get("/customers/{id}", customerHandler.GetCustomer)
+			router.Post("/customers/{id}/deactivate", customerHandler.DeactivateCustomer)
+			router.Get("/payment-terms", customerHandler.ListPaymentTerms)
+			router.Post("/payment-terms", customerHandler.CreatePaymentTerm)
+
+			router.Get("/items", itemHandler.List)
+			router.Post("/items", itemHandler.Create)
+			router.Post("/items/{id}/deactivate", itemHandler.Deactivate)
+			router.Get("/items/{id}/prices", itemHandler.ListPrices)
+			router.Post("/items/{id}/prices", itemHandler.CreatePrice)
+
+			router.Get("/quotations", salesHandler.List)
+			router.Post("/quotations", salesHandler.Create)
+			router.Get("/quotations/{id}", salesHandler.Get)
+			router.Post("/quotations/{id}/send", salesHandler.Send)
+			router.Post("/quotations/{id}/cancel", salesHandler.Cancel)
+			router.Post("/quotations/{id}/mark-expired", salesHandler.MarkExpired)
 		})
 	})
 

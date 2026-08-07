@@ -316,6 +316,8 @@ function entryKindToListKind(kind: EntrySubKind): ListSubKind | null {
       return "sales-invoice";
     case "sales-receipt":
       return "sales-receipt";
+    case "sales-quotation-entry":
+      return "sales-quotation";
     case "purchase-invoice":
       return "purchase-invoice";
     case "purchase-payment":
