@@ -558,6 +558,14 @@ button { cursor: pointer; }
 .status-cell__label .dot--neg { background: var(--negative); }
 .status-cell__label .dot--acc { background: var(--accent); }
 .status-cell__label .dot--warn { background: var(--warning); }
+
+.pos-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--positive);
+  display: inline-block;
+}
 .status-cell__value {
   font-family: var(--font-display);
   font-size: 1.625rem;
