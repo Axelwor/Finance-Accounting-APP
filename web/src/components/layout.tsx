@@ -1,24 +1,82 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAppState } from "../state";
 import { api } from "../api";
 
 const wordmark = "Ledgerly";
 
-const NAV_ITEMS = [
-  { to: "/dashboard", label: "Dashboard" },
-  { to: "/transactions", label: "Transactions" },
-  { to: "/record/money-in", label: "Money In" },
-  { to: "/record/money-out", label: "Money Out" },
-  { to: "/record/transfer", label: "Transfer" },
+const Icon = ({ children }: { children: ReactNode }) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">{children}</svg>
+);
+
+const NAV_OVERVIEW = [
+  {
+    to: "/dashboard",
+    label: "Today",
+    icon: (
+      <Icon>
+        <rect x="3" y="4" width="18" height="17" rx="1.5" />
+        <path d="M3 9h18" />
+        <path d="M8 2v4" />
+        <path d="M16 2v4" />
+      </Icon>
+    ),
+  },
+  {
+    to: "/transactions",
+    label: "Ledger",
+    icon: (
+      <Icon>
+        <path d="M4 5h16" />
+        <path d="M4 12h16" />
+        <path d="M4 19h16" />
+        <path d="M8 5v14" />
+      </Icon>
+    ),
+  },
 ];
 
-/** Brand mark shown in the sidebar and auth/onboarding headers. */
+const NAV_RECORD = [
+  {
+    to: "/record/money-in",
+    label: "Money in",
+    icon: (
+      <Icon>
+        <path d="M12 4v12" />
+        <path d="M6 10l6-6 6 6" />
+        <path d="M5 20h14" />
+      </Icon>
+    ),
+  },
+  {
+    to: "/record/money-out",
+    label: "Money out",
+    icon: (
+      <Icon>
+        <path d="M12 16V4" />
+        <path d="M6 10l6 6 6-6" />
+        <path d="M5 20h14" />
+      </Icon>
+    ),
+  },
+  {
+    to: "/record/transfer",
+    label: "Transfer",
+    icon: (
+      <Icon>
+        <path d="M4 8h13l-3-3" />
+        <path d="M20 16H7l3 3" />
+      </Icon>
+    ),
+  },
+];
+
+/** Brand wordmark with italic ledger glyph. */
 export function Brand() {
   return (
     <Link to="/" className="brand" aria-label={`${wordmark} - back to home`}>
       <span className="brand__mark" aria-hidden="true" />
-      <span className="brand__name">{wordmark}</span>
+      <span className="brand__name">Ledger<em>ly</em></span>
     </Link>
   );
 }
@@ -55,7 +113,11 @@ export function AppShell() {
         aria-label={sidebarOpen ? "Close menu" : "Open menu"}
         onClick={() => setSidebarOpen((open) => !open)}
       >
-        ☰
+        <Icon>
+          <path d="M4 6h16" />
+          <path d="M4 12h16" />
+          <path d="M4 18h16" />
+        </Icon>
       </button>
       <div
         className={`app-sidebar__scrim${sidebarOpen ? " is-visible" : ""}`}
@@ -67,20 +129,13 @@ export function AppShell() {
           <Brand />
         </div>
         <nav className="app-sidebar__nav" aria-label="Main menu">
-          {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => `app-sidebar__link${isActive ? " is-active" : ""}`}
-              onClick={closeSidebar}
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          <SidebarGroup label="Overview" items={NAV_OVERVIEW} onSelect={closeSidebar} />
+          <SidebarGroup label="Record" items={NAV_RECORD} onSelect={closeSidebar} />
         </nav>
         <div className="app-sidebar__footer">
           <span className="app-sidebar__user" title={user?.email}>
-            {user?.businessName}
+            Signed in as
+            <strong>{user?.businessName}</strong>
           </span>
           <button type="button" className="btn btn--ghost btn--sm" onClick={handleLogout}>
             Sign out
@@ -92,6 +147,41 @@ export function AppShell() {
           <Outlet />
         </div>
       </main>
+    </div>
+  );
+}
+
+interface SidebarItem {
+  to: string;
+  label: string;
+  icon: ReactNode;
+}
+
+function SidebarGroup({
+  label,
+  items,
+  onSelect,
+}: {
+  label: string;
+  items: SidebarItem[];
+  onSelect: () => void;
+}) {
+  return (
+    <div className="sidebar-group">
+      <p className="sidebar-group__label">{label}</p>
+      <div className="sidebar-group__items">
+        {items.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) => `app-sidebar__link${isActive ? " is-active" : ""}`}
+            onClick={onSelect}
+          >
+            {item.icon}
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
+      </div>
     </div>
   );
 }

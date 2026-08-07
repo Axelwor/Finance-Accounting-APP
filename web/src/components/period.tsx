@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { api } from "../api";
-import { Button, Card, FormError } from "./ui";
+import { Button, FormError } from "./ui";
 import type { PeriodResult } from "../types";
 
 type PeriodAction = "close" | "reopen";
 
 const CONFIRMATIONS: Record<PeriodAction, string> = {
   close:
-    "Close the current book period? After closing, the period cannot accept new transactions until it is reopened.",
+    "Close the current book period? Once closed, no new entries can be ruled until the period is reopened.",
   reopen:
     "Reopen a closed period? The closing journal will be reversed automatically by the system.",
 };
@@ -36,27 +36,30 @@ export function PeriodCard() {
   const processing = busy !== null;
 
   return (
-    <Card
-      className="period-card"
-      title="Book period"
-      description="Close the books when a period ends, or reopen when a correction is needed."
-    >
+    <div className="period-card section">
+      <div className="period-card__head">
+        <h3 className="period-card__title">Book period</h3>
+        <span className="period-card__meta">Close / reopen</span>
+      </div>
+      <p className="period-card__desc">
+        Close the books when a period ends, or reopen when a correction is needed. The closing journal moves the period's profit into retained earnings.
+      </p>
       <div className="quick-actions">
         <Button variant="primary" disabled={processing} onClick={() => void run("close")}>
-          {busy === "close" ? "Closing books..." : "Close Books"}
+          {busy === "close" ? "Closing books..." : "Close books"}
         </Button>
         <Button variant="secondary" disabled={processing} onClick={() => void run("reopen")}>
-          {busy === "reopen" ? "Reopening period..." : "Reopen Period"}
+          {busy === "reopen" ? "Reopening..." : "Reopen period"}
         </Button>
       </div>
 
       {result ? (
         <p className="period-card__status" role="status">
           Period #{result.period_id} {result.status === "CLOSED" ? "closed" : "reopened"} — journal{" "}
-          <code>{result.number}</code> recorded.
+          <code>{result.number}</code> ruled.
         </p>
       ) : null}
       <FormError message={error} />
-    </Card>
+    </div>
   );
 }

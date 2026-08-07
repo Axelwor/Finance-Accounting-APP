@@ -223,7 +223,7 @@ export function SelectField({
   value,
   onChange,
   options,
-  placeholder = "Select...",
+  placeholder = "Choose...",
   error,
 }: SelectFieldProps) {
   const id = useId();
@@ -281,7 +281,7 @@ export function FormError({ message }: { message: string | null }) {
 }
 
 /** Loading status for whole data pages (dashboard, lists, etc.). */
-export function LoadingState({ label = "Loading..." }: { label?: string }) {
+export function LoadingState({ label = "Stamping the day..." }: { label?: string }) {
   return (
     <div className="loading-state" role="status" aria-live="polite">
       <span className="loading-state__spinner" aria-hidden="true" />
@@ -325,7 +325,7 @@ export function EmptyState({
 
 /** Reloadable error message. */
 export function ErrorState({
-  title = "Something went wrong",
+  title = "Could not load the ledger",
   message,
   onRetry,
 }: {
@@ -339,7 +339,7 @@ export function ErrorState({
       <p className="error-state__message">{message}</p>
       {onRetry ? (
         <Button variant="secondary" onClick={onRetry}>
-          Try again
+          Retry
         </Button>
       ) : null}
     </div>

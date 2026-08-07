@@ -50,14 +50,21 @@ export function AuthScreen() {
       <div className="auth__hero">
         <div className="auth__brand">
           <span className="brand__mark" aria-hidden="true" />
-          <span className="brand__name">{wordmark}</span>
+          <span className="brand__name">Ledger<em>ly</em></span>
         </div>
-        <div className="auth__hero-copy">
-          <h1 className="auth__title">Simple bookkeeping, no accounting degree needed.</h1>
+        <div className="auth__copy">
+          <p className="auth__copy-meta">A craft ledger for daily books</p>
+          <h1 className="auth__title">
+            Record once. The <em>ledger</em> remembers.
+          </h1>
           <p className="auth__lede">
-            Record money in and out like writing in a notebook. Reports for taxes, banks, and
-            investors are prepared automatically in the background.
+            Money in, money out, transfer, close — written in the same ruled register
+            your accountant reads. Reports come from the same source, never a separate file.
           </p>
+        </div>
+        <div className="auth__signoff">
+          <span><strong>Ledgerly</strong> · Operate from the source book</span>
+          <span>Issue 1 · Vol. M1</span>
         </div>
       </div>
 
@@ -80,7 +87,7 @@ export function AuthScreen() {
               className={`auth-card__tab${mode === "register" ? " is-active" : ""}`}
               onClick={() => switchMode("register")}
             >
-              Create account
+              Open ledger
             </button>
           </div>
 
@@ -95,7 +102,7 @@ export function AuthScreen() {
           ) : null}
 
           <TextField
-            label="Email address"
+            label="Email"
             type="email"
             value={email}
             onChange={setEmail}
@@ -109,7 +116,7 @@ export function AuthScreen() {
             type="password"
             value={password}
             onChange={setPassword}
-            placeholder="At least 6 characters"
+            placeholder="At least 8 characters"
             autoComplete={mode === "register" ? "new-password" : "current-password"}
           />
 
@@ -117,25 +124,25 @@ export function AuthScreen() {
 
           <Button type="submit" variant="primary" fullWidth disabled={loading}>
             {loading
-              ? "Processing..."
+              ? "Opening..."
               : mode === "register"
-                ? "Create account"
+                ? "Open the ledger"
                 : "Sign in"}
           </Button>
 
           <p className="auth-card__switch">
             {mode === "login" ? (
               <>
-                No account yet?{" "}
+                First time here?{" "}
                 <button type="button" className="link-button" onClick={() => switchMode("register")}>
-                  Create one here
+                  Open a new ledger
                 </button>
               </>
             ) : (
               <>
-                Already have an account?{" "}
+                Already on the books?{" "}
                 <button type="button" className="link-button" onClick={() => switchMode("login")}>
-                  Sign in here
+                  Sign back in
                 </button>
               </>
             )}
@@ -143,7 +150,7 @@ export function AuthScreen() {
 
           <p className="auth-card__note">
             <Link to="/onboarding" className="link-inline">
-              Continue as example without account
+              Try with example data, no account needed
             </Link>
           </p>
         </form>

@@ -9,10 +9,10 @@ import { formatIDR } from "../lib/format";
 type BalanceKey = "cash" | "bank" | "receivables" | "payables" | "equity";
 
 const BALANCE_FIELDS: { key: BalanceKey; label: string; hint?: string }[] = [
-  { key: "cash", label: "Cash on hand", hint: "Physical money you hold." },
-  { key: "bank", label: "Bank account balance" },
-  { key: "receivables", label: "Receivables (money to be received)" },
-  { key: "payables", label: "Payables (money to be paid)" },
+  { key: "cash", label: "Cash on hand", hint: "Physical money in the drawer." },
+  { key: "bank", label: "Bank balance" },
+  { key: "receivables", label: "Receivables", hint: "Money owed to the business." },
+  { key: "payables", label: "Payables", hint: "Money the business owes." },
   { key: "equity", label: "Starting capital" },
 ];
 
@@ -25,7 +25,12 @@ const BUSINESS_TYPES = [
   "Other",
 ];
 
-const CURRENCIES: { value: CurrencyCode; label: string }[] = [{ value: "IDR", label: "Rupiah (Rp)" }];
+const CURRENCIES: { value: CurrencyCode; label: string }[] = [{ value: "IDR", label: "Rupiah (IDR)" }];
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 
 /** 3-step onboarding flow: business details, book period, opening balance. */
 export function OnboardingScreen() {
@@ -43,29 +48,17 @@ export function OnboardingScreen() {
     equity: "",
   });
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [finishing, setFinishing] = useState(false);
 
   const navigate = useNavigate();
   const { setBusiness } = useAppState();
 
-  const totalAssets = (balance.cash ? Number(balance.cash) : 0) + (balance.bank ? Number(balance.bank) : 0) + (balance.receivables ? Number(balance.receivables) : 0);
-  const totalLiabilitiesEquity = (balance.payables ? Number(balance.payables) : 0) + (balance.equity ? Number(balance.equity) : 0);
-
-  const monthLabels = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
+  const totalAssets =
+    (balance.cash ? Number(balance.cash) : 0) +
+    (balance.bank ? Number(balance.bank) : 0) +
+    (balance.receivables ? Number(balance.receivables) : 0);
+  const totalLiabilitiesEquity =
+    (balance.payables ? Number(balance.payables) : 0) + (balance.equity ? Number(balance.equity) : 0);
 
   const stepValid = (): boolean => {
     if (step === 0) return name.trim().length > 0 && businessType.trim().length > 0;
@@ -102,7 +95,6 @@ export function OnboardingScreen() {
       });
       const state = api.getLocalState();
       setBusiness(state.business);
-      setLoading(true);
       navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
@@ -149,11 +141,11 @@ export function OnboardingScreen() {
             label="Book period starts in month"
             value={startMonth}
             onChange={setStartMonth}
-            options={monthLabels.map((m, i) => ({ value: String(i + 1), label: m }))}
+            options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))}
           />
           <p className="field-note">
-            Book period: {monthLabels[Number(startMonth) - 1]} {year} through{" "}
-            {monthLabels[(Number(startMonth) + 10) % 12]} {Number(startMonth) === 1 ? year : Number(year) + 1}.
+            Book period: {MONTHS[Number(startMonth) - 1]} {year} through{" "}
+            {MONTHS[(Number(startMonth) + 10) % 12]} {Number(startMonth) === 1 ? year : Number(year) + 1}.
           </p>
         </div>
       );
@@ -170,9 +162,9 @@ export function OnboardingScreen() {
           />
         ))}
         <div className="balance-summary">
-          <p className="balance-summary__label">Summary</p>
+          <p className="balance-summary__label">Day-one ruling</p>
           <div className="balance-summary__row">
-            <span>Total assets (cash + bank + receivables)</span>
+            <span>Total assets</span>
             <strong>{formatIDR(totalAssets)}</strong>
           </div>
           <div className="balance-summary__row">
@@ -180,7 +172,7 @@ export function OnboardingScreen() {
             <strong>{formatIDR(totalLiabilitiesEquity)}</strong>
           </div>
           <p className="balance-summary__note">
-            Small differences between the two figures are balanced automatically by the system.
+            The system will balance any difference against capital automatically.
           </p>
         </div>
       </div>
@@ -189,26 +181,28 @@ export function OnboardingScreen() {
 
   const stepMeta = [
     { label: "Business details", desc: "Name, type, and currency." },
-    { label: "Book period", desc: "When your fiscal year starts." },
-    { label: "Opening balance", desc: "A summary of your day-one financial position." },
+    { label: "Book period", desc: "When the fiscal year starts." },
+    { label: "Opening balance", desc: "Your day-one financial position." },
   ];
 
   return (
     <div className="onboarding">
       <div className="onboarding__head">
-        <p className="onboarding__brand">
-          <span className="brand__mark" aria-hidden="true" />
-          <span className="brand__name">Ledgerly</span>
-        </p>
-        <h1 className="onboarding__title">Set up your business books</h1>
-        <p className="onboarding__sub">Three short steps, about 2 minutes.</p>
+        <p className="onboarding__meta">Setup / Three short steps</p>
+        <h1 className="onboarding__title">
+          Open the <em>ledger</em>
+        </h1>
+        <p className="onboarding__sub">Rule your books in three short steps, about two minutes.</p>
       </div>
 
       <ol className="stepper" aria-label="Onboarding steps">
         {stepMeta.map((s, i) => (
-          <li key={s.label} className={`stepper__item${i === step ? " is-active" : i < step ? " is-done" : ""}`}>
+          <li
+            key={s.label}
+            className={`stepper__item${i === step ? " is-active" : i < step ? " is-done" : ""}`}
+          >
             <span className="stepper__num" aria-hidden="true">
-              {i < step ? "✓" : i + 1}
+              {String(i + 1).padStart(2, "0")}
             </span>
             <span className="stepper__label">{s.label}</span>
           </li>
@@ -240,8 +234,8 @@ export function OnboardingScreen() {
           ) : (
             <span />
           )}
-          <Button type="submit" variant="primary" disabled={loading || finishing}>
-            {step < 2 ? "Next" : finishing ? "Saving..." : "Finish, open dashboard"}
+          <Button type="submit" variant="primary" disabled={finishing}>
+            {step < 2 ? "Next" : finishing ? "Ruling..." : "Open the dashboard"}
           </Button>
         </div>
       </form>
