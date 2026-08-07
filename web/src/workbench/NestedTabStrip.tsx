@@ -76,17 +76,19 @@ function NestedTabPill({
       </span>
       <span className="nested-tabpill__title" title={tab.title}>{tab.title}</span>
       <span className="nested-tabpill__status">{status}</span>
-      <button
-        type="button"
-        className="nested-tabpill__close"
-        aria-label={`Close ${tab.title}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          workbench.close(tab.id);
-        }}
-      >
-        ×
-      </button>
+      {tab.kind === "entry" ? (
+        <button
+          type="button"
+          className="nested-tabpill__close"
+          aria-label={`Close ${tab.title}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            workbench.close(tab.id);
+          }}
+        >
+          ×
+        </button>
+      ) : null}
     </div>
   );
 }

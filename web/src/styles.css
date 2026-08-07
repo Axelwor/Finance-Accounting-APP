@@ -1643,7 +1643,7 @@ select.input {
 .workarea {
   flex: 1;
   min-height: 0;
-  padding: var(--u-4);
+  padding: 0;
   background: var(--canvas);
 }
 .workarea--empty { display: flex; align-items: center; justify-content: center; }
@@ -2567,7 +2567,7 @@ select.input {
   padding: 0;
   border: 1px solid var(--rule);
   background: var(--paper);
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border-radius: 0 var(--radius-md) 0 0;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
