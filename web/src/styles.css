@@ -1644,8 +1644,6 @@ select.input {
   min-height: 0;
   padding: 0;
   background: var(--canvas);
-  margin-left: calc(-1 * var(--u-6));
-  margin-right: calc(-1 * var(--u-6));
 }
 .workarea--empty { display: flex; align-items: center; justify-content: center; padding: var(--u-6); }
 
@@ -2574,8 +2572,6 @@ select.input {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
-  margin-left: calc(-1 * var(--u-6));
-  margin-right: calc(-1 * var(--u-6));
 }
 .nested-tabstrip__inner {
   display: flex;
