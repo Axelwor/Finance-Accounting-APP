@@ -100,7 +100,7 @@ function reducer(state: State, action: Action): State {
       const lookup = findSubItemByList(action.subKind);
       if (!lookup) return state;
       const moduleId = lookup.module.id;
-      const parent = ensureModuleParent(state, moduleId);
+      const parent = ensureModuleParent(state, moduleId, lookup.item.label);
       return activateNestedChild(parent, {
         id: newId(`list-${action.subKind}`),
         kind: "list",
@@ -117,7 +117,8 @@ function reducer(state: State, action: Action): State {
         entryKindToListKind(action.subKind) ?? ("cash-other-receipt" as ListSubKind),
       );
       const moduleId: ModuleId = lookup?.module.id ?? "cash-bank";
-      const parent = ensureModuleParent(state, moduleId);
+      const subLabel = lookup?.item.label ?? findModule(moduleId)?.label ?? moduleId;
+      const parent = ensureModuleParent(state, moduleId, subLabel);
       return activateNestedChild(parent, {
         id: newId(`entry-${action.subKind}-draft`),
         kind: "entry",
@@ -132,7 +133,9 @@ function reducer(state: State, action: Action): State {
     }
     case "open-entry-existing": {
       const moduleId: ModuleId = "cash-bank";
-      const parent = ensureModuleParent(state, moduleId);
+      const lookup = findSubItemByList(entryKindToListKind(action.subKind) ?? ("cash-other-receipt" as ListSubKind));
+      const subLabel = lookup?.item.label ?? findModule(moduleId)?.label ?? moduleId;
+      const parent = ensureModuleParent(state, moduleId, subLabel);
       return activateNestedChild(parent, {
         id: `entry-${action.subKind}-${action.entryId}`,
         kind: "entry",
@@ -223,15 +226,25 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-function ensureModuleParent(state: State, moduleId: ModuleId): State {
+function ensureModuleParent(state: State, moduleId: ModuleId, title?: string): State {
   const existing = state.tabs.find((t): t is ModuleTab => t.kind === "module" && t.moduleId === moduleId);
-  if (existing) return state;
+  if (existing) {
+    // Update the tab title to reflect the latest sub-item opened.
+    if (title && existing.title !== title) {
+      const updated: ModuleTab = { ...existing, title };
+      return {
+        ...state,
+        tabs: state.tabs.map((t) => (t.id === existing.id ? updated : t)),
+      };
+    }
+    return state;
+  }
   const module = findModule(moduleId);
   const tab: ModuleTab = {
     id: `module-${moduleId}`,
     kind: "module",
     moduleId,
-    title: module?.label ?? moduleId,
+    title: title ?? module?.label ?? moduleId,
     createdAt: Date.now(),
   };
   return {
@@ -243,6 +256,10 @@ function ensureModuleParent(state: State, moduleId: ModuleId): State {
 function activateNestedChild(state: State, child: NestedTab): State {
   const parentId = `module-${child.moduleId}`;
   const parentExists = state.tabs.some((t) => t.id === parentId);
+  // Determine the sub-item label for the tab title.
+  const childListKind = child.kind === "list" ? child.subKind : entryKindToListKind(child.subKind) ?? ("cash-other-receipt" as ListSubKind);
+  const childLookup = findSubItemByList(childListKind);
+  const childLabel = childLookup?.item.label ?? findModule(child.moduleId)?.label ?? child.moduleId;
   const next: State = parentExists
     ? state
     : {
@@ -253,7 +270,7 @@ function activateNestedChild(state: State, child: NestedTab): State {
             id: parentId,
             kind: "module",
             moduleId: child.moduleId,
-            title: findModule(child.moduleId)?.label ?? child.moduleId,
+            title: childLabel,
             createdAt: Date.now(),
           },
         ],

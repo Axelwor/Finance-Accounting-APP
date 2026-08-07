@@ -48,6 +48,8 @@ export interface EntryTab extends TabBase {
 /** Module parent — owns a list of nested child tabs. */
 export interface ModuleTab extends TabBase {
   kind: "module";
+  /** The currently active sub-item label, shown in the top-level tab. */
+  activeSubItem?: string;
 }
 
 /** Dashboard overview — opens by default when the user first lands. */

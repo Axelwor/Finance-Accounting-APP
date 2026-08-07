@@ -28,7 +28,7 @@ function TabPill({ tab }: { tab: Tab }) {
   const workbench = useWorkbench();
   const isActive = tab.id === workbench.activeId;
   const isDashboard = tab.kind === "dashboard";
-  const label = isDashboard ? "Dashboard" : findModule(tab.moduleId)?.label ?? tab.title;
+  const label = isDashboard ? "Dashboard" : tab.title || (findModule(tab.moduleId)?.label ?? tab.moduleId);
 
   return (
     <div
@@ -38,7 +38,7 @@ function TabPill({ tab }: { tab: Tab }) {
       onClick={() => workbench.activate(tab.id)}
     >
       <span className={`tabpill__kind tabpill__kind--${isDashboard ? "home" : "module"}`}>
-        {isDashboard ? "HOME" : "MODULE"}
+        {isDashboard ? "HOME" : "MENU"}
       </span>
       <span className="tabpill__title" title={label}>{label}</span>
       {!isDashboard ? (
