@@ -105,7 +105,7 @@ func TestValidateOpeningBalanceRequest(t *testing.T) {
 	}{
 		{"missing source_ref", func(r *OpeningBalanceRequest) { r.SourceRef = "" }},
 		{"no balances", func(r *OpeningBalanceRequest) { r.Balances = nil }},
-		{"zero equity account", func(r *OpeningBalanceRequest) { r.EquityAccountID = 0 }},
+		{"negative equity account", func(r *OpeningBalanceRequest) { r.EquityAccountID = -1 }},
 		{"zero account id in line", func(r *OpeningBalanceRequest) { r.Balances[0].AccountID = 0 }},
 		{"debit and credit on same line", func(r *OpeningBalanceRequest) {
 			r.Balances[0].CreditCents = 100

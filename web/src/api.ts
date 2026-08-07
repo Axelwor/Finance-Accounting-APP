@@ -29,7 +29,9 @@ import type {
   LoginInput,
   OnboardingInput,
   OpeningBalancePayload,
+  PeriodResult,
   RegisterInput,
+  SaldoAwal,
   Transaction,
   TransactionInput,
   TransferCommandPayload,
@@ -205,10 +207,25 @@ function mapCategories(raw: BackendCategory[]): Category[] {
     }));
 }
 
-/** Id akun backend (int64) dari id UI string; NaN jika tidak terbaca. */
+/**
+ * Id akun backend (int64) dari id UI string; NaN jika tidak terbaca.
+ * Kode akun default dari seed COA backend (lihat auth/seed.go).
+ */
 function accountId(raw: string | undefined): number {
   return Number(raw);
 }
+
+/** Kode akun dari seed COA backend untuk setiap jenis saldo onboarding. */
+const ACCOUNT_CODE_BY_SALDO: Record<keyof SaldoAwal, string> = {
+  kas: "1101",
+  bank: "1102",
+  piutang: "1201",
+  hutang: "2101",
+  modal: "3101",
+};
+
+/** Kode akun ekuitas yang dipakai sebagai plug saldo awal (Modal, 3101). */
+const EQUITY_ACCOUNT_CODE = "3101";
 
 /** source_ref unik per perintah, mis. "WEB-1752754093701". */
 function newSourceRef(): string {
@@ -261,7 +278,7 @@ function slugify(value: string): string {
 }
 
 /** Membangun payload POST /opening-balances dari SaldoAwal onboarding. */
-function buildOpeningBalance(input: OnboardingInput): OpeningBalancePayload | null {
+async function buildOpeningBalance(input: OnboardingInput): Promise<OpeningBalancePayload | null> {
   const { kas, bank, piutang, hutang, modal } = input.saldoAwal;
   const toCents = (value: number) => Math.round(value * 100);
   const balances: OpeningBalancePayload["balances"] = [];
@@ -271,10 +288,30 @@ function buildOpeningBalance(input: OnboardingInput): OpeningBalancePayload | nu
   if (hutang > 0) balances.push({ account_id: 0, credit_cents: toCents(hutang), debit_cents: 0 });
   if (modal > 0) balances.push({ account_id: 0, credit_cents: toCents(modal), debit_cents: 0 });
   if (balances.length === 0) return null;
+
+  // Id akun belum diketahui saat onboarding (payload dibuat sebelum tenant
+  // terbentuk), jadi ambil dari seed COA backend (kode 1101/1102/1201/2101/3101).
+  let accounts: BackendAccount[] = [];
+  try {
+    accounts = await http<BackendAccount[]>("/accounts", { auth: true });
+  } catch {
+    // Jaringan gagal -> onboarding tetap selesai; saldo awal dilewati
+    // (completeOnboarding punya fallback tersendiri untuk kegagalan posting).
+  }
+  const idByCode = new Map(accounts.map((account) => [account.code, account.id]));
+  const idOf = (code: string): number => idByCode.get(code) ?? 0;
+
+  for (const line of balances) {
+    // Pesan saldo masuk/keluar berurutan: kas, bank, piutang, hutang, modal.
+    const codes = Object.values(ACCOUNT_CODE_BY_SALDO);
+    const idx = balances.indexOf(line);
+    line.account_id = idOf(codes[idx] ?? "");
+  }
+
   return {
     source_ref: newSourceRef(),
     entry_date: `${input.periode.tahun}-${String(input.periode.mulaiBulan).padStart(2, "0")}-01`,
-    equity_account_id: 0,
+    equity_account_id: idOf(EQUITY_ACCOUNT_CODE),
     balances,
     description: "Saldo awal onboarding",
   };
@@ -385,6 +422,32 @@ export const api = {
     } catch {
       return fallback();
     }
+  },
+
+  /**
+   * Menutup periode buku berjalan (POST /periods/close).
+   * Perintah eksplisit: kegagalan dilempar sebagai ApiError, tanpa fallback mock.
+   */
+  async closePeriod(): Promise<PeriodResult> {
+    return http<PeriodResult>("/periods/close", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify({}),
+    });
+  },
+
+  /**
+   * Membuka kembali periode yang sudah ditutup (POST /periods/unlock).
+   * Perintah eksplisit: kegagalan dilempar sebagai ApiError, tanpa fallback mock.
+   */
+  async unlockPeriod(): Promise<PeriodResult> {
+    return http<PeriodResult>("/periods/unlock", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify({}),
+    });
   },
 
   /**
@@ -508,7 +571,7 @@ export const api = {
         body: JSON.stringify({ name: usaha.nama, slug: slugify(usaha.nama) }),
       });
       if (tenant.id > 0) usaha.id = String(tenant.id);
-      const opening = buildOpeningBalance(input);
+      const opening = await buildOpeningBalance(input);
       if (opening) {
         try {
           await http<BackendJournalResult>("/opening-balances", {

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useAppState } from "../state";
 import { Card, ErrorState, LoadingState } from "../components/ui";
+import { PeriodCard } from "../components/period";
 import { TransactionRow } from "../components/transactions";
 import { formatRupiah } from "../lib/format";
 import type { DashboardSummary } from "../types";
@@ -112,6 +113,8 @@ export function DashboardScreen() {
               </div>
             ) : null}
           </Card>
+
+          <PeriodCard />
         </>
       )}
 

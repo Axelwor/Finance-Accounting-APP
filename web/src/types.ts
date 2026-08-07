@@ -216,3 +216,12 @@ export interface OpeningBalancePayload {
   balances: OpeningBalanceLine[];
   description: string;
 }
+
+/** Hasil perintah tutup/buka periode (POST /api/v1/periods/close|unlock). */
+export interface PeriodResult {
+  period_id: number;
+  status: string;
+  journal_id: number;
+  number: string;
+  hash?: string;
+}

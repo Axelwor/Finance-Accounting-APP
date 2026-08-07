@@ -227,7 +227,17 @@ func (service *Service) OpeningBalance(writer http.ResponseWriter, request *http
 		return
 	}
 	service.post(writer, request, tenant, idem, func(ctx context.Context, tx pgx.Tx) (accounting.Journal, error) {
-		equityAccount, err := loadAccount(ctx, tx, tenant, req.EquityAccountID)
+		// The equity account defaults to the seeded "Modal" account (code 3101)
+		// when the client does not send one: the seed runs on registration, so
+		// the tenant's own equity id is not known to onboarding clients.
+		equityAccountID := req.EquityAccountID
+		if equityAccountID <= 0 {
+			equityAccountID, err = resolveEquityAccount(ctx, tx, tenant)
+			if err != nil {
+				return accounting.Journal{}, err
+			}
+		}
+		equityAccount, err := loadAccount(ctx, tx, tenant, equityAccountID)
 		if err != nil {
 			return accounting.Journal{}, err
 		}
@@ -350,8 +360,8 @@ func validateOpeningBalanceRequest(req OpeningBalanceRequest) (string, string) {
 	if _, err := entryDate(req.EntryDate); err != nil {
 		return "INVALID_REQUEST", err.Error()
 	}
-	if req.EquityAccountID <= 0 {
-		return "INVALID_REQUEST", "equity_account_id must be a positive integer"
+	if req.EquityAccountID < 0 {
+		return "INVALID_REQUEST", "equity_account_id must be a positive integer or omitted to use the seeded equity account"
 	}
 	if len(req.Balances) == 0 {
 		return "INVALID_REQUEST", "balances must contain at least one line"

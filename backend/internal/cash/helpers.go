@@ -1,8 +1,10 @@
 package cash
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -115,6 +117,25 @@ func accountForEngine(row db.Account) accounting.Account {
 		IsGroup:     row.IsGroup,
 		IsActive:    row.IsActive,
 	}
+}
+
+// equityAccountCode is the seeded "Modal" account used as the default equity
+// plug target for opening balances. The seed provisions it on registration.
+const equityAccountCode = "3101"
+
+// resolveEquityAccount returns the tenant's seeded equity account id, so
+// opening balances can be posted without the client knowing its own ids.
+func resolveEquityAccount(ctx context.Context, tx pgx.Tx, tenantID int64) (int64, error) {
+	var accountID int64
+	err := tx.QueryRow(ctx, `
+		SELECT id
+		FROM accounts
+		WHERE tenant_id = $1 AND code = $2
+	`, tenantID, equityAccountCode).Scan(&accountID)
+	if err != nil {
+		return 0, fmt.Errorf("seeded equity account %s not found: %w", equityAccountCode, err)
+	}
+	return accountID, nil
 }
 
 // errorFor maps a posting error to the HTTP status/error code/message.
