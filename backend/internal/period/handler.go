@@ -118,6 +118,15 @@ func (service *Service) unlockPeriod(ctx context.Context, tenantID, userID int64
 			return err
 		}
 
+		// Reopen the period first so the entry-date trigger accepts the
+		// reversal journal (status REOPENED is accepted), then insert.
+		if _, err := tx.Exec(ctx, `
+			UPDATE accounting_periods SET status = 'REOPENED'
+			WHERE id = $1
+		`, periodID); err != nil {
+			return err
+		}
+
 		// Set void context so the immutable trigger accepts linking the
 		// original closing journal as reversed.
 		if _, err := tx.Exec(ctx, `SELECT set_config('app.void_context', '1', true)`); err != nil {
@@ -142,7 +151,7 @@ func (service *Service) unlockPeriod(ctx context.Context, tenantID, userID int64
 			}
 		}
 
-		// Reopen the period.
+		// Finalize the reopen: status OPEN and clear close metadata.
 		if _, err := tx.Exec(ctx, `
 			UPDATE accounting_periods SET status = 'OPEN', closed_at = NULL, closed_by = NULL
 			WHERE id = $1
