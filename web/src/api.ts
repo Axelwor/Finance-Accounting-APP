@@ -19,6 +19,7 @@ import type {
   BackendBalanceSheet,
   BackendCashFlow,
   BackendCategory,
+  BackendTrialBalance,
   BackendJournalResult,
   BackendProfitLoss,
   BackendTenant,
@@ -662,6 +663,26 @@ export const api = {
     } catch {
       return delay([]);
     }
+  },
+
+  /** Trial balance report (GET /reports/trial-balance). */
+  async getTrialBalance(): Promise<BackendTrialBalance> {
+    return http<BackendTrialBalance>("/reports/trial-balance", { auth: true });
+  },
+
+  /** Profit & Loss report (GET /reports/profit-loss). */
+  async getProfitLoss(): Promise<BackendProfitLoss> {
+    return http<BackendProfitLoss>("/reports/profit-loss", { auth: true });
+  },
+
+  /** Balance Sheet report (GET /reports/balance-sheet). */
+  async getBalanceSheet(): Promise<BackendBalanceSheet> {
+    return http<BackendBalanceSheet>("/reports/balance-sheet", { auth: true });
+  },
+
+  /** Cash Flow report (GET /reports/cash-flow). */
+  async getCashFlow(): Promise<BackendCashFlow> {
+    return http<BackendCashFlow>("/reports/cash-flow", { auth: true });
   },
 
   /**

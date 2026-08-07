@@ -3,6 +3,7 @@ import { EmptyState } from "../components/ui";
 import type { Tab } from "./types";
 import { CashEntryList } from "../screens/list/CashEntryList";
 import { CashEntryForm } from "../screens/entry/CashEntryForm";
+import { TrialBalanceReport, ProfitLossReport, BalanceSheetReport, CashFlowReport } from "../screens/list/Reports";
 
 /**
  * Work area: renders the active tab's content, or an empty state when
@@ -65,6 +66,14 @@ function TabContent({ tab }: { tab: Tab }) {
           />
         );
       // Reports (read-only) and mocked modules get placeholder for now.
+      case "report-trial-balance":
+        return <TrialBalanceReport />;
+      case "report-profit-loss":
+        return <ProfitLossReport />;
+      case "report-balance-sheet":
+        return <BalanceSheetReport />;
+      case "report-cash-flow":
+        return <CashFlowReport />;
       default:
         return <PlaceholderTab title={tab.title} sub={`list · ${tab.subKind}`} />;
     }

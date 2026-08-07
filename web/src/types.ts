@@ -231,6 +231,24 @@ export interface BackendCashFlow {
   net_cash_flow_cents: number;
 }
 
+/** Single row in the trial balance response. */
+export interface BackendTrialBalanceRow {
+  account_id: number;
+  account_code: string;
+  account_name: string;
+  report_group: string;
+  debit_cents: number;
+  credit_cents: number;
+}
+
+/** Response GET /api/v1/reports/trial-balance. */
+export interface BackendTrialBalance {
+  rows: BackendTrialBalanceRow[];
+  total_debit_cents: number;
+  total_credit_cents: number;
+  balanced: boolean;
+}
+
 /** Opening balance line for POST /api/v1/opening-balances. */
 export interface OpeningBalanceLine {
   account_id: number;
