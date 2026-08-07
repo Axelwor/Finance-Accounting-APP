@@ -27,9 +27,17 @@ const KIND_TONE: Record<NonNullable<Props["fixedKind"]>, string> = {
 };
 
 /**
- * Generic cash & bank history list. Used by all three sub-modules
- * (Other Receipt, Other Payment, Bank Transfer). Filters and columns
- * are baked in to keep the toolbar compact.
+ * Cash & bank history list (Accurate-style layout).
+ *
+ *   ┌──────────────────────────────────────────────────────────┐
+ *   │ Tanggal: 07/08/2026 - 07/08/2026 ▾  Kas/Bank: Semua ▾ ▾ │
+ *   │                                                        │
+ *   │ [+ Tambah] [↻] [⬇] [🖨] [⚙]            [search]    [0] │
+ *   │ ┌──────────────────────────────────────────────────┐   │
+ *   │ │ Nomor # | Tanggal | Kas/Bank | No Cek # | ...     │   │
+ *   │ │ Belum ada data                                     │   │
+ *   │ └──────────────────────────────────────────────────┘   │
+ *   └──────────────────────────────────────────────────────────┘
  */
 export function CashEntryList({ listKind, title, description, entrySubKind, fixedKind }: Props) {
   const workbench = useWorkbench();
@@ -86,43 +94,58 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
   const openAdd = () => workbench.openEntryDraft(entrySubKind);
 
   return (
-    <div className="listtab">
+    <div className="listtab listtab--accurate">
       <div className="listtab__head">
         <div className="listtab__title">
           <span>{title}</span>
-          <small>{filtered.length} entries</small>
-        </div>
-        <div className="listtab__toolbar">
-          <button type="button" className="btn btn--ink btn--sm" onClick={openAdd}>
-            + Tambah
-          </button>
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => void load()}>
-            Reload
-          </button>
+          <small>{description}</small>
         </div>
       </div>
 
-      <div className="listtab__filters">
-        <label className="listtab__filter">
-          <span>Search</span>
+      <div className="listtab__toolbar">
+        <div className="listtab__filters">
+          <div className="filter-pill">
+            <span className="filter-pill__label">Tanggal</span>
+            <span className="filter-pill__value">Semua</span>
+            <span className="filter-pill__caret">▾</span>
+          </div>
+          <div className="filter-pill">
+            <span className="filter-pill__label">Kas/Bank</span>
+            <span className="filter-pill__value">Semua</span>
+            <span className="filter-pill__caret">▾</span>
+          </div>
+          <button type="button" className="filter-pill__toggle" aria-label="More filters">
+            <span aria-hidden="true">▾</span>
+          </button>
+        </div>
+        <div className="listtab__actions">
+          <button type="button" className="btn btn--primary btn--sm" onClick={openAdd}>
+            + Tambah
+          </button>
+          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+            <ReloadIcon />
+          </button>
+          <button type="button" className="btn btn--icon btn--sm" aria-label="Download" disabled>
+            <DownloadIcon />
+          </button>
+          <button type="button" className="btn btn--icon btn--sm" aria-label="Print" disabled>
+            <PrintIcon />
+          </button>
+          <button type="button" className="btn btn--icon btn--sm" aria-label="Settings" disabled>
+            <SettingsIcon />
+          </button>
           <input
             type="search"
-            placeholder="number, memo, reference"
+            className="input listtab__search"
+            placeholder="Ketik dan [Enter]"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") void load();
             }}
           />
-        </label>
-        <label className="listtab__filter">
-          <span>From</span>
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-        </label>
-        <label className="listtab__filter">
-          <span>To</span>
-          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-        </label>
+          <span className="listtab__count">{filtered.length}</span>
+        </div>
       </div>
 
       <div className="listtab__body">
@@ -131,23 +154,26 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
         ) : error ? (
           <EmptyState title="Could not load" message={error} />
         ) : filtered.length === 0 ? (
-          <EmptyState
-            title="No entries in this view"
-            message="Rule your first entry with the + Tambah button, or clear the filters."
-            action={
-              <button type="button" className="btn btn--primary btn--sm" onClick={openAdd}>
-                + Tambah
-              </button>
-            }
-          />
+          <div className="ledger-table">
+            <div className="ledger-table__head">
+              <span>Nomor #</span>
+              <span>Tanggal</span>
+              <span>Kas/Bank</span>
+              <span>No Cek #</span>
+              <span>Keterangan</span>
+              <span className="right">Nilai</span>
+            </div>
+            <div className="ledger-table__empty">Belum ada data</div>
+          </div>
         ) : (
           <div className="ledger-table">
             <div className="ledger-table__head">
-              <span>Date</span>
-              <span>Number / Memo</span>
-              <span>Account</span>
-              <span className="right">Amount</span>
-              <span aria-hidden="true" />
+              <span>Nomor #</span>
+              <span>Tanggal</span>
+              <span>Kas/Bank</span>
+              <span>No Cek #</span>
+              <span>Keterangan</span>
+              <span className="right">Nilai</span>
             </div>
             {filtered.map((it) => (
               <CashRow key={it.id} item={it} fixedKind={fixedKind} onOpen={() => openEntry(it)} />
@@ -158,11 +184,14 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
 
       <div className="listtab__footer">
         <span>
-          Showing <strong>{filtered.length}</strong> of {items.length} &middot; net{" "}
+          Net{" "}
           <strong className={total >= 0 ? "is-positive" : "is-negative"} style={{ color: total >= 0 ? "var(--pos)" : "var(--neg)" }}>
             {total >= 0 ? "+" : "−"}
             {formatIDR(Math.abs(total))}
           </strong>
+        </span>
+        <span className="listtab__footer-count">
+          {filtered.length} of {items.length}
         </span>
       </div>
     </div>
@@ -214,17 +243,45 @@ function CashRow({
       }}
       style={{ cursor: "pointer" }}
     >
+      <span className="ledger-table__no">{item.number || `Entry #${item.id}`}</span>
       <span className="ledger-table__date">{item.entry_date}</span>
-      <div className="ledger-table__desc">
-        <span className={`kind-mark ${kindClass}`}>{kindLabel}</span>
-        <div className="ledger-table__desc-text">
-          <span className="ledger-table__desc-title">{item.number || `Entry #${item.id}`}</span>
-          <span className="ledger-table__desc-meta">{item.description || item.reference || "—"}</span>
-        </div>
-      </div>
       <span className="ledger-table__cat">{accountLine}</span>
+      <span className="ledger-table__memo">{item.reference || "—"}</span>
+      <span className="ledger-table__desc">
+        <span className={`kind-mark ${kindClass}`}>{kindLabel}</span>
+        <span>{item.description || "—"}</span>
+      </span>
       <span className={`ledger-table__amount ${toneClass}`}>{signedAmount}</span>
-      <span className="ledger-table__delete" aria-hidden="true">›</span>
     </div>
+  );
+}
+
+function ReloadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path d="M4 12a8 8 0 0 1 14-5l2-2v6h-6l2-2a6 6 0 0 0-10 3M20 12a8 8 0 0 1-14 5l-2 2v-6h6l-2 2a6 6 0 0 0 10-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
+  );
+}
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path d="M12 4v12m-5-5l5 5 5-5M4 20h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
+  );
+}
+function PrintIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path d="M6 9V4h12v5M6 18H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M6 14h12v6H6z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
+  );
+}
+function SettingsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" fill="none" />
+      <path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7 7 0 0 0-2-1.2l-.4-2.6h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.5 2 1.5a7 7 0 0 0 0 2.4l-2 1.5 2 3.5 2.4-1a7 7 0 0 0 2 1.2l.4 2.6h4l.4-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z" stroke="currentColor" strokeWidth="1.5" fill="none" />
+    </svg>
   );
 }
