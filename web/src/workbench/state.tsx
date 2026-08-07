@@ -1,6 +1,10 @@
 /**
- * Workbench state: tab list + active tab id, persisted to sessionStorage
- * so a refresh keeps the user's open tabs (and unsaved-entry warning).
+ * Workbench state: top-level tab list (dashboard + module parents) plus
+ * per-module nested child tabs (list views + entry forms).
+ *
+ * Persisted to sessionStorage so a refresh keeps the open tabs and
+ * unsaved-entry warning. The Dashboard tab is pinned as the first
+ * top-level tab; it cannot be closed.
  *
  * Single source of truth: the WorkbenchProvider wraps the app shell, and
  * screens call useWorkbench() to read/open/close/activate tabs.
@@ -16,16 +20,32 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import type { EntrySubKind, ListSubKind, Tab } from "./types";
-import { defaultEntryTitle, defaultListTitle, draftNumber, findSubItemByList } from "./modules";
+import type {
+  EntrySubKind,
+  EntryTab,
+  ListSubKind,
+  ModuleId,
+  ModuleTab,
+  NestedTab,
+  Tab,
+} from "./types";
+import { defaultEntryTitle, defaultListTitle, draftNumber, findSubItemByList, findModule } from "./modules";
 
-const STORAGE_KEY = "ledgerly.workbench.v1";
-const MAX_TABS = 12;
+const STORAGE_KEY = "ledgerly.workbench.v2";
+const MAX_NESTED_PER_MODULE = 12;
 
 interface State {
+  /** Top-level tabs: dashboard (pinned) + module parents. */
   tabs: Tab[];
+  /** Children of each module parent, keyed by parent id. */
+  nested: Record<string, NestedTab[]>;
+  /** Currently active top-level tab id. */
   activeId: string | null;
+  /** Currently active child per module parent. */
+  activeChild: Record<string, string | null>;
 }
+
+const EMPTY_STATE: State = { tabs: [], nested: {}, activeId: null, activeChild: {} };
 
 type Action =
   | { type: "open-list"; subKind: ListSubKind }
@@ -39,19 +59,21 @@ type Action =
   | { type: "hydrate"; state: State }
   | { type: "ensure-dashboard" };
 
+function newId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "hydrate": {
       return action.state;
     }
     case "ensure-dashboard": {
-      // Always keep the Dashboard tab as the first tab. If it was closed
-      // (or never opened), re-add it and activate it. This guarantees the
-      // workbench always lands on the Dashboard.
+      // Always keep the Dashboard tab as the first tab.
       const existing = state.tabs.find((t) => t.kind === "dashboard");
       if (existing) {
-        if (state.activeId && state.activeId !== existing.id) return state;
-        return { ...state, activeId: existing.id };
+        if (!state.activeId) return { ...state, activeId: existing.id };
+        return state;
       }
       const tab: Tab = {
         id: "tab-dashboard",
@@ -60,7 +82,7 @@ function reducer(state: State, action: Action): State {
         title: "Dashboard",
         createdAt: Date.now(),
       };
-      return { tabs: [tab, ...state.tabs], activeId: tab.id };
+      return { ...state, tabs: [tab, ...state.tabs], activeId: tab.id };
     }
     case "open-dashboard": {
       const existing = state.tabs.find((t) => t.kind === "dashboard");
@@ -72,95 +94,246 @@ function reducer(state: State, action: Action): State {
         title: "Dashboard",
         createdAt: Date.now(),
       };
-      return { tabs: [tab, ...state.tabs], activeId: tab.id };
+      return { ...state, tabs: [tab, ...state.tabs], activeId: tab.id };
     }
     case "open-list": {
-      const existing = state.tabs.find((t) => t.kind === "list" && t.subKind === action.subKind);
-      if (existing) {
-        return { ...state, activeId: existing.id };
-      }
-      const id = `list-${action.subKind}-${Date.now()}`;
-      const tab: Tab = {
-        id,
+      const lookup = findSubItemByList(action.subKind);
+      if (!lookup) return state;
+      const moduleId = lookup.module.id;
+      const parent = ensureModuleParent(state, moduleId);
+      return activateNestedChild(parent, {
+        id: newId(`list-${action.subKind}`),
         kind: "list",
-        moduleId: findSubItemByList(action.subKind)?.module.id ?? "cash-bank",
+        moduleId,
         subKind: action.subKind,
         title: defaultListTitle(action.subKind),
         createdAt: Date.now(),
-      };
-      return addTab(state, tab);
+      });
     }
     case "open-entry-draft": {
-      const id = `entry-${action.subKind}-draft-${Date.now()}`;
-      const tab: Tab = {
-        id,
+      const lookup = findSubItemByList(
+        // best-effort module inference for drafts: cash-transfer/money-in/money-out belong to cash-bank;
+        // other modules via their entry subkind.
+        entryKindToListKind(action.subKind) ?? ("cash-other-receipt" as ListSubKind),
+      );
+      const moduleId: ModuleId = lookup?.module.id ?? "cash-bank";
+      const parent = ensureModuleParent(state, moduleId);
+      return activateNestedChild(parent, {
+        id: newId(`entry-${action.subKind}-draft`),
         kind: "entry",
-        moduleId: "cash-bank", // refined by the form component if needed
+        moduleId,
         subKind: action.subKind,
         title: defaultEntryTitle(action.subKind),
         draft: true,
         status: draftNumber(action.subKind),
         unsaved: true,
         createdAt: Date.now(),
-      };
-      return addTab(state, tab);
+      });
     }
     case "open-entry-existing": {
-      const id = `entry-${action.subKind}-${action.entryId}`;
-      const tab: Tab = {
-        id,
+      const moduleId: ModuleId = "cash-bank";
+      const parent = ensureModuleParent(state, moduleId);
+      return activateNestedChild(parent, {
+        id: `entry-${action.subKind}-${action.entryId}`,
         kind: "entry",
-        moduleId: "cash-bank",
+        moduleId,
         subKind: action.subKind,
         title: action.title,
         draft: false,
         status: action.status,
         entryId: action.entryId,
         createdAt: Date.now(),
-      };
-      return addTab(state, tab);
+      });
     }
     case "close": {
-      const idx = state.tabs.findIndex((t) => t.id === action.id);
-      if (idx < 0) return state;
-      const tabs = state.tabs.filter((t) => t.id !== action.id);
-      let activeId = state.activeId;
-      if (activeId === action.id) {
-        activeId = tabs[idx]?.id ?? tabs[idx - 1]?.id ?? null;
+      // Dashboard is pinned: closing it just reactivates it.
+      if (action.id === "tab-dashboard") return state;
+      // Close a module parent: drop it and all its children.
+      const parent = state.tabs.find((t) => t.id === action.id);
+      if (parent && parent.kind === "module") {
+        return closeModule(state, parent.id);
       }
-      return { tabs, activeId };
+      // Close a nested child of some module.
+      for (const parentId of Object.keys(state.nested)) {
+        const children = state.nested[parentId];
+        const idx = children.findIndex((c) => c.id === action.id);
+        if (idx < 0) continue;
+        const remaining = children.filter((c) => c.id !== action.id);
+        const nextNested = { ...state.nested, [parentId]: remaining };
+        let activeChild = state.activeChild;
+        if (state.activeChild[parentId] === action.id) {
+          const fallback = remaining[Math.min(idx, remaining.length - 1)]?.id ?? null;
+          activeChild = { ...state.activeChild, [parentId]: fallback };
+        }
+        // If the parent has no children left, leave the parent in place
+        // (closing it requires explicit user action via the tab strip ×).
+        return { ...state, nested: nextNested, activeChild };
+      }
+      return state;
     }
     case "activate": {
-      return { ...state, activeId: action.id };
+      const tab = state.tabs.find((t) => t.id === action.id);
+      if (tab) return { ...state, activeId: action.id };
+      // Activating a nested child.
+      for (const parentId of Object.keys(state.nested)) {
+        if (state.nested[parentId].some((c) => c.id === action.id)) {
+          return {
+            ...state,
+            activeId: parentId,
+            activeChild: { ...state.activeChild, [parentId]: action.id },
+          };
+        }
+      }
+      return state;
     }
     case "replace-draft": {
-      const tabs = state.tabs.map((t) =>
-        t.id === action.id ? { ...t, title: action.title, status: action.status, draft: false, unsaved: false } : t,
-      );
-      return { ...state, tabs };
+      // Find which module owns this nested child.
+      const next = { ...state.nested };
+      for (const parentId of Object.keys(state.nested)) {
+        const idx = next[parentId].findIndex((c) => c.id === action.id);
+        if (idx < 0) continue;
+        const current = next[parentId][idx];
+        if (current.kind === "entry") {
+          // Cast through unknown because the discriminator narrowed the kind.
+          const updated = current as NestedTab;
+          (updated as EntryTab).draft = false;
+          (updated as EntryTab).title = action.title;
+          (updated as EntryTab).status = action.status;
+          (updated as EntryTab).unsaved = false;
+        }
+        next[parentId] = [...next[parentId]];
+        next[parentId][idx] = current;
+        return { ...state, nested: next };
+      }
+      return state;
     }
     case "mark-unsaved": {
-      const tabs = state.tabs.map((t) => (t.id === action.id ? { ...t, unsaved: action.unsaved } : t));
-      return { ...state, tabs };
+      const next = { ...state.nested };
+      for (const parentId of Object.keys(state.nested)) {
+        const idx = next[parentId].findIndex((c) => c.id === action.id);
+        if (idx >= 0) {
+          const updated: NestedTab = { ...next[parentId][idx], unsaved: action.unsaved };
+          next[parentId] = [...next[parentId]];
+          next[parentId][idx] = updated;
+          return { ...state, nested: next };
+        }
+      }
+      return state;
     }
   }
 }
 
-function addTab(state: State, tab: Tab): State {
-  let tabs = [...state.tabs, tab];
-  // Cap tabs at MAX_TABS, closing the oldest inactive first.
-  if (tabs.length > MAX_TABS) {
-    const idx = tabs.findIndex((t) => t.id !== state.activeId);
-    if (idx >= 0) tabs = tabs.filter((_, i) => i !== idx);
-    else tabs = tabs.slice(tabs.length - MAX_TABS);
+function ensureModuleParent(state: State, moduleId: ModuleId): State {
+  const existing = state.tabs.find((t): t is ModuleTab => t.kind === "module" && t.moduleId === moduleId);
+  if (existing) return state;
+  const module = findModule(moduleId);
+  const tab: ModuleTab = {
+    id: `module-${moduleId}`,
+    kind: "module",
+    moduleId,
+    title: module?.label ?? moduleId,
+    createdAt: Date.now(),
+  };
+  return {
+    ...state,
+    tabs: [...state.tabs, tab],
+  };
+}
+
+function activateNestedChild(state: State, child: NestedTab): State {
+  const parentId = `module-${child.moduleId}`;
+  const parentExists = state.tabs.some((t) => t.id === parentId);
+  const next: State = parentExists
+    ? state
+    : {
+        ...state,
+        tabs: [
+          ...state.tabs,
+          {
+            id: parentId,
+            kind: "module",
+            moduleId: child.moduleId,
+            title: findModule(child.moduleId)?.label ?? child.moduleId,
+            createdAt: Date.now(),
+          },
+        ],
+      };
+  const existingIdx = (next.nested[parentId] ?? []).findIndex((c) => {
+    if (c.kind !== child.kind || c.subKind !== child.subKind) return false;
+    if (child.kind === "entry" && c.kind === "entry") {
+      return c.draft === child.draft;
+    }
+    return true;
+  });
+  const existing = existingIdx >= 0 ? next.nested[parentId][existingIdx] : null;
+  let children = next.nested[parentId] ?? [];
+  if (existing) {
+    // Activate the existing child; no need to add another.
+    return {
+      ...next,
+      nested: { ...next.nested, [parentId]: children },
+      activeId: parentId,
+      activeChild: { ...next.activeChild, [parentId]: existing.id },
+    };
   }
-  return { tabs, activeId: tab.id };
+  children = [...children, child];
+  // Cap children per module.
+  if (children.length > MAX_NESTED_PER_MODULE) {
+    children = children.slice(children.length - MAX_NESTED_PER_MODULE);
+  }
+  return {
+    ...next,
+    nested: { ...next.nested, [parentId]: children },
+    activeId: parentId,
+    activeChild: { ...next.activeChild, [parentId]: child.id },
+  };
+}
+
+function closeModule(state: State, parentId: string): State {
+  const tabs = state.tabs.filter((t) => t.id !== parentId);
+  const nested = { ...state.nested };
+  delete nested[parentId];
+  const activeChild = { ...state.activeChild };
+  delete activeChild[parentId];
+  let activeId = state.activeId;
+  if (activeId === parentId) {
+    activeId = state.tabs.find((t) => t.kind === "dashboard")?.id ?? tabs[0]?.id ?? null;
+  }
+  return { tabs, nested, activeId, activeChild };
+}
+
+/** Reverse lookup from EntrySubKind to a representative ListSubKind so the
+ *  module parent can be inferred when opening a draft. */
+function entryKindToListKind(kind: EntrySubKind): ListSubKind | null {
+  switch (kind) {
+    case "money-in":
+      return "cash-other-receipt";
+    case "money-out":
+      return "cash-other-payment";
+    case "cash-transfer":
+      return "cash-transfer";
+    case "sales-invoice":
+      return "sales-invoice";
+    case "sales-receipt":
+      return "sales-receipt";
+    case "purchase-invoice":
+      return "purchase-invoice";
+    case "purchase-payment":
+      return "purchase-payment";
+    case "inventory-item":
+      return "inventory-items";
+    case "asset-register":
+      return "asset-register";
+  }
 }
 
 interface WorkbenchApi {
   tabs: Tab[];
+  nested: Record<string, NestedTab[]>;
   activeId: string | null;
   activeTab: Tab | null;
+  activeNested: NestedTab | null;
+  activeChildFor: (parentId: string) => string | null;
   openDashboard: () => void;
   openList: (sub: ListSubKind) => void;
   openEntryDraft: (sub: EntrySubKind) => void;
@@ -169,6 +342,8 @@ interface WorkbenchApi {
   activate: (id: string) => void;
   replaceDraft: (id: string, title: string, status: string) => void;
   markUnsaved: (id: string, unsaved: boolean) => void;
+  /** Look up a nested tab by id, used by entry forms to update themselves. */
+  getNested: (id: string) => NestedTab | undefined;
 }
 
 const WorkbenchContext = createContext<WorkbenchApi | null>(null);
@@ -178,7 +353,7 @@ function loadFromStorage(): State | null {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as State;
-    if (!parsed || !Array.isArray(parsed.tabs)) return null;
+    if (!parsed || !Array.isArray(parsed.tabs) || typeof parsed.nested !== "object") return null;
     return parsed;
   } catch {
     return null;
@@ -186,18 +361,14 @@ function loadFromStorage(): State | null {
 }
 
 export function WorkbenchProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, { tabs: [], activeId: null });
+  const [state, dispatch] = useReducer(reducer, EMPTY_STATE);
   const hydrated = useRef(false);
 
   useEffect(() => {
     if (hydrated.current) return;
     hydrated.current = true;
     const restored = loadFromStorage();
-    if (restored) {
-      dispatch({ type: "hydrate", state: restored });
-    }
-    // Always make sure the Dashboard tab exists and is active on first
-    // load (or after a refresh that wiped all tabs).
+    if (restored) dispatch({ type: "hydrate", state: restored });
     dispatch({ type: "ensure-dashboard" });
   }, []);
 
@@ -219,10 +390,15 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
   );
   const openDashboard = useCallback(() => dispatch({ type: "open-dashboard" }), []);
   const close = useCallback((id: string) => {
-    const tab = state.tabs.find((t) => t.id === id);
-    if (tab?.unsaved && !window.confirm("Close without saving? Unsaved changes will be lost.")) return;
+    // Dashboard is pinned — silently no-op instead of closing it.
+    if (id === "tab-dashboard") return;
+    // Nested child with unsaved changes — confirm before discarding.
+    for (const parentId of Object.keys(state.nested)) {
+      const child = state.nested[parentId].find((c) => c.id === id);
+      if (child?.unsaved && !window.confirm("Close without saving? Unsaved changes will be lost.")) return;
+    }
     dispatch({ type: "close", id });
-  }, [state.tabs]);
+  }, [state.nested]);
   const activate = useCallback((id: string) => dispatch({ type: "activate", id }), []);
   const replaceDraft = useCallback(
     (id: string, title: string, status: string) => dispatch({ type: "replace-draft", id, title, status }),
@@ -235,10 +411,18 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
 
   const api = useMemo<WorkbenchApi>(() => {
     const activeTab = state.tabs.find((t) => t.id === state.activeId) ?? null;
+    let activeNested: NestedTab | null = null;
+    if (activeTab && activeTab.kind === "module") {
+      const childId = state.activeChild[activeTab.id];
+      activeNested = childId ? state.nested[activeTab.id]?.find((c) => c.id === childId) ?? null : null;
+    }
     return {
       tabs: state.tabs,
+      nested: state.nested,
       activeId: state.activeId,
       activeTab,
+      activeNested,
+      activeChildFor: (parentId: string) => state.activeChild[parentId] ?? null,
       openDashboard,
       openList,
       openEntryDraft,
@@ -247,8 +431,25 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
       activate,
       replaceDraft,
       markUnsaved,
+      getNested: (id: string) => {
+        for (const parentId of Object.keys(state.nested)) {
+          const child = state.nested[parentId].find((c) => c.id === id);
+          if (child) return child;
+        }
+        return undefined;
+      },
     };
-  }, [state, openDashboard, openList, openEntryDraft, openEntryExisting, close, activate, replaceDraft, markUnsaved]);
+  }, [
+    state,
+    openDashboard,
+    openList,
+    openEntryDraft,
+    openEntryExisting,
+    close,
+    activate,
+    replaceDraft,
+    markUnsaved,
+  ]);
 
   return <WorkbenchContext.Provider value={api}>{children}</WorkbenchContext.Provider>;
 }

@@ -1,6 +1,7 @@
 import { useWorkbench } from "./state";
 import { EmptyState } from "../components/ui";
-import type { EntryTab, ListTab, Tab } from "./types";
+import { NestedTabStrip } from "./NestedTabStrip";
+import type { EntryTab, ListTab, ModuleTab, NestedTab } from "./types";
 import { CashEntryList } from "../screens/list/CashEntryList";
 import { CashEntryForm } from "../screens/entry/CashEntryForm";
 import {
@@ -24,7 +25,7 @@ import {
 } from "../screens/list/Inventory";
 import { AssetRegisterList } from "../screens/list/Assets";
 import { MockEntryForm } from "../screens/entry/MockEntryForm";
-import { defaultEntryTitle } from "./modules";
+import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
   const workbench = useWorkbench();
@@ -35,7 +36,7 @@ export function WorkArea() {
       <div className="workarea workarea--empty">
         <EmptyState
           title="No tab open"
-          message="Pick a module from the sidebar to open its history, or use the +Tambah button on any list to rule a new entry."
+          message="Pick a module from the sidebar to open its history, or use the +New entry button on any list to rule a new entry."
         />
       </div>
     );
@@ -48,15 +49,68 @@ export function WorkArea() {
   );
 }
 
-function TabContent({ tab }: { tab: Tab }) {
-  switch (tab.kind) {
-    case "dashboard":
-      return <DashboardScreen />;
-    case "list":
-      return <ListTabContent tab={tab} />;
-    case "entry":
-      return <EntryTabContent tab={tab} />;
+function TabContent({ tab }: { tab: { id: string; kind: string } }) {
+  const workbench = useWorkbench();
+  const active = workbench.tabs.find((t) => t.id === tab.id);
+  if (!active) return null;
+  if (active.kind === "dashboard") return <DashboardScreen />;
+  if (active.kind === "module") return <ModuleContent parent={active} />;
+  return null;
+}
+
+function ModuleContent({ parent }: { parent: ModuleTab }) {
+  const workbench = useWorkbench();
+  const children = workbench.nested[parent.id] ?? [];
+  const activeChildId = workbench.activeChildFor(parent.id);
+  const activeChild = activeChildId ? children.find((c) => c.id === activeChildId) ?? null : null;
+
+  const module = findModule(parent.moduleId);
+  const defaultAddLabel = module?.items[0]?.openEntry ? `New ${defaultEntryTitle(module.items[0].openEntry).toLowerCase()}` : "New entry";
+
+  // If the module has no children yet, auto-open the first list view so the
+  // work area is never empty.
+  if (children.length === 0 && module && module.items[0]) {
+    queueMicrotask(() => workbench.openList(module.items[0].openList));
+    return (
+      <div className="workarea__placeholder">
+        <EmptyState
+          title={`No items open in ${module.label}`}
+          message={`Open a history tab from the sidebar to see what's there.`}
+        />
+      </div>
+    );
   }
+
+  return (
+    <div className="module-content">
+      <NestedTabStrip
+        parentId={parent.id}
+        children={children}
+        activeChildId={activeChildId}
+        onAdd={
+          module?.items[0]?.openEntry
+            ? () => workbench.openEntryDraft(module.items[0].openEntry!)
+            : undefined
+        }
+        addLabel={defaultAddLabel}
+      />
+      <div className="module-content__body" key={activeChild?.id ?? "empty"}>
+        {activeChild ? <NestedContent tab={activeChild} /> : (
+          <div className="workarea__placeholder">
+            <EmptyState
+              title="No item selected"
+              message="Pick a tab from the sub-strip above, or use the +New entry button to rule a new transaction."
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NestedContent({ tab }: { tab: NestedTab }) {
+  if (tab.kind === "list") return <ListTabContent tab={tab} />;
+  return <EntryTabContent tab={tab} />;
 }
 
 function ListTabContent({ tab }: { tab: ListTab }) {

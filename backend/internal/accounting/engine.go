@@ -56,13 +56,29 @@ type Journal struct {
 }
 
 type CashIntent struct {
-	TenantID       int64
-	SourceRef      string
-	EntryDate      string
-	CashAccount    Account
+	TenantID    int64
+	SourceRef   string
+	EntryDate   string
+	CashAccount Account
+	// CounterAccount is the single-counter fallback. When CounterLines is
+	// non-empty it overrides CounterAccount and the cash side distributes
+	// across the lines.
 	CounterAccount Account
 	AmountCents    int64
 	Description    string
+	// CounterLines splits the counter side across multiple accounts. When
+	// provided, the sum of AmountCents across lines must equal AmountCents
+	// and CounterAccount is ignored.
+	CounterLines []CounterLine
+}
+
+// CounterLine is one line on the counter side of a CASH_IN / CASH_OUT
+// journal. Multiple lines let a single transaction touch several accounts
+// (e.g. a receipt split across two revenue accounts).
+type CounterLine struct {
+	Account     Account
+	AmountCents int64
+	Description string
 }
 
 type TransferIntent struct {
@@ -107,7 +123,8 @@ func CashIn(intent CashIntent) (Journal, error) {
 	if err := validatePostable(intent.CashAccount); err != nil {
 		return Journal{}, err
 	}
-	if err := validatePostable(intent.CounterAccount); err != nil {
+	lines, err := buildCounterCreditLines(intent)
+	if err != nil {
 		return Journal{}, err
 	}
 	journal := Journal{
@@ -116,10 +133,9 @@ func CashIn(intent CashIntent) (Journal, error) {
 		IntentType:  IntentCashIn,
 		EntryDate:   intent.EntryDate,
 		Description: intent.Description,
-		Lines: []Line{
+		Lines: append([]Line{
 			{AccountID: intent.CashAccount.ID, DebitCents: intent.AmountCents, SourceLineRef: "cash"},
-			{AccountID: intent.CounterAccount.ID, CreditCents: intent.AmountCents, SourceLineRef: "counter"},
-		},
+		}, lines...),
 	}
 	return finalize(journal)
 }
@@ -131,7 +147,8 @@ func CashOut(intent CashIntent) (Journal, error) {
 	if err := validatePostable(intent.CashAccount); err != nil {
 		return Journal{}, err
 	}
-	if err := validatePostable(intent.CounterAccount); err != nil {
+	lines, err := buildCounterCreditLines(intent)
+	if err != nil {
 		return Journal{}, err
 	}
 	journal := Journal{
@@ -140,12 +157,62 @@ func CashOut(intent CashIntent) (Journal, error) {
 		IntentType:  IntentCashOut,
 		EntryDate:   intent.EntryDate,
 		Description: intent.Description,
-		Lines: []Line{
-			{AccountID: intent.CounterAccount.ID, DebitCents: intent.AmountCents, SourceLineRef: "counter"},
+		Lines: append([]Line{
 			{AccountID: intent.CashAccount.ID, CreditCents: intent.AmountCents, SourceLineRef: "cash"},
-		},
+		}, invertLines(lines)...),
 	}
 	return finalize(journal)
+}
+
+// buildCounterCreditLines returns the credit-side lines of a CashIn
+// intent. When CounterLines is provided the lines must be valid postable
+// accounts, must each carry a positive amount, and the sum must equal the
+// intent amount. When CounterLines is empty, the single CounterAccount
+// is used.
+func buildCounterCreditLines(intent CashIntent) ([]Line, error) {
+	if len(intent.CounterLines) == 0 {
+		if err := validatePostable(intent.CounterAccount); err != nil {
+			return nil, err
+		}
+		return []Line{
+			{AccountID: intent.CounterAccount.ID, CreditCents: intent.AmountCents, SourceLineRef: "counter"},
+		}, nil
+	}
+	lines := make([]Line, 0, len(intent.CounterLines))
+	total := int64(0)
+	for index, cl := range intent.CounterLines {
+		if err := validatePostable(cl.Account); err != nil {
+			return nil, err
+		}
+		if cl.AmountCents <= 0 {
+			return nil, ErrInvalidAmount
+		}
+		total += cl.AmountCents
+		lines = append(lines, Line{
+			AccountID:     cl.Account.ID,
+			CreditCents:   cl.AmountCents,
+			SourceLineRef: fmt.Sprintf("counter-%d", index),
+		})
+	}
+	if total != intent.AmountCents {
+		return nil, ErrNotBalanced
+	}
+	return lines, nil
+}
+
+// invertLines flips debit and credit amounts (used to swap the cash side
+// of a CashIn line list into a CashOut line list).
+func invertLines(lines []Line) []Line {
+	out := make([]Line, len(lines))
+	for i, line := range lines {
+		out[i] = Line{
+			AccountID:     line.AccountID,
+			DebitCents:    line.CreditCents,
+			CreditCents:   line.DebitCents,
+			SourceLineRef: line.SourceLineRef,
+		}
+	}
+	return out
 }
 
 func Transfer(intent TransferIntent) (Journal, error) {

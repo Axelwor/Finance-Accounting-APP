@@ -14,13 +14,11 @@ interface Props {
   initialTitle?: string;
 }
 
-interface AccountLine {
+interface CounterLine {
   id: string;
-  accountCode: string;
-  accountName: string;
+  accountId: string;
   description: string;
   amount: string;
-  side: "debit" | "credit";
 }
 
 /** Field labels per sub-kind — the "party" field has different names. */
@@ -48,13 +46,27 @@ const HEADER_TITLE: Record<EntrySubKind, string> = {
   "asset-register": "Asset",
 };
 
+/** Default account shown in the locked-line placeholder for each demo module. */
+const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { side: "debit" | "credit"; label: string }> = {
+  "money-in": { side: "debit", label: "Cash / Bank" },
+  "money-out": { side: "credit", label: "Cash / Bank" },
+  "cash-transfer": { side: "debit", label: "From account" },
+  "sales-invoice": { side: "credit", label: "Receivable" },
+  "sales-receipt": { side: "debit", label: "Cash / Bank" },
+  "purchase-invoice": { side: "debit", label: "Inventory / Expense" },
+  "purchase-payment": { side: "credit", label: "Cash / Bank" },
+  "inventory-item": { side: "debit", label: "Inventory Asset" },
+  "asset-register": { side: "debit", label: "Fixed Asset" },
+};
+
 /**
- * Generic entry form stub for the modules that don't yet have a real
- * backend (Sales, Purchases, Inventory, Fixed Assets). It mirrors the
- * CashEntryForm chrome — header with status pill, action bar, header
- * section with date + number + party, a 2-row account grid, and a
- * memo footer — but Save only displays a FormError noting that the
- * module is in demo mode.
+ * Entry form stub for modules that don't yet have a real backend
+ * (Sales, Purchases, Inventory, Fixed Assets). Mirrors the
+ * CashEntryForm chrome: header with status pill + action bar, header
+ * section with date + number + party, a multi-line account grid where
+ * the first line is locked to the primary account for the module and
+ * the counter rows can be added/removed. Posting is disabled in demo
+ * mode.
  */
 export function MockEntryForm({ tabId, subKind, title, initialTitle }: Props) {
   const workbench = useWorkbench();
@@ -63,45 +75,29 @@ export function MockEntryForm({ tabId, subKind, title, initialTitle }: Props) {
   const [party, setParty] = useState("");
   const [description, setDescription] = useState("");
   const [memo, setMemo] = useState("");
-  const [lines, setLines] = useState<AccountLine[]>(() => seedLines(subKind));
+  const [counterLines, setCounterLines] = useState<CounterLine[]>([seedCounterLine()]);
   const [error, setError] = useState<string | null>(null);
 
-  // Mark the tab as unsaved whenever the user touches the form.
   useEffect(() => {
     workbench.markUnsaved(tabId, true);
-  }, [tabId, date, number, party, description, memo, lines, workbench]);
+  }, [tabId, date, number, party, description, memo, counterLines, workbench]);
 
-  const totals = useMemo(() => {
-    let debit = 0;
-    let credit = 0;
-    for (const line of lines) {
-      const cents = parseCents(line.amount);
-      if (line.side === "debit") debit += cents;
-      else credit += cents;
-    }
-    return { debit, credit, diff: debit - credit };
-  }, [lines]);
+  const primary = PRIMARY_ACCOUNT_HINT[subKind];
+  const cashAmountCents = useMemo(
+    () => counterLines.reduce((sum, line) => sum + parseCents(line.amount), 0),
+    [counterLines],
+  );
+  const countersTotals = cashAmountCents;
+  const diff = (primary.side === "debit" ? cashAmountCents : 0) - (primary.side === "credit" ? cashAmountCents : 0);
 
-  const updateLine = (id: string, patch: Partial<AccountLine>) => {
-    setLines((current) => current.map((line) => (line.id === id ? { ...line, ...patch } : line)));
+  const updateCounter = (id: string, patch: Partial<CounterLine>) => {
+    setCounterLines((current) => current.map((line) => (line.id === id ? { ...line, ...patch } : line)));
   };
-
-  const removeLine = (id: string) => {
-    setLines((current) => (current.length > 2 ? current.filter((line) => line.id !== id) : current));
+  const removeCounter = (id: string) => {
+    setCounterLines((current) => (current.length > 1 ? current.filter((line) => line.id !== id) : current));
   };
-
-  const addLine = (side: "debit" | "credit") => {
-    setLines((current) => [
-      ...current,
-      {
-        id: `ln-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        accountCode: "",
-        accountName: "",
-        description: "",
-        amount: "",
-        side,
-      },
-    ]);
+  const addCounter = () => {
+    setCounterLines((current) => [...current, seedCounterLine()]);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -125,9 +121,7 @@ export function MockEntryForm({ tabId, subKind, title, initialTitle }: Props) {
           >
             {status}
           </span>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-xs)", color: "var(--ink-muted)" }}>
-            {number}
-          </span>
+          <span className="entrytab__number">{number}</span>
           <span className="listtab__demo" title="Demo mode — no backend endpoint yet">
             Demo
           </span>
@@ -183,45 +177,78 @@ export function MockEntryForm({ tabId, subKind, title, initialTitle }: Props) {
           </label>
         </div>
 
-        <div>
-          <div className="entrytab__section-title" style={{ padding: "var(--space-5) var(--space-5) var(--space-2)" }}>
-            Account lines
-          </div>
+        <div className="entrytab__section">
+          <div className="entrytab__section-title">Account lines</div>
+
           <div className="entry-grid">
             <div className="entry-grid__head">
               <div>#</div>
-              <div>Account code</div>
-              <div>Account name</div>
+              <div>Account</div>
               <div>Description</div>
               <div className="right">Debit</div>
               <div className="right">Credit</div>
               <div aria-hidden="true" />
             </div>
-            {lines.map((line, idx) => (
+
+            <div className="entry-grid__row entry-grid__row--locked">
+              <div className="entry-grid__num">1</div>
+              <div>
+                <input
+                  type="text"
+                  value={primary.label}
+                  readOnly
+                  aria-readonly="true"
+                  className="entry-grid__readonly"
+                  title="Locked primary account"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={description || primary.label}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Line memo"
+                />
+              </div>
+              <div>
+                <input
+                  className="amount"
+                  type="text"
+                  inputMode="numeric"
+                  value={primary.side === "credit" ? "" : formatAmountInput(String(cashAmountCents))}
+                  readOnly
+                  aria-readonly="true"
+                />
+              </div>
+              <div>
+                <input
+                  className="amount"
+                  type="text"
+                  inputMode="numeric"
+                  value={primary.side === "debit" ? "" : formatAmountInput(String(cashAmountCents))}
+                  readOnly
+                  aria-readonly="true"
+                />
+              </div>
+              <div aria-hidden="true" />
+            </div>
+
+            {counterLines.map((line, idx) => (
               <div className="entry-grid__row" key={line.id}>
-                <div className="entry-grid__num">{idx + 1}</div>
+                <div className="entry-grid__num">{idx + 2}</div>
                 <div>
                   <input
                     type="text"
-                    value={line.accountCode}
-                    onChange={(e) => updateLine(line.id, { accountCode: e.target.value })}
-                    placeholder="0000"
-                    style={{ fontFamily: "var(--font-mono)" }}
-                  />
-                </div>
-                <div>
-                  <input
-                    type="text"
-                    value={line.accountName}
-                    onChange={(e) => updateLine(line.id, { accountName: e.target.value })}
-                    placeholder="Account name"
+                    value={line.accountId}
+                    onChange={(e) => updateCounter(line.id, { accountId: e.target.value })}
+                    placeholder="Account code"
                   />
                 </div>
                 <div>
                   <input
                     type="text"
                     value={line.description}
-                    onChange={(e) => updateLine(line.id, { description: e.target.value })}
+                    onChange={(e) => updateCounter(line.id, { description: e.target.value })}
                     placeholder="Line memo"
                   />
                 </div>
@@ -230,12 +257,14 @@ export function MockEntryForm({ tabId, subKind, title, initialTitle }: Props) {
                     className="amount"
                     type="text"
                     inputMode="numeric"
-                    value={line.side === "credit" ? "" : formatAmountInput(line.amount)}
+                    value={primary.side === "credit" ? formatAmountInput(line.amount) : ""}
                     onChange={(e) => {
                       const digits = e.target.value.replace(/[^\d]/g, "").slice(0, 15);
-                      updateLine(line.id, { amount: digits, side: "debit" });
+                      updateCounter(line.id, { amount: digits });
                     }}
                     placeholder="0"
+                    readOnly={primary.side === "debit"}
+                    aria-readonly={primary.side === "debit" ? "true" : undefined}
                   />
                 </div>
                 <div>
@@ -243,69 +272,56 @@ export function MockEntryForm({ tabId, subKind, title, initialTitle }: Props) {
                     className="amount"
                     type="text"
                     inputMode="numeric"
-                    value={line.side === "debit" ? "" : formatAmountInput(line.amount)}
+                    value={primary.side === "debit" ? formatAmountInput(line.amount) : ""}
                     onChange={(e) => {
                       const digits = e.target.value.replace(/[^\d]/g, "").slice(0, 15);
-                      updateLine(line.id, { amount: digits, side: "credit" });
+                      updateCounter(line.id, { amount: digits });
                     }}
                     placeholder="0"
+                    readOnly={primary.side === "credit"}
+                    aria-readonly={primary.side === "credit" ? "true" : undefined}
                   />
                 </div>
                 <div>
                   <button
                     type="button"
                     className="entry-grid__remove"
-                    onClick={() => removeLine(line.id)}
-                    aria-label="Remove line"
+                    onClick={() => removeCounter(line.id)}
+                    aria-label="Remove counter line"
+                    disabled={counterLines.length === 1}
                   >
                     ×
                   </button>
                 </div>
               </div>
             ))}
-            <div className="entry-grid__row">
+
+            <div className="entry-grid__row entry-grid__row--add">
               <div className="entry-grid__num">+</div>
-              <div style={{ display: "flex", gap: "var(--space-2)" }}>
-                <button type="button" className="entry-grid__add" onClick={() => addLine("debit")}>
-                  + Debit line
-                </button>
-                <button type="button" className="entry-grid__add" onClick={() => addLine("credit")}>
-                  + Credit line
+              <div>
+                <button type="button" className="entry-grid__add" onClick={addCounter}>
+                  + Add counter line
                 </button>
               </div>
               <div />
               <div />
               <div />
               <div />
-              <div />
             </div>
           </div>
+
           <div className="entry-grid__totals">
             <span>Totals</span>
             <span>
-              D <strong>{formatIDR(totals.debit)}</strong>
+              D <strong>{formatIDR(primary.side === "debit" ? cashAmountCents : 0)}</strong>
             </span>
             <span>
-              C <strong>{formatIDR(totals.credit)}</strong>
+              C <strong>{formatIDR(primary.side === "credit" ? cashAmountCents : 0)}</strong>
             </span>
-            <span className={totals.diff === 0 ? "" : "is-off"}>
-              Diff <strong>{formatIDR(Math.abs(totals.diff))}</strong>
+            <span className={diff === 0 ? "" : "is-off"}>
+              Diff <strong>{formatIDR(Math.abs(diff))}</strong>
             </span>
           </div>
-        </div>
-
-        <div className="entrytab__section" style={{ gridTemplateColumns: "1fr" }}>
-          <div className="entrytab__section-title">Memo</div>
-          <label className="field">
-            <span className="field__label">Internal note</span>
-            <textarea
-              className="input"
-              rows={3}
-              value={memo}
-              onChange={(e) => setMemo(e.target.value)}
-              placeholder="Anything to remember about this entry..."
-            />
-          </label>
         </div>
 
         <FormError message={error} />
@@ -333,37 +349,11 @@ function formatAmountInput(raw: string): string {
   return new Intl.NumberFormat("en-US").format(parseInt(digits, 10));
 }
 
-function seedLines(subKind: EntrySubKind): AccountLine[] {
-  const seedText =
-    subKind === "sales-invoice"
-      ? { d: "Revenue / Pendapatan", c: "Receivable / Piutang" }
-      : subKind === "sales-receipt"
-        ? { d: "Cash / Bank", c: "Receivable / Piutang" }
-        : subKind === "purchase-invoice"
-          ? { d: "Inventory / Persediaan", c: "Payable / Hutang" }
-          : subKind === "purchase-payment"
-            ? { d: "Payable / Hutang", c: "Cash / Bank" }
-            : subKind === "inventory-item"
-              ? { d: "Inventory Asset", c: "Equity / Modal" }
-              : subKind === "asset-register"
-                ? { d: "Fixed Asset", c: "Cash / Bank" }
-                : { d: "Debit", c: "Credit" };
-  return [
-    {
-      id: "ln-debit",
-      accountCode: "",
-      accountName: "",
-      description: seedText.d,
-      amount: "",
-      side: "debit",
-    },
-    {
-      id: "ln-credit",
-      accountCode: "",
-      accountName: "",
-      description: seedText.c,
-      amount: "",
-      side: "credit",
-    },
-  ];
+function seedCounterLine(): CounterLine {
+  return {
+    id: `ln-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    accountId: "",
+    description: "",
+    amount: "",
+  };
 }

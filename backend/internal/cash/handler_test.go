@@ -85,6 +85,60 @@ func TestValidateTransferRequest(t *testing.T) {
 	}
 }
 
+func TestValidateCashRequestWithCounterLines(t *testing.T) {
+	makeBase := func() CashRequest {
+		return CashRequest{
+			SourceRef:     "BK-SPLIT",
+			EntryDate:     "2026-08-06",
+			CashAccountID: 1101,
+			AmountCents:   500000,
+			CounterLines: []CounterLineRequest{
+				{AccountID: 4101, AmountCents: 300000},
+				{AccountID: 4102, AmountCents: 200000},
+			},
+		}
+	}
+	if code, message := validateCashRequest(makeBase()); code != "" {
+		t.Fatalf("expected valid counter_lines request, got %s: %s", code, message)
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(*CashRequest)
+	}{
+		{"counter_lines sum mismatch", func(r *CashRequest) { r.CounterLines[1].AmountCents = 100000 }},
+		{"zero account in counter_line", func(r *CashRequest) { r.CounterLines[0].AccountID = 0 }},
+		{"zero amount in counter_line", func(r *CashRequest) { r.CounterLines[0].AmountCents = 0 }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := makeBase()
+			tc.mutate(&req)
+			if code, _ := validateCashRequest(req); code != "INVALID_REQUEST" {
+				t.Fatalf("expected INVALID_REQUEST, got %q", code)
+			}
+		})
+	}
+
+	// When counter_lines is provided, counter_account_id may be empty.
+	req := makeBase()
+	req.CounterAccountID = 0
+	if code, _ := validateCashRequest(req); code != "" {
+		t.Fatalf("expected valid request with no counter_account_id, got %q", code)
+	}
+
+	// When counter_lines is empty, counter_account_id is required.
+	req = CashRequest{
+		SourceRef:     "BK-1",
+		EntryDate:     "2026-08-06",
+		CashAccountID: 1101,
+		AmountCents:   100000,
+	}
+	if code, _ := validateCashRequest(req); code != "INVALID_REQUEST" {
+		t.Fatalf("expected INVALID_REQUEST for missing counter_account_id, got %q", code)
+	}
+}
+
 func TestValidateOpeningBalanceRequest(t *testing.T) {
 	base := OpeningBalanceRequest{
 		SourceRef:       "OPEN-1",

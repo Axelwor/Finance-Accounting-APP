@@ -44,6 +44,16 @@
 - Added `POST /api/v1/periods/unlock`: reopens a closed period by posting a PERIOD_REOPEN reversal of the closing entry (linked via `reversal_of_id`) and restoring the period to OPEN; verified end-to-end — P&L restored to 289k, balance-sheet balanced.
 - Opening balances now resolve the seeded equity account (3101) server-side when `equity_account_id` is omitted, so onboarding clients don't need tenant account ids; added unit tests. Frontend added "Tutup Buku"/"Buka Periode" buttons on the dashboard and fixed the onboarding opening-balance payload to fetch real account ids.
 
+## DBG-UI-001 — UI/UX debug pass + multi-counter + nested tabs
+
+- **Multi-counter line support (backend)**: `CashIntent` now accepts `CounterLines []CounterLine`. `CashIn`/`CashOut` distribute the counter side across one or more accounts when provided; the single `CounterAccount` field is preserved as a fallback. New request shape `counter_lines: [{account_id, amount_cents, description}]` for `POST /cash-in` and `POST /cash-out`; validation enforces that the sum of `counter_lines[].amount_cents` equals `amount_cents` and that each line has a positive account_id and amount. Ledger hash chain and balance invariant unchanged. New unit tests for split-counter success, amount mismatch, non-postable account, and CashOut debit-side distribution.
+- **Nested tab model (frontend)**: the workbench now has a two-level tab model — top-level tabs are the Dashboard (pinned) and one module parent per sidebar group; each parent owns a list of child tabs (list views + entry forms) rendered as a sub-strip inside the work area. The sub-strip has `+ New entry` affordance and per-tab close. Clicking a sidebar sub-item opens the module parent and the matching child atomically. Session-storage key bumped to `v2` (old single-level tabs from prior sessions are discarded).
+- **Dashboard pinned**: the Dashboard tab no longer renders a close button, and the reducer's `close` action silently no-ops for `id === "tab-dashboard"`. The pinned tab is enforced by `ensure-dashboard` on every load.
+- **Cash entry form follows the header**: the first row of the multi-line grid is locked to the Cash/Bank account (or From account for transfers) picked in the Header, with a read-only amount derived from the counter rows. Counter rows can be added/removed (min 1) and each carries its own account, description, and amount; the running `D / C / Diff` totals compare the cash side against the sum of counter amounts. Transfers use two locked rows that share a single amount on the Header.
+- **Mock entry form aligns with the same locked-row pattern** (single counter editable, demo banner preserved).
+- **Visual fixes**: `.spark` sparkline opacity removed (the dashboard trend graphic now renders), `.page-head__meta` no longer uppercases the date (still mono, sentence-case) — restores the Accurate-style calm to the page-head chrome.
+- **API client**: `postCashIn`/`postCashOut` now accept an optional `counter_lines` array and send it instead of the legacy `counter_account_id` when provided.
+
 ## Ledgerly v0.2.0 — English UI + Accurate-style redesign
 
 - App rebranded to **Ledgerly** (was "Pembukuan Mudah"): new wordmark, HTML title, and meta description.

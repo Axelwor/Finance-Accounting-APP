@@ -25,13 +25,13 @@ func TestMapKind(t *testing.T) {
 // SQL fragment is asserted explicitly.
 func TestKindFilterSQL(t *testing.T) {
 	cases := map[string]string{
-		"CASH_IN":      "e.intent_type = 'CASH_IN'",
-		"CASH_OUT":     "e.intent_type = 'CASH_OUT'",
-		"TRANSFER":     "e.intent_type = 'TRANSFER'",
-		"money-in":     "e.intent_type = 'CASH_IN'",
-		"money-out":    "e.intent_type = 'CASH_OUT'",
-		"money-in-up":  "1 = 0",
-		"":             "",
+		"CASH_IN":     "e.intent_type = 'CASH_IN'",
+		"CASH_OUT":    "e.intent_type = 'CASH_OUT'",
+		"TRANSFER":    "e.intent_type = 'TRANSFER'",
+		"money-in":    "e.intent_type = 'CASH_IN'",
+		"money-out":   "e.intent_type = 'CASH_OUT'",
+		"money-in-up": "1 = 0",
+		"":            "",
 	}
 	for input, want := range cases {
 		upper := strings.ToUpper(strings.TrimSpace(input))

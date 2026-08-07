@@ -178,6 +178,13 @@ export interface BackendTenant {
   slug: string;
 }
 
+/** A single counter line for multi-line cash commands. */
+export interface CounterLinePayload {
+  account_id: number;
+  amount_cents: number;
+  description: string;
+}
+
 /** Common financial command payload (POST /cash-in, /cash-out). */
 export interface CashCommandPayload {
   source_ref: string;
@@ -186,6 +193,8 @@ export interface CashCommandPayload {
   counter_account_id: number;
   amount_cents: number;
   description: string;
+  /** Optional multi-counter: when provided, replaces counter_account_id. */
+  counter_lines?: CounterLinePayload[];
 }
 
 /** Payload POST /api/v1/transfers. */

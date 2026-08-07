@@ -1,10 +1,12 @@
 import { useWorkbench } from "./state";
-import { findSubItemByList } from "./modules";
+import { findModule } from "./modules";
 import type { Tab } from "./types";
 
 /**
- * Browser-style tab strip below the top bar. Tabs are clickable,
- * closeable, and the active tab carries a ledger-green left rule.
+ * Top-level browser-style tab strip below the top bar. Shows only the
+ * top-level tabs: the Dashboard (pinned, no close button) and module
+ * parents. A module parent's children are rendered by NestedTabStrip
+ * inside the work area.
  */
 export function TabStrip() {
   const workbench = useWorkbench();
@@ -12,7 +14,7 @@ export function TabStrip() {
   if (workbench.tabs.length === 0) return null;
 
   return (
-    <nav className="tabstrip" aria-label="Open tabs">
+    <nav className="tabstrip" aria-label="Open modules">
       <div className="tabstrip__inner">
         {workbench.tabs.map((tab) => (
           <TabPill key={tab.id} tab={tab} />
@@ -25,38 +27,33 @@ export function TabStrip() {
 function TabPill({ tab }: { tab: Tab }) {
   const workbench = useWorkbench();
   const isActive = tab.id === workbench.activeId;
-  const listMeta = tab.kind === "list" ? findSubItemByList(tab.subKind) : undefined;
-  const kind = tab.kind === "dashboard" ? "HOME" : tab.kind === "list" ? "LIST" : tab.draft ? "NEW" : "ENTRY";
-  const status =
-    tab.kind === "dashboard"
-      ? "LIVE"
-      : tab.status ?? (tab.kind === "list" ? "OPEN" : "EDIT");
+  const isDashboard = tab.kind === "dashboard";
+  const label = isDashboard ? "Dashboard" : findModule(tab.moduleId)?.label ?? tab.title;
 
   return (
     <div
-      className={`tabpill${isActive ? " is-active" : ""}${tab.unsaved ? " is-unsaved" : ""}`}
+      className={`tabpill${isActive ? " is-active" : ""}`}
       role="tab"
       aria-selected={isActive}
       onClick={() => workbench.activate(tab.id)}
     >
-      <span className={`tabpill__kind tabpill__kind--${
-        tab.kind === "dashboard" ? "list" : tab.kind === "list" ? "list" : tab.draft ? "draft" : "entry"
-      }`}>
-        {kind}
+      <span className={`tabpill__kind tabpill__kind--${isDashboard ? "home" : "module"}`}>
+        {isDashboard ? "HOME" : "MODULE"}
       </span>
-      <span className="tabpill__title" title={tab.title}>{tab.title}</span>
-      <span className="tabpill__status">{status}</span>
-      <button
-        type="button"
-        className="tabpill__close"
-        aria-label={`Close ${tab.title}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          workbench.close(tab.id);
-        }}
-      >
-        ×
-      </button>
+      <span className="tabpill__title" title={label}>{label}</span>
+      {!isDashboard ? (
+        <button
+          type="button"
+          className="tabpill__close"
+          aria-label={`Close ${label}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            workbench.close(tab.id);
+          }}
+        >
+          ×
+        </button>
+      ) : null}
     </div>
   );
 }

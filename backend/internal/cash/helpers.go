@@ -180,3 +180,31 @@ func violationConstraint(err error, name string) bool {
 	}
 	return pgErr.ConstraintName == name || strings.Contains(pgErr.Message, name)
 }
+
+// loadCounter resolves the counter side of a CashRequest. When the request
+// carries CounterLines, every line account is loaded and returned in
+// order. When it carries only CounterAccountID, the single counter is
+// loaded into the Account return and CounterLines is nil. Validation
+// upstream guarantees exactly one mode is present.
+func loadCounter(ctx context.Context, tx pgx.Tx, tenantID int64, req CashRequest) ([]accounting.CounterLine, db.Account, error) {
+	if len(req.CounterLines) > 0 {
+		lines := make([]accounting.CounterLine, 0, len(req.CounterLines))
+		for _, cl := range req.CounterLines {
+			row, err := loadAccount(ctx, tx, tenantID, cl.AccountID)
+			if err != nil {
+				return nil, db.Account{}, err
+			}
+			lines = append(lines, accounting.CounterLine{
+				Account:     accountForEngine(row),
+				AmountCents: cl.AmountCents,
+				Description: cl.Description,
+			})
+		}
+		return lines, db.Account{}, nil
+	}
+	row, err := loadAccount(ctx, tx, tenantID, req.CounterAccountID)
+	if err != nil {
+		return nil, db.Account{}, err
+	}
+	return nil, row, nil
+}

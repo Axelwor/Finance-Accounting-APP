@@ -535,6 +535,8 @@ export const api = {
   /**
    * Posts a CASH_IN journal via the backend. Used by the workbench
    * entry form when the user presses Post on an Other Receipt draft.
+   * When `counter_lines` is provided the backend splits the credit side
+   * across the listed accounts; otherwise `counter_account_id` is used.
    */
   async postCashIn(payload: {
     entry_date: string;
@@ -542,19 +544,25 @@ export const api = {
     cash_account_id: number;
     counter_account_id: number;
     amount_cents: number;
+    counter_lines?: import("./types").CounterLinePayload[];
   }): Promise<BackendJournalResult> {
+    const body: Record<string, unknown> = {
+      source_ref: `WEB-${Date.now()}`,
+      entry_date: payload.entry_date,
+      cash_account_id: payload.cash_account_id,
+      amount_cents: payload.amount_cents,
+      description: payload.description,
+    };
+    if (payload.counter_lines && payload.counter_lines.length > 0) {
+      body.counter_lines = payload.counter_lines;
+    } else {
+      body.counter_account_id = payload.counter_account_id;
+    }
     return http<BackendJournalResult>("/cash-in", {
       method: "POST",
       auth: true,
       idempotencyKey: newIdempotencyKey(),
-      body: JSON.stringify({
-        source_ref: `WEB-${Date.now()}`,
-        entry_date: payload.entry_date,
-        cash_account_id: payload.cash_account_id,
-        counter_account_id: payload.counter_account_id,
-        amount_cents: payload.amount_cents,
-        description: payload.description,
-      }),
+      body: JSON.stringify(body),
     });
   },
 
@@ -565,19 +573,25 @@ export const api = {
     cash_account_id: number;
     counter_account_id: number;
     amount_cents: number;
+    counter_lines?: import("./types").CounterLinePayload[];
   }): Promise<BackendJournalResult> {
+    const body: Record<string, unknown> = {
+      source_ref: `WEB-${Date.now()}`,
+      entry_date: payload.entry_date,
+      cash_account_id: payload.cash_account_id,
+      amount_cents: payload.amount_cents,
+      description: payload.description,
+    };
+    if (payload.counter_lines && payload.counter_lines.length > 0) {
+      body.counter_lines = payload.counter_lines;
+    } else {
+      body.counter_account_id = payload.counter_account_id;
+    }
     return http<BackendJournalResult>("/cash-out", {
       method: "POST",
       auth: true,
       idempotencyKey: newIdempotencyKey(),
-      body: JSON.stringify({
-        source_ref: `WEB-${Date.now()}`,
-        entry_date: payload.entry_date,
-        cash_account_id: payload.cash_account_id,
-        counter_account_id: payload.counter_account_id,
-        amount_cents: payload.amount_cents,
-        description: payload.description,
-      }),
+      body: JSON.stringify(body),
     });
   },
 

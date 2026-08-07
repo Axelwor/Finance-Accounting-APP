@@ -169,9 +169,9 @@ func (service *Service) queryCashEntries(
 	defer rows.Close()
 
 	type row struct {
-		id, debit, credit, amount                                 int64
-		number, intent, date, status, description, sourceRef       string
-		reversalOfID                                             int64
+		id, debit, credit, amount                            int64
+		number, intent, date, status, description, sourceRef string
+		reversalOfID                                         int64
 	}
 	out := []CashEntryListItem{}
 	for rows.Next() {

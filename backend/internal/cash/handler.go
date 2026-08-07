@@ -45,6 +45,18 @@ type CashRequest struct {
 	CounterAccountID int64  `json:"counter_account_id"`
 	AmountCents      int64  `json:"amount_cents"`
 	Description      string `json:"description"`
+	// CounterLines lets one journal split the counter side across multiple
+	// accounts. When non-empty, CounterAccountID is ignored and the sum of
+	// AmountCents across lines must equal AmountCents.
+	CounterLines []CounterLineRequest `json:"counter_lines"`
+}
+
+// CounterLineRequest is the request shape for one line on the counter
+// side of a CASH_IN / CASH_OUT journal.
+type CounterLineRequest struct {
+	AccountID   int64  `json:"account_id"`
+	AmountCents int64  `json:"amount_cents"`
+	Description string `json:"description"`
 }
 
 type TransferRequest struct {
@@ -106,7 +118,7 @@ func (service *Service) CashIn(writer http.ResponseWriter, request *http.Request
 		if err != nil {
 			return accounting.Journal{}, err
 		}
-		counterAccount, err := loadAccount(ctx, tx, tenant, req.CounterAccountID)
+		counterLines, counterAccount, err := loadCounter(ctx, tx, tenant, req)
 		if err != nil {
 			return accounting.Journal{}, err
 		}
@@ -116,6 +128,7 @@ func (service *Service) CashIn(writer http.ResponseWriter, request *http.Request
 			EntryDate:      req.EntryDate,
 			CashAccount:    accountForEngine(cashAccount),
 			CounterAccount: accountForEngine(counterAccount),
+			CounterLines:   counterLines,
 			AmountCents:    req.AmountCents,
 			Description:    req.Description,
 		})
@@ -148,7 +161,7 @@ func (service *Service) CashOut(writer http.ResponseWriter, request *http.Reques
 		if err != nil {
 			return accounting.Journal{}, err
 		}
-		counterAccount, err := loadAccount(ctx, tx, tenant, req.CounterAccountID)
+		counterLines, counterAccount, err := loadCounter(ctx, tx, tenant, req)
 		if err != nil {
 			return accounting.Journal{}, err
 		}
@@ -158,6 +171,7 @@ func (service *Service) CashOut(writer http.ResponseWriter, request *http.Reques
 			EntryDate:      req.EntryDate,
 			CashAccount:    accountForEngine(cashAccount),
 			CounterAccount: accountForEngine(counterAccount),
+			CounterLines:   counterLines,
 			AmountCents:    req.AmountCents,
 			Description:    req.Description,
 		})
@@ -329,11 +343,27 @@ func validateCashRequest(req CashRequest) (string, string) {
 		return "INVALID_REQUEST", err.Error()
 	}
 	req.EntryDate = date
-	if req.CashAccountID <= 0 || req.CounterAccountID <= 0 {
-		return "INVALID_REQUEST", "cash_account_id and counter_account_id must be positive integers"
+	if req.CashAccountID <= 0 {
+		return "INVALID_REQUEST", "cash_account_id must be a positive integer"
 	}
 	if err := validateAmount(req.AmountCents); err != nil {
 		return "INVALID_REQUEST", err.Error()
+	}
+	if len(req.CounterLines) > 0 {
+		total := int64(0)
+		for index, line := range req.CounterLines {
+			if line.AccountID <= 0 || line.AmountCents <= 0 {
+				return "INVALID_REQUEST", fmt.Sprintf("counter_lines[%d] must have positive account_id and amount_cents", index)
+			}
+			total += line.AmountCents
+		}
+		if total != req.AmountCents {
+			return "INVALID_REQUEST", "sum of counter_lines[].amount_cents must equal amount_cents"
+		}
+		return "", ""
+	}
+	if req.CounterAccountID <= 0 {
+		return "INVALID_REQUEST", "counter_account_id is required when counter_lines is empty"
 	}
 	return "", ""
 }
