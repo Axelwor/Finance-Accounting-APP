@@ -319,13 +319,12 @@ button { cursor: pointer; }
 .app-main__inner {
   flex: 1;
   min-width: 0;
-  max-width: 1320px;
   width: 100%;
-  margin: 0 auto;
-  padding: var(--u-6);
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--u-5);
+  gap: 0;
 }
 
 /* ------------------------------------------------------------
@@ -1855,10 +1854,11 @@ select.input {
 }
 
 .entrytab--accurate {
-  max-width: 1180px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: var(--u-2);
+  padding: 0 var(--u-5) var(--u-4);
 }
 .entrytab--accurate .entrytab__head {
   padding: var(--u-3) var(--u-4);
@@ -2202,7 +2202,8 @@ select.input {
   display: flex;
   flex-direction: column;
   gap: var(--u-2);
-  max-width: 1180px;
+  width: 100%;
+  padding: 0 var(--u-5) var(--u-4);
 }
 .listtab--accurate .listtab__head {
   padding: var(--u-2) var(--u-4);
