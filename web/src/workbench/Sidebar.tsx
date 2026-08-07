@@ -64,56 +64,53 @@ const Icon = ({ name }: { name: Module["icon"] }) => {
 };
 
 /**
- * Left sidebar with module tree. Hover, focus, or click on a module row
- * reveals its sub-item popup on the right. The popup stays open while the
- * pointer is on either the trigger or the popup itself (with an offset
- * bridge that hides the gap). On mobile the popup expands inline.
+ * Icon rail sidebar. Each module is a compact icon button.
+ * On hover the module label appears as small text below the icon,
+ * and a flyout submenu shows the module's sub-items to the right.
+ * On mobile the rail becomes a slide-over with full-width rows.
  */
 export function Sidebar() {
   const workbench = useWorkbench();
-  const [openModule, setOpenModule] = useState<string | null>(null);
+  const [hoveredModule, setHoveredModule] = useState<string | null>(null);
+  const [pinnedModule, setPinnedModule] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  /** Tracks whether focus is inside the module (so blur doesn't snap the popup shut). */
-  const insideRef = useRef(false);
+  const closeTimer = useRef<number | null>(null);
 
-  // Close popup on click outside or Escape.
+  // Close on Escape.
   useEffect(() => {
-    if (!openModule) return;
-    const onPointer = (e: PointerEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpenModule(null);
-    };
+    if (!hoveredModule && !pinnedModule) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpenModule(null);
+      if (e.key === "Escape") {
+        setHoveredModule(null);
+        setPinnedModule(null);
+      }
     };
-    document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [openModule]);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [hoveredModule, pinnedModule]);
+
+  const openModuleId = pinnedModule ?? hoveredModule;
+
+  const handleEnter = (id: string) => {
+    if (closeTimer.current) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    setHoveredModule(id);
+  };
+
+  const handleLeave = () => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => {
+      setHoveredModule(null);
+    }, 200);
+  };
 
   const handleSubClick = (sub: SubItem) => {
     workbench.openList(sub.openList);
-    setOpenModule(null);
+    setPinnedModule(null);
+    setHoveredModule(null);
     setMobileOpen(false);
-  };
-
-  const handleModuleEnter = (id: string) => {
-    setOpenModule(id);
-  };
-  const handleModuleLeave = (id: string) => {
-    // Defer to allow pointer to traverse the offset bridge into the popup.
-    // If a focus event arrives before the timer fires we keep the popup
-    // open (keyboard navigation must not snap shut).
-    setTimeout(() => {
-      if (!insideRef.current) setOpenModule(null);
-    }, 120);
-    // Optimistically set to null if leaving this exact module
-    if (openModule === id && !insideRef.current) {
-      // do nothing yet — wait for timeout
-    }
   };
 
   return (
@@ -136,75 +133,62 @@ export function Sidebar() {
         aria-hidden="true"
         onClick={() => setMobileOpen(false)}
       />
-      <aside ref={rootRef} className={`sidebar${mobileOpen ? " is-open" : ""}`} aria-label="Modules">
+      <aside className={`sidebar${mobileOpen ? " is-open" : ""}`} aria-label="Modules">
+        {/* Brand mark at top of rail */}
         <div className="sidebar__brand">
-          <span className="sidebar__brand-label">Business tools</span>
+          <span className="brand__mark" aria-hidden="true" />
         </div>
-        <nav className="sidebar__nav">
+
+        {/* Icon rail */}
+        <nav className="sidebar__rail" aria-label="Modules">
           {MODULES.map((mod) => {
-            const isOpen = openModule === mod.id;
+            const isOpen = openModuleId === mod.id;
             return (
               <div
                 key={mod.id}
-                className={`sidebar-module${isOpen ? " is-open" : ""}${
-                  mobileOpen && isOpen ? " is-mobile-open" : ""
-                }`}
-                onMouseEnter={() => handleModuleEnter(mod.id)}
-                onMouseLeave={() => handleModuleLeave(mod.id)}
+                className={`rail-item${isOpen ? " is-open" : ""}`}
+                onMouseEnter={() => handleEnter(mod.id)}
+                onMouseLeave={handleLeave}
               >
                 <button
                   type="button"
-                  className="sidebar-module__trigger"
+                  className="rail-item__btn"
                   aria-haspopup="menu"
                   aria-expanded={isOpen}
-                  onFocus={() => {
-                    insideRef.current = true;
-                    setOpenModule(mod.id);
-                  }}
-                  onBlur={() => {
-                    insideRef.current = false;
-                    setTimeout(() => {
-                      if (!insideRef.current) setOpenModule(null);
-                    }, 50);
-                  }}
-                  onClick={() => setOpenModule((current) => (current === mod.id ? null : mod.id))}
+                  aria-label={mod.label}
+                  onClick={() =>
+                    setPinnedModule((cur) => (cur === mod.id ? null : mod.id))
+                  }
+                  onFocus={() => handleEnter(mod.id)}
+                  onBlur={handleLeave}
                 >
-                  <span className="sidebar-module__icon" aria-hidden="true">
+                  <span className="rail-item__icon">
                     <Icon name={mod.icon} />
                   </span>
-                  <span className="sidebar-module__label">{mod.label}</span>
-                  <span className="sidebar-module__chevron" aria-hidden="true">›</span>
+                  <span className="rail-item__label">{mod.label}</span>
                 </button>
-                {/*
-                  Popup is always rendered (display controlled by CSS); it has
-                  an offset bridge so the pointer can travel from the trigger
-                  to the popup without re-entering the parent and firing
-                  mouseleave on the bridge element.
-                */}
+
+                {/* Flyout submenu */}
                 <div
-                  className="sidebar-module__popup"
+                  className={`rail-flyout${isOpen ? " is-open" : ""}`}
                   role="menu"
-                  onMouseEnter={() => {
-                    insideRef.current = true;
-                    setOpenModule(mod.id);
-                  }}
-                  onMouseLeave={() => {
-                    insideRef.current = false;
-                    setOpenModule(null);
-                  }}
+                  onMouseEnter={() => handleEnter(mod.id)}
+                  onMouseLeave={handleLeave}
                 >
-                  <p className="sidebar-module__popup-title">{mod.label}</p>
-                  <ul className="sidebar-module__items">
+                  <p className="rail-flyout__title">{mod.label}</p>
+                  <ul className="rail-flyout__items">
                     {mod.items.map((sub) => (
                       <li key={sub.id}>
                         <button
                           type="button"
                           role="menuitem"
-                          className="sidebar-subitem"
+                          className="rail-flyout__item"
                           onClick={() => handleSubClick(sub)}
                         >
-                          <span className="sidebar-subitem__label">{sub.label}</span>
-                          {sub.mockData ? <span className="sidebar-subitem__mock">Demo</span> : null}
+                          <span>{sub.label}</span>
+                          {sub.mockData ? (
+                            <span className="rail-flyout__badge">Demo</span>
+                          ) : null}
                         </button>
                       </li>
                     ))}
