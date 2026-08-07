@@ -15,12 +15,6 @@ const todayStamp = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 }).format(new Date());
 
-const shortDateStamp = new Intl.DateTimeFormat("en-US", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-}).format(new Date()).toUpperCase();
-
 function Spark({ values, tone }: { values: number[]; tone: "pos" | "neg" | "acc" }) {
   if (values.length < 2) return null;
   const width = 220;
@@ -132,7 +126,7 @@ export function DashboardScreen() {
       const summary = await api.getDashboard();
       setData(summary);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load the console. Try again.");
+      setError(err instanceof Error ? err.message : "Failed to load the dashboard. Try again.");
     }
   }, []);
 
@@ -169,11 +163,9 @@ export function DashboardScreen() {
           </p>
           <h1 className="page-title">
             <span>{businessName}</span>
-            <span className="page-title__sep">/</span>
-            <span className="page-title__sub">today's ledger</span>
           </h1>
           <p className="page-sub">
-            A ruled summary of the books. Read positions, rule entries, close periods — all from a single source.
+            {businessName} financial overview — today's positions and quick access to posting.
           </p>
         </div>
         <div className="page-head__actions">
@@ -197,7 +189,7 @@ export function DashboardScreen() {
       {error ? (
         <ErrorState message={error} onRetry={() => setRetryKey((k) => k + 1)} />
       ) : !data ? (
-        <LoadingState label="Loading console..." />
+        <LoadingState label="Loading dashboard..." />
       ) : (
         <>
           <section className="status-rail" aria-label="Position overview">
@@ -205,22 +197,22 @@ export function DashboardScreen() {
               lead
               label="Cash & Bank"
               value={formatIDR(data.cashAndBankBalance)}
-              delta="Cash + accounts combined"
+              delta="Cash and accounts combined"
               deltaTone={data.cashAndBankBalance >= 0 ? "pos" : "neg"}
               tone={data.cashAndBankBalance >= 0 ? "pos" : "neg"}
               spark={spark}
               sparkTone={data.cashAndBankBalance >= 0 ? "pos" : "neg"}
-              meta={`${shortDateStamp} END-OF-DAY`}
+              meta="End of day"
             />
             <StatusCell
-              label="MTD P&L"
+              label="MTD P&amp;L"
               value={formatIDR(data.monthlyProfitLoss)}
               delta="Month to date"
               deltaTone={data.monthlyProfitLoss >= 0 ? "pos" : "neg"}
               tone={data.monthlyProfitLoss >= 0 ? "pos" : "neg"}
               spark={entriesSpark}
               sparkTone="acc"
-              meta="VS LAST CYCLE"
+              meta="vs last cycle"
             />
             <StatusCell
               label="Open bills"
@@ -228,7 +220,7 @@ export function DashboardScreen() {
               delta="Receivables awaiting payment"
               deltaTone={data.dueBills > 0 ? "neg" : "neutral"}
               tone={data.dueBills > 0 ? "warn" : "neutral"}
-              meta={data.dueBills > 0 ? "ACTION NEEDED" : "CLEAR"}
+              meta={data.dueBills > 0 ? "Action needed" : "Clear"}
             />
             <StatusCell
               label="Low stock"
@@ -236,7 +228,7 @@ export function DashboardScreen() {
               delta="Items below reorder point"
               deltaTone={data.lowStock > 0 ? "neg" : "neutral"}
               tone={data.lowStock > 0 ? "warn" : "neutral"}
-              meta={data.lowStock > 0 ? "RESTOCK" : "STABLE"}
+              meta={data.lowStock > 0 ? "Restock" : "Stable"}
             />
           </section>
 
@@ -246,7 +238,7 @@ export function DashboardScreen() {
                 <span className="dot dot--pos" aria-hidden="true" />
                 Latest entries
               </h2>
-              <span className="section-head__meta">{recent.length} total &middot; top 5 shown</span>
+              <span className="section-head__meta">{recent.length} total — top 5 shown</span>
               {recent.length > 5 ? (
                 <button
                   type="button"
@@ -260,9 +252,9 @@ export function DashboardScreen() {
 
             {recent.length === 0 ? (
               <div className="empty-state">
-                <h3 className="empty-state__title">No entries in the book</h3>
+                <h3 className="empty-state__title">No entries in the book yet</h3>
                 <p className="empty-state__message">
-                  Open the book with your first money in or money out. The console reads from every line you rule.
+                  Start with your first money in or money out. The dashboard updates as you rule each line.
                 </p>
                 <button
                   type="button"
@@ -298,7 +290,7 @@ export function DashboardScreen() {
             </div>
             <div className="kpi-list">
               <KpiRow
-                label="This month's P&L"
+                label="This month's P&amp;L"
                 note="Income minus expense"
                 value={formatIDR(data.monthlyProfitLoss)}
                 tone={data.monthlyProfitLoss >= 0 ? "pos" : "neg"}
