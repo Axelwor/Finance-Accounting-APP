@@ -12,6 +12,7 @@ import (
 	"finance-accounting-app/backend/internal/cash"
 	"finance-accounting-app/backend/internal/coa"
 	"finance-accounting-app/backend/internal/config"
+	"finance-accounting-app/backend/internal/period"
 	"finance-accounting-app/backend/internal/reporting"
 	"finance-accounting-app/backend/internal/tenant"
 )
@@ -33,6 +34,7 @@ func main() {
 	reportingHandler := reporting.NewHandler(pool)
 	coaHandler := coa.NewHandler(pool)
 	cashHandler := cash.NewHandler(pool)
+	periodHandler := period.NewHandler(pool)
 
 	router := chi.NewRouter()
 	router.Get("/healthz", tenant.Health)
@@ -63,6 +65,8 @@ func main() {
 			router.Get("/reports/profit-loss", reportingHandler.ProfitLoss)
 			router.Get("/reports/balance-sheet", reportingHandler.BalanceSheet)
 			router.Get("/reports/cash-flow", reportingHandler.CashFlow)
+
+			router.Post("/periods/close", periodHandler.Close)
 		})
 	})
 
