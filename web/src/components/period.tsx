@@ -7,12 +7,12 @@ type PeriodAction = "close" | "reopen";
 
 const CONFIRMATIONS: Record<PeriodAction, string> = {
   close:
-    "Close the current book period? Once closed, no new entries can be ruled until the period is reopened.",
+    "Close the current book period? Once closed, no new entries can be ruled until reopened.",
   reopen:
-    "Reopen a closed period? The closing journal will be reversed automatically by the system.",
+    "Reopen a closed period? The closing journal will be reversed automatically.",
 };
 
-/** Small "Book period" card: closes / reopens the period from the dashboard. */
+/** Period control card on the dashboard. */
 export function PeriodCard() {
   const [busy, setBusy] = useState<PeriodAction | null>(null);
   const [result, setResult] = useState<PeriodResult | null>(null);
@@ -36,30 +36,34 @@ export function PeriodCard() {
   const processing = busy !== null;
 
   return (
-    <div className="period-card section">
-      <div className="period-card__head">
-        <h3 className="period-card__title">Book period</h3>
-        <span className="period-card__meta">Close / reopen</span>
+    <section className="section">
+      <div className="section-head">
+        <h2 className="section-head__title">
+          <span className="dot dot--acc" aria-hidden="true" />
+          Book period
+        </h2>
+        <span className="section-head__meta">CLOSE / REOPEN</span>
       </div>
-      <p className="period-card__desc">
-        Close the books when a period ends, or reopen when a correction is needed. The closing journal moves the period's profit into retained earnings.
-      </p>
-      <div className="quick-actions">
-        <Button variant="primary" disabled={processing} onClick={() => void run("close")}>
-          {busy === "close" ? "Closing books..." : "Close books"}
-        </Button>
-        <Button variant="secondary" disabled={processing} onClick={() => void run("reopen")}>
-          {busy === "reopen" ? "Reopening..." : "Reopen period"}
-        </Button>
-      </div>
-
-      {result ? (
-        <p className="period-card__status" role="status">
-          Period #{result.period_id} {result.status === "CLOSED" ? "closed" : "reopened"} — journal{" "}
-          <code>{result.number}</code> ruled.
+      <div className="period-stamp">
+        <p className="period-stamp__desc">
+          Close the books when a period ends, or reopen when a correction is needed. The closing journal moves the period's profit into retained earnings.
         </p>
-      ) : null}
-      <FormError message={error} />
-    </div>
+        <div className="quick-actions">
+          <Button variant="primary" disabled={processing} onClick={() => void run("close")}>
+            {busy === "close" ? "Closing..." : "Close books"}
+          </Button>
+          <Button variant="secondary" disabled={processing} onClick={() => void run("reopen")}>
+            {busy === "reopen" ? "Reopening..." : "Reopen period"}
+          </Button>
+        </div>
+
+        {result ? (
+          <p className="period-stamp__status" role="status">
+            Period #{result.period_id} {result.status === "CLOSED" ? "closed" : "reopened"} - journal <code>{result.number}</code> posted
+          </p>
+        ) : null}
+        <FormError message={error} />
+      </div>
+    </section>
   );
 }

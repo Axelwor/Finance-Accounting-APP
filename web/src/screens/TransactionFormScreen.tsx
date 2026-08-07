@@ -17,22 +17,25 @@ import type { AccountItem, Category, TransactionKind } from "../types";
 
 const KIND_META: Record<
   TransactionKind,
-  { title: string; sub: string; submit: string }
+  { title: string; sub: string; submit: string; meta: string }
 > = {
   "money-in": {
     title: "Money in",
-    sub: "Money received by the business, e.g. cash sales or receivable collected.",
-    submit: "Rule money in",
+    sub: "Cash receipt or receivable collected into a cash or bank account.",
+    submit: "Rule entry",
+    meta: "RECEIPT / +",
   },
   "money-out": {
     title: "Money out",
-    sub: "Money spent by the business, e.g. purchases, rent, or wages.",
-    submit: "Rule money out",
+    sub: "Cash payment or expense against a cash or bank account.",
+    submit: "Rule entry",
+    meta: "PAYMENT / -",
   },
   transfer: {
     title: "Transfer",
-    sub: "Move money between accounts or cash — neither profit nor loss.",
-    submit: "Rule transfer",
+    sub: "Move money between accounts — no profit or loss.",
+    submit: "Rule entry",
+    meta: "TRANSFER / =",
   },
 };
 
@@ -125,28 +128,35 @@ export function TransactionFormScreen() {
   return (
     <div className="form-page">
       <header className="page-head">
-        <div>
-          <p className="page-head__meta">Entry / {kind === "money-in" ? "Receipt" : kind === "money-out" ? "Payment" : "Transfer"}</p>
+        <div className="page-head__left">
+          <p className="page-head__meta"><strong>{meta.meta}</strong></p>
           <h1 className="page-title">
-            {meta.title} <em>entry</em>
+            <span>{meta.title}</span>
+            <span className="page-title__sep">/</span>
+            <span className="page-title__sub">new entry</span>
           </h1>
-          <p className="page-sub">{meta.sub}</p>
+          <p className="page-head__meta" style={{ marginTop: "var(--space-2)", textTransform: "none", letterSpacing: 0, color: "var(--ink-tertiary)" }}>
+            {meta.sub}
+          </p>
         </div>
       </header>
 
       {loadError ? (
         <ErrorState message={loadError} onRetry={() => void loadMaster()} />
       ) : categories.length === 0 ? (
-        <LoadingState label="Preparing the entry..." />
+        <LoadingState label="Loading masters..." />
       ) : (
-        <form className="form-card" onSubmit={handleSubmit} noValidate>
-          <div className="form-card__head">
-            <h2 className="form-card__title">{meta.title}</h2>
-            <p className="form-card__sub">{meta.sub}</p>
+        <form className="card-panel" onSubmit={handleSubmit} noValidate>
+          <div className="card-panel__head">
+            <h2 className="card-panel__title">
+              <span className={`kind-mark kind-mark--${kind}`}>{kind === "money-in" ? "IN" : kind === "money-out" ? "OUT" : "XFER"}</span>
+              {meta.title} entry
+            </h2>
+            <p className="card-panel__sub">{meta.sub}</p>
           </div>
 
           <div className="form-stack">
-            <AmountField label="Amount (IDR)" value={amount} onChange={setAmount} placeholder="0" />
+            <AmountField label="Amount" value={amount} onChange={setAmount} placeholder="0" />
 
             <DateField label="Entry date" value={date} onChange={setDate} max={todayISO()} />
 
@@ -170,7 +180,7 @@ export function TransactionFormScreen() {
               value={description}
               onChange={setDescription}
               placeholder="e.g. Today's cash sales"
-              hint="A short ruling so you can trace this later."
+              hint="Short ruling so you can trace this later."
             />
 
             <FormError message={error} />
@@ -180,13 +190,13 @@ export function TransactionFormScreen() {
                 Cancel
               </Button>
               <Button type="submit" variant="primary" disabled={saving || saved}>
-                {saving ? "Ruling..." : saved ? "Ruled ✓" : meta.submit}
+                {saving ? "Posting..." : saved ? "Posted ✓" : meta.submit}
               </Button>
             </div>
 
             {saved ? (
               <p className="form-card__success" role="status">
-                Entry ruled. Returning to the ledger...
+                Entry ruled. Returning to console...
               </p>
             ) : null}
           </div>

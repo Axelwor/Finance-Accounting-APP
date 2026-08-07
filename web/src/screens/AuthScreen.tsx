@@ -39,7 +39,7 @@ export function AuthScreen() {
       }
       navigate("/onboarding", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setError(err instanceof Error ? err.message : "Could not reach the console. Try again.");
     } finally {
       setLoading(false);
     }
@@ -50,21 +50,26 @@ export function AuthScreen() {
       <div className="auth__hero">
         <div className="auth__brand">
           <span className="brand__mark" aria-hidden="true" />
-          <span className="brand__name">Ledger<em>ly</em></span>
+          <span className="brand__name">{wordmark}</span>
+        </div>
+        <div className="auth__copy-meta">
+          <span className="dot" aria-hidden="true" />
+          <span>OPERATING CONSOLE / SESSION 01</span>
         </div>
         <div className="auth__copy">
-          <p className="auth__copy-meta">A craft ledger for daily books</p>
           <h1 className="auth__title">
-            Record once. The <em>ledger</em> remembers.
+            One book.<span className="slash"> </span>
+            <em>Every line ruled.</em>
           </h1>
           <p className="auth__lede">
-            Money in, money out, transfer, close — written in the same ruled register
-            your accountant reads. Reports come from the same source, never a separate file.
+            Money in, money out, transfer, close — written once in a ruled register
+            that feeds the same source your accountant reads. No syncing, no second
+            ledger, no surprises at period end.
           </p>
         </div>
         <div className="auth__signoff">
-          <span><strong>Ledgerly</strong> · Operate from the source book</span>
-          <span>Issue 1 · Vol. M1</span>
+          <span><strong>Ledgerly</strong> &middot; accounting console</span>
+          <span>Build <span className="pos">M1</span> &middot; IDR primary</span>
         </div>
       </div>
 
@@ -87,7 +92,7 @@ export function AuthScreen() {
               className={`auth-card__tab${mode === "register" ? " is-active" : ""}`}
               onClick={() => switchMode("register")}
             >
-              Open ledger
+              Open book
             </button>
           </div>
 
@@ -124,9 +129,9 @@ export function AuthScreen() {
 
           <Button type="submit" variant="primary" fullWidth disabled={loading}>
             {loading
-              ? "Opening..."
+              ? "Connecting..."
               : mode === "register"
-                ? "Open the ledger"
+                ? "Open the book"
                 : "Sign in"}
           </Button>
 
@@ -135,7 +140,7 @@ export function AuthScreen() {
               <>
                 First time here?{" "}
                 <button type="button" className="link-button" onClick={() => switchMode("register")}>
-                  Open a new ledger
+                  Open a new book
                 </button>
               </>
             ) : (
@@ -150,7 +155,7 @@ export function AuthScreen() {
 
           <p className="auth-card__note">
             <Link to="/onboarding" className="link-inline">
-              Try with example data, no account needed
+              Try example data, no account needed
             </Link>
           </p>
         </form>

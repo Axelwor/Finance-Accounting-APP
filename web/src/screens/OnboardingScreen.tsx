@@ -116,7 +116,7 @@ export function OnboardingScreen() {
             value={businessType}
             onChange={setBusinessType}
             options={BUSINESS_TYPES.map((t) => ({ value: t, label: t }))}
-            placeholder="Select business type"
+            placeholder="Choose business type"
           />
           <SelectField
             label="Currency"
@@ -172,7 +172,7 @@ export function OnboardingScreen() {
             <strong>{formatIDR(totalLiabilitiesEquity)}</strong>
           </div>
           <p className="balance-summary__note">
-            The system will balance any difference against capital automatically.
+            The system balances any difference against capital automatically.
           </p>
         </div>
       </div>
@@ -180,20 +180,23 @@ export function OnboardingScreen() {
   };
 
   const stepMeta = [
-    { label: "Business details", desc: "Name, type, and currency." },
-    { label: "Book period", desc: "When the fiscal year starts." },
-    { label: "Opening balance", desc: "Your day-one financial position." },
+    { label: "01 / Business", desc: "Name, type, and currency." },
+    { label: "02 / Period", desc: "When the fiscal year starts." },
+    { label: "03 / Opening balance", desc: "Your day-one financial position." },
   ];
 
   return (
     <div className="onboarding">
-      <div className="onboarding__head">
-        <p className="onboarding__meta">Setup / Three short steps</p>
-        <h1 className="onboarding__title">
-          Open the <em>ledger</em>
-        </h1>
-        <p className="onboarding__sub">Rule your books in three short steps, about two minutes.</p>
-      </div>
+      <header className="page-head">
+        <div className="page-head__left">
+          <p className="page-head__meta"><strong>SETUP</strong> &middot; 3 STEPS</p>
+          <h1 className="page-title">
+            <span>Open the book</span>
+            <span className="page-title__sep">/</span>
+            <span className="page-title__sub">onboarding</span>
+          </h1>
+        </div>
+      </header>
 
       <ol className="stepper" aria-label="Onboarding steps">
         {stepMeta.map((s, i) => (
@@ -201,16 +204,14 @@ export function OnboardingScreen() {
             key={s.label}
             className={`stepper__item${i === step ? " is-active" : i < step ? " is-done" : ""}`}
           >
-            <span className="stepper__num" aria-hidden="true">
-              {String(i + 1).padStart(2, "0")}
-            </span>
-            <span className="stepper__label">{s.label}</span>
+            <span className="stepper__num">{s.label.split(" / ")[0]}</span>
+            <span className="stepper__label">{s.label.split(" / ")[1]}</span>
           </li>
         ))}
       </ol>
 
       <form
-        className="onboarding-card"
+        className="card-panel"
         onSubmit={(e) => {
           e.preventDefault();
           if (step === 2) void handleFinish();
@@ -218,15 +219,15 @@ export function OnboardingScreen() {
         }}
         noValidate
       >
-        <div className="onboarding-card__head">
-          <h2 className="onboarding-card__title">{stepMeta[step].label}</h2>
-          <p className="onboarding-card__desc">{stepMeta[step].desc}</p>
+        <div className="card-panel__head">
+          <h2 className="card-panel__title">{stepMeta[step].label.split(" / ")[1]}</h2>
+          <p className="card-panel__sub">{stepMeta[step].desc}</p>
         </div>
 
         {renderStep()}
         <FormError message={error} />
 
-        <div className="onboarding-card__actions">
+        <div className="form-card__actions">
           {step > 0 ? (
             <Button variant="secondary" onClick={() => setStep((s) => s - 1)}>
               Back
@@ -235,7 +236,7 @@ export function OnboardingScreen() {
             <span />
           )}
           <Button type="submit" variant="primary" disabled={finishing}>
-            {step < 2 ? "Next" : finishing ? "Ruling..." : "Open the dashboard"}
+            {step < 2 ? "Next" : finishing ? "Posting..." : "Open console"}
           </Button>
         </div>
       </form>

@@ -6,13 +6,13 @@ import { TransactionList } from "../components/transactions";
 import type { TransactionKind } from "../types";
 
 const FILTERS: { value: TransactionKind | "all"; label: string }[] = [
-  { value: "all", label: "All entries" },
+  { value: "all", label: "All" },
   { value: "money-in", label: "Money in" },
   { value: "money-out", label: "Money out" },
   { value: "transfer", label: "Transfers" },
 ];
 
-/** Full ledger view with filters and local deletion. */
+/** Ledger view with filters and local deletion. */
 export function TransactionsScreen() {
   const { transactions, setTransactions } = useAppState();
   const [filter, setFilter] = useState<TransactionKind | "all">("all");
@@ -32,15 +32,18 @@ export function TransactionsScreen() {
     setTransactions(transactions.filter((t) => t.id !== id));
   };
 
+  const total = useMemo(() => visible.reduce((acc, t) => acc + (t.kind === "money-in" ? t.amount : t.kind === "money-out" ? -t.amount : 0), 0), [visible]);
+
   return (
     <div className="list-page">
       <header className="page-head">
-        <div>
-          <p className="page-head__meta">The complete record</p>
+        <div className="page-head__left">
+          <p className="page-head__meta"><strong>LEDGER</strong> &middot; {visible.length} of {transactions.length} entries</p>
           <h1 className="page-title">
-            Ledger <em>book</em>
+            <span>Ledger</span>
+            <span className="page-title__sep">/</span>
+            <span className="page-title__sub">all entries, ruled order</span>
           </h1>
-          <p className="page-sub">Every money in, money out, and transfer, ruled in chronological order.</p>
         </div>
         <div className="page-head__actions">
           <Link className="btn btn--primary" to="/record/money-in">
@@ -49,7 +52,7 @@ export function TransactionsScreen() {
         </div>
       </header>
 
-      <div className="filter-row" role="group" aria-label="Filter ledger">
+      <div className="filter-strip" role="group" aria-label="Filter ledger">
         {FILTERS.map((f) => (
           <button
             key={f.value}
@@ -61,12 +64,13 @@ export function TransactionsScreen() {
             {f.label}
           </button>
         ))}
+        <span className="filter-strip__count">Net {total >= 0 ? "+" : "-"}{formatNet(total)}</span>
       </div>
 
       {visible.length === 0 ? (
         <EmptyState
-          title={filter === "all" ? "The ledger is empty" : "No entries in this filter"}
-          message="Money in, money out, or transfers will be ruled in here."
+          title="The book is empty"
+          message="Money in, money out, or transfers will be ruled in here. The ledger reads the same as the reports."
           action={
             <Link className="btn btn--primary" to="/record/money-in">
               Record the first entry
@@ -77,8 +81,6 @@ export function TransactionsScreen() {
         <TransactionList transactions={visible} onDelete={remove} />
       )}
 
-      <p className="list-card__footer">Showing {visible.length} of {transactions.length} entries</p>
-
       <div className="quick-actions">
         <Button to="/record/money-in" variant="secondary">Money in</Button>
         <Button to="/record/money-out" variant="secondary">Money out</Button>
@@ -86,4 +88,8 @@ export function TransactionsScreen() {
       </div>
     </div>
   );
+}
+
+function formatNet(n: number): string {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Math.abs(n));
 }

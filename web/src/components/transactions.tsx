@@ -1,16 +1,16 @@
 import type { Transaction } from "../types";
-import { formatIDR, formatDate } from "../lib/format";
+import { formatIDR } from "../lib/format";
 
 const KIND_LABEL: Record<Transaction["kind"], string> = {
-  "money-in": "In",
-  "money-out": "Out",
-  transfer: "Xfer",
+  "money-in": "IN",
+  "money-out": "OUT",
+  transfer: "XFER",
 };
 
 const KIND_CLASS: Record<Transaction["kind"], string> = {
-  "money-in": "tx-kind-mark--money-in",
-  "money-out": "tx-kind-mark--money-out",
-  transfer: "tx-kind-mark--transfer",
+  "money-in": "kind-mark--money-in",
+  "money-out": "kind-mark--money-out",
+  transfer: "kind-mark--transfer",
 };
 
 const SIGN_CLASS: Record<Transaction["kind"], string> = {
@@ -25,33 +25,35 @@ interface TransactionRowProps {
   action?: React.ReactNode;
 }
 
-/** One row in the ruled transaction list. */
+/** One row in the ruled transaction table. */
 export function TransactionRow({ transaction, action }: TransactionRowProps) {
   const positive = transaction.kind === "money-in";
   const neutral = transaction.kind === "transfer";
   const amount = positive
-    ? `+ ${formatIDR(transaction.amount)}`
+    ? `+${formatIDR(transaction.amount)}`
     : neutral
       ? formatIDR(transaction.amount)
-      : `- ${formatIDR(transaction.amount)}`;
+      : `-${formatIDR(transaction.amount)}`;
   const signClass = SIGN_CLASS[transaction.kind];
 
   return (
-    <li className="tx-table__row">
-      <span className="tx-table__date">{formatDate(transaction.date)}</span>
-      <div className="tx-table__desc">
-        <span className="tx-table__desc-title">
-          <span className={`tx-kind-mark ${KIND_CLASS[transaction.kind]}`}>{KIND_LABEL[transaction.kind]}</span>
-          {transaction.description || KIND_LABEL[transaction.kind]}
-        </span>
-        <span className="tx-table__desc-meta">
-          {transaction.from && transaction.to ? `${transaction.from} to ${transaction.to}` : formatDate(transaction.date)}
-        </span>
+    <div className="ledger-table__row">
+      <span className="ledger-table__date">{transaction.date}</span>
+      <div className="ledger-table__desc">
+        <span className={`kind-mark ${KIND_CLASS[transaction.kind]}`}>{KIND_LABEL[transaction.kind]}</span>
+        <div className="ledger-table__desc-text">
+          <span className="ledger-table__desc-title">{transaction.description || KIND_LABEL[transaction.kind]}</span>
+          <span className="ledger-table__desc-meta">
+            {transaction.from && transaction.to
+              ? `${transaction.from} to ${transaction.to}`
+              : `Ruled ${transaction.date}`}
+          </span>
+        </div>
       </div>
-      <span className="tx-table__cat">{transaction.categoryName ?? "Uncategorized"}</span>
-      <span className={`tx-table__amount ${signClass}`}>{amount}</span>
+      <span className="ledger-table__cat">{transaction.categoryName ?? "Uncategorized"}</span>
+      <span className={`ledger-table__amount ${signClass}`}>{amount}</span>
       {action ?? <span aria-hidden="true" />}
-    </li>
+    </div>
   );
 }
 
@@ -64,14 +66,14 @@ export function TransactionList({
   onDelete?: (id: string) => void;
 }) {
   return (
-    <ul className="tx-table">
-      <li className="tx-table__head">
+    <div className="ledger-table">
+      <div className="ledger-table__head">
         <span>Date</span>
         <span>Description</span>
         <span>Category</span>
-        <span style={{ textAlign: "right" }}>Amount</span>
+        <span className="right">Amount</span>
         <span aria-hidden="true" />
-      </li>
+      </div>
       {transactions.map((t) => (
         <TransactionRow
           key={t.id}
@@ -80,7 +82,7 @@ export function TransactionList({
             onDelete ? (
               <button
                 type="button"
-                className="tx-table__delete"
+                className="ledger-table__delete"
                 aria-label={`Delete entry ${t.description || "without description"}`}
                 onClick={() => onDelete(t.id)}
               >
@@ -90,6 +92,6 @@ export function TransactionList({
           }
         />
       ))}
-    </ul>
+    </div>
   );
 }

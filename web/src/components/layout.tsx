@@ -13,6 +13,7 @@ const NAV_OVERVIEW = [
   {
     to: "/dashboard",
     label: "Today",
+    hint: "T",
     icon: (
       <Icon>
         <rect x="3" y="4" width="18" height="17" rx="1.5" />
@@ -25,6 +26,7 @@ const NAV_OVERVIEW = [
   {
     to: "/transactions",
     label: "Ledger",
+    hint: "L",
     icon: (
       <Icon>
         <path d="M4 5h16" />
@@ -40,6 +42,7 @@ const NAV_RECORD = [
   {
     to: "/record/money-in",
     label: "Money in",
+    hint: "M+",
     icon: (
       <Icon>
         <path d="M12 4v12" />
@@ -51,6 +54,7 @@ const NAV_RECORD = [
   {
     to: "/record/money-out",
     label: "Money out",
+    hint: "M-",
     icon: (
       <Icon>
         <path d="M12 16V4" />
@@ -62,6 +66,7 @@ const NAV_RECORD = [
   {
     to: "/record/transfer",
     label: "Transfer",
+    hint: "Xfer",
     icon: (
       <Icon>
         <path d="M4 8h13l-3-3" />
@@ -71,17 +76,17 @@ const NAV_RECORD = [
   },
 ];
 
-/** Brand wordmark with italic ledger glyph. */
+/** Brand mark for the sidebar and auth screens. */
 export function Brand() {
   return (
     <Link to="/" className="brand" aria-label={`${wordmark} - back to home`}>
       <span className="brand__mark" aria-hidden="true" />
-      <span className="brand__name">Ledger<em>ly</em></span>
+      <span className="brand__name">{wordmark}</span>
     </Link>
   );
 }
 
-/** Main navigation shell for signed-in users (left sidebar). */
+/** Main navigation shell for signed-in users (slim dark sidebar). */
 export function AppShell() {
   const { user, business, setUser, setBusiness, setTransactions } = useAppState();
   const navigate = useNavigate();
@@ -129,14 +134,14 @@ export function AppShell() {
           <Brand />
         </div>
         <nav className="app-sidebar__nav" aria-label="Main menu">
-          <SidebarGroup label="Overview" items={NAV_OVERVIEW} onSelect={closeSidebar} />
+          <SidebarGroup label="Console" items={NAV_OVERVIEW} onSelect={closeSidebar} />
           <SidebarGroup label="Record" items={NAV_RECORD} onSelect={closeSidebar} />
         </nav>
         <div className="app-sidebar__footer">
-          <span className="app-sidebar__user" title={user?.email}>
-            Signed in as
+          <div className="app-sidebar__user">
+            <span>Signed in</span>
             <strong>{user?.businessName}</strong>
-          </span>
+          </div>
           <button type="button" className="btn btn--ghost btn--sm" onClick={handleLogout}>
             Sign out
           </button>
@@ -154,6 +159,7 @@ export function AppShell() {
 interface SidebarItem {
   to: string;
   label: string;
+  hint: string;
   icon: ReactNode;
 }
 
@@ -179,6 +185,7 @@ function SidebarGroup({
           >
             {item.icon}
             <span>{item.label}</span>
+            <span className="app-sidebar__link__meta">{item.hint}</span>
           </NavLink>
         ))}
       </div>
