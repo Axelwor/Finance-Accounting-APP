@@ -1,10 +1,9 @@
 /* ============================================================
-   Ledgerly - Corporate Accounting Console
-   A calm, paper-and-ink system inspired by professional accounting
-   publications (Deloitte, EY, McKinsey reports). Off-white canvas,
-   deep navy ink, single teal accent, Source Serif 4 display, Inter
-   body, IBM Plex Mono for data. Ruled surfaces, soft hairline borders,
-   controlled shadow only on elevated proofs.
+   Ledgerly — Wave-inspired corporate system
+   White workspace, cool slate panels, deep navy ink, single blue
+   primary, green for positive only. Inter sans body + display,
+   IBM Plex Mono for numeric data. Soft hairlines, controlled shadow
+   only on elevated proofs.
 
    Tokens live in :root. Components only consume tokens.
    ============================================================ */

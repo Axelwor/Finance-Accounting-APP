@@ -39,7 +39,7 @@ export function AuthScreen() {
       }
       navigate("/onboarding", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not reach the console. Try again.");
+      setError(err instanceof Error ? err.message : "Could not reach the server. Try again.");
     } finally {
       setLoading(false);
     }
@@ -53,23 +53,22 @@ export function AuthScreen() {
           <span className="brand__name">{wordmark}</span>
         </div>
         <div className="auth__copy-meta">
-          <span className="dot" aria-hidden="true" />
-          <span>OPERATING CONSOLE / SESSION 01</span>
+          <span className="pos-dot" aria-hidden="true" />
+          <span>No sync, no double-entry — one book</span>
         </div>
         <div className="auth__copy">
           <h1 className="auth__title">
-            One book.<span className="slash"> </span>
-            <em>Every line ruled.</em>
+            Double-entry, simple<span className="slash">.</span>
+            <em> No accounting degree.</em>
           </h1>
           <p className="auth__lede">
-            Money in, money out, transfer, close — written once in a ruled register
-            that feeds the same source your accountant reads. No syncing, no second
-            ledger, no surprises at period end.
+            Money in, money out, transfers, and period close — written to one
+            ledger your accountant trusts, ready for tax season.
           </p>
         </div>
         <div className="auth__signoff">
-          <span><strong>Ledgerly</strong> &middot; accounting console</span>
-          <span>Build <span className="pos">M1</span> &middot; IDR primary</span>
+          <span><strong>Ledgerly</strong> &middot; bookkeeping for small business</span>
+          <span>M1 &middot; IDR</span>
         </div>
       </div>
 
