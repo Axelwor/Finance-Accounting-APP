@@ -75,7 +75,9 @@ func (service *Service) ProfitLoss(writer http.ResponseWriter, request *http.Req
 func (service *Service) BalanceSheet(writer http.ResponseWriter, request *http.Request) {
 	tenantID := tenantFrom(request)
 	rows, err := service.pool.Query(request.Context(), `
-		SELECT a.report_group, COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0)
+		SELECT a.report_group, COALESCE(SUM(CASE
+			WHEN a.report_group = 'asset' THEN jl.debit_cents - jl.credit_cents
+			ELSE jl.credit_cents - jl.debit_cents END), 0)
 		FROM journal_lines jl
 		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
 		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
