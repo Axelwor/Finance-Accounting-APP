@@ -11,15 +11,15 @@ import { WorkArea } from "./WorkArea";
 export function AppShell() {
   return (
     <div className="app-shell">
-      <TopBar />
       <Sidebar />
-      <main className="app-main" role="main">
+      <div className="app-main" role="main">
+        <TopBar />
         <TabStrip />
         <div className="app-main__inner">
           <Outlet />
+          <WorkArea />
         </div>
-        <WorkArea />
-      </main>
+      </div>
     </div>
   );
 }

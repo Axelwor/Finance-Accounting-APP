@@ -170,9 +170,7 @@ button { cursor: pointer; }
 
 .app-shell {
   display: grid;
-  grid-template-columns: 240px 1fr;
-  grid-template-rows: 56px 1fr;
-  grid-template-areas: "sidebar topbar" "sidebar workarea";
+  grid-template-columns: 240px minmax(0, 1fr);
   min-height: 100vh;
   background: var(--canvas);
 }
@@ -283,11 +281,23 @@ button { cursor: pointer; }
   background: rgba(20, 32, 54, 0.4);
 }
 
-.app-main { min-width: 0; }
+.app-main {
+  min-width: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas);
+}
 .app-main__inner {
+  flex: 1;
+  min-width: 0;
   max-width: 1320px;
+  width: 100%;
   margin: 0 auto;
   padding: var(--u-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--u-5);
 }
 
 /* ------------------------------------------------------------
@@ -1586,9 +1596,10 @@ select.input {
    ------------------------------------------------------------ */
 
 .workarea {
+  flex: 1;
+  min-height: 0;
   padding: var(--u-6);
   background: var(--canvas);
-  min-height: calc(100vh - 56px);
 }
 .workarea--empty { display: flex; align-items: center; justify-content: center; }
 
