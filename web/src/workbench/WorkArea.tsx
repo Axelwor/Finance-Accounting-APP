@@ -4,6 +4,12 @@ import type { Tab } from "./types";
 import { CashEntryList } from "../screens/list/CashEntryList";
 import { CashEntryForm } from "../screens/entry/CashEntryForm";
 import { TrialBalanceReport, ProfitLossReport, BalanceSheetReport, CashFlowReport } from "../screens/list/Reports";
+import { SalesInvoiceList, SalesReceiptList } from "../screens/list/Sales";
+import { PurchaseInvoiceList, PurchasePaymentList } from "../screens/list/Purchases";
+import { InventoryItemsList, StockMovementsList } from "../screens/list/Inventory";
+import { AssetRegisterList } from "../screens/list/Assets";
+import { MockEntryForm } from "../screens/entry/MockEntryForm";
+import { defaultEntryTitle } from "./modules";
 
 /**
  * Work area: renders the active tab's content, or an empty state when
@@ -65,7 +71,21 @@ function TabContent({ tab }: { tab: Tab }) {
             fixedKind="transfer"
           />
         );
-      // Reports (read-only) and mocked modules get placeholder for now.
+      case "sales-invoice":
+        return <SalesInvoiceList />;
+      case "sales-receipt":
+        return <SalesReceiptList />;
+      case "purchase-invoice":
+        return <PurchaseInvoiceList />;
+      case "purchase-payment":
+        return <PurchasePaymentList />;
+      case "inventory-items":
+        return <InventoryItemsList />;
+      case "stock-movements":
+        return <StockMovementsList />;
+      case "asset-register":
+        return <AssetRegisterList />;
+      // Reports (read-only) — kept from step 4.
       case "report-trial-balance":
         return <TrialBalanceReport />;
       case "report-profit-loss":
@@ -74,8 +94,12 @@ function TabContent({ tab }: { tab: Tab }) {
         return <BalanceSheetReport />;
       case "report-cash-flow":
         return <CashFlowReport />;
-      default:
-        return <PlaceholderTab title={tab.title} sub={`list · ${tab.subKind}`} />;
+      default: {
+        // Exhaustiveness — should be unreachable once all sub-kinds are
+        // wired. Cast keeps a friendly fallback while satisfying TS.
+        const fallback = tab as Tab;
+        return <PlaceholderTab title={fallback.title} sub={`list · ${fallback.subKind}`} />;
+      }
     }
   }
 
@@ -92,8 +116,24 @@ function TabContent({ tab }: { tab: Tab }) {
           initialTitle={tab.title}
         />
       );
-    default:
-      return <PlaceholderTab title={tab.title} sub={`entry · ${tab.subKind}`} />;
+    case "sales-invoice":
+    case "sales-receipt":
+    case "purchase-invoice":
+    case "purchase-payment":
+    case "inventory-item":
+    case "asset-register":
+      return (
+        <MockEntryForm
+          tabId={tab.id}
+          subKind={tab.subKind}
+          title={defaultEntryTitle(tab.subKind)}
+          initialTitle={tab.title}
+        />
+      );
+    default: {
+      const fallback = tab as Tab;
+      return <PlaceholderTab title={fallback.title} sub={`entry · ${fallback.subKind}`} />;
+    }
   }
 }
 
