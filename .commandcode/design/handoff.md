@@ -1,12 +1,11 @@
-# Wave Corporate Handoff Notes
+# Ledgerly Handoff Notes (Accurate-inspired corporate)
 
-**Date:** 2026-08-07  
-**Status:** Deployed live to `https://accounting.tikuma.net` (commit `2b50177`)  
+**Date:** 2026-08-08  
+**Status:** Deployed live to `https://accounting.tikuma.net` (latest `main`)  
 **Brand:** Ledgerly (English, M1, IDR)
+**Visual direction:** Accurate-inspired corporate (white workspace, cool slate panels, navy ink, brand blue `#2f80ed` accent). See `docs/UI_CONTRACT.md` v0.4.0 and `.commandcode/design/brief.md` for the locked token set.
 
 ## Design System
-
-### Colors (Wave-inspired corporate)
 | Token | Hex | Use |
 |---|---|---|
 | `--canvas` | `#f5f7fa` | Page workspace background |
@@ -103,6 +102,10 @@ Caddy restarts automatically on container recreate.
 ```bash
 curl -s https://accounting.tikuma.net/ | grep -oE 'assets/index-[A-Za-z0-9_-]+\.css'
 curl -s https://accounting.tikuma.net/assets/index-*.css | grep -oE '#[0-9a-f]{6}' | sort -u
+### Verify
+```bash
+curl -s https://accounting.tikuma.net/ | grep -oE 'assets/index-[A-Za-z0-9_-]+\.css'
+curl -s https://accounting.tikuma.net/assets/index-*.css | grep -oE '#[0-9a-f]{6}' | sort -u
 # Expected present: #ffffff #f5f7fa #18324b #2f80ed #27966f
-# Expected absent: #f7f5f0 #0d7370 #2f5d4a #0a0f14
+# Expected absent: any cream (#f7f5f0), teal accent (#0d7370), or legacy Wave tokens
 ```

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- SPEC-001: synced durable design docs to the live Accurate-inspired corporate direction. `docs/UI_CONTRACT.md` bumped to v0.4.0 with the actual `web/src/styles.css` token set (canvas `#f5f7fa`, accent `#2f80ed`, navy ink, Inter + IBM Plex Mono). `.commandcode/design/brief.md` rewritten to mark the previous Wave-teal / cream / Source Serif / ruled-sheet direction as superseded and to record Accurate Online as the authoritative layout reference. `.commandcode/design/handoff.md` heading and "Expected absent" tokens updated. No source-code change; `web/src/styles.css` was already the source of truth and remains unchanged.
 - Bootstrapped the Go backend and React/Vite frontend skeleton.
 - Added durable AI Agent task ledger and repository governance.
 - Installed project-level Taste Skill and Ponytail skills.
@@ -46,7 +47,7 @@
 
 ## DBG-UI-003 — Compact density + filled active tabs + accent-strip headers
 
-Audit-driven refresh of Cash & Bank visual hierarchy to match the Accurate Online reference while keeping the Wave Corporate brand. Three user-confirmed decisions drove the work: Save button = `#2f80ed` brand blue, density = compact, active tab = filled `--accent` background.
+Audit-driven refresh of Cash & Bank visual hierarchy to match the Accurate Online reference (Accurate-inspired corporate direction, SPEC-001). Three user-confirmed decisions drove the work: Save button = `#2f80ed` brand blue, density = compact, active tab = filled `--accent` background.
 
 - **Compact density**: form padding 20px → 16px, section gap 16px → 12px, field input 36px → 32px, label uppercase tightened, detail-grid row padding 8/12 → 4/12 with 32px min-height and hover accent-soft, module/content gap 16px → 8px, workarea padding 24px → 16px.
 - **Active tab filled**: top-level `.tabpill.is-active` becomes `var(--accent)` background + white text; nested-tabpill gets the same treatment for visual continuity. Tabstrip height 40px → 44px. Inactive `.tabpill__kind`, `.tabpill__status`, `.tabpill__close` recolor to white. `.tabpill__title::after` (unsaved dot) stays warning amber for legibility on the blue background.
