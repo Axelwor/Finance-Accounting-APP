@@ -138,7 +138,7 @@ export function Sidebar() {
       />
       <aside ref={rootRef} className={`sidebar${mobileOpen ? " is-open" : ""}`} aria-label="Modules">
         <div className="sidebar__brand">
-          <span className="sidebar__brand-label">Console</span>
+          <span className="sidebar__brand-label">Business tools</span>
         </div>
         <nav className="sidebar__nav">
           {MODULES.map((mod) => {
@@ -173,7 +173,6 @@ export function Sidebar() {
                     <Icon name={mod.icon} />
                   </span>
                   <span className="sidebar-module__label">{mod.label}</span>
-                  <span className="sidebar-module__count">{mod.items.length}</span>
                   <span className="sidebar-module__chevron" aria-hidden="true">›</span>
                 </button>
                 {/*
@@ -205,8 +204,7 @@ export function Sidebar() {
                           onClick={() => handleSubClick(sub)}
                         >
                           <span className="sidebar-subitem__label">{sub.label}</span>
-                          {sub.hint ? <span className="sidebar-subitem__hint">{sub.hint}</span> : null}
-                          {sub.mockData ? <span className="sidebar-subitem__mock">DEMO</span> : null}
+                          {sub.mockData ? <span className="sidebar-subitem__mock">Demo</span> : null}
                         </button>
                       </li>
                     ))}
