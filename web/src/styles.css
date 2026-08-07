@@ -41,7 +41,7 @@
   --warning-soft: rgba(184, 122, 46, 0.1);
 
   /* Type */
-  --font-display: "Source Serif 4", "Source Serif Pro", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --font-display: "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --font-sans: "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
@@ -66,6 +66,35 @@
 
   --shadow-card: 0 1px 2px rgba(20, 32, 54, 0.04), 0 8px 24px -12px rgba(20, 32, 54, 0.08);
   --shadow-pop: 0 12px 28px -10px rgba(20, 32, 54, 0.18);
+
+  /* Compatibility aliases used by the workbench layer. Every alias maps
+     back to the corporate palette above, so no legacy tech token can
+     silently fall back to transparent or black. */
+  --surface-canvas: var(--canvas);
+  --surface-panel: var(--paper);
+  --surface-well: var(--panel);
+  --surface-elev: var(--paper-elev);
+  --surface-hover: var(--panel-hover);
+  --ink-primary: var(--ink-deep);
+  --ink-tertiary: var(--ink-muted);
+  --ink-dim: var(--ink-faint);
+  --rule-bright: var(--rule-strong);
+  --pos: var(--positive);
+  --pos-soft: var(--positive-soft);
+  --neg: var(--negative);
+  --neg-soft: var(--negative-soft);
+  --acc: var(--accent);
+  --acc-soft: var(--accent-soft);
+  --warn: var(--warning);
+  --warn-soft: var(--warning-soft);
+  --space-1: var(--u-1);
+  --space-2: var(--u-2);
+  --space-3: var(--u-3);
+  --space-4: var(--u-4);
+  --space-5: var(--u-5);
+  --space-6: var(--u-6);
+  --space-7: var(--u-7);
+  --space-8: var(--u-8);
 
   font-family: var(--font-sans);
   color: var(--ink);

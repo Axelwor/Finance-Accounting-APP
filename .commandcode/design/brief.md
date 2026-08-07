@@ -36,28 +36,29 @@ Future surfaces (period close, reports) will lean **Monitor** + **Operate**. Com
 - One verb per button ("Rule money in", "Reopen period", "Sign in"). Loading copy names the actual work ("Stamping the day...", "Preparing the entry...", "Ruling...").
 - Errors are recovery paths, never blame. Empty states teach the space ("The ledger is empty — open it with your first money in or money out").
 
-## Visual Foundation (Tactile Operations Console — locked)
+## Visual Foundation (Wave-inspired Corporate Accounting Console — locked)
 
 | Token | Value | Role |
 |---|---|---|
-| `--ink-deep` | `#0f1a17` | Display text, deepest body |
-| `--ink-graphite` | `#1c2530` | Primary text, sidebar background, primary button |
-| `--ink-muted` | `#5a6470` | Secondary text, hints |
-| `--ink-faint` | `#8a929c` | Tertiary, captions |
-| `--paper` | `#f5efe2` | Page background (with faint horizontal ruling) |
-| `--paper-warm` | `#efe7d6` | Hover surface, balance summary |
-| `--paper-card` | `#fbf6e9` | Elevated cards, forms |
-| `--rule-soft` | `#ddd3bd` | Soft divider |
-| `--rule-strong` | `#8a7f5c` | Heavy divider, button outline |
-| `--ledger` | `#2f5d4a` | Accent — single role, ink underline, active marker |
-| `--negative` | `#8a2e1f` | Money out, errors |
-| `--amber` | `#a37226` | Reserved for warning states |
-| `--rust` | `#8a4b2a` | Reserved for legacy / migration states |
+| `--ink-deep` | `#142036` | Primary headings and strongest text |
+| `--ink` | `#1f2c46` | Body text and controls |
+| `--ink-secondary` | `#4f5b71` | Supporting text |
+| `--ink-muted` | `#7d8597` | Metadata and hints |
+| `--canvas` | `#f7f5f0` | Warm off-white application canvas |
+| `--paper` | `#fbfaf6` | Sidebar and top navigation surface |
+| `--paper-elev` | `#ffffff` | Elevated cards and forms |
+| `--panel` | `#f2efe8` | Hover and selected surfaces |
+| `--rule-soft` | `#e6e2d8` | Soft divider |
+| `--rule-strong` | `#b9b1a0` | Input and control borders |
+| `--accent` | `#0d7370` | Single corporate teal accent |
+| `--positive` | `#2d7a5c` | Money in and balanced status |
+| `--negative` | `#a8443b` | Money out and errors |
+| `--warning` | `#b87a2e` | Attention states |
 
 Typography:
-- Display: `Iowan Old Style → Source Serif Pro → Georgia, serif`. Used for headings, page titles, the today-stamp amount. Italic on the brand glyph "ly" and on emphasized nouns.
-- Sans: system stack (`Segoe UI → system-ui → ...`). Body, buttons, navigation, field labels.
-- Mono: `IBM Plex Mono → ui-monospace → SF Mono`. Currency amounts, dates, status codes, journal numbers, kind marks, all button labels (uppercase), all section meta and page-head meta. Tabular numerals enabled on amounts.
+- Primary type: `Inter → Segoe UI → system-ui`. Headings, body, buttons, navigation, and field labels all use the same corporate sans family. No serif display layer.
+- Mono: `IBM Plex Mono → ui-monospace → SF Mono`. Currency amounts, dates, status codes, journal numbers, kind marks, and compact metadata only. Tabular numerals enabled on amounts.
+- Type scale is restrained: page titles around 30px, section titles around 18px, body 14-15px, metadata 11-12px. No oversized marketing headline.
 
 Spacing: `1 / 4 / 9 unit` rhythm — `--u-1: 4px`, `--u-2: 8px`, `--u-3: 12px`, `--u-4: 16px`, `--u-5: 24px`, `--u-6: 36px`, `--u-7: 56px`, `--u-8: 80px`. No in-between.
 
@@ -69,15 +70,15 @@ Surface texture: faint horizontal ruling on `body` and `app-main` (`repeating-li
 
 ## Component Rules
 
-- **Sidebar:** fixed left column, graphite background, brand at top, grouped sections (Overview / Record) with mono labels, each item with inline SVG icon and a 2px ledger-green left rule when active. Footer holds user identity + Sign out.
-- **Page head:** date meta (mono uppercase) → display title (serif, with one italic emphasis word) → sub copy → page-head actions on the right. Bottom border in ink-graphite.
-- **Ledger stamp:** bordered proof object on the dashboard, inner border (1px from outer 6px), mono label "Cash & Bank — Today's Standing" + mono date stamp, large serif amount, two-cell ledger sub-row.
-- **Ledger rows:** ruled horizontal rows, label + mono note + value. Used for KPIs on the dashboard.
-- **Transaction table:** 5-column ruled table (date, kind-mark + description + meta, category, amount, action). Mono amounts in tabular numerals with sign (`+`, `-`, or none). Kind marks are bordered pills (`IN`, `OUT`, `XFER`).
-- **Forms:** hairline-only inputs (single bottom border in ink-graphite), mono uppercase labels, large mono suffix for currency. Two-column rows for related fields.
-- **Buttons:** square, 1px ink border, uppercase mono labels, no rounded corners. Variants: primary (graphite fill), secondary (outline), ghost, danger, ink (ledger-green fill for standout).
-- **Filters:** mono uppercase, no background, ink-graphite underline activates on selection. Bottom rule separates filter row from content.
-- **Period card:** bordered stamp with mono header row, ledger green status line with mono journal code chip.
+- **Sidebar:** light paper surface, deep navy text, small restrained icons, teal left rule for the active module. Hover submenu is a white elevated popup with a subtle shadow and clear sub-item hierarchy. It must remain usable by mouse, keyboard, and touch.
+- **Top bar:** light paper surface with Ledgerly mark, LIVE indicator, company name, clock, session context, and Sign out. 56px maximum height.
+- **Page head:** compact sans title + supporting copy + actions. Avoid editorial slogans and decorative timestamp strips.
+- **Dashboard proof:** four corporate metric cards with restrained borders and minimal shadow, followed by a ruled recent-entry table. Metrics are the proof object.
+- **Transaction table:** 5-column ruled table (date, kind mark + description + meta, category, amount, action). Mono only for dates/amounts/status. Kind marks use quiet outlined badges (`IN`, `OUT`, `XFER`).
+- **Forms:** white elevated form panels on warm canvas, visible labels above inputs, quiet bottom-border inputs, two-column related fields, clear primary action footer.
+- **Buttons:** modest 4px radius, sentence case sans labels, navy primary, white outlined secondary, teal only for key positive/action states.
+- **Filters:** light outlined controls in a compact toolbar; active filter uses teal border/text, not a filled neon pill.
+- **Period card:** white corporate card with navy heading, muted explanation, teal status line, and small journal code.
 
 ## Composition Lanes (allowed)
 
