@@ -39,6 +39,10 @@ func (service *Service) Routes(router chi.Router) {
 	router.Post("/goods-received-notes", service.CreateGRN)
 	router.Get("/goods-received-notes", service.ListGRNs)
 	router.Get("/goods-received-notes/{id}", service.GetGRN)
+
+	router.Post("/purchase-returns", service.CreatePurchaseReturn)
+	router.Get("/purchase-returns", service.ListPurchaseReturns)
+	router.Get("/purchase-returns/{id}", service.GetPurchaseReturn)
 }
 
 // ---------------------------------------------------------------------------

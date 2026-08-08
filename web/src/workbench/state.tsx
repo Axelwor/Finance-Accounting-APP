@@ -353,6 +353,8 @@ function entryKindToListKind(kind: EntrySubKind): ListSubKind | null {
       return "purchase-invoice";
     case "purchase-payment":
       return "purchase-payment";
+    case "purchase-return-entry":
+      return "purchase-return";
     case "inventory-item":
       return "inventory-items";
     case "asset-register":
