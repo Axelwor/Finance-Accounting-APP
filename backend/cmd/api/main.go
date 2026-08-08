@@ -121,6 +121,13 @@ func main() {
 
 			purchaseHandler := purchase.NewHandler(pool)
 			purchaseHandler.Routes(router)
+
+			// Supplier payments (Bayar) — POST/GET /supplier-invoices/{id}/payments.
+			// Added separately from purchaseHandler.Routes so they stay grouped with
+			// the supplier-invoice endpoints; safe whether or not the
+			// supplier-invoice routes have been registered yet (chi merges by path).
+			router.Post("/supplier-invoices/{id}/payments", purchaseHandler.CreateSupplierPayment)
+			router.Get("/supplier-invoices/{id}/payments", purchaseHandler.ListSupplierPayments)
 		})
 	})
 

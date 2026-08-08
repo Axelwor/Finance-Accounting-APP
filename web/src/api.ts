@@ -68,6 +68,8 @@ import type {
   GoodsReceivedNote,
   GoodsReceivedNoteListItem,
   CreateGRNInput,
+  SupplierPayment,
+  CreateSupplierPaymentInput,
 } from "./types";
 
 const LATENCY_MS = 200;
@@ -1005,6 +1007,27 @@ export const api = {
       idempotencyKey: newIdempotencyKey(),
       body: JSON.stringify(input),
     });
+  },
+
+  // -- Supplier Payments (Bayar) --
+
+  /** Receive a supplier payment against a supplier invoice (POST /supplier-invoices/{id}/payments). */
+  async createSupplierPayment(invoiceId: number, input: CreateSupplierPaymentInput): Promise<SupplierPayment> {
+    return http<SupplierPayment>(`/supplier-invoices/${invoiceId}/payments`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** List payments for a supplier invoice. */
+  async listSupplierPayments(invoiceId: number): Promise<SupplierPayment[]> {
+    try {
+      return await http<SupplierPayment[]>(`/supplier-invoices/${invoiceId}/payments`, { auth: true });
+    } catch {
+      return [];
+    }
   },
 
   /**
