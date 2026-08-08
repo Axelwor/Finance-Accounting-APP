@@ -121,6 +121,10 @@ func main() {
 
 			purchaseHandler := purchase.NewHandler(pool)
 			purchaseHandler.Routes(router)
+
+			router.Post("/supplier-invoices", purchaseHandler.CreateSupplierInvoice)
+			router.Get("/supplier-invoices", purchaseHandler.ListSupplierInvoices)
+			router.Get("/supplier-invoices/{id}", purchaseHandler.GetSupplierInvoice)
 		})
 	})
 

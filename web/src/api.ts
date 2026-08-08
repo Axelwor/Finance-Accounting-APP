@@ -68,6 +68,9 @@ import type {
   GoodsReceivedNote,
   GoodsReceivedNoteListItem,
   CreateGRNInput,
+  SupplierInvoice,
+  SupplierInvoiceListItem,
+  CreateSupplierInvoiceInput,
 } from "./types";
 
 const LATENCY_MS = 200;
@@ -1000,6 +1003,31 @@ export const api = {
 
   async createGRN(input: CreateGRNInput): Promise<GoodsReceivedNote> {
     return http<GoodsReceivedNote>("/goods-received-notes", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Supplier invoice (Tagihan) list (GET /supplier-invoices). Optional status filter. */
+  async listSupplierInvoices(status?: string): Promise<SupplierInvoiceListItem[]> {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+    try {
+      return await http<SupplierInvoiceListItem[]>(`/supplier-invoices${qs}`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Get one supplier invoice with lines. */
+  async getSupplierInvoice(id: number): Promise<SupplierInvoice> {
+    return http<SupplierInvoice>(`/supplier-invoices/${id}`, { auth: true });
+  },
+
+  /** Create a supplier invoice (POST /supplier-invoices). Posts reclassification journal. */
+  async createSupplierInvoice(input: CreateSupplierInvoiceInput): Promise<SupplierInvoice> {
+    return http<SupplierInvoice>("/supplier-invoices", {
       method: "POST",
       auth: true,
       idempotencyKey: newIdempotencyKey(),

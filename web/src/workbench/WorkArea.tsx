@@ -26,6 +26,7 @@ import {
   PurchaseInvoiceList,
   PurchasePaymentList,
 } from "../screens/list/Purchases";
+import { SupplierInvoiceList } from "../screens/list/SupplierInvoiceList";
 import {
   InventoryItemsList,
   StockMovementsList,
@@ -40,6 +41,7 @@ import { CreditNoteForm } from "../screens/entry/CreditNoteForm";
 import { PurchaseOrderForm } from "../screens/entry/PurchaseOrderForm";
 import { GRNForm } from "../screens/entry/GRNForm";
 import { PurchaseSupplierForm } from "../screens/entry/PurchaseSupplierForm";
+import { SupplierInvoiceForm } from "../screens/entry/SupplierInvoiceForm";
 import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
@@ -179,6 +181,8 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <GRNList />;
     case "purchase-supplier":
       return <PurchaseSupplierList />;
+    case "supplier-invoice":
+      return <SupplierInvoiceList />;
     case "purchase-invoice":
       return <PurchaseInvoiceList />;
     case "purchase-payment":
@@ -243,6 +247,8 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
       return <PurchaseOrderForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "grn-entry":
       return <GRNForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "supplier-invoice-entry":
+      return <SupplierInvoiceForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "purchase-supplier-entry":
       return <PurchaseSupplierForm />;
     default:

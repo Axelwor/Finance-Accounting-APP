@@ -40,7 +40,7 @@ const purchases: Module = {
     { id: "pu-po", label: "Purchase Orders", hint: "PO", openList: "purchase-order", openEntry: "purchase-order-entry" },
     { id: "pu-grn", label: "Goods Received", hint: "GRN", openList: "grn", openEntry: "grn-entry" },
     { id: "pu-supplier", label: "Suppliers", hint: "SUP", openList: "purchase-supplier", openEntry: "purchase-supplier-entry" },
-    { id: "pu-invoice", label: "Supplier Invoices", hint: "BIL", openList: "purchase-invoice", openEntry: "purchase-invoice", mockData: true },
+    { id: "pu-invoice", label: "Supplier Invoices", hint: "BIL", openList: "supplier-invoice", openEntry: "supplier-invoice-entry" },
     { id: "pu-payment", label: "Purchase Payments", hint: "PAY", openList: "purchase-payment", openEntry: "purchase-payment", mockData: true },
   ],
 };
@@ -121,6 +121,8 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Goods Received Notes";
     case "purchase-supplier":
       return "Suppliers";
+    case "supplier-invoice":
+      return "Supplier Invoices";
     case "purchase-invoice":
       return "Purchase Invoices";
     case "purchase-payment":
@@ -171,6 +173,8 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Supplier";
     case "purchase-invoice":
       return "Purchase Invoice";
+    case "supplier-invoice-entry":
+      return "Supplier Invoice";
     case "purchase-payment":
       return "Purchase Payment";
     case "inventory-item":
@@ -196,6 +200,7 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "grn-entry": return "GRN-DRAFT";
     case "purchase-supplier-entry": return "SUP-DRAFT";
     case "purchase-invoice": return "PI-DRAFT";
+    case "supplier-invoice-entry": return "BIL-DRAFT";
     case "purchase-payment": return "PP-DRAFT";
     case "inventory-item": return "IT-DRAFT";
     case "asset-register": return "FA-DRAFT";

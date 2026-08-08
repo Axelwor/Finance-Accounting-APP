@@ -24,6 +24,7 @@ export type ListSubKind =
   | "grn"
   | "purchase-supplier"
   | "purchase-invoice"
+  | "supplier-invoice"
   | "purchase-payment"
   | "inventory-items"
   | "stock-movements"
@@ -48,6 +49,7 @@ export type EntrySubKind =
   | "grn-entry"
   | "purchase-supplier-entry"
   | "purchase-invoice"
+  | "supplier-invoice-entry"
   | "purchase-payment"
   | "inventory-item"
   | "asset-register";
@@ -832,4 +834,26 @@ export interface CreateGRNInput {
   grn_date: string;
   notes?: string;
   lines: GRNLineInput[];
+}
+
+/* Supplier Invoice (Tagihan) */
+export interface SupplierInvoiceListItem {
+  id: number; number: string; supplier_id: number; supplier_name?: string;
+  grn_id?: number; invoice_date: string; due_date?: string;
+  supplier_invoice_number?: string; dpp_cents: number; vat_cents: number;
+  total_cents: number; dp_applied_cents: number; payable_cents: number;
+  status: "ISSUED"|"PARTIALLY_PAID"|"PAID"|"VOID"; journal_entry_id?: number;
+}
+export interface SupplierInvoiceLine {
+  id: number; item_id: number; item_code?: string; item_name?: string;
+  line_no: number; qty: string; unit_price_cents: number; discount_cents: number;
+  tax_rate: number; line_total_cents: number; description?: string;
+}
+export interface SupplierInvoice extends SupplierInvoiceListItem { notes?: string; lines: SupplierInvoiceLine[]; }
+export interface SupplierInvoiceLineInput {
+  item_id: number; qty: number; unit_price_cents: number; discount_cents: number; tax_rate: number; description?: string;
+}
+export interface CreateSupplierInvoiceInput {
+  supplier_id: number; grn_id?: number; invoice_date: string; due_date?: string;
+  supplier_invoice_number?: string; notes?: string; lines: SupplierInvoiceLineInput[];
 }
