@@ -67,6 +67,16 @@
 | POST | `/credit-notes` | Create credit note (CN) — posts return + COGS reversal |
 | GET | `/credit-notes` | List credit notes (optional `?status=`) |
 | GET | `/credit-notes/{id}` | Get credit note with lines |
+| POST | `/suppliers` | Create supplier |
+| GET | `/suppliers` | List suppliers |
+| GET | `/suppliers/{id}` | Get supplier |
+| POST | `/suppliers/{id}/deactivate` | Deactivate supplier |
+| POST | `/purchase-orders` | Create purchase order (PO) — no journal |
+| GET | `/purchase-orders` | List purchase orders (optional `?status=`) |
+| GET | `/purchase-orders/{id}` | Get purchase order with lines |
+| POST | `/goods-received-notes` | Create GRN — posts Dr Inventory / Cr Accrued Payables |
+| GET | `/goods-received-notes` | List GRNs (optional `?status=`) |
+| GET | `/goods-received-notes/{id}` | Get GRN with lines |
 
 ### Sales Quotation Notes
 

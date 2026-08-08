@@ -37,7 +37,10 @@ const purchases: Module = {
   label: "Purchases",
   icon: "purchase",
   items: [
-    { id: "pu-invoice", label: "Purchase Invoices", hint: "BIL", openList: "purchase-invoice", openEntry: "purchase-invoice", mockData: true },
+    { id: "pu-po", label: "Purchase Orders", hint: "PO", openList: "purchase-order", openEntry: "purchase-order-entry" },
+    { id: "pu-grn", label: "Goods Received", hint: "GRN", openList: "grn", openEntry: "grn-entry" },
+    { id: "pu-supplier", label: "Suppliers", hint: "SUP", openList: "purchase-supplier", openEntry: "purchase-supplier-entry" },
+    { id: "pu-invoice", label: "Supplier Invoices", hint: "BIL", openList: "purchase-invoice", openEntry: "purchase-invoice", mockData: true },
     { id: "pu-payment", label: "Purchase Payments", hint: "PAY", openList: "purchase-payment", openEntry: "purchase-payment", mockData: true },
   ],
 };
@@ -112,6 +115,12 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Delivery Orders";
     case "credit-note":
       return "Credit Notes";
+    case "purchase-order":
+      return "Purchase Orders";
+    case "grn":
+      return "Goods Received Notes";
+    case "purchase-supplier":
+      return "Suppliers";
     case "purchase-invoice":
       return "Purchase Invoices";
     case "purchase-payment":
@@ -154,6 +163,12 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Delivery Order";
     case "credit-note-entry":
       return "Credit Note";
+    case "purchase-order-entry":
+      return "Purchase Order";
+    case "grn-entry":
+      return "Goods Received Note";
+    case "purchase-supplier-entry":
+      return "Supplier";
     case "purchase-invoice":
       return "Purchase Invoice";
     case "purchase-payment":
@@ -177,6 +192,9 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "sales-order-entry": return "SO-DRAFT";
     case "delivery-order-entry": return "DO-DRAFT";
     case "credit-note-entry": return "CN-DRAFT";
+    case "purchase-order-entry": return "PO-DRAFT";
+    case "grn-entry": return "GRN-DRAFT";
+    case "purchase-supplier-entry": return "SUP-DRAFT";
     case "purchase-invoice": return "PI-DRAFT";
     case "purchase-payment": return "PP-DRAFT";
     case "inventory-item": return "IT-DRAFT";

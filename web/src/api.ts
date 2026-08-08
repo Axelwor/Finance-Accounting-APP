@@ -59,6 +59,15 @@ import type {
   CreditNote,
   CreditNoteListItem,
   CreateCreditNoteInput,
+  Supplier,
+  SupplierListItem,
+  CreateSupplierInput,
+  PurchaseOrder,
+  PurchaseOrderListItem,
+  CreatePurchaseOrderInput,
+  GoodsReceivedNote,
+  GoodsReceivedNoteListItem,
+  CreateGRNInput,
 } from "./types";
 
 const LATENCY_MS = 200;
@@ -922,6 +931,75 @@ export const api = {
   /** Create a credit note (POST /credit-notes). Posts return + COGS reversal journals. */
   async createCreditNote(input: CreateCreditNoteInput): Promise<CreditNote> {
     return http<CreditNote>("/credit-notes", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  // -- Suppliers --
+
+  async listSuppliers(): Promise<SupplierListItem[]> {
+    try {
+      return await http<SupplierListItem[]>("/suppliers", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  async getSupplier(id: number): Promise<Supplier> {
+    return http<Supplier>(`/suppliers/${id}`, { auth: true });
+  },
+
+  async createSupplier(input: CreateSupplierInput): Promise<Supplier> {
+    return http<Supplier>("/suppliers", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  // -- Purchase Orders --
+
+  async listPurchaseOrders(status?: PurchaseOrderListItem["status"]): Promise<PurchaseOrderListItem[]> {
+    const query = status ? `?status=${status}` : "";
+    try {
+      return await http<PurchaseOrderListItem[]>(`/purchase-orders${query}`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  async getPurchaseOrder(id: number): Promise<PurchaseOrder> {
+    return http<PurchaseOrder>(`/purchase-orders/${id}`, { auth: true });
+  },
+
+  async createPurchaseOrder(input: CreatePurchaseOrderInput): Promise<PurchaseOrder> {
+    return http<PurchaseOrder>("/purchase-orders", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  // -- Goods Received Notes --
+
+  async listGRNs(status?: GoodsReceivedNoteListItem["status"]): Promise<GoodsReceivedNoteListItem[]> {
+    const query = status ? `?status=${status}` : "";
+    try {
+      return await http<GoodsReceivedNoteListItem[]>(`/goods-received-notes${query}`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  async getGRN(id: number): Promise<GoodsReceivedNote> {
+    return http<GoodsReceivedNote>(`/goods-received-notes/${id}`, { auth: true });
+  },
+
+  async createGRN(input: CreateGRNInput): Promise<GoodsReceivedNote> {
+    return http<GoodsReceivedNote>("/goods-received-notes", {
       method: "POST",
       auth: true,
       idempotencyKey: newIdempotencyKey(),

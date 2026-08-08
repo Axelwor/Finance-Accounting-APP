@@ -20,6 +20,9 @@ export type ListSubKind =
   | "sales-order"
   | "delivery-order"
   | "credit-note"
+  | "purchase-order"
+  | "grn"
+  | "purchase-supplier"
   | "purchase-invoice"
   | "purchase-payment"
   | "inventory-items"
@@ -41,6 +44,9 @@ export type EntrySubKind =
   | "sales-order-entry"
   | "delivery-order-entry"
   | "credit-note-entry"
+  | "purchase-order-entry"
+  | "grn-entry"
+  | "purchase-supplier-entry"
   | "purchase-invoice"
   | "purchase-payment"
   | "inventory-item"
@@ -690,4 +696,140 @@ export interface CreateCreditNoteInput {
   refund_method?: string;
   reason?: string;
   lines: CreditNoteLineInput[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Suppliers                                                           */
+/* ------------------------------------------------------------------ */
+
+export interface SupplierListItem {
+  id: number;
+  code: string;
+  name: string;
+  npwp?: string;
+  contact_person?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  is_active: boolean;
+}
+
+export interface Supplier extends SupplierListItem {
+  province?: string;
+  postal_code?: string;
+  payment_term_id?: number;
+  credit_limit_cents?: number;
+}
+
+export interface CreateSupplierInput {
+  code: string;
+  name: string;
+  npwp?: string;
+  contact_person?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Purchase Order (PO) — commitment only, no journal                    */
+/* ------------------------------------------------------------------ */
+
+export interface PurchaseOrderListItem {
+  id: number;
+  number: string;
+  supplier_id: number;
+  supplier_name?: string;
+  order_date: string;
+  payment_term_id?: number;
+  notes?: string;
+  status: "CONFIRMED" | "PARTIALLY_RECEIVED" | "RECEIVED" | "CANCELLED";
+  total_cents: number;
+  received_cents: number;
+}
+
+export interface PurchaseOrderLine {
+  id: number;
+  item_id: number;
+  item_code?: string;
+  item_name?: string;
+  line_no: number;
+  qty: string;
+  unit_price_cents: number;
+  discount_cents: number;
+  tax_rate: string;
+  line_total_cents: number;
+  received_qty: string;
+  description?: string;
+}
+
+export interface PurchaseOrder extends PurchaseOrderListItem {
+  lines: PurchaseOrderLine[];
+}
+
+export interface PurchaseOrderLineInput {
+  item_id: number;
+  qty: number;
+  unit_price_cents: number;
+  discount_cents: number;
+  tax_rate: number;
+  description?: string;
+}
+
+export interface CreatePurchaseOrderInput {
+  supplier_id: number;
+  order_date: string;
+  payment_term_id?: number;
+  notes?: string;
+  lines: PurchaseOrderLineInput[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Goods Received Note (GRN) — posts Dr Inventory / Cr Accrued Payable */
+/* ------------------------------------------------------------------ */
+
+export interface GoodsReceivedNoteListItem {
+  id: number;
+  number: string;
+  purchase_order_id: number;
+  supplier_id: number;
+  supplier_name?: string;
+  grn_date: string;
+  notes?: string;
+  status: "RECEIVED" | "RETURNED" | "CANCELLED";
+  journal_entry_id?: number;
+  total_cents: number;
+}
+
+export interface GRNLine {
+  id: number;
+  item_id: number;
+  item_code?: string;
+  item_name?: string;
+  line_no: number;
+  qty: string;
+  unit_cost_cents: number;
+  line_total_cents: number;
+  description?: string;
+}
+
+export interface GoodsReceivedNote extends GoodsReceivedNoteListItem {
+  lines: GRNLine[];
+}
+
+export interface GRNLineInput {
+  item_id: number;
+  po_line_id?: number;
+  qty: number;
+  unit_cost_cents: number;
+  description?: string;
+}
+
+export interface CreateGRNInput {
+  purchase_order_id: number;
+  grn_date: string;
+  notes?: string;
+  lines: GRNLineInput[];
 }

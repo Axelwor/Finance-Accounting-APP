@@ -15,6 +15,7 @@ import (
 	"finance-accounting-app/backend/internal/customer"
 	"finance-accounting-app/backend/internal/item"
 	"finance-accounting-app/backend/internal/period"
+	"finance-accounting-app/backend/internal/purchase"
 	"finance-accounting-app/backend/internal/reporting"
 	"finance-accounting-app/backend/internal/sales"
 	"finance-accounting-app/backend/internal/tenant"
@@ -117,6 +118,9 @@ func main() {
 			router.Post("/credit-notes", salesHandler.CreateCreditNote)
 			router.Get("/credit-notes", salesHandler.ListCreditNotes)
 			router.Get("/credit-notes/{id}", salesHandler.GetCreditNote)
+
+			purchaseHandler := purchase.NewHandler(pool)
+			purchaseHandler.Routes(router)
 		})
 	})
 

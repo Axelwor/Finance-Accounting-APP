@@ -19,6 +19,9 @@ import { SalesOrderList } from "../screens/list/SalesOrderList";
 import { DeliveryOrderList } from "../screens/list/DeliveryOrderList";
 import { InvoiceList } from "../screens/list/InvoiceList";
 import { CreditNoteList } from "../screens/list/CreditNoteList";
+import { PurchaseOrderList } from "../screens/list/PurchaseOrderList";
+import { GRNList } from "../screens/list/GRNList";
+import { PurchaseSupplierList } from "../screens/list/PurchaseSupplierList";
 import {
   PurchaseInvoiceList,
   PurchasePaymentList,
@@ -34,6 +37,9 @@ import { SalesOrderForm } from "../screens/entry/SalesOrderForm";
 import { DeliveryOrderForm } from "../screens/entry/DeliveryOrderForm";
 import { InvoiceForm } from "../screens/entry/InvoiceForm";
 import { CreditNoteForm } from "../screens/entry/CreditNoteForm";
+import { PurchaseOrderForm } from "../screens/entry/PurchaseOrderForm";
+import { GRNForm } from "../screens/entry/GRNForm";
+import { PurchaseSupplierForm } from "../screens/entry/PurchaseSupplierForm";
 import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
@@ -167,6 +173,12 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <DeliveryOrderList />;
     case "credit-note":
       return <CreditNoteList />;
+    case "purchase-order":
+      return <PurchaseOrderList />;
+    case "grn":
+      return <GRNList />;
+    case "purchase-supplier":
+      return <PurchaseSupplierList />;
     case "purchase-invoice":
       return <PurchaseInvoiceList />;
     case "purchase-payment":
@@ -227,6 +239,12 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
       return <SalesOrderForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "delivery-order-entry":
       return <DeliveryOrderForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "purchase-order-entry":
+      return <PurchaseOrderForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "grn-entry":
+      return <GRNForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "purchase-supplier-entry":
+      return <PurchaseSupplierForm />;
     default:
       return <PlaceholderTab title={tab.title} sub={`entry · ${subKind}`} />;
   }
