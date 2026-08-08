@@ -29,6 +29,7 @@ func seedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		{"3201", "Retained Earnings", "equity", "EQUITY"},
 		{"3301", "Current Earnings", "equity", "EQUITY"},
 		{"4101", "Sales Revenue", "revenue", "REVENUE"},
+		{"4201", "Sales Returns", "revenue", "CONTRA_REVENUE"},
 		{"5101", "COGS", "expense", "COGS"},
 		{"5201", "Salary Expense", "expense", "EXPENSE"},
 		{"5202", "Rent Expense", "expense", "EXPENSE"},

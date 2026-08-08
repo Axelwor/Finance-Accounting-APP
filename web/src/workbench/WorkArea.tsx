@@ -18,6 +18,7 @@ import {
 import { SalesOrderList } from "../screens/list/SalesOrderList";
 import { DeliveryOrderList } from "../screens/list/DeliveryOrderList";
 import { InvoiceList } from "../screens/list/InvoiceList";
+import { CreditNoteList } from "../screens/list/CreditNoteList";
 import {
   PurchaseInvoiceList,
   PurchasePaymentList,
@@ -32,6 +33,7 @@ import { QuotationForm } from "../screens/entry/QuotationForm";
 import { SalesOrderForm } from "../screens/entry/SalesOrderForm";
 import { DeliveryOrderForm } from "../screens/entry/DeliveryOrderForm";
 import { InvoiceForm } from "../screens/entry/InvoiceForm";
+import { CreditNoteForm } from "../screens/entry/CreditNoteForm";
 import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
@@ -163,6 +165,8 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <SalesOrderList />;
     case "delivery-order":
       return <DeliveryOrderList />;
+    case "credit-note":
+      return <CreditNoteList />;
     case "purchase-invoice":
       return <PurchaseInvoiceList />;
     case "purchase-payment":
@@ -202,6 +206,8 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
       );
     case "sales-invoice":
       return <InvoiceForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "credit-note-entry":
+      return <CreditNoteForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "sales-receipt":
     case "purchase-invoice":
     case "purchase-payment":

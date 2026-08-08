@@ -113,6 +113,10 @@ func main() {
 			router.Get("/invoices/{id}", salesHandler.GetInvoice)
 			router.Post("/invoices/{id}/payments", salesHandler.CreatePayment)
 			router.Get("/invoices/{id}/payments", salesHandler.ListPayments)
+
+			router.Post("/credit-notes", salesHandler.CreateCreditNote)
+			router.Get("/credit-notes", salesHandler.ListCreditNotes)
+			router.Get("/credit-notes/{id}", salesHandler.GetCreditNote)
 		})
 	})
 

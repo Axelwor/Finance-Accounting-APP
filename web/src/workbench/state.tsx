@@ -339,6 +339,8 @@ function entryKindToListKind(kind: EntrySubKind): ListSubKind | null {
       return "sales-order";
     case "delivery-order-entry":
       return "delivery-order";
+    case "credit-note-entry":
+      return "credit-note";
     case "purchase-invoice":
       return "purchase-invoice";
     case "purchase-payment":

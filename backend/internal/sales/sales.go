@@ -54,6 +54,10 @@ func (service *Service) Routes(router chi.Router) {
 	router.Get("/invoices/{id}", service.GetInvoice)
 	router.Post("/invoices/{id}/payments", service.CreatePayment)
 	router.Get("/invoices/{id}/payments", service.ListPayments)
+
+	router.Post("/credit-notes", service.CreateCreditNote)
+	router.Get("/credit-notes", service.ListCreditNotes)
+	router.Get("/credit-notes/{id}", service.GetCreditNote)
 }
 
 // Result types shared by list/detail/create responses.

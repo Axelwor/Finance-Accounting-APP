@@ -19,6 +19,7 @@ export type ListSubKind =
   | "sales-quotation"
   | "sales-order"
   | "delivery-order"
+  | "credit-note"
   | "purchase-invoice"
   | "purchase-payment"
   | "inventory-items"
@@ -39,6 +40,7 @@ export type EntrySubKind =
   | "sales-quotation-entry"
   | "sales-order-entry"
   | "delivery-order-entry"
+  | "credit-note-entry"
   | "purchase-invoice"
   | "purchase-payment"
   | "inventory-item"
@@ -627,4 +629,65 @@ export interface CreatePaymentInput {
   amount_cents: number;
   payment_date: string;
   description?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Credit Note (CN / Sales Return)                                     */
+/* ------------------------------------------------------------------ */
+
+/** Credit note list row (GET /api/v1/credit-notes). */
+export interface CreditNoteListItem {
+  id: number;
+  number: string;
+  invoice_id: number;
+  customer_id: number;
+  customer_name?: string;
+  cn_date: string;
+  refund_method: "deduct" | "refund" | "credit_balance";
+  reason?: string;
+  status: "DRAFT" | "APPLIED" | "VOID";
+  total_cents: number;
+  ar_deducted_cents: number;
+  cogs_reversed_cents: number;
+}
+
+/** A credit note line (GET /api/v1/credit-notes/{id}). */
+export interface CreditNoteLine {
+  id: number;
+  item_id: number;
+  item_code?: string;
+  item_name?: string;
+  invoice_line_id?: number;
+  line_no: number;
+  qty: string;
+  unit_price_cents: number;
+  unit_cost_cents: number;
+  line_total_cents: number;
+  cogs_reversed_cents: number;
+  description?: string;
+}
+
+/** Full credit note with lines. */
+export interface CreditNote extends CreditNoteListItem {
+  lines: CreditNoteLine[];
+}
+
+/** Input line for POST /api/v1/credit-notes. */
+export interface CreditNoteLineInput {
+  item_id: number;
+  invoice_line_id?: number;
+  qty: number;
+  unit_price_cents: number;
+  unit_cost_cents: number;
+  description?: string;
+}
+
+/** Payload POST /api/v1/credit-notes. */
+export interface CreateCreditNoteInput {
+  invoice_id: number;
+  customer_id: number;
+  cn_date: string;
+  refund_method?: string;
+  reason?: string;
+  lines: CreditNoteLineInput[];
 }

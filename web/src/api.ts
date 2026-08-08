@@ -56,6 +56,9 @@ import type {
   CreateInvoiceInput,
   InvoicePayment,
   CreatePaymentInput,
+  CreditNote,
+  CreditNoteListItem,
+  CreateCreditNoteInput,
 } from "./types";
 
 const LATENCY_MS = 200;
@@ -899,6 +902,31 @@ export const api = {
     } catch {
       return [];
     }
+  },
+
+  /** Credit note list (GET /credit-notes). Optional status filter. */
+  async listCreditNotes(status?: CreditNoteListItem["status"]): Promise<CreditNoteListItem[]> {
+    const query = status ? `?status=${status}` : "";
+    try {
+      return await http<CreditNoteListItem[]>(`/credit-notes${query}`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Get one credit note with lines. */
+  async getCreditNote(id: number): Promise<CreditNote> {
+    return http<CreditNote>(`/credit-notes/${id}`, { auth: true });
+  },
+
+  /** Create a credit note (POST /credit-notes). Posts return + COGS reversal journals. */
+  async createCreditNote(input: CreateCreditNoteInput): Promise<CreditNote> {
+    return http<CreditNote>("/credit-notes", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
   },
 
   /**

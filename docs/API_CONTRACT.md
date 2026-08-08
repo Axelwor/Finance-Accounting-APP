@@ -64,6 +64,9 @@
 | GET | `/invoices/{id}` | Get invoice with lines |
 | POST | `/invoices/{id}/payments` | Receive customer payment — posts Dr Cash / Cr AR |
 | GET | `/invoices/{id}/payments` | List payments for an invoice |
+| POST | `/credit-notes` | Create credit note (CN) — posts return + COGS reversal |
+| GET | `/credit-notes` | List credit notes (optional `?status=`) |
+| GET | `/credit-notes/{id}` | Get credit note with lines |
 
 ### Sales Quotation Notes
 
@@ -112,9 +115,18 @@
 - After payment, the invoice's `receivable_cents` is reduced and `status` becomes `PARTIALLY_PAID` or `PAID`.
 - Accounts 1201 (AR) and 2402 (Customer Overpayment) are resolved by code from the seeded COA. `seed.go` provisions 2402 for new tenants; migration 000009 seeds it for existing tenants.
 
-## Financial Command Contract
+### Credit Note Notes
 
-Request headers:
+- **CN posts two journals** in one transaction:
+  1. Revenue reversal: `Dr 4201 Sales Returns / Cr 1201 AR` (intent_type `SALES_RETURN`). When `refund_method=refund`, the credit is to Cash/Bank instead of AR.
+  2. COGS reversal: `Dr 1301 Inventory / Cr 5101 COGS` (intent_type `COGS_REVERSAL`) per returned item.
+- `refund_method` controls how the customer is compensated: `deduct` (reduce AR on the linked invoice), `refund` (cash refund), or `credit_balance` (hold as customer credit).
+- After CN with `deduct`, the invoice's `receivable_cents` is increased and `status` may revert from `PAID` to `PARTIALLY_PAID`.
+- Inventory movements (movement_type `SALES_RETURN`, qty positive = stock in) are recorded per line.
+- Accounts 4201/1201/1301/5101 are resolved by code from the seeded COA. `seed.go` provisions 4201 for new tenants; migration 000010 seeds it for existing tenants.
+- `POST /credit-notes` allocates `CN-{YYYY}-{seq}` from `document_numbering`. Requires `Idempotency-Key` header.
+
+## Financial Command Contract
 
 ```text
 Authorization: Bearer <access-token>
