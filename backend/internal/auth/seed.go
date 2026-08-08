@@ -20,6 +20,7 @@ func seedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		{"1102", "Bank", "asset", "BANK"},
 		{"1201", "Accounts Receivable", "asset", "AR"},
 		{"1203", "Input VAT", "asset", "INPUT_VAT"},
+		{"1204", "Other Receivables", "asset", "OTHER_RECEIVABLE"},
 		{"1205", "Prepayment to Suppliers", "asset", "PREPAYMENT"},
 		{"1301", "Inventory", "asset", "INVENTORY"},
 		{"1401", "Fixed Assets", "asset", "FIXED_ASSET"},

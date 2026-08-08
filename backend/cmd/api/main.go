@@ -125,6 +125,8 @@ func main() {
 			router.Post("/supplier-invoices", purchaseHandler.CreateSupplierInvoice)
 			router.Get("/supplier-invoices", purchaseHandler.ListSupplierInvoices)
 			router.Get("/supplier-invoices/{id}", purchaseHandler.GetSupplierInvoice)
+			router.Post("/supplier-invoices/{id}/payments", purchaseHandler.CreateSupplierPayment)
+			router.Get("/supplier-invoices/{id}/payments", purchaseHandler.ListSupplierPayments)
 		})
 	})
 

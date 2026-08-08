@@ -857,3 +857,26 @@ export interface CreateSupplierInvoiceInput {
   supplier_id: number; grn_id?: number; invoice_date: string; due_date?: string;
   supplier_invoice_number?: string; notes?: string; lines: SupplierInvoiceLineInput[];
 }
+
+/* Supplier Payment (Bayar) */
+export interface SupplierPayment {
+  id: number;
+  number: string;
+  supplier_id: number;
+  invoice_id: number;
+  journal_entry_id?: number;
+  amount_cents: number;
+  ap_applied_cents: number;
+  overpayment_cents: number;
+  cash_account_id: number;
+  payment_date: string;
+  description?: string;
+  status: "PAID" | "REVERSED";
+}
+
+export interface CreateSupplierPaymentInput {
+  cash_account_id: number;
+  amount_cents: number;
+  payment_date: string;
+  description?: string;
+}
