@@ -25,6 +25,7 @@ export type ListSubKind =
   | "purchase-supplier"
   | "purchase-invoice"
   | "purchase-payment"
+  | "purchase-return"
   | "inventory-items"
   | "stock-movements"
   | "asset-register"
@@ -49,6 +50,7 @@ export type EntrySubKind =
   | "purchase-supplier-entry"
   | "purchase-invoice"
   | "purchase-payment"
+  | "purchase-return-entry"
   | "inventory-item"
   | "asset-register";
 
@@ -832,4 +834,46 @@ export interface CreateGRNInput {
   grn_date: string;
   notes?: string;
   lines: GRNLineInput[];
+}
+
+/* Supplier Invoice (Tagihan) — minimal list item used by purchase-return picker.
+   The full type is owned by the supplier-invoice feature (migration 000012). */
+export interface SupplierInvoiceListItem {
+  id: number;
+  number: string;
+  supplier_id: number;
+  supplier_name?: string;
+  invoice_date: string;
+  due_date?: string;
+  supplier_invoice_number?: string;
+  dpp_cents: number;
+  vat_cents: number;
+  total_cents: number;
+  dp_applied_cents: number;
+  payable_cents: number;
+  notes?: string;
+  status: "ISSUED" | "PARTIALLY_PAID" | "PAID" | "VOID";
+  journal_entry_id?: number;
+}
+
+/* Purchase Return (Retur Pembelian) */
+export interface PurchaseReturnListItem {
+  id: number; number: string; supplier_id: number; supplier_name?: string;
+  invoice_id: number; return_date: string; refund_method: "deduct"|"refund"|"credit_balance";
+  reason?: string; status: "APPLIED"|"VOID"; total_cents: number;
+  vat_reversed_cents: number; ap_deducted_cents: number;
+}
+export interface PurchaseReturnLine {
+  id: number; item_id: number; item_code?: string; item_name?: string;
+  invoice_line_id?: number; line_no: number; qty: string;
+  unit_price_cents: number; line_total_cents: number; description?: string;
+}
+export interface PurchaseReturn extends PurchaseReturnListItem { lines: PurchaseReturnLine[]; }
+export interface PurchaseReturnLineInput {
+  item_id: number; invoice_line_id?: number; qty: number;
+  unit_price_cents: number; description?: string;
+}
+export interface CreatePurchaseReturnInput {
+  invoice_id: number; supplier_id: number; return_date: string;
+  refund_method?: string; reason?: string; lines: PurchaseReturnLineInput[];
 }
