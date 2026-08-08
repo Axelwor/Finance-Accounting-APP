@@ -17,6 +17,8 @@ export type ListSubKind =
   | "sales-invoice"
   | "sales-receipt"
   | "sales-quotation"
+  | "sales-order"
+  | "delivery-order"
   | "purchase-invoice"
   | "purchase-payment"
   | "inventory-items"
@@ -35,6 +37,8 @@ export type EntrySubKind =
   | "sales-invoice"
   | "sales-receipt"
   | "sales-quotation-entry"
+  | "sales-order-entry"
+  | "delivery-order-entry"
   | "purchase-invoice"
   | "purchase-payment"
   | "inventory-item"
@@ -396,4 +400,231 @@ export interface QuotationCreateInput {
   notes?: string;
   source_ref?: string;
   lines: QuotationLineInput[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Sales Order (SO) + Down Payment (DP)                                */
+/* ------------------------------------------------------------------ */
+
+/** Sales order list row (GET /api/v1/sales-orders). */
+export interface SalesOrderListItem {
+  id: number;
+  number: string;
+  quotation_id?: number;
+  customer_id: number;
+  customer_name?: string;
+  order_date: string;
+  payment_term_id?: number;
+  notes?: string;
+  status: "CONFIRMED" | "CLOSED" | "CANCELLED";
+  total_cents: number;
+  dp_received_cents: number;
+}
+
+/** A sales order line (GET /api/v1/sales-orders/{id}). */
+export interface SalesOrderLine {
+  id: number;
+  item_id: number;
+  item_code?: string;
+  item_name?: string;
+  line_no: number;
+  qty: string;
+  unit_price_cents: number;
+  discount_cents: number;
+  tax_rate: string;
+  line_total_cents: number;
+  description?: string;
+}
+
+/** Down payment attached to an order (GET /api/v1/sales-orders/{id}). */
+export interface DownPayment {
+  id: number;
+  number: string;
+  order_id: number;
+  journal_entry_id?: number;
+  amount_cents: number;
+  cash_account_id: number;
+  dp_date: string;
+  description?: string;
+  status: "RECEIVED" | "REFUNDED";
+}
+
+/** Full sales order with lines and down payments. */
+export interface SalesOrder extends SalesOrderListItem {
+  lines: SalesOrderLine[];
+  down_payments: DownPayment[];
+}
+
+/** Input line for POST /api/v1/sales-orders. */
+export interface SalesOrderLineInput {
+  item_id: number;
+  qty: number;
+  unit_price_cents: number;
+  discount_cents: number;
+  tax_rate: number;
+  description?: string;
+}
+
+/** Payload POST /api/v1/sales-orders. */
+export interface SalesOrderCreateInput {
+  customer_id: number;
+  quotation_id?: number;
+  order_date: string;
+  payment_term_id?: number;
+  notes?: string;
+  lines: SalesOrderLineInput[];
+}
+
+/** Payload POST /api/v1/sales-orders/{id}/down-payments. */
+export interface CreateDownPaymentInput {
+  cash_account_id: number;
+  amount_cents: number;
+  dp_date: string;
+  description?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Delivery Order (DO)                                                 */
+/* ------------------------------------------------------------------ */
+
+/** Delivery order list row (GET /api/v1/delivery-orders). */
+export interface DeliveryOrderListItem {
+  id: number;
+  number: string;
+  sales_order_id: number;
+  customer_id: number;
+  customer_name?: string;
+  delivery_date: string;
+  notes?: string;
+  status: "SHIPPED" | "RETURNED" | "CANCELLED";
+  journal_entry_id?: number;
+  total_cogs_cents: number;
+}
+
+/** A delivery order line (GET /api/v1/delivery-orders/{id}). */
+export interface DeliveryOrderLine {
+  id: number;
+  item_id: number;
+  item_code?: string;
+  item_name?: string;
+  line_no: number;
+  qty: string;
+  unit_cost_cents: number;
+  cogs_cents: number;
+  inventory_account_id: number;
+  cogs_account_id: number;
+  description?: string;
+}
+
+/** Full delivery order with lines. */
+export interface DeliveryOrder extends DeliveryOrderListItem {
+  lines: DeliveryOrderLine[];
+}
+
+/** Input line for POST /api/v1/delivery-orders. */
+export interface DeliveryLineInput {
+  item_id: number;
+  qty: number;
+  unit_cost_cents: number;
+  description?: string;
+}
+
+/** Payload POST /api/v1/delivery-orders. */
+export interface CreateDeliveryInput {
+  sales_order_id: number;
+  delivery_date: string;
+  notes?: string;
+  lines: DeliveryLineInput[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Invoice (INV)                                                       */
+/* ------------------------------------------------------------------ */
+
+/** Invoice list row (GET /api/v1/invoices). */
+export interface InvoiceListItem {
+  id: number;
+  number: string;
+  sales_order_id?: number;
+  customer_id: number;
+  customer_name?: string;
+  invoice_date: string;
+  due_date?: string;
+  payment_term_id?: number;
+  notes?: string;
+  status: "DRAFT" | "ISSUED" | "PARTIALLY_PAID" | "PAID" | "VOID";
+  total_cents: number;
+  dp_applied_cents: number;
+  receivable_cents: number;
+}
+
+/** An invoice line (GET /api/v1/invoices/{id}). */
+export interface InvoiceLine {
+  id: number;
+  item_id: number;
+  item_code?: string;
+  item_name?: string;
+  delivery_id?: number;
+  line_no: number;
+  qty: string;
+  unit_price_cents: number;
+  discount_cents: number;
+  tax_rate: string;
+  line_total_cents: number;
+  description?: string;
+}
+
+/** Full invoice with lines. */
+export interface Invoice extends InvoiceListItem {
+  lines: InvoiceLine[];
+}
+
+/** Input line for POST /api/v1/invoices. */
+export interface InvoiceLineInput {
+  item_id: number;
+  delivery_id?: number;
+  qty: number;
+  unit_price_cents: number;
+  discount_cents: number;
+  tax_rate: number;
+  description?: string;
+}
+
+/** Payload POST /api/v1/invoices. */
+export interface CreateInvoiceInput {
+  sales_order_id?: number;
+  customer_id: number;
+  invoice_date: string;
+  due_date?: string;
+  payment_term_id?: number;
+  notes?: string;
+  lines: InvoiceLineInput[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Invoice Payment (Pelunasan)                                         */
+/* ------------------------------------------------------------------ */
+
+/** Payment record (POST /invoices/{id}/payments response). */
+export interface InvoicePayment {
+  id: number;
+  number: string;
+  invoice_id: number;
+  customer_id: number;
+  journal_entry_id?: number;
+  amount_cents: number;
+  ar_applied_cents: number;
+  overpayment_cents: number;
+  cash_account_id: number;
+  payment_date: string;
+  description?: string;
+  status: "RECEIVED" | "REVERSED";
+}
+
+/** Payload POST /api/v1/invoices/{id}/payments. */
+export interface CreatePaymentInput {
+  cash_account_id: number;
+  amount_cents: number;
+  payment_date: string;
+  description?: string;
 }

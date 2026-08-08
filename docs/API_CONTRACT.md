@@ -49,6 +49,21 @@
 | POST | `/quotations/{id}/send` | DRAFT → SENT |
 | POST | `/quotations/{id}/cancel` | DRAFT/SENT → CANCELLED |
 | POST | `/quotations/{id}/mark-expired` | → EXPIRED |
+| POST | `/sales-orders` | Create sales order (SO) with lines |
+| GET | `/sales-orders` | List sales orders (optional `?status=`) |
+| GET | `/sales-orders/{id}` | Get sales order with lines + down payments |
+| POST | `/sales-orders/{id}/cancel` | CONFIRMED → CANCELLED (only when no DP) |
+| POST | `/sales-orders/{id}/down-payments` | Receive down payment (DP) — posts journal |
+| GET | `/sales-orders/{id}/down-payments` | List down payments for an SO |
+| POST | `/down-payments/{id}/refund` | Refund a DP — posts reversal journal |
+| POST | `/delivery-orders` | Create delivery order (DO) — posts COGS journal |
+| GET | `/delivery-orders` | List delivery orders (optional `?status=`) |
+| GET | `/delivery-orders/{id}` | Get delivery order with lines |
+| POST | `/invoices` | Create invoice (INV) — posts revenue + DP realization |
+| GET | `/invoices` | List invoices (optional `?status=`) |
+| GET | `/invoices/{id}` | Get invoice with lines |
+| POST | `/invoices/{id}/payments` | Receive customer payment — posts Dr Cash / Cr AR |
+| GET | `/invoices/{id}/payments` | List payments for an invoice |
 
 ### Sales Quotation Notes
 
@@ -57,6 +72,45 @@
 - Line total: `line_total_cents = round(qty * unit_price_cents) − discount_cents`; header `total_cents` is the sum of lines.
 - Status machine: `DRAFT → SENT → CONVERTED` (via later SO conversion, not yet exposed) or `EXPIRED` / `CANCELLED`.
 - Customer must belong to the tenant; at least one line required; `qty > 0`, `unit_price_cents ≥ 0`, `tax_rate` in 0..100.
+
+### Sales Order + Down Payment Notes
+
+- **SO is a commitment only** — it does **not** post any journal (per `ACCOUNTING_ENGINE.md` §7). Journals are posted only at DP, DO, and INV steps.
+- `POST /sales-orders` inserts the order header + lines in one transaction and allocates `SO-{YYYY}-{seq}` from `document_numbering`. When `quotation_id` is provided, the linked quotation is marked `CONVERTED`.
+- SO status machine: `CONFIRMED → CANCELLED` (only when `dp_received_cents = 0`) or `CONFIRMED → CLOSED` (via later INV).
+- **DP posts a journal**: `Dr Cash/Bank / Cr 2201 Customer Deposit` (intent_type `SALES_DOWN_PAYMENT`). DP requires `Idempotency-Key` header.
+- DP validation: `dp_received_cents + amount_cents ≤ total_cents` (rejected with `DP_EXCEEDS_ORDER` when exceeded). Multiple DPs can be allocated to one SO.
+- **DP refund** (`POST /down-payments/{id}/refund`): reverses the original DP journal (intent_type `SALES_DP_REFUND`), marks the original journal `VOID`, sets the DP status to `REFUNDED`, and reduces `dp_received_cents`.
+- The 2201 account is resolved by code; `seed.go` provisions it for new tenants and migration 000006 seeds it for existing tenants.
+
+### Delivery Order Notes
+
+- **DO posts a COGS journal**: `Dr 5101 COGS / Cr 1301 Inventory` per item delivered (intent_type `SALES_DELIVERY`). Each line carries its own `cogs_account_id` and `inventory_account_id` resolved from the item's account defaults.
+- DO requires `Idempotency-Key` header. The journal is posted in the same transaction as the delivery header + lines, with hash-chain and outbox event.
+- Only **goods** items can be delivered — services are rejected. Each item must have `inventory_account_id` and `cogs_account_id` set.
+- An `inventory_movements` row is recorded per line (movement_type `DO`, qty negative = stock out).
+- The linked sales order's status is set to `CLOSED` after delivery.
+- `POST /delivery-orders` allocates `DO-{YYYY}-{seq}` from `document_numbering`.
+- DO supports partial delivery (multiple DOs per SO); the SO's `delivered_qty` column tracks cumulative delivery per line.
+
+### Invoice Notes
+
+- **INV posts two journals**:
+  1. Revenue: `Dr 1201 AR / Cr 4101 Revenue` (intent_type `SALES_INVOICE`)
+  2. DP realization (when the linked SO has `dp_received_cents > 0`): `Dr 2201 Customer Deposit / Cr 1201 AR` (intent_type `SALES_DP_REALIZE`)
+- INV requires `Idempotency-Key` header. Both journals are posted in the same transaction with hash-chain and outbox events.
+- `dp_applied_cents` is clamped to `min(dp_received_cents, total_cents)`; `receivable_cents = total_cents - dp_applied_cents`.
+- Accounts 1201 (AR) and 4101 (Revenue) are resolved by code from the seeded COA. 2201 (Customer Deposit) is resolved by code for the DP realization.
+- `POST /invoices` allocates `INV-{YYYY}-{seq}` from `document_numbering`.
+- When `sales_order_id` is provided, the SO's `dp_received_cents` is read to determine the DP realization amount.
+
+### Invoice Payment (Pelunasan) Notes
+
+- **Payment posts a journal**: `Dr Cash/Bank / Cr 1201 AR` (intent_type `SALES_RECEIPT`). When the payment exceeds the remaining `receivable_cents`, the excess is credited to `2402 Customer Overpayment` in the same journal.
+- Payment requires `Idempotency-Key` header. The journal carries hash-chain, outbox event, and idempotency.
+- `ar_applied_cents` is clamped to `min(amount_cents, receivable_cents)`; `overpayment_cents = amount_cents - ar_applied_cents`.
+- After payment, the invoice's `receivable_cents` is reduced and `status` becomes `PARTIALLY_PAID` or `PAID`.
+- Accounts 1201 (AR) and 2402 (Customer Overpayment) are resolved by code from the seeded COA. `seed.go` provisions 2402 for new tenants; migration 000009 seeds it for existing tenants.
 
 ## Financial Command Contract
 

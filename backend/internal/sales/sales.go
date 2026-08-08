@@ -27,7 +27,7 @@ func NewHandler(pool *pgxpool.Pool) *Service {
 	return &Service{pool: pool}
 }
 
-// Routes registers the quotation endpoints on the chi router.
+// Routes registers the quotation and sales order endpoints on the chi router.
 func (service *Service) Routes(router chi.Router) {
 	router.Post("/quotations", service.Create)
 	router.Get("/quotations", service.List)
@@ -35,6 +35,25 @@ func (service *Service) Routes(router chi.Router) {
 	router.Post("/quotations/{id}/send", service.Send)
 	router.Post("/quotations/{id}/cancel", service.Cancel)
 	router.Post("/quotations/{id}/mark-expired", service.MarkExpired)
+
+	router.Post("/sales-orders", service.CreateOrder)
+	router.Get("/sales-orders", service.ListOrders)
+	router.Get("/sales-orders/{id}", service.GetOrder)
+	router.Post("/sales-orders/{id}/cancel", service.CancelOrder)
+
+	router.Post("/sales-orders/{id}/down-payments", service.CreateDP)
+	router.Get("/sales-orders/{id}/down-payments", service.ListDPs)
+	router.Post("/down-payments/{id}/refund", service.RefundDP)
+
+	router.Post("/delivery-orders", service.CreateDelivery)
+	router.Get("/delivery-orders", service.ListDeliveries)
+	router.Get("/delivery-orders/{id}", service.GetDelivery)
+
+	router.Post("/invoices", service.CreateInvoice)
+	router.Get("/invoices", service.ListInvoices)
+	router.Get("/invoices/{id}", service.GetInvoice)
+	router.Post("/invoices/{id}/payments", service.CreatePayment)
+	router.Get("/invoices/{id}/payments", service.ListPayments)
 }
 
 // Result types shared by list/detail/create responses.

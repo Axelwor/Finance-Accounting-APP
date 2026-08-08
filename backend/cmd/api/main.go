@@ -94,6 +94,25 @@ func main() {
 			router.Post("/quotations/{id}/send", salesHandler.Send)
 			router.Post("/quotations/{id}/cancel", salesHandler.Cancel)
 			router.Post("/quotations/{id}/mark-expired", salesHandler.MarkExpired)
+
+			router.Post("/sales-orders", salesHandler.CreateOrder)
+			router.Get("/sales-orders", salesHandler.ListOrders)
+			router.Get("/sales-orders/{id}", salesHandler.GetOrder)
+			router.Post("/sales-orders/{id}/cancel", salesHandler.CancelOrder)
+
+			router.Post("/sales-orders/{id}/down-payments", salesHandler.CreateDP)
+			router.Get("/sales-orders/{id}/down-payments", salesHandler.ListDPs)
+			router.Post("/down-payments/{id}/refund", salesHandler.RefundDP)
+
+			router.Post("/delivery-orders", salesHandler.CreateDelivery)
+			router.Get("/delivery-orders", salesHandler.ListDeliveries)
+			router.Get("/delivery-orders/{id}", salesHandler.GetDelivery)
+
+			router.Post("/invoices", salesHandler.CreateInvoice)
+			router.Get("/invoices", salesHandler.ListInvoices)
+			router.Get("/invoices/{id}", salesHandler.GetInvoice)
+			router.Post("/invoices/{id}/payments", salesHandler.CreatePayment)
+			router.Get("/invoices/{id}/payments", salesHandler.ListPayments)
 		})
 	})
 

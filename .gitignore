@@ -23,3 +23,7 @@ web/tsconfig.tsbuildinfo
 # Temporary scratch
 fix_it.md
 fix_plan_check.md
+
+# Tool artifacts
+.kilo/
+.playwright-mcp/

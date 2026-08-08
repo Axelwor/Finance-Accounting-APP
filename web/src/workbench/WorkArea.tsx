@@ -12,10 +12,12 @@ import {
 } from "../screens/list/Reports";
 import { DashboardScreen } from "../screens/workbench/DashboardScreen";
 import {
-  SalesInvoiceList,
   SalesReceiptList,
   QuotationList,
 } from "../screens/list/Sales";
+import { SalesOrderList } from "../screens/list/SalesOrderList";
+import { DeliveryOrderList } from "../screens/list/DeliveryOrderList";
+import { InvoiceList } from "../screens/list/InvoiceList";
 import {
   PurchaseInvoiceList,
   PurchasePaymentList,
@@ -27,6 +29,9 @@ import {
 import { AssetRegisterList } from "../screens/list/Assets";
 import { MockEntryForm } from "../screens/entry/MockEntryForm";
 import { QuotationForm } from "../screens/entry/QuotationForm";
+import { SalesOrderForm } from "../screens/entry/SalesOrderForm";
+import { DeliveryOrderForm } from "../screens/entry/DeliveryOrderForm";
+import { InvoiceForm } from "../screens/entry/InvoiceForm";
 import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
@@ -149,11 +154,15 @@ function ListTabContent({ tab }: { tab: ListTab }) {
         />
       );
     case "sales-invoice":
-      return <SalesInvoiceList />;
+      return <InvoiceList />;
     case "sales-receipt":
       return <SalesReceiptList />;
     case "sales-quotation":
       return <QuotationList />;
+    case "sales-order":
+      return <SalesOrderList />;
+    case "delivery-order":
+      return <DeliveryOrderList />;
     case "purchase-invoice":
       return <PurchaseInvoiceList />;
     case "purchase-payment":
@@ -192,6 +201,7 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
         />
       );
     case "sales-invoice":
+      return <InvoiceForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "sales-receipt":
     case "purchase-invoice":
     case "purchase-payment":
@@ -207,6 +217,10 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
       );
     case "sales-quotation-entry":
       return <QuotationForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "sales-order-entry":
+      return <SalesOrderForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "delivery-order-entry":
+      return <DeliveryOrderForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     default:
       return <PlaceholderTab title={tab.title} sub={`entry · ${subKind}`} />;
   }

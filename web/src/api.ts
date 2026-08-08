@@ -43,6 +43,19 @@ import type {
   Quotation,
   QuotationCreateInput,
   QuotationListItem,
+  SalesOrder,
+  SalesOrderCreateInput,
+  SalesOrderListItem,
+  CreateDownPaymentInput,
+  DownPayment,
+  DeliveryOrder,
+  DeliveryOrderListItem,
+  CreateDeliveryInput,
+  Invoice,
+  InvoiceListItem,
+  CreateInvoiceInput,
+  InvoicePayment,
+  CreatePaymentInput,
 } from "./types";
 
 const LATENCY_MS = 200;
@@ -759,6 +772,133 @@ export const api = {
   /** Cancel a quotation (DRAFT/SENT -> CANCELLED). */
   async cancelQuotation(id: number): Promise<{ id: number; status: string }> {
     return http<{ id: number; status: string }>(`/quotations/${id}/cancel`, { method: "POST", auth: true });
+  },
+
+  /** Sales order list (GET /sales-orders). Optional status filter. */
+  async listSalesOrders(status?: SalesOrderListItem["status"]): Promise<SalesOrderListItem[]> {
+    const query = status ? `?status=${status}` : "";
+    try {
+      return await http<SalesOrderListItem[]>(`/sales-orders${query}`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Get one sales order with lines and down payments. */
+  async getSalesOrder(id: number): Promise<SalesOrder> {
+    return http<SalesOrder>(`/sales-orders/${id}`, { auth: true });
+  },
+
+  /** Create a sales order (POST /sales-orders). SO posts no journal. */
+  async createSalesOrder(input: SalesOrderCreateInput): Promise<SalesOrder> {
+    return http<SalesOrder>("/sales-orders", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Cancel a sales order (CONFIRMED -> CANCELLED, only when no DP). */
+  async cancelSalesOrder(id: number): Promise<{ id: number; status: string }> {
+    return http<{ id: number; status: string }>(`/sales-orders/${id}/cancel`, { method: "POST", auth: true });
+  },
+
+  /** Create a down payment for a sales order (POST /sales-orders/{id}/down-payments). */
+  async createDownPayment(orderId: number, input: CreateDownPaymentInput): Promise<DownPayment> {
+    return http<DownPayment>(`/sales-orders/${orderId}/down-payments`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** List down payments for a sales order. */
+  async listDownPayments(orderId: number): Promise<DownPayment[]> {
+    try {
+      return await http<DownPayment[]>(`/sales-orders/${orderId}/down-payments`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Refund a down payment (POST /down-payments/{id}/refund). */
+  async refundDownPayment(dpId: number): Promise<{ dp_id: number; status: string }> {
+    return http<{ dp_id: number; status: string }>(`/down-payments/${dpId}/refund`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+    });
+  },
+
+  /** Delivery order list (GET /delivery-orders). Optional status filter. */
+  async listDeliveryOrders(status?: DeliveryOrderListItem["status"]): Promise<DeliveryOrderListItem[]> {
+    const query = status ? `?status=${status}` : "";
+    try {
+      return await http<DeliveryOrderListItem[]>(`/delivery-orders${query}`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Get one delivery order with lines. */
+  async getDeliveryOrder(id: number): Promise<DeliveryOrder> {
+    return http<DeliveryOrder>(`/delivery-orders/${id}`, { auth: true });
+  },
+
+  /** Create a delivery order (POST /delivery-orders). DO posts a COGS journal. */
+  async createDeliveryOrder(input: CreateDeliveryInput): Promise<DeliveryOrder> {
+    return http<DeliveryOrder>("/delivery-orders", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Invoice list (GET /invoices). Optional status filter. */
+  async listInvoices(status?: InvoiceListItem["status"]): Promise<InvoiceListItem[]> {
+    const query = status ? `?status=${status}` : "";
+    try {
+      return await http<InvoiceListItem[]>(`/invoices${query}`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Get one invoice with lines. */
+  async getInvoice(id: number): Promise<Invoice> {
+    return http<Invoice>(`/invoices/${id}`, { auth: true });
+  },
+
+  /** Create an invoice (POST /invoices). Posts revenue + DP realization journals. */
+  async createInvoice(input: CreateInvoiceInput): Promise<Invoice> {
+    return http<Invoice>("/invoices", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Receive a customer payment against an invoice (POST /invoices/{id}/payments). */
+  async createInvoicePayment(invoiceId: number, input: CreatePaymentInput): Promise<InvoicePayment> {
+    return http<InvoicePayment>(`/invoices/${invoiceId}/payments`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** List payments for an invoice. */
+  async listInvoicePayments(invoiceId: number): Promise<InvoicePayment[]> {
+    try {
+      return await http<InvoicePayment[]>(`/invoices/${invoiceId}/payments`, { auth: true });
+    } catch {
+      return [];
+    }
   },
 
   /**
