@@ -11,11 +11,12 @@ import (
 type IntentType string
 
 const (
-	IntentCashIn   IntentType = "CASH_IN"
-	IntentCashOut  IntentType = "CASH_OUT"
-	IntentTransfer IntentType = "TRANSFER"
-	IntentOpening  IntentType = "OPENING_BALANCE"
-	IntentReversal IntentType = "REVERSAL"
+	IntentCashIn        IntentType = "CASH_IN"
+	IntentCashOut       IntentType = "CASH_OUT"
+	IntentTransfer      IntentType = "TRANSFER"
+	IntentOpening       IntentType = "OPENING_BALANCE"
+	IntentReversal      IntentType = "REVERSAL"
+	IntentManualJournal IntentType = "MANUAL_JOURNAL"
 )
 
 type AccountType string
@@ -288,6 +289,40 @@ func Reverse(original Journal, sourceRef string, entryDate string) (Journal, err
 		lines[index] = Line{AccountID: line.AccountID, DebitCents: line.CreditCents, CreditCents: line.DebitCents, SourceLineRef: line.SourceLineRef}
 	}
 	journal := Journal{TenantID: original.TenantID, SourceRef: sourceRef, IntentType: IntentReversal, EntryDate: entryDate, Description: "Reversal: " + original.Description, Lines: lines}
+	return finalize(journal)
+}
+
+// ManualIntent describes a free-form manual journal entry. Each line must
+// reference a postable account and the lines must balance (total debit =
+// total credit). Unlike the cash/opening intents, no account-type rules
+// are enforced — the accountant owns the composition.
+type ManualIntent struct {
+	TenantID    int64
+	SourceRef   string
+	EntryDate   string
+	Description string
+	Lines       []Line
+}
+
+// ManualJournal builds a MANUAL_JOURNAL entry. At least two lines are
+// required and the lines must balance. Account postability (loaded by
+// the caller and stamped onto each Line via a parallel check) is the
+// caller's responsibility; the engine only validates the balance rule.
+func ManualJournal(intent ManualIntent) (Journal, error) {
+	if intent.SourceRef == "" || intent.EntryDate == "" {
+		return Journal{}, ErrInvalidOpening
+	}
+	if len(intent.Lines) < 2 {
+		return Journal{}, ErrNoLines
+	}
+	journal := Journal{
+		TenantID:    intent.TenantID,
+		SourceRef:   intent.SourceRef,
+		IntentType:  IntentManualJournal,
+		EntryDate:   intent.EntryDate,
+		Description: intent.Description,
+		Lines:       intent.Lines,
+	}
 	return finalize(journal)
 }
 

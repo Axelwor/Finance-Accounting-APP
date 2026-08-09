@@ -33,6 +33,10 @@ import {
   StockMovementsList,
 } from "../screens/list/Inventory";
 import { AssetRegisterList } from "../screens/list/Assets";
+import { JournalEntryList } from "../screens/list/JournalEntryList";
+import { GeneralLedger } from "../screens/list/GeneralLedger";
+import { JournalRegister } from "../screens/list/JournalRegister";
+import { JournalEntryForm } from "../screens/entry/JournalEntryForm";
 import { MockEntryForm } from "../screens/entry/MockEntryForm";
 import { QuotationForm } from "../screens/entry/QuotationForm";
 import { SalesOrderForm } from "../screens/entry/SalesOrderForm";
@@ -197,6 +201,12 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <StockMovementsList />;
     case "asset-register":
       return <AssetRegisterList />;
+    case "journal-entry":
+      return <JournalEntryList />;
+    case "general-ledger":
+      return <GeneralLedger />;
+    case "journal-register":
+      return <JournalRegister />;
     case "report-trial-balance":
       return <TrialBalanceReport />;
     case "report-profit-loss":
@@ -257,6 +267,8 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
       return <PurchaseReturnForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "purchase-supplier-entry":
       return <PurchaseSupplierForm />;
+    case "journal-entry":
+      return <JournalEntryForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     default:
       return <PlaceholderTab title={tab.title} sub={`entry · ${subKind}`} />;
   }

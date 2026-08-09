@@ -19,6 +19,7 @@ export type ModuleId =
   | "purchases"
   | "inventory"
   | "fixed-assets"
+  | "accountant"
   | "reports";
 
 export type NestedTabKind = "list" | "entry";
@@ -76,6 +77,6 @@ export interface SubItem {
 export interface Module {
   id: ModuleId;
   label: string;
-  icon: "wallet" | "sale" | "purchase" | "box" | "building" | "report";
+  icon: "wallet" | "sale" | "purchase" | "box" | "building" | "report" | "ledger";
   items: SubItem[];
 }

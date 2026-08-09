@@ -39,6 +39,7 @@ const PARTY_LABEL: Record<EntrySubKind, string> = {
   "purchase-payment": "Supplier",
   "inventory-item": "Item Name",
   "asset-register": "Asset Name",
+  "journal-entry": "Memo",
 };
 
 const HEADER_TITLE: Record<EntrySubKind, string> = {
@@ -60,6 +61,7 @@ const HEADER_TITLE: Record<EntrySubKind, string> = {
   "purchase-payment": "Purchase Payment",
   "inventory-item": "Inventory Item",
   "asset-register": "Asset",
+  "journal-entry": "Journal Entry",
 };
 
 const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
@@ -81,6 +83,7 @@ const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
   "purchase-payment": { label: "Cash / Bank" },
   "inventory-item": { label: "Inventory Asset" },
   "asset-register": { label: "Fixed Asset" },
+  "journal-entry": { label: "Lines" },
 };
 
 /**

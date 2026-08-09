@@ -60,6 +60,15 @@ const Icon = ({ name }: { name: Module["icon"] }) => {
           <path d="M17 14v3" />
         </svg>
       );
+    case "ledger":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 3h14v18H5z" />
+          <path d="M8 7h8" />
+          <path d="M8 11h8" />
+          <path d="M8 15h5" />
+        </svg>
+      );
   }
 };
 

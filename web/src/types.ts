@@ -30,6 +30,9 @@ export type ListSubKind =
   | "inventory-items"
   | "stock-movements"
   | "asset-register"
+  | "journal-entry"
+  | "general-ledger"
+  | "journal-register"
   | "report-trial-balance"
   | "report-profit-loss"
   | "report-balance-sheet"
@@ -54,7 +57,8 @@ export type EntrySubKind =
   | "purchase-payment"
   | "purchase-return-entry"
   | "inventory-item"
-  | "asset-register";
+  | "asset-register"
+  | "journal-entry";
 
 export type CurrencyCode = "IDR";
 
@@ -903,4 +907,41 @@ export interface PurchaseReturnLineInput {
 export interface CreatePurchaseReturnInput {
   invoice_id: number; supplier_id: number; return_date: string;
   refund_method?: string; reason?: string; lines: PurchaseReturnLineInput[];
+}
+
+/* ================================================================== */
+/* Accountant Mode (manual journals, general ledger, journal register) */
+/* ================================================================== */
+
+/* Manual Journal Entry */
+export interface JournalEntryListItem {
+  id: number; number: string; entry_date: string; description: string;
+  intent_type: string; status: string; total_debit_cents: number; total_credit_cents: number;
+}
+export interface JournalEntryLine {
+  account_id: number; account_code: string; account_name: string;
+  debit_cents: number; credit_cents: number; description?: string;
+}
+export interface JournalEntry extends JournalEntryListItem {
+  source_ref: string; lines: JournalEntryLine[];
+}
+export interface ManualJournalInput {
+  entry_date: string; description: string;
+  lines: { account_id: number; debit_cents: number; credit_cents: number; description?: string }[];
+}
+
+/* General Ledger (Buku Besar) */
+export interface GeneralLedgerEntry {
+  entry_number: string; entry_date: string; description: string;
+  debit_cents: number; credit_cents: number; running_balance_cents: number;
+}
+export interface GeneralLedgerResult {
+  account_id: number; account_code: string; account_name: string;
+  opening_balance_cents: number; entries: GeneralLedgerEntry[]; closing_balance_cents: number;
+}
+
+/* Journal Register */
+export interface JournalRegisterItem {
+  id: number; number: string; entry_date: string; description: string;
+  intent_type: string; total_debit_cents: number; total_credit_cents: number;
 }
