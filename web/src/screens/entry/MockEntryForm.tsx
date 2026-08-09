@@ -43,6 +43,7 @@ const PARTY_LABEL: Record<EntrySubKind, string> = {
   "stock-transfer-entry": "Transfer Date",
   "asset-register": "Asset Name",
   "journal-entry": "Memo",
+  "financial-notes-entry": "Period",
 };
 
 const HEADER_TITLE: Record<EntrySubKind, string> = {
@@ -68,6 +69,7 @@ const HEADER_TITLE: Record<EntrySubKind, string> = {
   "stock-transfer-entry": "Stock Transfer",
   "asset-register": "Asset",
   "journal-entry": "Journal Entry",
+  "financial-notes-entry": "Financial Note",
 };
 
 const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
@@ -93,6 +95,7 @@ const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
   "stock-transfer-entry": { label: "Transfer items" },
   "asset-register": { label: "Fixed Asset" },
   "journal-entry": { label: "Lines" },
+  "financial-notes-entry": { label: "Note" },
 };
 
 /**

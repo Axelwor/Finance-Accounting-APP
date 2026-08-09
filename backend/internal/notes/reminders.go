@@ -11,15 +11,15 @@ import (
 // (payable, direction=supplier), filtering out PAID/VOID rows whose due_date
 // is within `days_ahead` days from today (or already overdue).
 type dueDateReminder struct {
-	ID           int64     `json:"id"`
-	Number       string    `json:"number"`
-	PartyName    string    `json:"party_name"`
-	Direction    string    `json:"direction"` // "customer" | "supplier"
-	InvoiceDate  time.Time `json:"invoice_date"`
-	DueDate      time.Time `json:"due_date"`
-	AmountCents  int64     `json:"amount_cents"`
-	Status       string    `json:"status"`
-	DaysOverdue  int       `json:"days_overdue"`
+	ID          int64     `json:"id"`
+	Number      string    `json:"number"`
+	PartyName   string    `json:"party_name"`
+	Direction   string    `json:"direction"` // "customer" | "supplier"
+	InvoiceDate time.Time `json:"invoice_date"`
+	DueDate     time.Time `json:"due_date"`
+	AmountCents int64     `json:"amount_cents"`
+	Status      string    `json:"status"`
+	DaysOverdue int       `json:"days_overdue"`
 }
 
 // DueDateReminders returns customer + supplier invoices whose due_date falls

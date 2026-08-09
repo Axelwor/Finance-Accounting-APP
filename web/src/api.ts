@@ -388,6 +388,14 @@ async function buildOpeningBalance(input: OnboardingInput): Promise<OpeningBalan
 /* API implementation (real auth; other endpoints fall back to mock)   */
 /* ------------------------------------------------------------------ */
 
+function buildReportQuery(fromDate?: string, toDate?: string): string {
+  const params = new URLSearchParams();
+  if (fromDate) params.set("from", fromDate);
+  if (toDate) params.set("to", toDate);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
 export const api = {
   /** Registers a new user on the backend and opens a local session. */
   async register(input: RegisterInput): Promise<{ user: { id: string; email: string; businessName: string } }> {
@@ -839,22 +847,26 @@ export const api = {
 
   /** Trial balance report (GET /reports/trial-balance). */
   async getTrialBalance(fromDate?: string, toDate?: string): Promise<BackendTrialBalance> {
-    return http<BackendTrialBalance>(`/reports/trial-balance${reportDateQuery(fromDate, toDate)}`, { auth: true });
+    const qs = buildReportQuery(fromDate, toDate);
+    return http<BackendTrialBalance>(`/reports/trial-balance${qs}`, { auth: true });
   },
 
   /** Profit & Loss report (GET /reports/profit-loss). */
   async getProfitLoss(fromDate?: string, toDate?: string): Promise<BackendProfitLoss> {
-    return http<BackendProfitLoss>(`/reports/profit-loss${reportDateQuery(fromDate, toDate)}`, { auth: true });
+    const qs = buildReportQuery(fromDate, toDate);
+    return http<BackendProfitLoss>(`/reports/profit-loss${qs}`, { auth: true });
   },
 
   /** Balance Sheet report (GET /reports/balance-sheet). */
   async getBalanceSheet(fromDate?: string, toDate?: string): Promise<BackendBalanceSheet> {
-    return http<BackendBalanceSheet>(`/reports/balance-sheet${reportDateQuery(fromDate, toDate)}`, { auth: true });
+    const qs = buildReportQuery(fromDate, toDate);
+    return http<BackendBalanceSheet>(`/reports/balance-sheet${qs}`, { auth: true });
   },
 
   /** Cash Flow report (GET /reports/cash-flow). */
   async getCashFlow(fromDate?: string, toDate?: string): Promise<BackendCashFlow> {
-    return http<BackendCashFlow>(`/reports/cash-flow${reportDateQuery(fromDate, toDate)}`, { auth: true });
+    const qs = buildReportQuery(fromDate, toDate);
+    return http<BackendCashFlow>(`/reports/cash-flow${qs}`, { auth: true });
   },
 
   /**

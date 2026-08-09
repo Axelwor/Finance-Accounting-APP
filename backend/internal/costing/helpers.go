@@ -25,9 +25,9 @@ import (
 
 // Costing methods (mirror items.costing_method CHECK constraint).
 const (
-	MethodFIFO         = "fifo"
+	MethodFIFO          = "fifo"
 	MethodMovingAverage = "moving_average"
-	MethodSpecific     = "specific"
+	MethodSpecific      = "specific"
 )
 
 // ErrInsufficientStock is returned when a stock-out would drive qty_on_hand

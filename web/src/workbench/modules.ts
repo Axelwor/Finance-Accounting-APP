@@ -226,6 +226,10 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Asset";
     case "journal-entry":
       return "Journal Entry";
+    case "financial-notes-entry":
+      return "Financial Note";
+    default:
+      return "Entry";
   }
 }
 
@@ -254,5 +258,7 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "stock-transfer-entry": return "TRF-DRAFT";
     case "asset-register": return "FA-DRAFT";
     case "journal-entry": return "JE-DRAFT";
+    case "financial-notes-entry": return "FN-DRAFT";
+    default: return "DRAFT";
   }
 }

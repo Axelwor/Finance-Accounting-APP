@@ -367,6 +367,10 @@ function entryKindToListKind(kind: EntrySubKind): ListSubKind | null {
       return "asset-register";
     case "journal-entry":
       return "journal-entry";
+    case "financial-notes-entry":
+      return "financial-notes";
+    default:
+      return null;
   }
 }
 
