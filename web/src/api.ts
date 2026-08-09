@@ -87,7 +87,19 @@ import type {
   ManualJournalInput,
   GeneralLedgerResult,
   JournalRegisterItem,
+  BankStatement,
+  BankStatementListItem,
+  BankStatementLine,
+  BankReconciliation,
+  BookCandidate,
+  CreateBankStatementInput,
+  BankStatementLineInput,
+  ReconcileMatchInput,
+  ReconcileUnmatchInput,
 } from "./types";
+
+/** Reconciliation detail returned by the reconcile endpoints. */
+type Reconciliation = BankReconciliation;
 
 const LATENCY_MS = 200;
 const STORAGE_KEY = "ledgerly.m1.v1";
@@ -1245,6 +1257,84 @@ export const api = {
       body: JSON.stringify(input),
     });
   },
+
+  // -- Bank Reconciliation --
+
+  /** Bank accounts only (account_type = BANK), from GET /accounts. Failure -> empty array. */
+  async listBankAccounts(): Promise<BackendAccount[]> {
+    try {
+      const all = await http<BackendAccount[]>("/accounts", { auth: true });
+      return all.filter((a) => a.is_active && !a.is_group && a.account_type === "BANK");
+    } catch {
+      return [];
+    }
+  },
+
+  /** List bank statements (GET /bank-statements). Optional status filter. */
+  async listBankStatements(status?: string): Promise<BankStatementListItem[]> {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+    try {
+      return await http<BankStatementListItem[]>(`/bank-statements${qs}`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Get one bank statement with its lines (GET /bank-statements/{id}). */
+  async getBankStatement(id: number): Promise<BankStatement> {
+    return http<BankStatement>(`/bank-statements/${id}`, { auth: true });
+  },
+
+  /** Import a bank statement (POST /bank-statements). CSV is parsed client-side; lines sent as JSON. */
+  async importBankStatement(input: CreateBankStatementInput): Promise<BankStatement> {
+    return http<BankStatement>("/bank-statements", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Start reconciliation: auto-match statement lines to book transactions (POST /bank-statements/{id}/reconcile). */
+  async startReconciliation(statementId: number): Promise<Reconciliation> {
+    return http<Reconciliation>(`/bank-statements/${statementId}/reconcile`, {
+      method: "POST",
+      auth: true,
+    });
+  },
+
+  /** Get one reconciliation with its detail (GET /bank-reconciliations/{id}). */
+  async getReconciliation(id: number): Promise<Reconciliation> {
+    return http<Reconciliation>(`/bank-reconciliations/${id}`, { auth: true });
+  },
+
+  /** Manual match a statement line to a journal line (POST /bank-reconciliations/{id}/match). */
+  async matchReconciliationLine(reconId: number, input: ReconcileMatchInput): Promise<Reconciliation> {
+    return http<Reconciliation>(`/bank-reconciliations/${reconId}/match`, {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Unmatch a statement line (POST /bank-reconciliations/{id}/unmatch). */
+  async unmatchReconciliationLine(reconId: number, input: ReconcileUnmatchInput): Promise<Reconciliation> {
+    return http<Reconciliation>(`/bank-reconciliations/${reconId}/unmatch`, {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Complete reconciliation (POST /bank-reconciliations/{id}/complete). Requires diff_cents == 0. */
+  async completeReconciliation(reconId: number): Promise<Reconciliation> {
+    return http<Reconciliation>(`/bank-reconciliations/${reconId}/complete`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+    });
+  },
+
   /**
    * Completes onboarding: creates the tenant on the backend (POST /tenants),
    * then posts the opening balance (POST /opening-balances) when filled in.

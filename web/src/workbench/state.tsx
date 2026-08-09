@@ -329,6 +329,8 @@ function entryKindToListKind(kind: EntrySubKind): ListSubKind | null {
       return "cash-other-payment";
     case "cash-transfer":
       return "cash-transfer";
+    case "bank-reconciliation-entry":
+      return "bank-reconciliation";
     case "sales-invoice":
       return "sales-invoice";
     case "sales-receipt":

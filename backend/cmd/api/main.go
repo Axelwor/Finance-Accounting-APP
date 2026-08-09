@@ -18,6 +18,7 @@ import (
 	"finance-accounting-app/backend/internal/item"
 	"finance-accounting-app/backend/internal/period"
 	"finance-accounting-app/backend/internal/purchase"
+	"finance-accounting-app/backend/internal/reconciliation"
 	"finance-accounting-app/backend/internal/reporting"
 	"finance-accounting-app/backend/internal/sales"
 	"finance-accounting-app/backend/internal/tenant"
@@ -139,6 +140,10 @@ func main() {
 			router.Get("/supplier-invoices/{id}", purchaseHandler.GetSupplierInvoice)
 			router.Post("/supplier-invoices/{id}/payments", purchaseHandler.CreateSupplierPayment)
 			router.Get("/supplier-invoices/{id}/payments", purchaseHandler.ListSupplierPayments)
+
+			// US-050: Bank Reconciliation (Rekonsiliasi Kas & Bank).
+			reconciliationHandler := reconciliation.NewHandler(pool)
+			reconciliationHandler.Routes(router)
 		})
 	})
 
