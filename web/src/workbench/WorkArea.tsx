@@ -32,6 +32,8 @@ import {
   InventoryItemsList,
   StockMovementsList,
 } from "../screens/list/Inventory";
+import { StockOpnameList } from "../screens/list/StockOpnameList";
+import { StockTransferList } from "../screens/list/StockTransferList";
 import { AssetRegisterList } from "../screens/list/Assets";
 import { MockEntryForm } from "../screens/entry/MockEntryForm";
 import { QuotationForm } from "../screens/entry/QuotationForm";
@@ -44,6 +46,8 @@ import { GRNForm } from "../screens/entry/GRNForm";
 import { PurchaseSupplierForm } from "../screens/entry/PurchaseSupplierForm";
 import { SupplierInvoiceForm } from "../screens/entry/SupplierInvoiceForm";
 import { PurchaseReturnForm } from "../screens/entry/PurchaseReturnForm";
+import { StockOpnameForm } from "../screens/entry/StockOpnameForm";
+import { StockTransferForm } from "../screens/entry/StockTransferForm";
 import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
@@ -195,6 +199,10 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <InventoryItemsList />;
     case "stock-movements":
       return <StockMovementsList />;
+    case "stock-opname":
+      return <StockOpnameList />;
+    case "stock-transfer":
+      return <StockTransferList />;
     case "asset-register":
       return <AssetRegisterList />;
     case "report-trial-balance":
@@ -257,6 +265,10 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
       return <PurchaseReturnForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "purchase-supplier-entry":
       return <PurchaseSupplierForm />;
+    case "stock-opname-entry":
+      return <StockOpnameForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "stock-transfer-entry":
+      return <StockTransferForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     default:
       return <PlaceholderTab title={tab.title} sub={`entry · ${subKind}`} />;
   }

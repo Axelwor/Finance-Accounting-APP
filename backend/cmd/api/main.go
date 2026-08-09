@@ -13,6 +13,7 @@ import (
 	"finance-accounting-app/backend/internal/coa"
 	"finance-accounting-app/backend/internal/config"
 	"finance-accounting-app/backend/internal/customer"
+	"finance-accounting-app/backend/internal/inventory"
 	"finance-accounting-app/backend/internal/item"
 	"finance-accounting-app/backend/internal/period"
 	"finance-accounting-app/backend/internal/purchase"
@@ -121,6 +122,9 @@ func main() {
 
 			purchaseHandler := purchase.NewHandler(pool)
 			purchaseHandler.Routes(router)
+
+			inventoryHandler := inventory.NewHandler(pool)
+			inventoryHandler.Routes(router)
 
 			router.Post("/supplier-invoices", purchaseHandler.CreateSupplierInvoice)
 			router.Get("/supplier-invoices", purchaseHandler.ListSupplierInvoices)

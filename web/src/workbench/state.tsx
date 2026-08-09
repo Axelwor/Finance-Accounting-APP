@@ -357,6 +357,10 @@ function entryKindToListKind(kind: EntrySubKind): ListSubKind | null {
       return "purchase-return";
     case "inventory-item":
       return "inventory-items";
+    case "stock-opname-entry":
+      return "stock-opname";
+    case "stock-transfer-entry":
+      return "stock-transfer";
     case "asset-register":
       return "asset-register";
   }

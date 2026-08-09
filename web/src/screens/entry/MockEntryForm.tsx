@@ -38,6 +38,8 @@ const PARTY_LABEL: Record<EntrySubKind, string> = {
     "purchase-return-entry": "Supplier",
   "purchase-payment": "Supplier",
   "inventory-item": "Item Name",
+  "stock-opname-entry": "Opname Date",
+  "stock-transfer-entry": "Transfer Date",
   "asset-register": "Asset Name",
 };
 
@@ -59,6 +61,8 @@ const HEADER_TITLE: Record<EntrySubKind, string> = {
     "supplier-invoice-entry": "Supplier Invoice",
   "purchase-payment": "Purchase Payment",
   "inventory-item": "Inventory Item",
+  "stock-opname-entry": "Stock Opname",
+  "stock-transfer-entry": "Stock Transfer",
   "asset-register": "Asset",
 };
 
@@ -80,6 +84,8 @@ const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
     "supplier-invoice-entry": { label: "Uninvoiced Payables" },
   "purchase-payment": { label: "Cash / Bank" },
   "inventory-item": { label: "Inventory Asset" },
+  "stock-opname-entry": { label: "Counted items" },
+  "stock-transfer-entry": { label: "Transfer items" },
   "asset-register": { label: "Fixed Asset" },
 };
 

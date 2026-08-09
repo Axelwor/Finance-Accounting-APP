@@ -34,12 +34,14 @@ func seedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		{"3301", "Current Earnings", "equity", "EQUITY"},
 		{"4101", "Sales Revenue", "revenue", "REVENUE"},
 		{"4201", "Sales Returns", "revenue", "CONTRA_REVENUE"},
+		{"4907", "Inventory Adjustment Gain", "revenue", "OTHER_INCOME"},
 		{"5101", "COGS", "expense", "COGS"},
 		{"5201", "Salary Expense", "expense", "EXPENSE"},
 		{"5202", "Rent Expense", "expense", "EXPENSE"},
 		{"5203", "Transportation Expense", "expense", "EXPENSE"},
 		{"5204", "Utilities Expense", "expense", "EXPENSE"},
 		{"5205", "Other Expenses", "expense", "EXPENSE"},
+		{"5907", "Inventory Adjustment Loss", "expense", "OTHER_EXPENSE"},
 	}
 	accountIDs := make(map[string]int64, len(accounts))
 	for _, account := range accounts {

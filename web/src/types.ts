@@ -29,6 +29,8 @@ export type ListSubKind =
   | "purchase-return"
   | "inventory-items"
   | "stock-movements"
+  | "stock-opname"
+  | "stock-transfer"
   | "asset-register"
   | "report-trial-balance"
   | "report-profit-loss"
@@ -54,6 +56,8 @@ export type EntrySubKind =
   | "purchase-payment"
   | "purchase-return-entry"
   | "inventory-item"
+  | "stock-opname-entry"
+  | "stock-transfer-entry"
   | "asset-register";
 
 export type CurrencyCode = "IDR";
@@ -903,4 +907,94 @@ export interface PurchaseReturnLineInput {
 export interface CreatePurchaseReturnInput {
   invoice_id: number; supplier_id: number; return_date: string;
   refund_method?: string; reason?: string; lines: PurchaseReturnLineInput[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Stock Opname (US-043) — physical count adjustment                  */
+/*   surplus  (diff > 0): Dr Inventory / Cr Inventory Adjustment Gain */
+/*   shortage (diff < 0): Dr Inventory Adjustment Loss / Cr Inventory */
+/* ------------------------------------------------------------------ */
+
+export interface StockOpnameListItem {
+  id: number;
+  number: string;
+  opname_date: string;
+  notes?: string;
+  status: "DRAFT" | "COUNTED" | "APPROVED" | "VOID";
+  journal_entry_id?: number;
+  total_adjustment_cents: number;
+}
+
+export interface StockOpnameLine {
+  id: number;
+  item_id: number;
+  item_code?: string;
+  item_name?: string;
+  line_no: number;
+  system_qty: string;
+  counted_qty: string;
+  diff_qty: string;
+  unit_cost_cents: number;
+  adjustment_cents: number;
+  inventory_account_id: number;
+  reason?: string;
+}
+
+export interface StockOpname extends StockOpnameListItem {
+  lines: StockOpnameLine[];
+}
+
+export interface StockOpnameLineInput {
+  item_id: number;
+  counted_qty: number;
+  unit_cost_cents: number;
+  reason?: string;
+}
+
+export interface CreateStockOpnameInput {
+  opname_date: string;
+  notes?: string;
+  lines: StockOpnameLineInput[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Stock Transfer (US-042) — stock movement, no journal posted        */
+/*   (same inventory account, no value change)                        */
+/* ------------------------------------------------------------------ */
+
+export interface StockTransferListItem {
+  id: number;
+  number: string;
+  transfer_date: string;
+  notes?: string;
+  status: "COMPLETED" | "VOID";
+}
+
+export interface StockTransferLine {
+  id: number;
+  item_id: number;
+  item_code?: string;
+  item_name?: string;
+  line_no: number;
+  qty: string;
+  unit_cost_cents: number;
+  inventory_account_id: number;
+  description?: string;
+}
+
+export interface StockTransfer extends StockTransferListItem {
+  lines: StockTransferLine[];
+}
+
+export interface StockTransferLineInput {
+  item_id: number;
+  qty: number;
+  unit_cost_cents: number;
+  description?: string;
+}
+
+export interface CreateStockTransferInput {
+  transfer_date: string;
+  notes?: string;
+  lines: StockTransferLineInput[];
 }

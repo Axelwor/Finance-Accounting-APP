@@ -53,6 +53,8 @@ const inventory: Module = {
   items: [
     { id: "in-items", label: "Item List", hint: "ITM", openList: "inventory-items", openEntry: "inventory-item", mockData: true },
     { id: "in-movements", label: "Stock Movements", hint: "STK", openList: "stock-movements", mockData: true },
+    { id: "in-opname", label: "Stock Opnames", hint: "OPN", openList: "stock-opname", openEntry: "stock-opname-entry" },
+    { id: "in-transfer", label: "Stock Transfers", hint: "TRF", openList: "stock-transfer", openEntry: "stock-transfer-entry" },
   ],
 };
 
@@ -134,6 +136,10 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Item List";
     case "stock-movements":
       return "Stock Movements";
+    case "stock-opname":
+      return "Stock Opnames";
+    case "stock-transfer":
+      return "Stock Transfers";
     case "asset-register":
       return "Asset Register";
     case "report-trial-balance":
@@ -184,6 +190,10 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Purchase Return";
     case "inventory-item":
       return "Item";
+    case "stock-opname-entry":
+      return "Stock Opname";
+    case "stock-transfer-entry":
+      return "Stock Transfer";
     case "asset-register":
       return "Asset";
   }
@@ -209,6 +219,8 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "purchase-payment": return "PP-DRAFT";
     case "purchase-return-entry": return "PRET-DRAFT";
     case "inventory-item": return "IT-DRAFT";
+    case "stock-opname-entry": return "OPN-DRAFT";
+    case "stock-transfer-entry": return "TRF-DRAFT";
     case "asset-register": return "FA-DRAFT";
   }
 }

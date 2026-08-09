@@ -76,6 +76,12 @@ import type {
   PurchaseReturn,
   PurchaseReturnListItem,
   CreatePurchaseReturnInput,
+  StockOpname,
+  StockOpnameListItem,
+  CreateStockOpnameInput,
+  StockTransfer,
+  StockTransferListItem,
+  CreateStockTransferInput,
 } from "./types";
 
 const LATENCY_MS = 200;
@@ -1008,6 +1014,60 @@ export const api = {
 
   async createGRN(input: CreateGRNInput): Promise<GoodsReceivedNote> {
     return http<GoodsReceivedNote>("/goods-received-notes", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  // -- Stock Opnames (US-043) --
+
+  async listStockOpnames(): Promise<StockOpnameListItem[]> {
+    try {
+      return await http<StockOpnameListItem[]>("/stock-opnames", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  async getStockOpname(id: number): Promise<StockOpname> {
+    return http<StockOpname>(`/stock-opnames/${id}`, { auth: true });
+  },
+
+  async createStockOpname(input: CreateStockOpnameInput): Promise<StockOpname> {
+    return http<StockOpname>("/stock-opnames", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  async approveStockOpname(id: number): Promise<StockOpname> {
+    return http<StockOpname>(`/stock-opnames/${id}/approve`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+    });
+  },
+
+  // -- Stock Transfers (US-042) --
+
+  async listStockTransfers(): Promise<StockTransferListItem[]> {
+    try {
+      return await http<StockTransferListItem[]>("/stock-transfers", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  async getStockTransfer(id: number): Promise<StockTransfer> {
+    return http<StockTransfer>(`/stock-transfers/${id}`, { auth: true });
+  },
+
+  async createStockTransfer(input: CreateStockTransferInput): Promise<StockTransfer> {
+    return http<StockTransfer>("/stock-transfers", {
       method: "POST",
       auth: true,
       idempotencyKey: newIdempotencyKey(),
