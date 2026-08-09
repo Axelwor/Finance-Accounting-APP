@@ -4,7 +4,7 @@
 -- Seed accounts 1402, 5206, 3401, 4903, 5903, 5207 for existing tenants.
 -- 1401 Fixed Assets already exists (seeded in 000001 / seed.go).
 INSERT INTO accounts (tenant_id, code, name, report_group, account_type)
-SELECT t.id, v.code, v.name, v.report_group, v.account_type
+SELECT t.id, v.code, v.val_name, v.report_group, v.account_type
 FROM tenants t
 CROSS JOIN (VALUES
   ('1402', 'Accumulated Depreciation', 'asset', 'CONTRA_ASSET'),
@@ -13,7 +13,7 @@ CROSS JOIN (VALUES
   ('4903', 'Gain on Asset Disposal', 'revenue', 'OTHER_INCOME'),
   ('5903', 'Loss on Asset Disposal', 'expense', 'OTHER_EXPENSE'),
   ('5207', 'Impairment Loss', 'expense', 'IMPAIRMENT')
-) AS v(code, name, report_group, account_type)
+) AS v(code, val_name, report_group, account_type)
 WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.tenant_id = t.id AND a.code = v.code);
 
 CREATE TABLE fixed_assets (
