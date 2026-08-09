@@ -67,6 +67,17 @@ const fixedAssets: Module = {
   ],
 };
 
+const accountant: Module = {
+  id: "accountant",
+  label: "Accountant",
+  icon: "ledger",
+  items: [
+    { id: "ac-journal", label: "Journal Entries", hint: "JE", openList: "journal-entry", openEntry: "journal-entry" },
+    { id: "ac-ledger", label: "General Ledger", hint: "GL", openList: "general-ledger" },
+    { id: "ac-register", label: "Journal Register", hint: "REG", openList: "journal-register" },
+  ],
+};
+
 const reports: Module = {
   id: "reports",
   label: "Reports",
@@ -79,7 +90,7 @@ const reports: Module = {
   ],
 };
 
-export const MODULES: Module[] = [cashBank, sales, purchases, inventory, fixedAssets, reports];
+export const MODULES: Module[] = [cashBank, sales, purchases, inventory, fixedAssets, accountant, reports];
 
 export function findModule(id: ModuleId): Module | undefined {
   return MODULES.find((m) => m.id === id);
@@ -142,6 +153,12 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Stock Transfers";
     case "asset-register":
       return "Asset Register";
+    case "journal-entry":
+      return "Journal Entries";
+    case "general-ledger":
+      return "General Ledger";
+    case "journal-register":
+      return "Journal Register";
     case "report-trial-balance":
       return "Trial Balance";
     case "report-profit-loss":
@@ -196,6 +213,8 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Stock Transfer";
     case "asset-register":
       return "Asset";
+    case "journal-entry":
+      return "Journal Entry";
   }
 }
 
@@ -222,5 +241,6 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "stock-opname-entry": return "OPN-DRAFT";
     case "stock-transfer-entry": return "TRF-DRAFT";
     case "asset-register": return "FA-DRAFT";
+    case "journal-entry": return "JE-DRAFT";
   }
 }

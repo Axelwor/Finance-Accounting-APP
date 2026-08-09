@@ -82,6 +82,11 @@ import type {
   StockTransfer,
   StockTransferListItem,
   CreateStockTransferInput,
+  JournalEntryListItem,
+  JournalEntry,
+  ManualJournalInput,
+  GeneralLedgerResult,
+  JournalRegisterItem,
 } from "./types";
 
 const LATENCY_MS = 200;
@@ -720,6 +725,100 @@ export const api = {
       return delay(response.items ?? []);
     } catch {
       return delay([]);
+    }
+  },
+
+  /* ----------------------- Accountant Mode v1 ----------------------- */
+
+  /**
+   * Lists raw backend accounts (GET /accounts) for the account pickers used
+   * by the manual journal and general ledger screens. Falls back to an empty
+   * list on failure so the picker still renders.
+   */
+  async listBackendAccounts(): Promise<BackendAccount[]> {
+    try {
+      return await http<BackendAccount[]>("/accounts", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Creates a manual journal entry (POST /journal-entries). */
+  async createManualJournal(payload: ManualJournalInput): Promise<BackendJournalResult> {
+    return http<BackendJournalResult>("/journal-entries", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Lists journal entries (GET /journal-entries). */
+  async listJournalEntries(params: {
+    from_date?: string;
+    to_date?: string;
+    account_id?: number;
+  } = {}): Promise<JournalEntryListItem[]> {
+    const search = new URLSearchParams();
+    if (params.from_date) search.set("from_date", params.from_date);
+    if (params.to_date) search.set("to_date", params.to_date);
+    if (params.account_id) search.set("account_id", String(params.account_id));
+    const query = search.toString();
+    try {
+      const response = await http<{ items: JournalEntryListItem[] }>(
+        `/journal-entries${query ? `?${query}` : ""}`,
+        { auth: true },
+      );
+      return response.items ?? [];
+    } catch {
+      return [];
+    }
+  },
+
+  /** Gets one journal entry with its lines (GET /journal-entries/{id}). */
+  async getJournalEntry(id: number): Promise<JournalEntry | null> {
+    try {
+      return await http<JournalEntry>(`/journal-entries/${id}`, { auth: true });
+    } catch {
+      return null;
+    }
+  },
+
+  /** General ledger for one account (GET /general-ledger?account_id=...). */
+  async getGeneralLedger(params: {
+    account_id: number;
+    from_date?: string;
+    to_date?: string;
+  }): Promise<GeneralLedgerResult | null> {
+    const search = new URLSearchParams();
+    search.set("account_id", String(params.account_id));
+    if (params.from_date) search.set("from_date", params.from_date);
+    if (params.to_date) search.set("to_date", params.to_date);
+    try {
+      return await http<GeneralLedgerResult>(`/general-ledger?${search.toString()}`, { auth: true });
+    } catch {
+      return null;
+    }
+  },
+
+  /** Journal register (GET /journal-register). */
+  async getJournalRegister(params: {
+    from_date?: string;
+    to_date?: string;
+    intent_type?: string;
+  } = {}): Promise<JournalRegisterItem[]> {
+    const search = new URLSearchParams();
+    if (params.from_date) search.set("from_date", params.from_date);
+    if (params.to_date) search.set("to_date", params.to_date);
+    if (params.intent_type) search.set("intent_type", params.intent_type);
+    const query = search.toString();
+    try {
+      return await http<JournalRegisterItem[]>(
+        `/journal-register${query ? `?${query}` : ""}`,
+        { auth: true },
+      );
+    } catch {
+      return [];
     }
   },
 

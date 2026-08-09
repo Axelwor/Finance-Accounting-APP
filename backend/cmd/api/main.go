@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"finance-accounting-app/backend/internal/accounting"
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/cash"
 	"finance-accounting-app/backend/internal/coa"
@@ -39,6 +40,7 @@ func main() {
 	reportingHandler := reporting.NewHandler(pool)
 	coaHandler := coa.NewHandler(pool)
 	cashHandler := cash.NewHandler(pool)
+	accountingHandler := accounting.NewHandler(pool)
 	periodHandler := period.NewHandler(pool)
 	customerHandler := customer.NewHandler(pool)
 	itemHandler := item.NewHandler(pool)
@@ -61,6 +63,12 @@ func main() {
 			router.Post("/transfers", cashHandler.Transfer)
 			router.Post("/opening-balances", cashHandler.OpeningBalance)
 			router.Post("/journal-entries/{id}/reverse", cashHandler.Reverse)
+
+			router.Post("/journal-entries", accountingHandler.CreateManualJournal)
+			router.Get("/journal-entries", accountingHandler.ListJournalEntries)
+			router.Get("/journal-entries/{id}", accountingHandler.GetJournalEntry)
+			router.Get("/general-ledger", accountingHandler.GetGeneralLedger)
+			router.Get("/journal-register", accountingHandler.GetJournalRegister)
 
 			router.Get("/accounts", coaHandler.List)
 			router.Post("/accounts", coaHandler.Create)

@@ -132,8 +132,8 @@ function reducer(state: State, action: Action): State {
       });
     }
     case "open-entry-existing": {
-      const moduleId: ModuleId = "cash-bank";
       const lookup = findSubItemByList(entryKindToListKind(action.subKind) ?? ("cash-other-receipt" as ListSubKind));
+      const moduleId: ModuleId = lookup?.module.id ?? "cash-bank";
       const subLabel = lookup?.item.label ?? findModule(moduleId)?.label ?? moduleId;
       const parent = ensureModuleParent(state, moduleId, subLabel);
       return activateNestedChild(parent, {
@@ -363,6 +363,8 @@ function entryKindToListKind(kind: EntrySubKind): ListSubKind | null {
       return "stock-transfer";
     case "asset-register":
       return "asset-register";
+    case "journal-entry":
+      return "journal-entry";
   }
 }
 
