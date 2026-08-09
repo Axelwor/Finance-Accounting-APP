@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/costing"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -127,16 +128,18 @@ func (service *Service) CreateGRN(writer http.ResponseWriter, request *http.Requ
 			line          GRNLineRequest
 			lineTotal     int64
 			inventoryAcct int64
+			costingMethod string
 		}
 		prepared := make([]preparedGRNLine, 0, len(req.Lines))
 		var totalGRN int64
 		for _, line := range req.Lines {
 			var itemType, itemCode, itemName string
 			var invAcct pgtype.Int8
+			var costingMethod pgtype.Text
 			err := tx.QueryRow(request.Context(), `
-				SELECT item_type, code, name, inventory_account_id
+				SELECT item_type, code, name, inventory_account_id, costing_method
 				FROM items WHERE tenant_id = $1 AND id = $2
-			`, tenant, line.ItemID).Scan(&itemType, &itemCode, &itemName, &invAcct)
+			`, tenant, line.ItemID).Scan(&itemType, &itemCode, &itemName, &invAcct, &costingMethod)
 			if err != nil {
 				return fmt.Errorf("item %d not found: %w", line.ItemID, err)
 			}
@@ -152,6 +155,7 @@ func (service *Service) CreateGRN(writer http.ResponseWriter, request *http.Requ
 				line:          line,
 				lineTotal:     lineTotal,
 				inventoryAcct: invAcct.Int64,
+				costingMethod: textValue(costingMethod),
 			})
 		}
 
@@ -276,6 +280,11 @@ func (service *Service) CreateGRN(writer http.ResponseWriter, request *http.Requ
 				INSERT INTO inventory_movements (tenant_id, item_id, movement_type, qty, unit_cost_cents, source_ref, source_id)
 				VALUES ($1, $2, 'GRN', $3, $4, $5, $6)
 			`, tenant, p.line.ItemID, posQty, p.line.UnitCostCents, grnNumber, grnID); err != nil {
+				return err
+			}
+			// Post the costing layer / balance update (PSAK 14).
+			if err := costing.PostGRN(request.Context(), tx, tenant, p.line.ItemID,
+				p.line.Qty, p.line.UnitCostCents, p.costingMethod); err != nil {
 				return err
 			}
 		}

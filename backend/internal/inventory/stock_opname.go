@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/costing"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -48,6 +49,7 @@ type stockOpnameLineResponse struct {
 	AdjustmentCents    int64   `json:"adjustment_cents"`
 	InventoryAccountID int64   `json:"inventory_account_id"`
 	Reason             string  `json:"reason"`
+	costingMethod      string  `json:"-"`
 }
 
 type stockOpnameResponse struct {
@@ -330,7 +332,7 @@ func (service *Service) ApproveStockOpname(writer http.ResponseWriter, request *
 		rows, err := tx.Query(request.Context(), `
 			SELECT sol.id, sol.item_id, i.code, i.name, sol.line_no, sol.system_qty,
 			       sol.counted_qty, sol.diff_qty, sol.unit_cost_cents, sol.adjustment_cents,
-			       sol.inventory_account_id, COALESCE(sol.reason,'')
+			       sol.inventory_account_id, COALESCE(sol.reason,''), COALESCE(i.costing_method,'')
 			FROM stock_opname_lines sol
 			LEFT JOIN items i ON i.tenant_id = sol.tenant_id AND i.id = sol.item_id
 			WHERE sol.tenant_id = $1 AND sol.opname_id = $2
@@ -345,9 +347,10 @@ func (service *Service) ApproveStockOpname(writer http.ResponseWriter, request *
 			var line stockOpnameLineResponse
 			var itemCode, itemName, reason pgtype.Text
 			var systemQty, countedQty, diffQty pgtype.Numeric
+			var costingMethod pgtype.Text
 			if err := rows.Scan(&line.ID, &line.ItemID, &itemCode, &itemName, &line.LineNo,
 				&systemQty, &countedQty, &diffQty, &line.UnitCostCents, &line.AdjustmentCents,
-				&line.InventoryAccountID, &reason); err != nil {
+				&line.InventoryAccountID, &reason, &costingMethod); err != nil {
 				return err
 			}
 			line.SystemQty = numericToFloat(systemQty)
@@ -356,6 +359,7 @@ func (service *Service) ApproveStockOpname(writer http.ResponseWriter, request *
 			line.ItemCode = textValue(itemCode)
 			line.ItemName = textValue(itemName)
 			line.Reason = textValue(reason)
+			line.costingMethod = textValue(costingMethod)
 			opn.Lines = append(opn.Lines, line)
 		}
 		if err := rows.Err(); err != nil {
