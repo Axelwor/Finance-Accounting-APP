@@ -5,6 +5,7 @@ import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import type { Customer, Item, InvoiceLineInput, SalesOrderListItem, InvoicePayment, CreatePaymentInput } from "../../types";
+import { AttachmentPanel } from "../../components/AttachmentPanel";
 
 interface Props {
   tabId: string;
@@ -413,6 +414,10 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
                 </div>
               )}
               <FormError message={payError} />
+
+              {invId && (
+                <AttachmentPanel ownerType="invoice" ownerId={invId} />
+              )}
             </div>
           )}
         </div>

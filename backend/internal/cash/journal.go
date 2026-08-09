@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/db"
 )
@@ -165,6 +166,26 @@ func (service *Service) post(writer http.ResponseWriter, request *http.Request, 
 			return err
 		}
 		if err := insertOutbox(request.Context(), tx, tenant, "journal.posted", journalPayload(journal, entry.ID, number)); err != nil {
+			return err
+		}
+		// Audit trail: log the POST (or VOID for reversals) action.
+		action := audit.ActionPost
+		if reversalOfID > 0 {
+			action = audit.ActionVoid
+		}
+		after := map[string]any{
+			"id":          entry.ID,
+			"number":      entry.Number,
+			"intent_type": string(journal.IntentType),
+			"entry_date":  journal.EntryDate,
+			"description": journal.Description,
+			"source_ref":  journal.SourceRef,
+			"hash":        journal.Hash,
+		}
+		if reversalOfID > 0 {
+			after["reversal_of_id"] = reversalOfID
+		}
+		if err := audit.Log(request.Context(), tx, tenant, userID, "journal_entry", entry.ID, action, nil, after); err != nil {
 			return err
 		}
 		result = postingResult{

@@ -47,7 +47,8 @@ export type ListSubKind =
   | "production-job"
   | "ppn-reconciliation"
   | "pph-final"
-  | "ecl-calculator";
+  | "ecl-calculator"
+  | "audit-logs";
 
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
@@ -1565,4 +1566,33 @@ export interface CalculateDeferredTaxResult {
   tax_rate: string;
   deferred_tax_cents: number;
   direction: "ASSET" | "REVERSAL";
+}
+
+/** US-100: Attachment metadata returned by the backend. */
+export interface Attachment {
+  id: number;
+  tenant_id: number;
+  owner_type: string;
+  owner_id: number;
+  file_name: string;
+  file_key: string;
+  mime_type: string;
+  file_size: number;
+  ocr_status: "NONE" | "PENDING" | "COMPLETED" | "FAILED";
+  created_at: string;
+  uploaded_by: number;
+}
+
+/** US-101: Audit log entry returned by GET /audit-logs. */
+export interface AuditLog {
+  id: number;
+  tenant_id: number;
+  user_id: number;
+  user_name: string;
+  entity_type: string;
+  entity_id: number;
+  action: "CREATE" | "UPDATE" | "DELETE" | "POST" | "VOID" | "CLOSE" | "UNLOCK" | "APPROVE" | "REJECT";
+  before_data: Record<string, unknown> | null;
+  after_data: Record<string, unknown> | null;
+  created_at: string;
 }

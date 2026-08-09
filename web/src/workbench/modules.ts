@@ -86,6 +86,7 @@ const accountant: Module = {
     { id: "ac-journal", label: "Journal Entries", hint: "JE", openList: "journal-entry", openEntry: "journal-entry" },
     { id: "ac-ledger", label: "General Ledger", hint: "GL", openList: "general-ledger" },
     { id: "ac-register", label: "Journal Register", hint: "REG", openList: "journal-register" },
+    { id: "ac-audit", label: "Audit Trail", hint: "AUD", openList: "audit-logs" },
   ],
 };
 
@@ -211,6 +212,8 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "PPh Final UMKM";
     case "ecl-calculator":
       return "ECL — Penyisihan Piutang";
+    case "audit-logs":
+      return "Audit Trail";
   }
 }
 

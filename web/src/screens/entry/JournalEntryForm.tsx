@@ -4,6 +4,7 @@ import { ErrorState, FormError, LoadingState } from "../../components/ui";
 import { api, mockHelpers } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { BackendAccount, JournalEntry, JournalEntryLine } from "../../types";
+import { AttachmentPanel } from "../../components/AttachmentPanel";
 
 interface Props {
   tabId: string;
@@ -244,6 +245,10 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
               </span>
             )}
           </div>
+
+          {isDetail && detail ? (
+            <AttachmentPanel ownerType="journal_entry" ownerId={detail.id} />
+          ) : null}
         </div>
 
         <aside className="entrytab__aside action-rail">

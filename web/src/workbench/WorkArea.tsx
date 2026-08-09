@@ -41,6 +41,7 @@ import { FixedAssetList } from "../screens/list/FixedAssetList";
 import { JournalEntryList } from "../screens/list/JournalEntryList";
 import { GeneralLedger } from "../screens/list/GeneralLedger";
 import { JournalRegister } from "../screens/list/JournalRegister";
+import { AuditLogList } from "../screens/list/AuditLogList";
 import { JournalEntryForm } from "../screens/entry/JournalEntryForm";
 import { MockEntryForm } from "../screens/entry/MockEntryForm";
 import { QuotationForm } from "../screens/entry/QuotationForm";
@@ -251,6 +252,8 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <PPhFinalCalculator />;
     case "ecl-calculator":
       return <ECLCalculator />;
+    case "audit-logs":
+      return <AuditLogList />;
     default:
       return <PlaceholderTab title={tab.title} sub={`list · ${subKind}`} />;
   }
