@@ -131,6 +131,16 @@ import type {
   WriteOffResult,
   CalculateDeferredTaxInput,
   CalculateDeferredTaxResult,
+  ReportFrameworkRecord,
+  SetFrameworkInput,
+  Dimension,
+  CreateDimensionInput,
+  TagJournalLineInput,
+  Budget,
+  BudgetListItem,
+  BudgetLineInput,
+  CreateBudgetInput,
+  BudgetVsActualResult,
 } from "./types";
 
 /** Reconciliation detail returned by the reconcile endpoints. */
@@ -757,6 +767,16 @@ export const api = {
     }
   },
 
+  /** Active non-group revenue/expense accounts, for budget line pickers. */
+  async listBudgetAccounts(): Promise<BackendAccount[]> {
+    try {
+      const raw = await http<BackendAccount[]>("/accounts", { auth: true });
+      return raw.filter((a) => !a.is_group && a.is_active && (a.report_group === "revenue" || a.report_group === "expense"));
+    } catch {
+      return [];
+    }
+  },
+
   /**
    * Cash & bank history list from GET /api/v1/cash-entries (Bearer).
    * Returns the unified list of CASH_IN, CASH_OUT, and TRANSFER journals
@@ -884,8 +904,15 @@ export const api = {
   },
 
   /** Profit & Loss report (GET /reports/profit-loss). */
-  async getProfitLoss(fromDate?: string, toDate?: string): Promise<BackendProfitLoss> {
-    const qs = buildReportQuery(fromDate, toDate);
+  async getProfitLoss(
+    fromDate?: string,
+    toDate?: string,
+    framework?: string,
+    dimensionId?: number,
+  ): Promise<BackendProfitLoss> {
+    let qs = buildReportQuery(fromDate, toDate);
+    if (framework) qs += (qs ? "&" : "?") + `framework=${encodeURIComponent(framework)}`;
+    if (dimensionId && dimensionId > 0) qs += (qs ? "&" : "?") + `dimension_id=${dimensionId}`;
     return http<BackendProfitLoss>(`/reports/profit-loss${qs}`, { auth: true });
   },
 
@@ -1682,6 +1709,91 @@ export const api = {
       idempotencyKey: newIdempotencyKey(),
       body: JSON.stringify(input),
     });
+  },
+
+  // -- Report Frameworks (US-090A) --
+
+  /** List the tenant's configured report frameworks (GET /report-frameworks). */
+  async listReportFrameworks(): Promise<ReportFrameworkRecord[]> {
+    try {
+      return await http<ReportFrameworkRecord[]>("/report-frameworks", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Set or upsert a report framework for the tenant (POST /report-frameworks). */
+  async setReportFramework(input: SetFrameworkInput): Promise<ReportFrameworkRecord> {
+    return http<ReportFrameworkRecord>("/report-frameworks", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  // -- Dimensions (US-093) --
+
+  /** List dimensions (GET /dimensions?dimension_type=&is_active=). */
+  async listDimensions(dimensionType?: string): Promise<Dimension[]> {
+    const qs = dimensionType ? `?dimension_type=${encodeURIComponent(dimensionType)}` : "";
+    try {
+      return await http<Dimension[]>(`/dimensions${qs}`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Create a dimension (POST /dimensions). */
+  async createDimension(input: CreateDimensionInput): Promise<Dimension> {
+    return http<Dimension>("/dimensions", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Tag a journal line with dimensions (POST /journal-lines/{id}/dimensions). */
+  async tagJournalLine(lineId: number, input: TagJournalLineInput): Promise<{ tagged: boolean }> {
+    return http(`/journal-lines/${lineId}/dimensions`, {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  // -- Budgets (US-093) --
+
+  /** List budgets (GET /budgets?fiscal_year=&status=). */
+  async listBudgets(fiscalYear?: number, status?: string): Promise<BudgetListItem[]> {
+    const params = new URLSearchParams();
+    if (fiscalYear) params.set("fiscal_year", String(fiscalYear));
+    if (status) params.set("status", status);
+    const qs = params.toString();
+    try {
+      return await http<BudgetListItem[]>(`/budgets${qs ? `?${qs}` : ""}`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Get one budget with its lines (GET /budgets/{id}). */
+  async getBudget(id: number): Promise<Budget> {
+    return http<Budget>(`/budgets/${id}`, { auth: true });
+  },
+
+  /** Create a budget with monthly lines (POST /budgets). */
+  async createBudget(input: CreateBudgetInput): Promise<Budget> {
+    return http<Budget>("/budgets", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Budget vs actual report (GET /budgets/{id}/vs-actual). */
+  async getBudgetVsActual(id: number): Promise<BudgetVsActualResult> {
+    return http<BudgetVsActualResult>(`/budgets/${id}/vs-actual`, { auth: true });
   },
 
   /**

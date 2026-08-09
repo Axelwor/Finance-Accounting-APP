@@ -66,6 +66,10 @@ import { AssetDisposeForm } from "../screens/entry/AssetDisposeForm";
 import { PPNReconciliation } from "../screens/list/PPNReconciliation";
 import { PPhFinalCalculator } from "../screens/list/PPhFinalCalculator";
 import { ECLCalculator } from "../screens/list/ECLCalculator";
+import { DimensionList } from "../screens/list/DimensionList";
+import { BudgetList } from "../screens/list/BudgetList";
+import { BudgetVsActual } from "../screens/list/BudgetVsActual";
+import { BudgetForm } from "../screens/entry/BudgetForm";
 import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
@@ -251,6 +255,12 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <PPhFinalCalculator />;
     case "ecl-calculator":
       return <ECLCalculator />;
+    case "dimensions":
+      return <DimensionList />;
+    case "budgets":
+      return <BudgetList />;
+    case "budget-vs-actual":
+      return <BudgetVsActual />;
     default:
       return <PlaceholderTab title={tab.title} sub={`list · ${subKind}`} />;
   }
@@ -324,6 +334,8 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
       return <AssetDepreciateForm tabId={tab.id} assetId={Number(tab.entryId)} initialTitle={tab.title} />;
     case "asset-dispose":
       return <AssetDisposeForm tabId={tab.id} assetId={Number(tab.entryId)} initialTitle={tab.title} />;
+    case "budget-entry":
+      return <BudgetForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     default:
       return <PlaceholderTab title={tab.title} sub={`entry · ${subKind}`} />;
   }

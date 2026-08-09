@@ -47,7 +47,10 @@ export type ListSubKind =
   | "production-job"
   | "ppn-reconciliation"
   | "pph-final"
-  | "ecl-calculator";
+  | "ecl-calculator"
+  | "dimensions"
+  | "budgets"
+  | "budget-vs-actual";
 
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
@@ -78,7 +81,8 @@ export type EntrySubKind =
   | "journal-entry"
   | "financial-notes-entry"
   | "bom-entry"
-  | "production-job-entry";
+  | "production-job-entry"
+  | "budget-entry";
 
 export type CurrencyCode = "IDR";
 
@@ -265,6 +269,16 @@ export interface BackendProfitLoss {
   revenue_cents: number;
   expense_cents: number;
   profit_cents: number;
+  /** Present when ?framework= is set — same totals, different presentation. */
+  framework?: string;
+  sections?: ProfitLossSection[];
+}
+
+/** One grouped line in a framework P&L (EMKM/ETAP/SAK Umum). */
+export interface ProfitLossSection {
+  code: string;
+  label: string;
+  amount_cents: number;
 }
 
 /** Response GET /api/v1/reports/balance-sheet. */
@@ -1565,4 +1579,117 @@ export interface CalculateDeferredTaxResult {
   tax_rate: string;
   deferred_tax_cents: number;
   direction: "ASSET" | "REVERSAL";
+}
+
+/* ------------------------------------------------------------------ */
+/* Report Frameworks (US-090A) + Dimensions + Budgets (US-093)       */
+/* ------------------------------------------------------------------ */
+
+export type ReportFramework = "EMKM" | "ETAP" | "SAK_UMUM";
+
+/** Row in the report_frameworks table (GET /report-frameworks). */
+export interface ReportFrameworkRecord {
+  id: number;
+  framework: ReportFramework;
+  is_default: boolean;
+  tenant_id: number;
+  created_at: string;
+}
+
+/** Payload POST /report-frameworks. */
+export interface SetFrameworkInput {
+  framework: ReportFramework;
+  is_default?: boolean;
+}
+
+/** Dimension master (GET/POST /dimensions). */
+export interface Dimension {
+  id: number;
+  code: string;
+  name: string;
+  dimension_type: "branch" | "project" | "department" | "cost_center";
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface CreateDimensionInput {
+  code: string;
+  name: string;
+  dimension_type: Dimension["dimension_type"];
+}
+
+/** Payload POST /journal-lines/{id}/dimensions. */
+export interface TagJournalLineInput {
+  dimension_ids: number[];
+}
+
+/** Budget line input (POST /budgets). */
+export interface BudgetLineInput {
+  account_id: number;
+  dimension_id?: number;
+  month: number;
+  amount_cents: number;
+}
+
+/** Budget line as returned by GET /budgets/{id}. */
+export interface BudgetLine {
+  id: number;
+  budget_id: number;
+  account_id: number;
+  dimension_id: number;
+  month: number;
+  amount_cents: number;
+}
+
+/** Full budget with lines (GET /budgets/{id}, POST /budgets). */
+export interface Budget {
+  id: number;
+  name: string;
+  fiscal_year: number;
+  dimension_id: number;
+  status: "DRAFT" | "APPROVED" | "CLOSED";
+  created_at: string;
+  lines?: BudgetLine[];
+}
+
+/** Budget list row (GET /budgets). */
+export interface BudgetListItem {
+  id: number;
+  name: string;
+  fiscal_year: number;
+  dimension_id: number;
+  status: "DRAFT" | "APPROVED" | "CLOSED";
+  created_at: string;
+  line_count: number;
+  total_cents: number;
+}
+
+export interface CreateBudgetInput {
+  name: string;
+  fiscal_year: number;
+  dimension_id?: number;
+  lines: BudgetLineInput[];
+}
+
+/** One row in the budget vs actual report. */
+export interface BudgetVsActualRow {
+  account_id: number;
+  account_code: string;
+  account_name: string;
+  month: number;
+  budget_cents: number;
+  actual_cents: number;
+  variance_cents: number;
+}
+
+/** Response GET /budgets/{id}/vs-actual. */
+export interface BudgetVsActualResult {
+  budget_id: number;
+  name: string;
+  fiscal_year: number;
+  dimension_id: number;
+  rows: BudgetVsActualRow[];
+  total_budget_cents: number;
+  total_actual_cents: number;
+  total_variance_cents: number;
 }

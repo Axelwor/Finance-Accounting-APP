@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
-import type { ListSubKind } from "../../types";
+import type { Dimension, ListSubKind, ReportFrameworkRecord } from "../../types";
 
 interface ReportConfig {
   listKind: ListSubKind;
@@ -129,20 +129,106 @@ export function TrialBalanceReport() {
   );
 }
 
+const FRAMEWORK_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "Default" },
+  { value: "EMKM", label: "EMKM (UMKM)" },
+  { value: "ETAP", label: "ETAP (Menengah)" },
+  { value: "SAK_UMUM", label: "SAK Umum (PSAK)" },
+];
+
+/**
+ * Profit & Loss report with optional framework presentation and dimension
+ * filter (US-090A + US-093). The same posted totals are re-presented by the
+ * selected framework; the dimension filter narrows to journal lines tagged
+ * with a cabang/proyek dimension.
+ */
 export function ProfitLossReport() {
+  const [framework, setFramework] = useState("");
+  const [dimensionId, setDimensionId] = useState(0);
+  const [dimensions, setDimensions] = useState<Dimension[]>([]);
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await api.getProfitLoss(undefined, undefined, framework || undefined, dimensionId || undefined);
+      setData(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load the report.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [framework, dimensionId]);
+
+  useEffect(() => {
+    void api.listDimensions().then(setDimensions).catch(() => setDimensions([]));
+  }, []);
+
+  const r = data;
+  const net = (r?.profit_cents ?? 0) as number;
+  const isProfit = net >= 0;
+  const sections: { code: string; label: string; amount_cents: number }[] = r?.sections ?? [];
+
   return (
-    <ReportTab
-      config={{
-        listKind: "report-profit-loss",
-        title: "Profit & Loss",
-        description: "Revenue minus expenses for the current period",
-        fetcher: () => api.getProfitLoss(),
-        emptyMessage: "No revenue or expenses recorded.",
-        render: (data: any) => {
-          const r = data;
-          const net = (r.profit_cents ?? 0) as number;
-          const isProfit = net >= 0;
-          return (
+    <div className="listtab">
+      <div className="listtab__head">
+        <div className="listtab__title">
+          <span>Profit &amp; Loss</span>
+          <small>Revenue minus expenses {framework ? `· ${framework} presentation` : ""}</small>
+        </div>
+        <div className="listtab__toolbar" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>Framework</label>
+          <select
+            className="field__input"
+            value={framework}
+            onChange={(e) => setFramework(e.target.value)}
+            style={{ minWidth: 180, padding: "4px 8px" }}
+          >
+            {FRAMEWORK_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          {dimensions.length > 0 ? (
+            <>
+              <label style={{ fontSize: 12, color: "var(--text-secondary)", marginLeft: 8 }}>Dimension</label>
+              <select
+                className="field__input"
+                value={dimensionId}
+                onChange={(e) => setDimensionId(Number(e.target.value))}
+                style={{ minWidth: 160, padding: "4px 8px" }}
+              >
+                <option value={0}>All</option>
+                {dimensions.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.code} · {d.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : null}
+          <button type="button" className="btn btn--secondary btn--sm" onClick={() => void load()}>
+            Reload
+          </button>
+        </div>
+      </div>
+
+      <div className="listtab__body">
+        {loading ? (
+          <LoadingState label="Computing..." />
+        ) : error ? (
+          <ErrorState message={error} onRetry={() => void load()} />
+        ) : r ? (
+          <>
             <div className="entrytab__body" style={{ background: "transparent", border: 0 }}>
               <div className="entrytab__section" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
                 <Stat label="Revenue" value={fmtIDR(r.revenue_cents ?? 0)} tone="pos" />
@@ -150,10 +236,41 @@ export function ProfitLossReport() {
                 <Stat label="Net" value={fmtIDR(Math.abs(net))} tone={isProfit ? "pos" : "neg"} suffix={isProfit ? "PROFIT" : "LOSS"} />
               </div>
             </div>
-          );
-        },
-      }}
-    />
+
+            {sections.length > 0 ? (
+              <div style={{ marginTop: 24 }}>
+                <div className="listtab__title" style={{ marginBottom: 12 }}>
+                  <span>Breakdown ({framework})</span>
+                  <small>Same data, framework presentation</small>
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table className="data-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: "left", padding: "8px 12px" }}>Section</th>
+                        <th style={{ textAlign: "right", padding: "8px 12px" }}>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sections.map((s) => (
+                        <tr key={s.code} style={{ borderBottom: "1px solid var(--rule)" }}>
+                          <td style={{ padding: "8px 12px" }}>{s.label}</td>
+                          <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "var(--font-mono)" }}>
+                            {fmtIDR(s.amount_cents)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <EmptyState title="No data" message="No revenue or expenses recorded." />
+        )}
+      </div>
+    </div>
   );
 }
 

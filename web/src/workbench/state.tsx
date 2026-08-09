@@ -373,6 +373,8 @@ function entryKindToListKind(kind: EntrySubKind): ListSubKind | null {
       return "journal-entry";
     case "financial-notes-entry":
       return "financial-notes";
+    case "budget-entry":
+      return "budgets";
     default:
       return null;
   }

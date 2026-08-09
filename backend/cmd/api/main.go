@@ -11,6 +11,7 @@ import (
 	"finance-accounting-app/backend/internal/accounting"
 	"finance-accounting-app/backend/internal/assets"
 	"finance-accounting-app/backend/internal/auth"
+	"finance-accounting-app/backend/internal/budget"
 	"finance-accounting-app/backend/internal/cash"
 	"finance-accounting-app/backend/internal/coa"
 	"finance-accounting-app/backend/internal/config"
@@ -168,6 +169,10 @@ func main() {
 			// US-080..083: Tax (PPN, PPh Final UMKM, ECL, Deferred Tax).
 			taxHandler := tax.NewHandler(pool)
 			taxHandler.Routes(router)
+
+			// US-090A + US-093: Report frameworks, dimensions, and budget vs actual.
+			budgetHandler := budget.NewHandler(pool)
+			budgetHandler.Routes(router)
 		})
 	})
 

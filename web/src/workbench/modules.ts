@@ -86,6 +86,8 @@ const accountant: Module = {
     { id: "ac-journal", label: "Journal Entries", hint: "JE", openList: "journal-entry", openEntry: "journal-entry" },
     { id: "ac-ledger", label: "General Ledger", hint: "GL", openList: "general-ledger" },
     { id: "ac-register", label: "Journal Register", hint: "REG", openList: "journal-register" },
+    { id: "ac-dimensions", label: "Dimensions", hint: "DIM", openList: "dimensions" },
+    { id: "ac-budgets", label: "Budgets", hint: "BGT", openList: "budgets", openEntry: "budget-entry" },
   ],
 };
 
@@ -113,6 +115,7 @@ const reports: Module = {
     { id: "rp-cf", label: "Cash Flow", hint: "CF", openList: "report-cash-flow" },
     { id: "rp-notes", label: "Financial Notes", hint: "CAL", openList: "financial-notes", openEntry: "financial-notes-entry" },
     { id: "rp-reminders", label: "Due Date Reminders", hint: "DUE", openList: "due-date-reminders" },
+    { id: "rp-budget-actual", label: "Budget vs Actual", hint: "BVA", openList: "budget-vs-actual" },
   ],
 };
 
@@ -211,6 +214,12 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "PPh Final UMKM";
     case "ecl-calculator":
       return "ECL — Penyisihan Piutang";
+    case "dimensions":
+      return "Dimensions";
+    case "budgets":
+      return "Budgets";
+    case "budget-vs-actual":
+      return "Budget vs Actual";
   }
 }
 
@@ -273,6 +282,8 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Bill of Materials";
     case "production-job-entry":
       return "Production Job";
+    case "budget-entry":
+      return "Budget";
     default:
       return "Entry";
   }
@@ -309,6 +320,7 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "financial-notes-entry": return "FN-DRAFT";
     case "bom-entry": return "BOM-DRAFT";
     case "production-job-entry": return "PRD-DRAFT";
+    case "budget-entry": return "BUD-DRAFT";
     default: return "DRAFT";
   }
 }

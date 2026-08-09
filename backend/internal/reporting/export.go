@@ -39,15 +39,15 @@ func (service *Service) Export(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
-	dr := parseDateRange(request)
-	result, err := service.fetchReportData(request, rtype, dr)
+	f := parseReportFilter(request)
+	result, err := service.fetchReportData(request, rtype, f)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
 		return
 	}
 
 	title := reportTitles[rtype]
-	label := dateRangeLabel(dr.fromDate, dr.toDate)
+	label := dateRangeLabel(f.fromDate, f.toDate)
 
 	switch format {
 	case "pdf":

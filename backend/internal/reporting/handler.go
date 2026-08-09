@@ -34,11 +34,25 @@ type TrialBalanceResult struct {
 	Balanced         bool              `json:"balanced"`
 }
 
+// ProfitLossSection is one grouped line in a framework-presented P&L. The
+// same posted totals are re-grouped by account_type and relabelled per the
+// selected framework (EMKM = simplest, SAK_UMUM = full PSAK breakdown).
+type ProfitLossSection struct {
+	Code        string `json:"code"`
+	Label       string `json:"label"`
+	AmountCents int64  `json:"amount_cents"`
+}
+
 // ProfitLossResult is the JSON shape returned by GET /reports/profit-loss.
+// The flat revenue/expense/profit totals are always present. When a framework
+// query param is supplied, Sections carries the framework-grouped breakdown
+// (same data, different presentation).
 type ProfitLossResult struct {
-	RevenueCents int64 `json:"revenue_cents"`
-	ExpenseCents int64 `json:"expense_cents"`
-	ProfitCents  int64 `json:"profit_cents"`
+	RevenueCents int64               `json:"revenue_cents"`
+	ExpenseCents int64               `json:"expense_cents"`
+	ProfitCents  int64               `json:"profit_cents"`
+	Framework    string              `json:"framework,omitempty"`
+	Sections     []ProfitLossSection `json:"sections,omitempty"`
 }
 
 // CashFlowResult is the JSON shape returned by GET /reports/cash-flow.
@@ -86,6 +100,15 @@ type dateRange struct {
 	toDate   string // YYYY-MM-DD, may be ""
 }
 
+// reportFilter bundles the optional query params that narrow a report. It
+// extends dateRange with a dimension_id scope (only journal lines tagged with
+// the dimension are aggregated) and a framework presentation selector.
+type reportFilter struct {
+	dateRange
+	dimensionID int64  // 0 = no dimension filter
+	framework   string // EMKM | ETAP | SAK_UMUM, or "" for the default
+}
+
 // parseDateRange reads the optional from_date / to_date query params and
 // validates the YYYY-MM-DD format. Invalid values are silently ignored so the
 // report degrades to "all posted entries" rather than erroring — the toolbar
@@ -105,6 +128,25 @@ func parseDateRange(r *http.Request) dateRange {
 		fromDate: parse(r.URL.Query().Get("from_date")),
 		toDate:   parse(r.URL.Query().Get("to_date")),
 	}
+}
+
+// parseReportFilter reads from_date / to_date plus the optional framework and
+// dimension_id query params used by the reporting endpoints. Invalid values
+// are silently dropped so the report degrades to the default rather than
+// erroring.
+func parseReportFilter(r *http.Request) reportFilter {
+	dr := parseDateRange(r)
+	f := reportFilter{dateRange: dr}
+	if dimRaw := strings.TrimSpace(r.URL.Query().Get("dimension_id")); dimRaw != "" {
+		if id, err := strconv.ParseInt(dimRaw, 10, 64); err == nil && id > 0 {
+			f.dimensionID = id
+		}
+	}
+	switch strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("framework"))) {
+	case "EMKM", "ETAP", "SAK_UMUM":
+		f.framework = strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("framework")))
+	}
+	return f
 }
 
 // dateRangeLabel renders a human-readable range for export headers, e.g.
@@ -158,8 +200,8 @@ func dateFilter(d dateRange, baseArg int, args *[]any) string {
 // inception to to_date; from_date is ignored (a trial balance is a snapshot,
 // not a movement).
 func (service *Service) TrialBalance(writer http.ResponseWriter, request *http.Request) {
-	dr := parseDateRange(request)
-	result, err := service.fetchTrialBalance(request.Context(), tenantFrom(request), dr)
+	f := parseReportFilter(request)
+	result, err := service.fetchTrialBalance(request.Context(), tenantFrom(request), f)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
 		return
@@ -168,9 +210,13 @@ func (service *Service) TrialBalance(writer http.ResponseWriter, request *http.R
 }
 
 // ProfitLoss aggregates revenue and expense groups for the requested range.
+// An optional `framework` query param switches the presentation (EMKM /
+// ETAP / SAK Umum); the underlying totals are identical. An optional
+// `dimension_id` query param narrows the aggregation to journal lines tagged
+// with that dimension (cabang / proyek).
 func (service *Service) ProfitLoss(writer http.ResponseWriter, request *http.Request) {
-	dr := parseDateRange(request)
-	result, err := service.fetchProfitLoss(request.Context(), tenantFrom(request), dr)
+	f := parseReportFilter(request)
+	result, err := service.fetchProfitLoss(request.Context(), tenantFrom(request), f)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
 		return
@@ -183,8 +229,8 @@ func (service *Service) ProfitLoss(writer http.ResponseWriter, request *http.Req
 // before the period is closed (engine §21.2: current earnings real-time). With
 // to_date supplied the snapshot is taken as of that date.
 func (service *Service) BalanceSheet(writer http.ResponseWriter, request *http.Request) {
-	dr := parseDateRange(request)
-	result, err := service.fetchBalanceSheet(request.Context(), tenantFrom(request), dr)
+	f := parseReportFilter(request)
+	result, err := service.fetchBalanceSheet(request.Context(), tenantFrom(request), f)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
 		return
@@ -194,8 +240,8 @@ func (service *Service) BalanceSheet(writer http.ResponseWriter, request *http.R
 
 // CashFlow aggregates movements across CASH/BANK accounts within the range.
 func (service *Service) CashFlow(writer http.ResponseWriter, request *http.Request) {
-	dr := parseDateRange(request)
-	result, err := service.fetchCashFlow(request.Context(), tenantFrom(request), dr)
+	f := parseReportFilter(request)
+	result, err := service.fetchCashFlow(request.Context(), tenantFrom(request), f)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
 		return
