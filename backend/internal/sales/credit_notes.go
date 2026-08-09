@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/costing"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -163,6 +164,7 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 			cogsReversed  int64
 			inventoryAcct int64
 			cogsAcct      int64
+			costingMethod string
 		}
 		prepared := make([]preparedCNLine, 0, len(req.Lines))
 		var totalReturn int64
@@ -170,10 +172,11 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 		for _, line := range req.Lines {
 			var itemType, itemCode, itemName string
 			var invAcct, cogsAcct pgtype.Int8
+			var costingMethod pgtype.Text
 			err := tx.QueryRow(request.Context(), `
-				SELECT item_type, code, name, inventory_account_id, cogs_account_id
+				SELECT item_type, code, name, inventory_account_id, cogs_account_id, costing_method
 				FROM items WHERE tenant_id = $1 AND id = $2
-			`, tenant, line.ItemID).Scan(&itemType, &itemCode, &itemName, &invAcct, &cogsAcct)
+			`, tenant, line.ItemID).Scan(&itemType, &itemCode, &itemName, &invAcct, &cogsAcct, &costingMethod)
 			if err != nil {
 				return err
 			}
@@ -190,6 +193,7 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 				cogsReversed:  cogsReversed,
 				inventoryAcct: invAcct.Int64,
 				cogsAcct:      cogsAcct.Int64,
+				costingMethod: textValue(costingMethod),
 			})
 		}
 
@@ -330,6 +334,12 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 					VALUES ($1, $2, 'SALES_RETURN', $3, $4, $5, $6)
 				`, tenant, p.line.ItemID, posQty, p.line.UnitCostCents,
 					fmt.Sprintf("CN-%d", req.InvoiceID), 0); err != nil {
+					return err
+				}
+				// Reverse the COGS posting: restore FIFO layers / adjust
+				// the moving average (PSAK 14).
+				if err := costing.ReverseCOGS(request.Context(), tx, tenant,
+					p.line.ItemID, p.line.Qty, p.line.UnitCostCents, p.costingMethod); err != nil {
 					return err
 				}
 			}

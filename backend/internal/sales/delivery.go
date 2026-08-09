@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/costing"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -136,16 +137,18 @@ func (service *Service) CreateDelivery(writer http.ResponseWriter, request *http
 			cogsCents     int64
 			inventoryAcct int64
 			cogsAcct      int64
+			costingMethod string
 		}
 		prepared := make([]preparedDeliveryLine, 0, len(req.Lines))
 		var totalCOGS int64
 		for _, line := range req.Lines {
 			var itemType, itemCode, itemName string
 			var invAcct, cogsAcct pgtype.Int8
+			var costingMethod pgtype.Text
 			err := tx.QueryRow(request.Context(), `
-				SELECT item_type, code, name, inventory_account_id, cogs_account_id
+				SELECT item_type, code, name, inventory_account_id, cogs_account_id, costing_method
 				FROM items WHERE tenant_id = $1 AND id = $2
-			`, tenant, line.ItemID).Scan(&itemType, &itemCode, &itemName, &invAcct, &cogsAcct)
+			`, tenant, line.ItemID).Scan(&itemType, &itemCode, &itemName, &invAcct, &cogsAcct, &costingMethod)
 			if err != nil {
 				return err
 			}
@@ -155,15 +158,30 @@ func (service *Service) CreateDelivery(writer http.ResponseWriter, request *http
 			if !invAcct.Valid || !cogsAcct.Valid {
 				return fmt.Errorf("item %s (%s) is missing inventory or cogs account", itemCode, itemName)
 			}
-			cogsCents := roundQty(line.Qty) * line.UnitCostCents
+			method := textValue(costingMethod)
+			// Resolve the actual COGS via the costing package. For FIFO and
+			// moving-average items the caller-supplied unit_cost_cents is
+			// ignored; for specific identification the caller's cost stands.
+			resolvedCOGS, err := costing.ResolveCOGS(request.Context(), tx, tenant, line.ItemID, line.Qty, method)
+			if err != nil {
+				return err
+			}
+			unitCost := line.UnitCostCents
+			cogsCents := resolvedCOGS
+			if method == costing.MethodSpecific {
+				// Specific identification: caller-supplied cost is authoritative.
+				unitCost = line.UnitCostCents
+				cogsCents = roundQty(line.Qty) * line.UnitCostCents
+			}
 			totalCOGS += cogsCents
 			prepared = append(prepared, preparedDeliveryLine{
 				line:          line,
 				itemID:        line.ItemID,
-				unitCost:      line.UnitCostCents,
+				unitCost:      unitCost,
 				cogsCents:     cogsCents,
 				inventoryAcct: invAcct.Int64,
 				cogsAcct:      cogsAcct.Int64,
+				costingMethod: method,
 			})
 		}
 

@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/costing"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -166,9 +167,10 @@ func (service *Service) CreatePurchaseReturn(writer http.ResponseWriter, request
 
 		// Prepare lines: compute totals and VAT reversal per line.
 		type preparedPRLine struct {
-			line        PurchaseReturnLineRequest
-			lineTotal   int64
-			vatReversed int64
+			line          PurchaseReturnLineRequest
+			lineTotal     int64
+			vatReversed   int64
+			costingMethod string
 		}
 		prepared := make([]preparedPRLine, 0, len(req.Lines))
 		var totalReturn int64
@@ -178,10 +180,17 @@ func (service *Service) CreatePurchaseReturn(writer http.ResponseWriter, request
 			vatReversed := vatReversedForReturn(lineTotal, vatRate)
 			totalReturn += lineTotal
 			totalVATReversed += vatReversed
+			// Read the item's costing method so the costing reversal can be
+			// applied correctly (PSAK 14).
+			var costingMethod pgtype.Text
+			_ = tx.QueryRow(request.Context(), `
+				SELECT costing_method FROM items WHERE tenant_id = $1 AND id = $2
+			`, tenant, line.ItemID).Scan(&costingMethod)
 			prepared = append(prepared, preparedPRLine{
-				line:        line,
-				lineTotal:   lineTotal,
-				vatReversed: vatReversed,
+				line:          line,
+				lineTotal:     lineTotal,
+				vatReversed:   vatReversed,
+				costingMethod: textValue(costingMethod),
 			})
 		}
 
@@ -290,6 +299,13 @@ func (service *Service) CreatePurchaseReturn(writer http.ResponseWriter, request
 				VALUES ($1, $2, 'PURCHASE_RETURN', $3, $4, $5, $6)
 			`, tenant, p.line.ItemID, negQty, p.line.UnitPriceCents,
 				fmt.Sprintf("PRET-%d", req.InvoiceID), 0); err != nil {
+				return err
+			}
+			// Reverse the cost layers / average cost to reflect inventory
+			// leaving the warehouse (PSAK 14). Uses the line's unit price as
+			// the cost basis when the item's costing method is specific.
+			if err := costing.ReverseCOGS(request.Context(), tx, tenant, p.line.ItemID,
+				p.line.Qty, p.line.UnitPriceCents, p.costingMethod); err != nil {
 				return err
 			}
 		}
