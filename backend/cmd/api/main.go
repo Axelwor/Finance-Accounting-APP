@@ -22,6 +22,7 @@ import (
 	"finance-accounting-app/backend/internal/reconciliation"
 	"finance-accounting-app/backend/internal/reporting"
 	"finance-accounting-app/backend/internal/sales"
+	"finance-accounting-app/backend/internal/tax"
 	"finance-accounting-app/backend/internal/tenant"
 )
 
@@ -156,6 +157,10 @@ func main() {
 			notesHandler := notes.NewHandler(pool)
 			notesHandler.Routes(router)
 			router.Get("/reminders/due-dates", notesHandler.DueDateReminders)
+
+			// US-080..083: Tax (PPN, PPh Final UMKM, ECL, Deferred Tax).
+			taxHandler := tax.NewHandler(pool)
+			taxHandler.Routes(router)
 		})
 	})
 

@@ -55,6 +55,9 @@ import { StockTransferForm } from "../screens/entry/StockTransferForm";
 import { BankStatementList } from "../screens/list/BankStatementList";
 import { BankStatementImport } from "../screens/entry/BankStatementImport";
 import { ReconciliationForm } from "../screens/entry/ReconciliationForm";
+import { PPNReconciliation } from "../screens/list/PPNReconciliation";
+import { PPhFinalCalculator } from "../screens/list/PPhFinalCalculator";
+import { ECLCalculator } from "../screens/list/ECLCalculator";
 import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
@@ -228,6 +231,12 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <BalanceSheetReport />;
     case "report-cash-flow":
       return <CashFlowReport />;
+    case "ppn-reconciliation":
+      return <PPNReconciliation />;
+    case "pph-final":
+      return <PPhFinalCalculator />;
+    case "ecl-calculator":
+      return <ECLCalculator />;
     default:
       return <PlaceholderTab title={tab.title} sub={`list · ${subKind}`} />;
   }
