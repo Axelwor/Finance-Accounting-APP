@@ -34,6 +34,8 @@ import {
 } from "../screens/list/Inventory";
 import { StockOpnameList } from "../screens/list/StockOpnameList";
 import { StockTransferList } from "../screens/list/StockTransferList";
+import { BOMList } from "../screens/list/BOMList";
+import { ProductionJobList } from "../screens/list/ProductionJobList";
 import { AssetRegisterList } from "../screens/list/Assets";
 import { FixedAssetList } from "../screens/list/FixedAssetList";
 import { JournalEntryList } from "../screens/list/JournalEntryList";
@@ -53,6 +55,8 @@ import { SupplierInvoiceForm } from "../screens/entry/SupplierInvoiceForm";
 import { PurchaseReturnForm } from "../screens/entry/PurchaseReturnForm";
 import { StockOpnameForm } from "../screens/entry/StockOpnameForm";
 import { StockTransferForm } from "../screens/entry/StockTransferForm";
+import { BOMForm } from "../screens/entry/BOMForm";
+import { ProductionJobForm } from "../screens/entry/ProductionJobForm";
 import { BankStatementList } from "../screens/list/BankStatementList";
 import { BankStatementImport } from "../screens/entry/BankStatementImport";
 import { ReconciliationForm } from "../screens/entry/ReconciliationForm";
@@ -216,6 +220,10 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <StockOpnameList />;
     case "stock-transfer":
       return <StockTransferList />;
+    case "bom":
+      return <BOMList />;
+    case "production-job":
+      return <ProductionJobList />;
     case "asset-register":
       return <AssetRegisterList />;
     case "fixed-assets":
@@ -290,6 +298,10 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
       return <StockOpnameForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "stock-transfer-entry":
       return <StockTransferForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "bom-entry":
+      return <BOMForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "production-job-entry":
+      return <ProductionJobForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "journal-entry":
       return <JournalEntryForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "bank-reconciliation-entry":

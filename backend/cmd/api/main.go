@@ -19,6 +19,7 @@ import (
 	"finance-accounting-app/backend/internal/item"
 	"finance-accounting-app/backend/internal/notes"
 	"finance-accounting-app/backend/internal/period"
+	"finance-accounting-app/backend/internal/production"
 	"finance-accounting-app/backend/internal/purchase"
 	"finance-accounting-app/backend/internal/reconciliation"
 	"finance-accounting-app/backend/internal/reporting"
@@ -158,10 +159,11 @@ func main() {
 			notesHandler.Routes(router)
 			router.Get("/reminders/due-dates", notesHandler.DueDateReminders)
 
-			// US-060..063: Fixed Assets (Aset Tetap) — registrasi, penyusutan,
-			// revaluasi, disposisi, & impairment (PSAK 16).
 			assetsHandler := assets.NewHandler(pool)
 			assetsHandler.Routes(router)
+
+			productionHandler := production.NewHandler(pool)
+			productionHandler.Routes(router)
 		})
 	})
 
