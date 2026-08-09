@@ -981,6 +981,11 @@ export const api = {
   async listFixedAssets(): Promise<FixedAssetListItem[]> {
     try {
       return await http<FixedAssetListItem[]>("/fixed-assets", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
   /* ----------------------------- Tax (US-080..083) ----------------------------- */
 
   /** PPN summary across a date range (GET /ppn/summary). */
@@ -1058,6 +1063,12 @@ export const api = {
   /** Registers a new fixed asset (POST /fixed-assets). Posts Dr 1401 / Cr Cash. */
   async registerFixedAsset(input: RegisterFixedAssetInput): Promise<FixedAsset> {
     return http<FixedAsset>("/fixed-assets", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
   /** Calculates and posts the ECL provision (POST /ecl/calculate). */
   async calculateECL(input: CalculateECLInput): Promise<CalculateECLResult> {
     return http<CalculateECLResult>("/ecl/calculate", {
@@ -1071,6 +1082,13 @@ export const api = {
   /** Posts depreciation for a period (POST /fixed-assets/{id}/depreciate). Dr 5206 / Cr 1402. */
   async depreciateAsset(id: number, input: DepreciateAssetInput): Promise<DepreciationResult> {
     return http<DepreciationResult>(`/fixed-assets/${id}/depreciate`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
   /** Writes off a specific receivable (POST /ecl/write-off). */
   async writeOffReceivable(input: WriteOffInput): Promise<WriteOffResult> {
     return http<WriteOffResult>("/ecl/write-off", {
@@ -1104,6 +1122,13 @@ export const api = {
   /** Records an impairment (POST /fixed-assets/{id}/impair). Dr 5207 / Cr 1401. */
   async impairAsset(id: number, input: ImpairAssetInput): Promise<{ journal_entry_id?: number; impairment_loss_cents: number; new_book_value_cents: number }> {
     return http(`/fixed-assets/${id}/impair`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
   /** Calculates and posts the deferred tax movement (POST /deferred-tax/calculate). */
   async calculateDeferredTax(input: CalculateDeferredTaxInput): Promise<CalculateDeferredTaxResult> {
     return http<CalculateDeferredTaxResult>("/deferred-tax/calculate", {

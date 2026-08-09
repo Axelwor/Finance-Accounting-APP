@@ -44,7 +44,7 @@ export type ListSubKind =
   | "financial-notes"
   | "due-date-reminders"
   | "bom"
-  | "production-job";
+  | "production-job"
   | "ppn-reconciliation"
   | "pph-final"
   | "ecl-calculator";
@@ -1295,6 +1295,9 @@ export interface ImpairAssetInput {
   entry_date: string;
   impaired_value_cents: number;
   description?: string;
+}
+
+/* ------------------------------------------------------------------ */
 /* Production / Job Order Costing (US-070..072)                        */
 /*   BOM, production jobs, job costs, job completion.                  */
 /*   Material cost: Dr 1303 WIP / Cr 1301 Inventory                   */
@@ -1410,6 +1413,9 @@ export type CreateProductionJobCostInput = AddProductionJobCostInput;
 export interface CompleteProductionJobInput {
   /** Optional completed quantity (defaults to target_qty when omitted). */
   completed_qty?: number;
+}
+
+/* ------------------------------------------------------------------ */
 /* Tax — PPN, PPh Final UMKM, ECL, Deferred Tax (US-080..083)         */
 /* ------------------------------------------------------------------ */
 

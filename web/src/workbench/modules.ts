@@ -116,8 +116,7 @@ const reports: Module = {
   ],
 };
 
-export const MODULES: Module[] = [cashBank, sales, purchases, production, inventory, fixedAssets, accountant, reports];
-export const MODULES: Module[] = [cashBank, sales, purchases, inventory, fixedAssets, accountant, tax, reports];
+export const MODULES: Module[] = [cashBank, sales, purchases, production, inventory, fixedAssets, accountant, tax, reports];
 
 export function findModule(id: ModuleId): Module | undefined {
   return MODULES.find((m) => m.id === id);
