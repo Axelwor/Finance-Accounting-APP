@@ -131,6 +131,14 @@ import type {
   WriteOffResult,
   CalculateDeferredTaxInput,
   CalculateDeferredTaxResult,
+  LeaseContract,
+  LeaseContractListItem,
+  CreateLeaseContractInput,
+  LeasePaymentResult,
+  EntityHierarchyItem,
+  CreateEntityHierarchyInput,
+  ConsolidatedTrialBalanceResult,
+  ConsolidatedProfitLossResult,
 } from "./types";
 
 /** Reconciliation detail returned by the reconcile endpoints. */
@@ -1734,6 +1742,74 @@ export const api = {
   /** Reads the setup status from local storage. */
   getLocalState(): PersistedState {
     return loadState();
+  },
+
+  // -- Lease Contracts (US-111, PSAK 73) --
+
+  async listLeaseContracts(): Promise<LeaseContractListItem[]> {
+    try {
+      return await http<LeaseContractListItem[]>("/lease-contracts", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  async getLeaseContract(id: number): Promise<LeaseContract> {
+    return http<LeaseContract>(`/lease-contracts/${id}`, { auth: true });
+  },
+
+  async createLeaseContract(input: CreateLeaseContractInput): Promise<LeaseContract> {
+    return http<LeaseContract>("/lease-contracts", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  async postLeasePayment(leaseId: number, paymentNo: number): Promise<LeasePaymentResult> {
+    return http<LeasePaymentResult>(`/lease-contracts/${leaseId}/payments/${paymentNo}/post`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify({}),
+    });
+  },
+
+  // -- Entity Hierarchy (US-110, PSAK 65) --
+
+  async listEntityHierarchy(): Promise<EntityHierarchyItem[]> {
+    try {
+      return await http<EntityHierarchyItem[]>("/entity-hierarchy", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  async createEntityHierarchy(input: CreateEntityHierarchyInput): Promise<EntityHierarchyItem> {
+    return http<EntityHierarchyItem>("/entity-hierarchy", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  // -- Consolidated Reports (US-110) --
+
+  async getConsolidatedTrialBalance(): Promise<ConsolidatedTrialBalanceResult> {
+    try {
+      return await http<ConsolidatedTrialBalanceResult>("/consolidated-reports/trial-balance", { auth: true });
+    } catch {
+      return { rows: [], total_debit_cents: 0, total_credit_cents: 0, elimination_cents: 0, balanced: true, consolidated_tenant_ids: [] };
+    }
+  },
+
+  async getConsolidatedProfitLoss(): Promise<ConsolidatedProfitLossResult> {
+    try {
+      return await http<ConsolidatedProfitLossResult>("/consolidated-reports/profit-loss", { auth: true });
+    } catch {
+      return { revenue_cents: 0, expense_cents: 0, profit_cents: 0, elimination_cents: 0, consolidated_tenant_ids: [] };
+    }
   },
 
   /** Access token for protected API calls (used later). */

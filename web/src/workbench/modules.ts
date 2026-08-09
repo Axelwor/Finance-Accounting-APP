@@ -75,6 +75,7 @@ const fixedAssets: Module = {
   icon: "building",
   items: [
     { id: "fa-register", label: "Asset Register", hint: "AST", openList: "fixed-assets", openEntry: "fixed-assets-entry" },
+    { id: "fa-lease", label: "Lease Contracts", hint: "LS", openList: "lease-contract", openEntry: "lease-contract-entry" },
   ],
 };
 
@@ -113,6 +114,7 @@ const reports: Module = {
     { id: "rp-cf", label: "Cash Flow", hint: "CF", openList: "report-cash-flow" },
     { id: "rp-notes", label: "Financial Notes", hint: "CAL", openList: "financial-notes", openEntry: "financial-notes-entry" },
     { id: "rp-reminders", label: "Due Date Reminders", hint: "DUE", openList: "due-date-reminders" },
+    { id: "rp-consol-tb", label: "Consolidated TB", hint: "CTB", openList: "consolidated-report" },
   ],
 };
 
@@ -211,6 +213,10 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "PPh Final UMKM";
     case "ecl-calculator":
       return "ECL — Penyisihan Piutang";
+    case "lease-contract":
+      return "Lease Contracts";
+    case "consolidated-report":
+      return "Consolidated Report";
   }
 }
 
@@ -273,6 +279,10 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Bill of Materials";
     case "production-job-entry":
       return "Production Job";
+    case "lease-contract-entry":
+      return "Lease Contract";
+    case "lease-payment-schedule":
+      return "Lease Schedule";
     default:
       return "Entry";
   }
@@ -309,6 +319,8 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "financial-notes-entry": return "FN-DRAFT";
     case "bom-entry": return "BOM-DRAFT";
     case "production-job-entry": return "PRD-DRAFT";
+    case "lease-contract-entry": return "LS-DRAFT";
+    case "lease-payment-schedule": return "LS-SCH";
     default: return "DRAFT";
   }
 }

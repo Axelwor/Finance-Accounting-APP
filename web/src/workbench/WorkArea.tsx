@@ -66,6 +66,10 @@ import { AssetDisposeForm } from "../screens/entry/AssetDisposeForm";
 import { PPNReconciliation } from "../screens/list/PPNReconciliation";
 import { PPhFinalCalculator } from "../screens/list/PPhFinalCalculator";
 import { ECLCalculator } from "../screens/list/ECLCalculator";
+import { LeaseContractList } from "../screens/list/LeaseContractList";
+import { ConsolidatedReport } from "../screens/list/ConsolidatedReport";
+import { LeaseContractForm } from "../screens/entry/LeaseContractForm";
+import { LeasePaymentSchedule } from "../screens/entry/LeasePaymentSchedule";
 import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
@@ -251,6 +255,10 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <PPhFinalCalculator />;
     case "ecl-calculator":
       return <ECLCalculator />;
+    case "lease-contract":
+      return <LeaseContractList />;
+    case "consolidated-report":
+      return <ConsolidatedReport />;
     default:
       return <PlaceholderTab title={tab.title} sub={`list · ${subKind}`} />;
   }
@@ -324,6 +332,10 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
       return <AssetDepreciateForm tabId={tab.id} assetId={Number(tab.entryId)} initialTitle={tab.title} />;
     case "asset-dispose":
       return <AssetDisposeForm tabId={tab.id} assetId={Number(tab.entryId)} initialTitle={tab.title} />;
+    case "lease-contract-entry":
+      return <LeaseContractForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "lease-payment-schedule":
+      return <LeasePaymentSchedule tabId={tab.id} leaseId={tab.entryId} initialTitle={tab.title} />;
     default:
       return <PlaceholderTab title={tab.title} sub={`entry · ${subKind}`} />;
   }
