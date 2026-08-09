@@ -1040,6 +1040,8 @@ export interface GeneralLedgerResult {
 export interface JournalRegisterItem {
   id: number; number: string; entry_date: string; description: string;
   intent_type: string; total_debit_cents: number; total_credit_cents: number;
+}
+
 /* ------------------------------------------------------------------ */
 /* Bank Reconciliation (US-050)                                       */
 /* ------------------------------------------------------------------ */
