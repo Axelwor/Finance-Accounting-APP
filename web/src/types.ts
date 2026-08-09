@@ -52,6 +52,8 @@ export type ListSubKind =
   | "budgets"
   | "budget-vs-actual";
   | "audit-logs";
+  | "lease-contract"
+  | "consolidated-report";
 
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
@@ -84,6 +86,8 @@ export type EntrySubKind =
   | "bom-entry"
   | "production-job-entry"
   | "budget-entry";
+  | "lease-contract-entry"
+  | "lease-payment-schedule";
 
 export type CurrencyCode = "IDR";
 
@@ -1721,4 +1725,110 @@ export interface AuditLog {
   before_data: Record<string, unknown> | null;
   after_data: Record<string, unknown> | null;
   created_at: string;
+/** Lease contract list item (US-111, PSAK 73). */
+export interface LeaseContractListItem {
+  id: number;
+  number: string;
+  lessee_name: string;
+  lessor_name?: string;
+  start_date: string;
+  end_date: string;
+  payment_amount_cents: number;
+  payment_frequency: string;
+  total_payments: number;
+  discount_rate: string;
+  status: string;
+  initial_rou_cents: number;
+  initial_liability_cents: number;
+  journal_entry_id?: number;
+}
+
+/** Lease contract with full detail + payment schedule. */
+export interface LeasePaymentScheduleItem {
+  payment_no: number;
+  payment_date: string;
+  payment_amount_cents: number;
+  principal_cents: number;
+  interest_cents: number;
+  remaining_liability_cents: number;
+  journal_entry_id?: number;
+  posted: boolean;
+}
+
+export interface LeaseContract extends LeaseContractListItem {
+  rou_asset_account_id: number;
+  lease_liability_account_id: number;
+  interest_expense_account_id: number;
+  schedule?: LeasePaymentScheduleItem[];
+}
+
+export interface CreateLeaseContractInput {
+  lessee_name: string;
+  lessor_name?: string;
+  start_date: string;
+  end_date: string;
+  payment_amount_cents: number;
+  payment_frequency: string;
+  total_payments: number;
+  discount_rate: string;
+  payment_account_code?: string;
+  description?: string;
+}
+
+export interface LeasePaymentResult {
+  lease_id: number;
+  payment_no: number;
+  payment_date: string;
+  payment_amount_cents: number;
+  principal_cents: number;
+  interest_cents: number;
+  remaining_liability_cents: number;
+  journal_entry_id?: number;
+  posted: boolean;
+}
+
+/** Entity hierarchy (US-110, PSAK 65). */
+export interface EntityHierarchyItem {
+  id: number;
+  tenant_id: number;
+  parent_tenant_id: number;
+  relationship: string;
+  consolidation_pct: number;
+  tenant_name?: string;
+  parent_tenant_name?: string;
+  created_at?: string;
+}
+
+export interface CreateEntityHierarchyInput {
+  child_tenant_id: number;
+  parent_tenant_id: number;
+  consolidation_pct?: number;
+}
+
+/** Consolidated trial balance (US-110). */
+export interface ConsolidatedTrialBalanceRow {
+  account_id: number;
+  account_code: string;
+  account_name: string;
+  report_group: string;
+  debit_cents: number;
+  credit_cents: number;
+}
+
+export interface ConsolidatedTrialBalanceResult {
+  rows: ConsolidatedTrialBalanceRow[];
+  total_debit_cents: number;
+  total_credit_cents: number;
+  elimination_cents: number;
+  balanced: boolean;
+  consolidated_tenant_ids: number[];
+}
+
+/** Consolidated P&L (US-110). */
+export interface ConsolidatedProfitLossResult {
+  revenue_cents: number;
+  expense_cents: number;
+  profit_cents: number;
+  elimination_cents: number;
+  consolidated_tenant_ids: number[];
 }

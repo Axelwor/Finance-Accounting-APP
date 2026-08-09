@@ -71,6 +71,10 @@ import { DimensionList } from "../screens/list/DimensionList";
 import { BudgetList } from "../screens/list/BudgetList";
 import { BudgetVsActual } from "../screens/list/BudgetVsActual";
 import { BudgetForm } from "../screens/entry/BudgetForm";
+import { LeaseContractList } from "../screens/list/LeaseContractList";
+import { ConsolidatedReport } from "../screens/list/ConsolidatedReport";
+import { LeaseContractForm } from "../screens/entry/LeaseContractForm";
+import { LeasePaymentSchedule } from "../screens/entry/LeasePaymentSchedule";
 import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
@@ -264,6 +268,10 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <BudgetVsActual />;
     case "audit-logs":
       return <AuditLogList />;
+    case "lease-contract":
+      return <LeaseContractList />;
+    case "consolidated-report":
+      return <ConsolidatedReport />;
     default:
       return <PlaceholderTab title={tab.title} sub={`list · ${subKind}`} />;
   }
@@ -339,6 +347,10 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
       return <AssetDisposeForm tabId={tab.id} assetId={Number(tab.entryId)} initialTitle={tab.title} />;
     case "budget-entry":
       return <BudgetForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "lease-contract-entry":
+      return <LeaseContractForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "lease-payment-schedule":
+      return <LeasePaymentSchedule tabId={tab.id} leaseId={tab.entryId} initialTitle={tab.title} />;
     default:
       return <PlaceholderTab title={tab.title} sub={`entry · ${subKind}`} />;
   }

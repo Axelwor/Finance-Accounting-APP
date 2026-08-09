@@ -19,6 +19,7 @@ import (
 	"finance-accounting-app/backend/internal/customer"
 	"finance-accounting-app/backend/internal/inventory"
 	"finance-accounting-app/backend/internal/item"
+	"finance-accounting-app/backend/internal/lease"
 	"finance-accounting-app/backend/internal/notes"
 	"finance-accounting-app/backend/internal/period"
 	"finance-accounting-app/backend/internal/production"
@@ -177,6 +178,9 @@ func main() {
 			// US-100/US-101: Attachments (Lampirkan Bukti) + Audit Trail.
 			auditHandler := audit.NewHandler(pool, cfg.StorageRoot)
 			auditHandler.Routes(router)
+			// US-110..111: Consolidation (PSAK 65) + Lease (PSAK 73).
+			leaseHandler := lease.NewHandler(pool)
+			leaseHandler.Routes(router)
 		})
 	})
 

@@ -29,11 +29,13 @@ func seedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		{"1304", "Finished Goods", "asset", "INVENTORY"},
 		{"1401", "Fixed Assets", "asset", "FIXED_ASSET"},
 		{"1402", "Accumulated Depreciation", "asset", "CONTRA_ASSET"},
+		{"1701", "Right-of-Use Asset", "asset", "ROU_ASSET"},
 		{"2101", "Accounts Payable", "liability", "AP"},
 		{"2105", "Uninvoiced Payables", "liability", "ACCRUED_LIABILITY"},
 		{"2201", "Customer Deposit", "liability", "CUSTOMER_DEPOSIT"},
 		{"2202", "VAT Payable", "liability", "TAX_PAYABLE"},
 		{"2203", "Income Tax Payable", "liability", "TAX_PAYABLE"},
+		{"2301", "Lease Liability", "liability", "LEASE_LIABILITY"},
 		{"2402", "Customer Overpayment", "liability", "CUSTOMER_DEPOSIT"},
 		{"3101", "Capital", "equity", "EQUITY"},
 		{"3201", "Retained Earnings", "equity", "EQUITY"},
@@ -56,6 +58,7 @@ func seedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		{"5205", "Bad Debt Expense", "expense", "BAD_DEBT"},
 		{"5208", "Income Tax Expense", "expense", "TAX_EXPENSE"},
 		{"5904", "Deferred Tax Expense", "expense", "DEFERRED_TAX"},
+		{"5906", "Interest Expense", "expense", "INTEREST_EXPENSE"},
 		{"5907", "Inventory Adjustment Loss", "expense", "OTHER_EXPENSE"},
 	}
 	accountIDs := make(map[string]int64, len(accounts))
