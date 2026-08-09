@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/assets"
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/cash"
 	"finance-accounting-app/backend/internal/coa"
@@ -156,6 +157,11 @@ func main() {
 			notesHandler := notes.NewHandler(pool)
 			notesHandler.Routes(router)
 			router.Get("/reminders/due-dates", notesHandler.DueDateReminders)
+
+			// US-060..063: Fixed Assets (Aset Tetap) — registrasi, penyusutan,
+			// revaluasi, disposisi, & impairment (PSAK 16).
+			assetsHandler := assets.NewHandler(pool)
+			assetsHandler.Routes(router)
 		})
 	})
 

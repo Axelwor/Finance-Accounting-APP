@@ -99,6 +99,15 @@ import type {
   FinancialNote,
   FinancialNoteInput,
   DueDateReminder,
+  FixedAsset,
+  FixedAssetListItem,
+  RegisterFixedAssetInput,
+  DepreciateAssetInput,
+  DepreciationResult,
+  RevalueAssetInput,
+  DisposeAssetInput,
+  AssetDisposalResult,
+  ImpairAssetInput,
 } from "./types";
 
 /** Reconciliation detail returned by the reconcile endpoints. */
@@ -941,6 +950,72 @@ export const api = {
     } catch {
       return [];
     }
+  },
+
+  /* ----------------------- Fixed Assets (US-060..063) ----------------------- */
+
+  /** Lists the asset register (GET /fixed-assets). Failure -> empty array. */
+  async listFixedAssets(): Promise<FixedAssetListItem[]> {
+    try {
+      return await http<FixedAssetListItem[]>("/fixed-assets", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Gets one fixed asset with schedule + transactions (GET /fixed-assets/{id}). */
+  async getFixedAsset(id: number): Promise<FixedAsset> {
+    return http<FixedAsset>(`/fixed-assets/${id}`, { auth: true });
+  },
+
+  /** Registers a new fixed asset (POST /fixed-assets). Posts Dr 1401 / Cr Cash. */
+  async registerFixedAsset(input: RegisterFixedAssetInput): Promise<FixedAsset> {
+    return http<FixedAsset>("/fixed-assets", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Posts depreciation for a period (POST /fixed-assets/{id}/depreciate). Dr 5206 / Cr 1402. */
+  async depreciateAsset(id: number, input: DepreciateAssetInput): Promise<DepreciationResult> {
+    return http<DepreciationResult>(`/fixed-assets/${id}/depreciate`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Revalues an asset to OCI (POST /fixed-assets/{id}/revalue). Dr/Cr 1401 vs 3401. */
+  async revalueAsset(id: number, input: RevalueAssetInput): Promise<{ journal_entry_id?: number; adjustment_cents: number; direction: string }> {
+    return http(`/fixed-assets/${id}/revalue`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Disposes/sells an asset (POST /fixed-assets/{id}/dispose). Sets status DISPOSED. */
+  async disposeAsset(id: number, input: DisposeAssetInput): Promise<AssetDisposalResult> {
+    return http<AssetDisposalResult>(`/fixed-assets/${id}/dispose`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Records an impairment (POST /fixed-assets/{id}/impair). Dr 5207 / Cr 1401. */
+  async impairAsset(id: number, input: ImpairAssetInput): Promise<{ journal_entry_id?: number; impairment_loss_cents: number; new_book_value_cents: number }> {
+    return http(`/fixed-assets/${id}/impair`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
   },
 
   /** Customer list (GET /customers). Failure -> empty array. */

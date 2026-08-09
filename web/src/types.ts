@@ -33,6 +33,7 @@ export type ListSubKind =
   | "stock-opname"
   | "stock-transfer"
   | "asset-register"
+  | "fixed-assets"
   | "journal-entry"
   | "general-ledger"
   | "journal-register"
@@ -66,6 +67,9 @@ export type EntrySubKind =
   | "stock-opname-entry"
   | "stock-transfer-entry"
   | "asset-register"
+  | "fixed-assets-entry"
+  | "asset-depreciate"
+  | "asset-dispose"
   | "journal-entry"
   | "financial-notes-entry";
 
@@ -1149,4 +1153,139 @@ export interface DueDateReminder {
   amount_cents: number;
   status: string;
   days_overdue: number;
+}
+
+/* ------------------------------------------------------------------ */
+/* Fixed Assets (Aset Tetap) — US-060..063                             */
+/* ------------------------------------------------------------------ */
+
+export type DepreciationMethod = "straight_line" | "declining_balance" | "units_of_production";
+export type AssetStatus = "ACTIVE" | "DISPOSED" | "IMPAIRED";
+export type AssetTxType = "ACQUISITION" | "DEPRECIATION" | "REVALUATION" | "DISPOSAL" | "IMPAIRMENT";
+
+/** Row in the asset register list. */
+export interface FixedAssetListItem {
+  id: number;
+  code: string;
+  name: string;
+  acquisition_date: string;
+  acquisition_cost_cents: number;
+  salvage_value_cents: number;
+  useful_life_months: number;
+  depreciation_method: DepreciationMethod;
+  rate: string;
+  status: AssetStatus;
+  book_value_cents: number;
+  accum_dep_cents: number;
+}
+
+export interface AssetDepreciationScheduleItem {
+  id: number;
+  asset_id: number;
+  period_year: number;
+  period_month: number;
+  depreciation_cents: number;
+  journal_entry_id?: number;
+  posted: boolean;
+  posted_at?: string;
+}
+
+export interface AssetTransactionItem {
+  id: number;
+  asset_id: number;
+  tx_type: AssetTxType;
+  tx_date: string;
+  amount_cents: number;
+  journal_entry_id?: number;
+  description?: string;
+  created_at: string;
+}
+
+/** Full asset detail (GET /fixed-assets/{id}). */
+export interface FixedAsset {
+  id: number;
+  code: string;
+  name: string;
+  asset_account_id: number;
+  accum_dep_account_id: number;
+  dep_expense_account_id: number;
+  impairment_account_id?: number;
+  acquisition_date: string;
+  acquisition_cost_cents: number;
+  salvage_value_cents: number;
+  useful_life_months: number;
+  depreciation_method: DepreciationMethod;
+  rate: string;
+  units_total?: number;
+  units_used: number;
+  status: AssetStatus;
+  book_value_cents: number;
+  accum_dep_cents: number;
+  journal_entry_id?: number;
+  created_at?: string;
+  updated_at?: string;
+  schedule?: AssetDepreciationScheduleItem[];
+  transactions?: AssetTransactionItem[];
+}
+
+export interface RegisterFixedAssetInput {
+  code: string;
+  name: string;
+  acquisition_date: string;
+  acquisition_cost_cents: number;
+  salvage_value_cents: number;
+  useful_life_months: number;
+  depreciation_method: DepreciationMethod;
+  rate?: string;
+  units_total?: number;
+  payment_account_code?: string;
+  description?: string;
+}
+
+export interface DepreciateAssetInput {
+  period_year: number;
+  period_month: number;
+  entry_date: string;
+  description?: string;
+}
+
+export interface DepreciationResult {
+  asset_id: number;
+  period_year: number;
+  period_month: number;
+  depreciation_cents: number;
+  journal_entry_id?: number;
+  schedule_id?: number;
+  book_value_cents: number;
+  accum_dep_cents: number;
+  already_posted?: boolean;
+  status: string;
+}
+
+export interface RevalueAssetInput {
+  new_value_cents: number;
+  entry_date: string;
+  description?: string;
+}
+
+export interface DisposeAssetInput {
+  disposal_date: string;
+  proceeds_cents: number;
+  cash_account_code?: string;
+  description?: string;
+}
+
+export interface AssetDisposalResult {
+  asset_id: number;
+  proceeds_cents: number;
+  book_value_cents: number;
+  gain_loss_cents: number;
+  journal_entry_id?: number;
+  status: string;
+}
+
+export interface ImpairAssetInput {
+  entry_date: string;
+  impaired_value_cents: number;
+  description?: string;
 }

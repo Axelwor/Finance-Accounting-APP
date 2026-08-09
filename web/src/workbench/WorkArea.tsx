@@ -35,6 +35,7 @@ import {
 import { StockOpnameList } from "../screens/list/StockOpnameList";
 import { StockTransferList } from "../screens/list/StockTransferList";
 import { AssetRegisterList } from "../screens/list/Assets";
+import { FixedAssetList } from "../screens/list/FixedAssetList";
 import { JournalEntryList } from "../screens/list/JournalEntryList";
 import { GeneralLedger } from "../screens/list/GeneralLedger";
 import { JournalRegister } from "../screens/list/JournalRegister";
@@ -55,6 +56,9 @@ import { StockTransferForm } from "../screens/entry/StockTransferForm";
 import { BankStatementList } from "../screens/list/BankStatementList";
 import { BankStatementImport } from "../screens/entry/BankStatementImport";
 import { ReconciliationForm } from "../screens/entry/ReconciliationForm";
+import { FixedAssetForm } from "../screens/entry/FixedAssetForm";
+import { AssetDepreciateForm } from "../screens/entry/AssetDepreciateForm";
+import { AssetDisposeForm } from "../screens/entry/AssetDisposeForm";
 import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
@@ -214,6 +218,8 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <StockTransferList />;
     case "asset-register":
       return <AssetRegisterList />;
+    case "fixed-assets":
+      return <FixedAssetList />;
     case "journal-entry":
       return <JournalEntryList />;
     case "general-ledger":
@@ -291,6 +297,12 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
         return <BankStatementImport tabId={tab.id} initialTitle={tab.title} />;
       }
       return <ReconciliationForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "fixed-assets-entry":
+      return <FixedAssetForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "asset-depreciate":
+      return <AssetDepreciateForm tabId={tab.id} assetId={Number(tab.entryId)} initialTitle={tab.title} />;
+    case "asset-dispose":
+      return <AssetDisposeForm tabId={tab.id} assetId={Number(tab.entryId)} initialTitle={tab.title} />;
     default:
       return <PlaceholderTab title={tab.title} sub={`entry · ${subKind}`} />;
   }

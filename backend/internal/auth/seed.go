@@ -24,6 +24,7 @@ func seedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		{"1205", "Prepayment to Suppliers", "asset", "PREPAYMENT"},
 		{"1301", "Inventory", "asset", "INVENTORY"},
 		{"1401", "Fixed Assets", "asset", "FIXED_ASSET"},
+		{"1402", "Accumulated Depreciation", "asset", "CONTRA_ASSET"},
 		{"2101", "Accounts Payable", "liability", "AP"},
 		{"2105", "Uninvoiced Payables", "liability", "ACCRUED_LIABILITY"},
 		{"2201", "Customer Deposit", "liability", "CUSTOMER_DEPOSIT"},
@@ -32,8 +33,10 @@ func seedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		{"3101", "Capital", "equity", "EQUITY"},
 		{"3201", "Retained Earnings", "equity", "EQUITY"},
 		{"3301", "Current Earnings", "equity", "EQUITY"},
+		{"3401", "Revaluation Surplus (OCI)", "equity", "OCI"},
 		{"4101", "Sales Revenue", "revenue", "REVENUE"},
 		{"4201", "Sales Returns", "revenue", "CONTRA_REVENUE"},
+		{"4903", "Gain on Asset Disposal", "revenue", "OTHER_INCOME"},
 		{"4907", "Inventory Adjustment Gain", "revenue", "OTHER_INCOME"},
 		{"5101", "COGS", "expense", "COGS"},
 		{"5201", "Salary Expense", "expense", "EXPENSE"},
@@ -41,6 +44,9 @@ func seedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		{"5203", "Transportation Expense", "expense", "EXPENSE"},
 		{"5204", "Utilities Expense", "expense", "EXPENSE"},
 		{"5205", "Other Expenses", "expense", "EXPENSE"},
+		{"5206", "Depreciation Expense", "expense", "DEPRECIATION"},
+		{"5207", "Impairment Loss", "expense", "IMPAIRMENT"},
+		{"5903", "Loss on Asset Disposal", "expense", "OTHER_EXPENSE"},
 		{"5907", "Inventory Adjustment Loss", "expense", "OTHER_EXPENSE"},
 	}
 	accountIDs := make(map[string]int64, len(accounts))

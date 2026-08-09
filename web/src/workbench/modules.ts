@@ -64,7 +64,7 @@ const fixedAssets: Module = {
   label: "Fixed Assets",
   icon: "building",
   items: [
-    { id: "fa-register", label: "Asset Register", hint: "AST", openList: "asset-register", openEntry: "asset-register", mockData: true },
+    { id: "fa-register", label: "Asset Register", hint: "AST", openList: "fixed-assets", openEntry: "fixed-assets-entry" },
   ],
 };
 
@@ -158,6 +158,8 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Stock Transfers";
     case "asset-register":
       return "Asset Register";
+    case "fixed-assets":
+      return "Fixed Assets";
     case "journal-entry":
       return "Journal Entries";
     case "general-ledger":
@@ -224,6 +226,12 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Stock Transfer";
     case "asset-register":
       return "Asset";
+    case "fixed-assets-entry":
+      return "Fixed Asset";
+    case "asset-depreciate":
+      return "Depreciation";
+    case "asset-dispose":
+      return "Asset Disposal";
     case "journal-entry":
       return "Journal Entry";
     case "financial-notes-entry":
@@ -257,6 +265,9 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "stock-opname-entry": return "OPN-DRAFT";
     case "stock-transfer-entry": return "TRF-DRAFT";
     case "asset-register": return "FA-DRAFT";
+    case "fixed-assets-entry": return "FA-DRAFT";
+    case "asset-depreciate": return "FA-DEP";
+    case "asset-dispose": return "FA-DISP";
     case "journal-entry": return "JE-DRAFT";
     case "financial-notes-entry": return "FN-DRAFT";
     default: return "DRAFT";

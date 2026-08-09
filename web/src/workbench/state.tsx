@@ -365,6 +365,10 @@ function entryKindToListKind(kind: EntrySubKind): ListSubKind | null {
       return "stock-transfer";
     case "asset-register":
       return "asset-register";
+    case "fixed-assets-entry":
+    case "asset-depreciate":
+    case "asset-dispose":
+      return "fixed-assets";
     case "journal-entry":
       return "journal-entry";
     case "financial-notes-entry":

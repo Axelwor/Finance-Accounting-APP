@@ -42,6 +42,9 @@ const PARTY_LABEL: Record<EntrySubKind, string> = {
   "stock-opname-entry": "Opname Date",
   "stock-transfer-entry": "Transfer Date",
   "asset-register": "Asset Name",
+  "fixed-assets-entry": "Asset Name",
+  "asset-depreciate": "Period",
+  "asset-dispose": "Proceeds",
   "journal-entry": "Memo",
   "financial-notes-entry": "Period",
 };
@@ -68,6 +71,9 @@ const HEADER_TITLE: Record<EntrySubKind, string> = {
   "stock-opname-entry": "Stock Opname",
   "stock-transfer-entry": "Stock Transfer",
   "asset-register": "Asset",
+  "fixed-assets-entry": "Fixed Asset",
+  "asset-depreciate": "Asset Depreciation",
+  "asset-dispose": "Asset Disposal",
   "journal-entry": "Journal Entry",
   "financial-notes-entry": "Financial Note",
 };
@@ -94,6 +100,9 @@ const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
   "stock-opname-entry": { label: "Counted items" },
   "stock-transfer-entry": { label: "Transfer items" },
   "asset-register": { label: "Fixed Asset" },
+  "fixed-assets-entry": { label: "Fixed Asset" },
+  "asset-depreciate": { label: "Depreciation" },
+  "asset-dispose": { label: "Proceeds" },
   "journal-entry": { label: "Lines" },
   "financial-notes-entry": { label: "Note" },
 };
