@@ -44,6 +44,9 @@ import { GRNForm } from "../screens/entry/GRNForm";
 import { PurchaseSupplierForm } from "../screens/entry/PurchaseSupplierForm";
 import { SupplierInvoiceForm } from "../screens/entry/SupplierInvoiceForm";
 import { PurchaseReturnForm } from "../screens/entry/PurchaseReturnForm";
+import { BankStatementList } from "../screens/list/BankStatementList";
+import { BankStatementImport } from "../screens/entry/BankStatementImport";
+import { ReconciliationForm } from "../screens/entry/ReconciliationForm";
 import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
@@ -187,6 +190,8 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <SupplierInvoiceList />;
     case "purchase-return":
       return <PurchaseReturnList />;
+    case "bank-reconciliation":
+      return <BankStatementList />;
     case "purchase-invoice":
       return <PurchaseInvoiceList />;
     case "purchase-payment":
@@ -257,6 +262,11 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
       return <PurchaseReturnForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "purchase-supplier-entry":
       return <PurchaseSupplierForm />;
+    case "bank-reconciliation-entry":
+      if (tab.entryId == null) {
+        return <BankStatementImport tabId={tab.id} initialTitle={tab.title} />;
+      }
+      return <ReconciliationForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     default:
       return <PlaceholderTab title={tab.title} sub={`entry · ${subKind}`} />;
   }

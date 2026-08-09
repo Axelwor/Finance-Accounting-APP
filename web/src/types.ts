@@ -27,6 +27,7 @@ export type ListSubKind =
   | "supplier-invoice"
   | "purchase-payment"
   | "purchase-return"
+  | "bank-reconciliation"
   | "inventory-items"
   | "stock-movements"
   | "asset-register"
@@ -40,6 +41,7 @@ export type EntrySubKind =
   | "money-in"
   | "money-out"
   | "cash-transfer"
+  | "bank-reconciliation-entry"
   | "sales-invoice"
   | "sales-receipt"
   | "sales-quotation-entry"
@@ -903,4 +905,71 @@ export interface PurchaseReturnLineInput {
 export interface CreatePurchaseReturnInput {
   invoice_id: number; supplier_id: number; return_date: string;
   refund_method?: string; reason?: string; lines: PurchaseReturnLineInput[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Bank Reconciliation (US-050)                                       */
+/* ------------------------------------------------------------------ */
+
+export interface BankStatementLineInput {
+  tx_date: string; description?: string; reference?: string; amount_cents: number;
+}
+export interface CreateBankStatementInput {
+  bank_account_id: number; statement_date: string;
+  opening_balance_cents: number; closing_balance_cents: number;
+  notes?: string; lines: BankStatementLineInput[];
+}
+
+export interface BankStatementLine {
+  id: number; line_no: number; tx_date: string;
+  description?: string; reference?: string; amount_cents: number;
+  matched_journal_line_id?: number | null;
+  match_status: "UNMATCHED" | "MATCHED" | "MANUAL" | "ADJUSTMENT";
+  journal_entry_number?: string | null;
+  journal_entry_date?: string | null;
+  journal_description?: string | null;
+}
+export interface BankStatementListItem {
+  id: number; bank_account_id: number; bank_account_name?: string;
+  bank_account_code?: string; statement_date: string;
+  opening_balance_cents: number; closing_balance_cents: number;
+  status: "IMPORTED" | "RECONCILING" | "RECONCILED" | "VOID"; line_count: number;
+}
+export interface BankStatement extends BankStatementListItem {
+  notes?: string; lines: BankStatementLine[];
+}
+
+export interface BookCandidate {
+  journal_line_id: number; entry_id: number;
+  entry_number: string; entry_date: string;
+  amount_cents: number; direction: "DEBIT" | "CREDIT";
+  description?: string | null; is_matched: boolean;
+}
+export interface BankReconciliationListItem {
+  id: number; statement_id: number; bank_account_id: number;
+  bank_account_name?: string; recon_date: string;
+  book_balance_cents: number; statement_balance_cents: number;
+  adjusted_book_cents: number; adjusted_statement_cents: number; diff_cents: number;
+  status: "DRAFT" | "RECONCILED" | "VOID"; notes?: string;
+  summary?: {
+    statement_balance_cents: number; book_balance_cents: number;
+    adjusted_book_cents: number; adjusted_statement_cents: number; diff_cents: number;
+    matched_count: number; unmatched_count: number; total_lines: number;
+  };
+}
+export interface BankReconciliation extends BankReconciliationListItem {
+  statement_lines: BankStatementLine[];
+  book_candidates: BookCandidate[];
+  summary: {
+    statement_balance_cents: number; book_balance_cents: number;
+    adjusted_book_cents: number; adjusted_statement_cents: number; diff_cents: number;
+    matched_count: number; unmatched_count: number; total_lines: number;
+  };
+}
+
+export interface ReconcileMatchInput {
+  statement_line_id: number; journal_line_id: number;
+}
+export interface ReconcileUnmatchInput {
+  statement_line_id: number;
 }

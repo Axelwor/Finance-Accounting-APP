@@ -15,6 +15,7 @@ const cashBank: Module = {
     { id: "cb-receipt", label: "Other Receipt", hint: "M+", openList: "cash-other-receipt", openEntry: "money-in" },
     { id: "cb-payment", label: "Other Payment", hint: "M-", openList: "cash-other-payment", openEntry: "money-out" },
     { id: "cb-transfer", label: "Bank Transfer", hint: "Xfer", openList: "cash-transfer", openEntry: "cash-transfer" },
+    { id: "cb-recon", label: "Bank Reconciliation", hint: "REC", openList: "bank-reconciliation", openEntry: "bank-reconciliation-entry" },
   ],
 };
 
@@ -130,6 +131,8 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Purchase Payments";
     case "purchase-return":
       return "Purchase Returns";
+    case "bank-reconciliation":
+      return "Bank Reconciliation";
     case "inventory-items":
       return "Item List";
     case "stock-movements":
@@ -182,6 +185,8 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Purchase Payment";
     case "purchase-return-entry":
       return "Purchase Return";
+    case "bank-reconciliation-entry":
+      return "Bank Reconciliation";
     case "inventory-item":
       return "Item";
     case "asset-register":
@@ -208,6 +213,7 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "supplier-invoice-entry": return "BIL-DRAFT";
     case "purchase-payment": return "PP-DRAFT";
     case "purchase-return-entry": return "PRET-DRAFT";
+    case "bank-reconciliation-entry": return "REC-DRAFT";
     case "inventory-item": return "IT-DRAFT";
     case "asset-register": return "FA-DRAFT";
   }

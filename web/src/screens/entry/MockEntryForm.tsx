@@ -24,6 +24,7 @@ const PARTY_LABEL: Record<EntrySubKind, string> = {
   "money-in": "Received From",
   "money-out": "Paid To",
   "cash-transfer": "Memo",
+  "bank-reconciliation-entry": "Bank Account",
   "sales-invoice": "Customer",
   "sales-receipt": "Payer",
   "sales-quotation-entry": "Customer",
@@ -58,6 +59,7 @@ const HEADER_TITLE: Record<EntrySubKind, string> = {
     "purchase-invoice": "Purchase Invoice",
     "supplier-invoice-entry": "Supplier Invoice",
   "purchase-payment": "Purchase Payment",
+  "bank-reconciliation-entry": "Bank Statement",
   "inventory-item": "Inventory Item",
   "asset-register": "Asset",
 };
@@ -79,6 +81,7 @@ const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
     "purchase-invoice": { label: "Inventory / Expense" },
     "supplier-invoice-entry": { label: "Uninvoiced Payables" },
   "purchase-payment": { label: "Cash / Bank" },
+  "bank-reconciliation-entry": { label: "Bank account" },
   "inventory-item": { label: "Inventory Asset" },
   "asset-register": { label: "Fixed Asset" },
 };
