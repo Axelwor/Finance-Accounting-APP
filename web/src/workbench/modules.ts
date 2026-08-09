@@ -88,6 +88,8 @@ const reports: Module = {
     { id: "rp-pl", label: "Profit & Loss", hint: "P&L", openList: "report-profit-loss" },
     { id: "rp-bs", label: "Balance Sheet", hint: "BS", openList: "report-balance-sheet" },
     { id: "rp-cf", label: "Cash Flow", hint: "CF", openList: "report-cash-flow" },
+    { id: "rp-notes", label: "Financial Notes", hint: "CAL", openList: "financial-notes", openEntry: "financial-notes-entry" },
+    { id: "rp-reminders", label: "Due Date Reminders", hint: "DUE", openList: "due-date-reminders" },
   ],
 };
 
@@ -170,6 +172,10 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Balance Sheet";
     case "report-cash-flow":
       return "Cash Flow";
+    case "financial-notes":
+      return "Financial Notes";
+    case "due-date-reminders":
+      return "Due Date Reminders";
   }
 }
 

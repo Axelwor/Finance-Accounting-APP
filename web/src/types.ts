@@ -39,7 +39,9 @@ export type ListSubKind =
   | "report-trial-balance"
   | "report-profit-loss"
   | "report-balance-sheet"
-  | "report-cash-flow";
+  | "report-cash-flow"
+  | "financial-notes"
+  | "due-date-reminders";
 
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
@@ -64,7 +66,8 @@ export type EntrySubKind =
   | "stock-opname-entry"
   | "stock-transfer-entry"
   | "asset-register"
-  | "journal-entry";
+  | "journal-entry"
+  | "financial-notes-entry";
 
 export type CurrencyCode = "IDR";
 
@@ -1107,4 +1110,43 @@ export interface ReconcileMatchInput {
 }
 export interface ReconcileUnmatchInput {
   statement_line_id: number;
+}
+
+/* ------------------------------------------------------------------ */
+/* Financial Notes (Catatan atas Laporan Keuangan — dasar)             */
+/* ------------------------------------------------------------------ */
+
+export interface FinancialNote {
+  id: number;
+  period_year: number;
+  note_number: string;
+  title: string;
+  content: string;
+  display_order: number;
+}
+
+export interface FinancialNoteInput {
+  period_year: number;
+  note_number: string;
+  title: string;
+  content: string;
+  display_order?: number;
+}
+
+/* ------------------------------------------------------------------ */
+/* Due Date Reminders (Pengingat Jatuh Tempo)                          */
+/* ------------------------------------------------------------------ */
+
+export type DueDateDirection = "customer" | "supplier";
+
+export interface DueDateReminder {
+  id: number;
+  number: string;
+  party_name: string;
+  direction: DueDateDirection;
+  invoice_date: string;
+  due_date: string;
+  amount_cents: number;
+  status: string;
+  days_overdue: number;
 }

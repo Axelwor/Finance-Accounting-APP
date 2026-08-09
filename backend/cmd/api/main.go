@@ -16,6 +16,7 @@ import (
 	"finance-accounting-app/backend/internal/customer"
 	"finance-accounting-app/backend/internal/inventory"
 	"finance-accounting-app/backend/internal/item"
+	"finance-accounting-app/backend/internal/notes"
 	"finance-accounting-app/backend/internal/period"
 	"finance-accounting-app/backend/internal/purchase"
 	"finance-accounting-app/backend/internal/reconciliation"
@@ -144,6 +145,11 @@ func main() {
 			// US-050: Bank Reconciliation (Rekonsiliasi Kas & Bank).
 			reconciliationHandler := reconciliation.NewHandler(pool)
 			reconciliationHandler.Routes(router)
+
+			// P2-016: Catatan atas Laporan Keuangan + Pengingat Jatuh Tempo.
+			notesHandler := notes.NewHandler(pool)
+			notesHandler.Routes(router)
+			router.Get("/reminders/due-dates", notesHandler.DueDateReminders)
 		})
 	})
 

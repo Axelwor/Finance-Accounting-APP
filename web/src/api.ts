@@ -96,6 +96,9 @@ import type {
   BankStatementLineInput,
   ReconcileMatchInput,
   ReconcileUnmatchInput,
+  FinancialNote,
+  FinancialNoteInput,
+  DueDateReminder,
 } from "./types";
 
 /** Reconciliation detail returned by the reconcile endpoints. */
@@ -852,6 +855,61 @@ export const api = {
   /** Cash Flow report (GET /reports/cash-flow). */
   async getCashFlow(): Promise<BackendCashFlow> {
     return http<BackendCashFlow>("/reports/cash-flow", { auth: true });
+  },
+
+  /* ----------------------- Financial Notes (P2-016) ----------------------- */
+
+  /** Lists financial notes (GET /financial-notes?period_year=). Failure -> empty array. */
+  async listFinancialNotes(periodYear?: number): Promise<FinancialNote[]> {
+    const query = periodYear ? `?period_year=${periodYear}` : "";
+    try {
+      return await http<FinancialNote[]>(`/financial-notes${query}`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Gets one financial note (GET /financial-notes/{id}). */
+  async getFinancialNote(id: number): Promise<FinancialNote> {
+    return http<FinancialNote>(`/financial-notes/${id}`, { auth: true });
+  },
+
+  /** Creates a financial note (POST /financial-notes). */
+  async createFinancialNote(input: FinancialNoteInput): Promise<FinancialNote> {
+    return http<FinancialNote>("/financial-notes", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Updates a financial note (PUT /financial-notes/{id}). */
+  async updateFinancialNote(id: number, input: FinancialNoteInput): Promise<FinancialNote> {
+    return http<FinancialNote>(`/financial-notes/${id}`, {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Deletes a financial note (DELETE /financial-notes/{id}). */
+  async deleteFinancialNote(id: number): Promise<{ id: number; deleted: boolean }> {
+    return http<{ id: number; deleted: boolean }>(`/financial-notes/${id}`, {
+      method: "DELETE",
+      auth: true,
+    });
+  },
+
+  /* ----------------------- Due Date Reminders (P2-016) ----------------------- */
+
+  /** Lists customer + supplier invoices due within days_ahead days (GET /reminders/due-dates). */
+  async listDueDateReminders(daysAhead: number = 7): Promise<DueDateReminder[]> {
+    try {
+      return await http<DueDateReminder[]>(`/reminders/due-dates?days_ahead=${daysAhead}`, { auth: true });
+    } catch {
+      return [];
+    }
   },
 
   /** Customer list (GET /customers). Failure -> empty array. */

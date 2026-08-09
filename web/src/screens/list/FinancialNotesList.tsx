@@ -1,0 +1,189 @@
+import { useEffect, useMemo, useState } from "react";
+import { useWorkbench } from "../../workbench/state";
+import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
+import { api } from "../../api";
+import type { FinancialNote } from "../../types";
+
+/**
+ * Financial Notes list (Catatan atas Laporan Keuangan).
+ *
+ * Notes are free-text disclosures attached to a fiscal year, presented
+ * alongside the Laporan Posisi Keuangan. Each note carries a number,
+ * title, and long-form content. The list groups notes by period_year
+ * and supports create / edit / delete.
+ */
+export function FinancialNotesList() {
+  const workbench = useWorkbench();
+  const [items, setItems] = useState<FinancialNote[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api.listFinancialNotes();
+      setItems(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load financial notes.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const grouped = useMemo(() => {
+    const map = new Map<number, FinancialNote[]>();
+    for (const it of items) {
+      const list = map.get(it.period_year) ?? [];
+      list.push(it);
+      map.set(it.period_year, list);
+    }
+    return [...map.entries()].sort((a, b) => b[0] - a[0]);
+  }, [items]);
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm("Delete this note? This cannot be undone.")) return;
+    setDeletingId(id);
+    try {
+      await api.deleteFinancialNote(id);
+      setItems((prev) => prev.filter((it) => it.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete note.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const openEntry = (item: FinancialNote) =>
+    workbench.openEntryExisting("financial-notes-entry", item.id, `${item.note_number} · ${item.title}`);
+
+  return (
+    <div className="listtab listtab--accurate">
+      <div className="listtab__head">
+        <div className="listtab__title">
+          <span>Financial Notes</span>
+          <small>Catatan atas Laporan Keuangan — disclosures attached to each fiscal year.</small>
+        </div>
+      </div>
+      <div className="listtab__toolbar">
+        <div className="listtab__filters" />
+        <div className="listtab__actions">
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            onClick={() => workbench.openEntryDraft("financial-notes-entry")}
+          >
+            + New Note
+          </button>
+          <button
+            type="button"
+            className="btn btn--icon btn--sm"
+            onClick={() => void load()}
+            aria-label="Reload"
+          >
+            <ReloadIcon />
+          </button>
+          <span className="listtab__count">{items.length}</span>
+        </div>
+      </div>
+      <div className="listtab__body">
+        {loading ? (
+          <LoadingState label="Loading financial notes..." />
+        ) : error ? (
+          <ErrorState message={error} onRetry={() => void load()} />
+        ) : items.length === 0 ? (
+          <EmptyState
+            title="No financial notes yet"
+            message="Add a note to disclose accounting policies, breakdowns, or commitments attached to the Laporan Posisi Keuangan."
+            action={
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => workbench.openEntryDraft("financial-notes-entry")}
+              >
+                New Note
+              </button>
+            }
+          />
+        ) : (
+          <div className="notes-list">
+            {grouped.map(([year, notes]) => (
+              <section className="notes-list__group" key={year}>
+                <header className="notes-list__group-head">
+                  <span className="notes-list__group-year">Fiscal Year {year}</span>
+                  <span className="notes-list__group-count">{notes.length} note(s)</span>
+                </header>
+                <div className="ledger-table">
+                  <div className="ledger-table__head">
+                    <span>No.</span>
+                    <span>Title</span>
+                    <span>Content</span>
+                    <span />
+                  </div>
+                  {notes.map((it) => (
+                    <div className="ledger-table__row" key={it.id}>
+                      <span className="ledger-table__num" onClick={() => openEntry(it)} role="button">
+                        {it.note_number}
+                      </span>
+                      <span className="ledger-table__party" onClick={() => openEntry(it)} role="button">
+                        {it.title}
+                      </span>
+                      <span className="ledger-table__memo">{previewContent(it.content)}</span>
+                      <span className="ledger-table__actions">
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm"
+                          onClick={() => openEntry(it)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          onClick={() => void handleDelete(it.id)}
+                          disabled={deletingId === it.id}
+                        >
+                          {deletingId === it.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="listtab__footer">
+        <span className="listtab__footer-count">{items.length} Note(s)</span>
+      </div>
+    </div>
+  );
+}
+
+function previewContent(content: string): string {
+  const trimmed = (content ?? "").trim();
+  if (!trimmed) return "—";
+  const firstLine = trimmed.split(/\r?\n/)[0];
+  return firstLine.length > 80 ? firstLine.slice(0, 80) + "…" : firstLine;
+}
+
+function ReloadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path
+        d="M4 12a8 8 0 0 1 14-5l2-2v6h-6l2-2a6 6 0 0 0-10 3M20 12a8 8 0 0 1-14 5l-2 2v-6h6l-2 2a6 6 0 0 0 10-3"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
