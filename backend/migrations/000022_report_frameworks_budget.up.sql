@@ -43,6 +43,13 @@ CREATE TABLE dimensions (
 
 CREATE INDEX dimensions_tenant_type_idx ON dimensions (tenant_id, dimension_type, is_active);
 
+-- Ensure journal_lines has the composite unique constraint needed for the FK below.
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'journal_lines_tenant_id_id_key') THEN
+        ALTER TABLE journal_lines ADD CONSTRAINT journal_lines_tenant_id_id_key UNIQUE (tenant_id, id);
+    END IF;
+END $$;
+
 -- Dimension tags on journal lines (many-to-many). A line can carry multiple
 -- dimensions (e.g. a branch + a project). The composite FK keeps tags within
 -- the same tenant as their line / dimension.
