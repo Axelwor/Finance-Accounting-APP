@@ -14,13 +14,6 @@ import (
 	"finance-accounting-app/backend/internal/db"
 )
 
-// Supplier Invoice (Tagihan) account codes (seeded by migration 000011).
-const (
-	apAccountCode       = "2101" // Accounts Payable (formal)
-	inputVATAccountCode = "1203" // Input VAT (PPN masukan)
-	purchasePrepayCode  = "1205" // Purchase Prepayment (Advance to Supplier)
-)
-
 // Supplier invoice statuses.
 const (
 	siIssued        = "ISSUED"

@@ -881,24 +881,6 @@ export interface CreateSupplierPaymentInput {
   amount_cents: number;
   payment_date: string;
   description?: string;
-/* Supplier Invoice (Tagihan) — minimal list item used by purchase-return picker.
-   The full type is owned by the supplier-invoice feature (migration 000012). */
-export interface SupplierInvoiceListItem {
-  id: number;
-  number: string;
-  supplier_id: number;
-  supplier_name?: string;
-  invoice_date: string;
-  due_date?: string;
-  supplier_invoice_number?: string;
-  dpp_cents: number;
-  vat_cents: number;
-  total_cents: number;
-  dp_applied_cents: number;
-  payable_cents: number;
-  notes?: string;
-  status: "ISSUED" | "PARTIALLY_PAID" | "PAID" | "VOID";
-  journal_entry_id?: number;
 }
 
 /* Purchase Return (Retur Pembelian) */

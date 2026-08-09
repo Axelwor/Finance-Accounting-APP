@@ -22,6 +22,16 @@ type Service struct {
 	pool *pgxpool.Pool
 }
 
+// Shared account codes (seeded by migration 000011).
+const (
+	apAccountCode          = "2101" // Accounts Payable (formal)
+	uninvoicedPayableCode  = "2105" // Uninvoiced Payables (accrued)
+	inputVATAccountCode    = "1203" // Input VAT (PPN masukan)
+	purchasePrepayCode     = "1205" // Purchase Prepayment (Advance to Supplier)
+	inventoryAccountCode   = "1301" // Inventory
+	overpaymentAccountCode = "1204" // Other Receivables (supplier overpayment)
+)
+
 func NewHandler(pool *pgxpool.Pool) *Service {
 	return &Service{pool: pool}
 }

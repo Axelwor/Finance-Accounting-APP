@@ -13,17 +13,10 @@ import (
 	"finance-accounting-app/backend/internal/db"
 )
 
-// Accounts resolved from the seeded COA:
-//   - 2101 Accounts Payable (AP): debited to reduce what we owe the supplier.
-//   - 1204 Other Receivables: holds supplier overpayment (amount > payable).
-//     NOT 2402 — that's a customer-only liability account.
-//
 // Supplier invoice statuses (ISSUED / PARTIALLY_PAID / PAID / VOID) are defined
 // as local string literals here to avoid colliding with any constants the
 // supplier-invoice handler (US-033) may export from its own file.
 const (
-	apAccountCode            = "2101"
-	supplierOverpaymentCode  = "1204"
 	supplierPaymentDocType   = "PAY"
 	supplierPaymentDocPrefix = "PAY"
 )
@@ -148,7 +141,7 @@ func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, reques
 			{AccountID: cashAccount.ID, CreditCents: req.AmountCents, SourceLineRef: "cash"},
 		}
 		if overpayment > 0 {
-			opAccountID, err := resolveAccountByCode(request.Context(), tx, tenant, supplierOverpaymentCode)
+			opAccountID, err := resolveAccountByCode(request.Context(), tx, tenant, overpaymentAccountCode)
 			if err != nil {
 				return err
 			}

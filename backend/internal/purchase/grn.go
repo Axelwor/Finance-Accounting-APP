@@ -18,11 +18,7 @@ import (
 )
 
 // GRN posts: Dr 1301 Inventory / Cr 2105 Uninvoiced Payables.
-// Account codes resolved from seeded COA.
-const (
-	inventoryAccountCode  = "1301"
-	uninvoicedPayableCode = "2105"
-)
+// Account codes resolved from seeded COA (constants in helpers.go).
 
 type CreateGRNRequest struct {
 	PurchaseOrderID int64            `json:"purchase_order_id"`

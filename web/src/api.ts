@@ -76,7 +76,6 @@ import type {
   PurchaseReturn,
   PurchaseReturnListItem,
   CreatePurchaseReturnInput,
-  SupplierInvoiceListItem,
 } from "./types";
 
 const LATENCY_MS = 200;
@@ -1016,28 +1015,13 @@ export const api = {
     });
   },
 
-  /** Supplier invoice (Tagihan) list (GET /supplier-invoices). Optional status filter. */
+  // -- Supplier Invoices (Tagihan) --
+
+  /** Supplier invoice list (GET /supplier-invoices). Optional status filter. */
   async listSupplierInvoices(status?: string): Promise<SupplierInvoiceListItem[]> {
     const qs = status ? `?status=${encodeURIComponent(status)}` : "";
     try {
       return await http<SupplierInvoiceListItem[]>(`/supplier-invoices${qs}`, { auth: true });
-  // -- Supplier Invoices (minimal — used by Purchase Return form) --
-
-  async listSupplierInvoices(status?: SupplierInvoiceListItem["status"]): Promise<SupplierInvoiceListItem[]> {
-    const query = status ? `?status=${encodeURIComponent(status)}` : "";
-    try {
-      return await http<SupplierInvoiceListItem[]>(`/supplier-invoices${query}`, { auth: true });
-    } catch {
-      return [];
-    }
-  },
-
-  // -- Purchase Returns (Retur Pembelian) --
-
-  async listPurchaseReturns(status?: string): Promise<PurchaseReturnListItem[]> {
-    const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-    try {
-      return await http<PurchaseReturnListItem[]>(`/purchase-returns${qs}`, { auth: true });
     } catch {
       return [];
     }
@@ -1051,12 +1035,6 @@ export const api = {
   /** Create a supplier invoice (POST /supplier-invoices). Posts reclassification journal. */
   async createSupplierInvoice(input: CreateSupplierInvoiceInput): Promise<SupplierInvoice> {
     return http<SupplierInvoice>("/supplier-invoices", {
-  async getPurchaseReturn(id: number): Promise<PurchaseReturn> {
-    return http<PurchaseReturn>(`/purchase-returns/${id}`, { auth: true });
-  },
-
-  async createPurchaseReturn(input: CreatePurchaseReturnInput): Promise<PurchaseReturn> {
-    return http<PurchaseReturn>("/purchase-returns", {
       method: "POST",
       auth: true,
       idempotencyKey: newIdempotencyKey(),
@@ -1083,6 +1061,30 @@ export const api = {
     } catch {
       return [];
     }
+  },
+
+  // -- Purchase Returns (Retur Pembelian) --
+
+  async listPurchaseReturns(status?: string): Promise<PurchaseReturnListItem[]> {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+    try {
+      return await http<PurchaseReturnListItem[]>(`/purchase-returns${qs}`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  async getPurchaseReturn(id: number): Promise<PurchaseReturn> {
+    return http<PurchaseReturn>(`/purchase-returns/${id}`, { auth: true });
+  },
+
+  async createPurchaseReturn(input: CreatePurchaseReturnInput): Promise<PurchaseReturn> {
+    return http<PurchaseReturn>("/purchase-returns", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
   },
   /**
    * Completes onboarding: creates the tenant on the backend (POST /tenants),

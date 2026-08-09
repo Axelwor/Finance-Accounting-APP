@@ -16,14 +16,6 @@ import (
 	"finance-accounting-app/backend/internal/db"
 )
 
-// Accounts used by purchase returns.
-// 2101 = Accounts Payable (AP), 1301 = Inventory, 1203 = Input VAT.
-const (
-	apAccountCode       = "2101"
-	inputVATAccountCode = "1203"
-	// inventoryAccountCode is already defined in grn.go (1301).
-)
-
 // PR (purchase return) statuses.
 const (
 	prApplied = "APPLIED"
