@@ -23,6 +23,8 @@ func seedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		{"1204", "Other Receivables", "asset", "OTHER_RECEIVABLE"},
 		{"1205", "Prepayment to Suppliers", "asset", "PREPAYMENT"},
 		{"1301", "Inventory", "asset", "INVENTORY"},
+		{"1303", "Work in Progress", "asset", "INVENTORY"},
+		{"1304", "Finished Goods", "asset", "INVENTORY"},
 		{"1401", "Fixed Assets", "asset", "FIXED_ASSET"},
 		{"2101", "Accounts Payable", "liability", "AP"},
 		{"2105", "Uninvoiced Payables", "liability", "ACCRUED_LIABILITY"},

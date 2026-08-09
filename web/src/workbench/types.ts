@@ -17,6 +17,7 @@ export type ModuleId =
   | "cash-bank"
   | "sales"
   | "purchases"
+  | "production"
   | "inventory"
   | "fixed-assets"
   | "accountant"
@@ -77,6 +78,6 @@ export interface SubItem {
 export interface Module {
   id: ModuleId;
   label: string;
-  icon: "wallet" | "sale" | "purchase" | "box" | "building" | "report" | "ledger";
+  icon: "wallet" | "sale" | "purchase" | "box" | "building" | "report" | "ledger" | "factory";
   items: SubItem[];
 }

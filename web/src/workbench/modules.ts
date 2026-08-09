@@ -47,6 +47,16 @@ const purchases: Module = {
   ],
 };
 
+const production: Module = {
+  id: "production",
+  label: "Production",
+  icon: "factory",
+  items: [
+    { id: "pr-bom", label: "Bill of Materials", hint: "BOM", openList: "bom", openEntry: "bom-entry" },
+    { id: "pr-job", label: "Production Jobs", hint: "JOB", openList: "production-job", openEntry: "production-job-entry" },
+  ],
+};
+
 const inventory: Module = {
   id: "inventory",
   label: "Inventory",
@@ -93,7 +103,7 @@ const reports: Module = {
   ],
 };
 
-export const MODULES: Module[] = [cashBank, sales, purchases, inventory, fixedAssets, accountant, reports];
+export const MODULES: Module[] = [cashBank, sales, purchases, production, inventory, fixedAssets, accountant, reports];
 
 export function findModule(id: ModuleId): Module | undefined {
   return MODULES.find((m) => m.id === id);
@@ -176,6 +186,10 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Financial Notes";
     case "due-date-reminders":
       return "Due Date Reminders";
+    case "bom":
+      return "Bill of Materials";
+    case "production-job":
+      return "Production Jobs";
   }
 }
 
@@ -228,6 +242,10 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Journal Entry";
     case "financial-notes-entry":
       return "Financial Note";
+    case "bom-entry":
+      return "Bill of Materials";
+    case "production-job-entry":
+      return "Production Job";
     default:
       return "Entry";
   }
@@ -259,6 +277,8 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "asset-register": return "FA-DRAFT";
     case "journal-entry": return "JE-DRAFT";
     case "financial-notes-entry": return "FN-DRAFT";
+    case "bom-entry": return "BOM-DRAFT";
+    case "production-job-entry": return "PRD-DRAFT";
     default: return "DRAFT";
   }
 }

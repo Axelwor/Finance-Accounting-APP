@@ -98,6 +98,16 @@ import type {
   ReconcileUnmatchInput,
   FinancialNote,
   FinancialNoteInput,
+  BOM,
+  BOMListItem,
+  CreateBOMInput,
+  ProductionJob,
+  ProductionJobListItem,
+  ProductionJobCost,
+  CreateProductionJobInput,
+  AddProductionJobCostInput,
+  CreateProductionJobCostInput,
+  CompleteProductionJobInput,
   DueDateReminder,
 } from "./types";
 
@@ -1421,6 +1431,70 @@ export const api = {
       method: "POST",
       auth: true,
       idempotencyKey: newIdempotencyKey(),
+    });
+  },
+
+  // -- Bill of Materials (US-070) --
+
+  async listBOMs(): Promise<BOMListItem[]> {
+    try {
+      return await http<BOMListItem[]>("/bill-of-materials", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  async getBOM(id: number): Promise<BOM> {
+    return http<BOM>(`/bill-of-materials/${id}`, { auth: true });
+  },
+
+  async createBOM(input: CreateBOMInput): Promise<BOM> {
+    return http<BOM>("/bill-of-materials", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  // -- Production Jobs (US-070..072) --
+
+  async listProductionJobs(): Promise<ProductionJobListItem[]> {
+    try {
+      return await http<ProductionJobListItem[]>("/production-jobs", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  async getProductionJob(id: number): Promise<ProductionJob> {
+    return http<ProductionJob>(`/production-jobs/${id}`, { auth: true });
+  },
+
+  async createProductionJob(input: CreateProductionJobInput): Promise<ProductionJob> {
+    return http<ProductionJob>("/production-jobs", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  async addProductionJobCost(jobId: number, input: CreateProductionJobCostInput): Promise<ProductionJobCost> {
+    return http<ProductionJobCost>(`/production-jobs/${jobId}/costs`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  async completeProductionJob(jobId: number, input: CompleteProductionJobInput): Promise<ProductionJob> {
+    return http<ProductionJob>(`/production-jobs/${jobId}/complete`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
     });
   },
 

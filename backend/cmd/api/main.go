@@ -18,6 +18,7 @@ import (
 	"finance-accounting-app/backend/internal/item"
 	"finance-accounting-app/backend/internal/notes"
 	"finance-accounting-app/backend/internal/period"
+	"finance-accounting-app/backend/internal/production"
 	"finance-accounting-app/backend/internal/purchase"
 	"finance-accounting-app/backend/internal/reconciliation"
 	"finance-accounting-app/backend/internal/reporting"
@@ -156,6 +157,10 @@ func main() {
 			notesHandler := notes.NewHandler(pool)
 			notesHandler.Routes(router)
 			router.Get("/reminders/due-dates", notesHandler.DueDateReminders)
+
+			// US-070..072: Production / Job Order Costing (BOM, jobs, costs, completion).
+			productionHandler := production.NewHandler(pool)
+			productionHandler.Routes(router)
 		})
 	})
 

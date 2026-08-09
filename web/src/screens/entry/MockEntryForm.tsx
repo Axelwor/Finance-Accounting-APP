@@ -44,6 +44,8 @@ const PARTY_LABEL: Record<EntrySubKind, string> = {
   "asset-register": "Asset Name",
   "journal-entry": "Memo",
   "financial-notes-entry": "Period",
+  "bom-entry": "BOM Code",
+  "production-job-entry": "Job Number",
 };
 
 const HEADER_TITLE: Record<EntrySubKind, string> = {
@@ -70,6 +72,8 @@ const HEADER_TITLE: Record<EntrySubKind, string> = {
   "asset-register": "Asset",
   "journal-entry": "Journal Entry",
   "financial-notes-entry": "Financial Note",
+  "bom-entry": "Bill of Materials",
+  "production-job-entry": "Production Job",
 };
 
 const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
@@ -96,6 +100,8 @@ const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
   "asset-register": { label: "Fixed Asset" },
   "journal-entry": { label: "Lines" },
   "financial-notes-entry": { label: "Note" },
+  "bom-entry": { label: "BOM lines" },
+  "production-job-entry": { label: "WIP / Finished Goods" },
 };
 
 /**

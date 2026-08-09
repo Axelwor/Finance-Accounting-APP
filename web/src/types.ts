@@ -41,7 +41,9 @@ export type ListSubKind =
   | "report-balance-sheet"
   | "report-cash-flow"
   | "financial-notes"
-  | "due-date-reminders";
+  | "due-date-reminders"
+  | "bom"
+  | "production-job";
 
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
@@ -67,7 +69,9 @@ export type EntrySubKind =
   | "stock-transfer-entry"
   | "asset-register"
   | "journal-entry"
-  | "financial-notes-entry";
+  | "financial-notes-entry"
+  | "bom-entry"
+  | "production-job-entry";
 
 export type CurrencyCode = "IDR";
 
@@ -1149,4 +1153,122 @@ export interface DueDateReminder {
   amount_cents: number;
   status: string;
   days_overdue: number;
+}
+
+/* ------------------------------------------------------------------ */
+/* Production / Job Order Costing (US-070..072)                        */
+/*   BOM, production jobs, job costs, job completion.                  */
+/*   Material cost: Dr 1303 WIP / Cr 1301 Inventory                   */
+/*   Labor/Overhead: Dr 1303 WIP / Cr 1101 Cash                       */
+/*   Complete: Dr 1304 Finished Goods / Cr 1303 WIP                   */
+/*   Variance loss: Dr 5901 / Cr 1303; gain: Dr 1303 / Cr 4902        */
+/* ------------------------------------------------------------------ */
+
+export type ProductionCostType = "material" | "labor" | "overhead";
+
+export interface BOMLine {
+  id: number;
+  item_id: number;
+  item_code?: string;
+  item_name?: string;
+  line_no: number;
+  qty: number;
+  unit_cost_cents: number;
+  line_total_cents: number;
+  cost_type: ProductionCostType;
+  description?: string;
+}
+
+export interface BOM {
+  id: number;
+  code: string;
+  name: string;
+  finished_good_item_id: number;
+  finished_good_code?: string;
+  finished_good_name?: string;
+  output_qty: number;
+  status: "ACTIVE" | "VOID";
+  lines?: BOMLine[];
+}
+
+/** BOM list item (header only, no lines). */
+export type BOMListItem = BOM;
+
+export interface BOMLineInput {
+  item_id: number;
+  qty: number;
+  unit_cost_cents: number;
+  cost_type: ProductionCostType;
+  description?: string;
+}
+
+export interface CreateBOMInput {
+  code: string;
+  name: string;
+  finished_good_item_id: number;
+  output_qty: number;
+  lines: BOMLineInput[];
+}
+
+export interface ProductionJobCost {
+  id: number;
+  cost_type: ProductionCostType;
+  item_id?: number;
+  item_code?: string;
+  item_name?: string;
+  description?: string;
+  qty?: number;
+  unit_cost_cents: number;
+  total_cents: number;
+  journal_entry_id?: number;
+  posted_at?: string;
+}
+
+export interface ProductionJob {
+  id: number;
+  number: string;
+  bom_id?: number;
+  finished_good_item_id: number;
+  finished_good_code?: string;
+  finished_good_name?: string;
+  target_qty: number;
+  completed_qty: number;
+  start_date: string;
+  completion_date?: string;
+  status: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+  wip_account_id: number;
+  finished_good_account_id: number;
+  total_material_cents: number;
+  total_labor_cents: number;
+  total_overhead_cents: number;
+  total_cost_cents: number;
+  variance_cents: number;
+  journal_entry_id?: number;
+  costs?: ProductionJobCost[];
+}
+
+/** Production job list item (header only, no costs). */
+export type ProductionJobListItem = ProductionJob;
+
+export interface CreateProductionJobInput {
+  bom_id?: number;
+  finished_good_item_id: number;
+  target_qty: number;
+  start_date: string;
+}
+
+export interface AddProductionJobCostInput {
+  cost_type: ProductionCostType;
+  item_id?: number;
+  description?: string;
+  qty: number;
+  unit_cost_cents: number;
+}
+
+/** Alias for the cost-creation request body (same shape). */
+export type CreateProductionJobCostInput = AddProductionJobCostInput;
+
+export interface CompleteProductionJobInput {
+  /** Optional completed quantity (defaults to target_qty when omitted). */
+  completed_qty?: number;
 }
