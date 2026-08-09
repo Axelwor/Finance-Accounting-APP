@@ -29,7 +29,7 @@ const sales: Module = {
     { id: "sl-delivery", label: "Delivery Orders", hint: "DO", openList: "delivery-order", openEntry: "delivery-order-entry" },
     { id: "sl-invoice", label: "Sales Invoices", hint: "INV", openList: "sales-invoice", openEntry: "sales-invoice" },
     { id: "sl-credit-note", label: "Credit Notes", hint: "CN", openList: "credit-note", openEntry: "credit-note-entry" },
-    { id: "sl-receipt", label: "Sales Receipts", hint: "RCP", openList: "sales-receipt", openEntry: "sales-receipt", mockData: true },
+    { id: "sl-receipt", label: "Sales Receipts", hint: "RCP", openList: "sales-receipt", openEntry: "sales-invoice" },
   ],
 };
 
@@ -42,7 +42,7 @@ const purchases: Module = {
     { id: "pu-grn", label: "Goods Received", hint: "GRN", openList: "grn", openEntry: "grn-entry" },
     { id: "pu-supplier", label: "Suppliers", hint: "SUP", openList: "purchase-supplier", openEntry: "purchase-supplier-entry" },
     { id: "pu-invoice", label: "Supplier Invoices", hint: "BIL", openList: "supplier-invoice", openEntry: "supplier-invoice-entry" },
-    { id: "pu-payment", label: "Purchase Payments", hint: "PAY", openList: "purchase-payment", openEntry: "purchase-payment", mockData: true },
+    { id: "pu-payment", label: "Purchase Payments", hint: "PAY", openList: "purchase-payment", openEntry: "supplier-invoice-entry" },
     { id: "pu-return", label: "Purchase Returns", hint: "PRET", openList: "purchase-return", openEntry: "purchase-return-entry" },
   ],
 };

@@ -71,7 +71,7 @@ const (
 	pphPayableAccountCode  = "2203" // Income Tax Payable
 	pphExpenseAccountCode  = "5208" // Income Tax Expense
 	allowanceAccountCode   = "1202" // Allowance for Doubtful Accounts
-	badDebtExpenseCode     = "5205" // Bad Debt Expense
+	badDebtExpenseCode     = "5209" // Bad Debt Expense
 	badDebtRecoveryCode    = "4906" // Bad Debt Recovery
 	deferredTaxAssetCode   = "1206" // Deferred Tax Asset
 	deferredTaxExpenseCode = "5904" // Deferred Tax Expense

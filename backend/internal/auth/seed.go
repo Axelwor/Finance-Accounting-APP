@@ -55,7 +55,7 @@ func seedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		{"5206", "Depreciation Expense", "expense", "DEPRECIATION"},
 		{"5207", "Impairment Loss", "expense", "IMPAIRMENT"},
 		{"5903", "Loss on Asset Disposal", "expense", "OTHER_EXPENSE"},
-		{"5205", "Bad Debt Expense", "expense", "BAD_DEBT"},
+		{"5209", "Bad Debt Expense", "expense", "BAD_DEBT"},
 		{"5208", "Income Tax Expense", "expense", "TAX_EXPENSE"},
 		{"5904", "Deferred Tax Expense", "expense", "DEFERRED_TAX"},
 		{"5906", "Interest Expense", "expense", "INTEREST_EXPENSE"},

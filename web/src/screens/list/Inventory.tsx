@@ -1,153 +1,105 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
-import { MockList, type MockListColumn } from "./MockList";
+import { EmptyState, LoadingState } from "../../components/ui";
+import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
-import {
-  makeInventoryItems,
-  makeStockMovements,
-  type InventoryItem,
-  type StockMovement,
-} from "../../lib/mockData";
-
-function ItemStatusBadge({ status, onHand }: { status: InventoryItem["status"]; onHand: number }) {
-  const low = onHand > 0 && onHand < 20;
-  const tone = status === "INACTIVE" ? "is-muted" : low ? "is-negative" : "is-positive";
-  const label = status === "INACTIVE" ? "INACTIVE" : low ? "LOW" : "ACTIVE";
-  return (
-    <span className={`kind-mark ${tone}`} style={{ minWidth: 64, display: "inline-block" }}>
-      {label}
-    </span>
-  );
-}
-
-function MovementStatusBadge({ status }: { status: StockMovement["status"] }) {
-  const cls =
-    status === "POSTED"
-      ? "is-positive"
-      : status === "VOID"
-        ? "is-negative"
-        : "is-muted";
-  return (
-    <span className={`kind-mark ${cls}`} style={{ minWidth: 64, display: "inline-block" }}>
-      {status}
-    </span>
-  );
-}
+import type { Item } from "../../types";
 
 export function InventoryItemsList() {
   const workbench = useWorkbench();
-  const rows = useMemo(() => makeInventoryItems(), []);
+  const [items, setItems] = useState<Item[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const columns: MockListColumn<InventoryItem>[] = [
-    {
-      key: "code",
-      label: "Code",
-      render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", color: "var(--ink-secondary)" }}>{r.code}</span>
-      ),
-    },
-    {
-      key: "name",
-      label: "Name",
-      primary: true,
-      render: (r) => r.name,
-      secondary: (r) => `${r.category} · ${r.unit}`,
-    },
-    {
-      key: "onHand",
-      label: "On hand",
-      align: "right",
-      tone: (r) => (r.onHand === 0 ? "is-muted" : r.onHand < 20 ? "is-negative" : ""),
-      render: (r) => new Intl.NumberFormat("en-US").format(r.onHand),
-    },
-    {
-      key: "avgCost",
-      label: "Avg cost",
-      align: "right",
-      render: (r) => formatIDR(r.avgCost),
-    },
-    {
-      key: "status",
-      label: "Status",
-      render: (r) => <ItemStatusBadge status={r.status} onHand={r.onHand} />,
-    },
-  ];
+  useEffect(() => {
+    api.listItems()
+      .then(setItems)
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
-    <MockList
-      title="Item List"
-      description="Inventory items and average cost (mock data — no backend yet)."
-      kind="inventory"
-      columns={columns}
-      rows={rows}
-      searchFields={["code", "name", "category", "unit"]}
-      getRowKey={(r) => r.id}
-      searchPlaceholder="code, name, category..."
-      onAdd={() => workbench.openEntryDraft("inventory-item")}
-      onOpen={(r) => workbench.openEntryExisting("inventory-item", r.id, r.code, r.status)}
-    />
+    <div className="listtab listtab--accurate">
+      <div className="listtab__head">
+        <div className="listtab__title">
+          <span>Item List</span>
+          <small>Master data for goods and services.</small>
+        </div>
+      </div>
+      <div className="listtab__toolbar">
+        <div className="listtab__filters" />
+        <div className="listtab__actions">
+          <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.openEntryDraft("inventory-item")}>
+            + New Item
+          </button>
+          <span className="listtab__count">{items.length}</span>
+        </div>
+      </div>
+      <div className="listtab__body">
+        {loading ? (
+          <LoadingState label="Loading items..." />
+        ) : items.length === 0 ? (
+          <EmptyState
+            title="No items yet"
+            message="Add goods or service items to start creating quotations, orders, and invoices."
+            action={
+              <button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("inventory-item")}>
+                New Item
+              </button>
+            }
+          />
+        ) : (
+          <div className="ledger-table">
+            <div className="ledger-table__head">
+              <span>Code</span>
+              <span>Name</span>
+              <span>Type</span>
+              <span>UoM</span>
+              <span className="right">Price</span>
+              <span>Status</span>
+            </div>
+            {items.map((it) => (
+              <div
+                key={it.id}
+                className="ledger-table__row"
+                role="button"
+                tabIndex={0}
+                onClick={() => workbench.openEntryExisting("inventory-item", it.id, it.code, it.is_active ? "ACTIVE" : "INACTIVE")}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); workbench.openEntryExisting("inventory-item", it.id, it.code, it.is_active ? "ACTIVE" : "INACTIVE"); } }}
+                style={{ cursor: "pointer" }}
+              >
+                <span className="ledger-table__no">{it.code}</span>
+                <span className="ledger-table__cat">{it.name}</span>
+                <span><span className={`kind-mark ${it.item_type === "goods" ? "" : "is-muted"}`}>{it.item_type}</span></span>
+                <span className="ledger-table__memo">{it.unit || "—"}</span>
+                <span className="ledger-table__amount right">{it.sale_price_cents ? formatIDR(it.sale_price_cents) : "—"}</span>
+                <span><span className={`kind-mark ${it.is_active ? "is-positive" : "is-negative"}`}>{it.is_active ? "Active" : "Inactive"}</span></span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="listtab__footer">
+        <span className="listtab__footer-count">{items.length} item(s)</span>
+      </div>
+    </div>
   );
 }
 
 export function StockMovementsList() {
-  const workbench = useWorkbench();
-  const rows = useMemo(() => makeStockMovements(), []);
-
-  const columns: MockListColumn<StockMovement>[] = [
-    {
-      key: "date",
-      label: "Date",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)" }}>{r.date}</span>,
-    },
-    {
-      key: "number",
-      label: "Number",
-      primary: true,
-      render: (r) => r.number,
-      secondary: (r) => r.item,
-    },
-    {
-      key: "type",
-      label: "Type",
-      render: (r) => r.type,
-    },
-    {
-      key: "qty",
-      label: "Qty",
-      align: "right",
-      render: (r) => new Intl.NumberFormat("en-US").format(r.qty),
-    },
-    {
-      key: "unitCost",
-      label: "Unit cost",
-      align: "right",
-      render: (r) => formatIDR(r.unitCost),
-    },
-    {
-      key: "total",
-      label: "Total",
-      align: "right",
-      tone: (r) => (r.status === "VOID" ? "is-muted" : ""),
-      render: (r) => formatIDR(r.total),
-    },
-    {
-      key: "status",
-      label: "Status",
-      render: (r) => <MovementStatusBadge status={r.status} />,
-    },
-  ];
-
-  // The stock-movements list is read-only — no entry form yet.
   return (
-    <MockList
-      title="Stock Movements"
-      description="Receipts, issues, transfers, and adjustments (mock data — no backend yet)."
-      kind="inventory"
-      columns={columns}
-      rows={rows}
-      searchFields={["number", "item", "type", "date"]}
-      getRowKey={(r) => r.id}
-      searchPlaceholder="number, item, type..."
-    />
+    <div className="listtab listtab--accurate">
+      <div className="listtab__head">
+        <div className="listtab__title">
+          <span>Stock Movements</span>
+          <small>Receipts, issues, transfers, and adjustments.</small>
+        </div>
+      </div>
+      <div className="listtab__body">
+        <EmptyState
+          title="Stock movements"
+          message="Stock movements are recorded automatically by GRN, DO, Stock Opname, and Stock Transfer. View individual item movements from the Item List."
+        />
+      </div>
+    </div>
   );
 }

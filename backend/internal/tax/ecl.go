@@ -27,10 +27,10 @@ import (
 //	>90    days: 10%  (configurable via request)
 //
 // The provision journal adjusts 1202 (Allowance for Doubtful Accounts, contra
-// asset) against 5205 (Bad Debt Expense) to reach the target allowance:
+// asset) against 5209 (Bad Debt Expense) to reach the target allowance:
 //
-//	If target > current allowance: Dr 5205 / Cr 1202 (increase provision)
-//	If target < current allowance: Dr 1202 / Cr 5205 (release provision)
+//	If target > current allowance: Dr 5209 / Cr 1202 (increase provision)
+//	If target < current allowance: Dr 1202 / Cr 5209 (release provision)
 //
 // A write-off removes a specific receivable from the books, consuming any
 // allowance already booked against it:
@@ -134,7 +134,7 @@ func (service *Service) postECLProvision(ctx context.Context, tenant int64, idem
 		if err != nil {
 			return err
 		}
-		badDebtID, err := resolveAccountByCode(ctx, tx, tenant, badDebtExpenseCode) // 5205
+		badDebtID, err := resolveAccountByCode(ctx, tx, tenant, badDebtExpenseCode) // 5209
 		if err != nil {
 			return err
 		}
@@ -152,7 +152,7 @@ func (service *Service) postECLProvision(ctx context.Context, tenant int64, idem
 
 		var lines []accounting.Line
 		if adjustment > 0 {
-			// Increase provision: Dr 5205 / Cr 1202.
+			// Increase provision: Dr 5209 / Cr 1202.
 			lines = []accounting.Line{
 				{AccountID: badDebtID, DebitCents: adjustment, SourceLineRef: "ecl-provision-expense"},
 				{AccountID: allowanceID, CreditCents: adjustment, SourceLineRef: "ecl-provision-allowance"},

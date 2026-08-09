@@ -42,6 +42,8 @@ import { JournalEntryList } from "../screens/list/JournalEntryList";
 import { GeneralLedger } from "../screens/list/GeneralLedger";
 import { JournalRegister } from "../screens/list/JournalRegister";
 import { AuditLogList } from "../screens/list/AuditLogList";
+import { FinancialNotesList } from "../screens/list/FinancialNotesList";
+import { DueDateReminders } from "../screens/list/DueDateReminders";
 import { JournalEntryForm } from "../screens/entry/JournalEntryForm";
 import { MockEntryForm } from "../screens/entry/MockEntryForm";
 import { QuotationForm } from "../screens/entry/QuotationForm";
@@ -75,6 +77,7 @@ import { LeaseContractList } from "../screens/list/LeaseContractList";
 import { ConsolidatedReport } from "../screens/list/ConsolidatedReport";
 import { LeaseContractForm } from "../screens/entry/LeaseContractForm";
 import { LeasePaymentSchedule } from "../screens/entry/LeasePaymentSchedule";
+import { FinancialNoteForm } from "../screens/entry/FinancialNoteForm";
 import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
@@ -268,6 +271,10 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <BudgetVsActual />;
     case "audit-logs":
       return <AuditLogList />;
+    case "financial-notes":
+      return <FinancialNotesList />;
+    case "due-date-reminders":
+      return <DueDateReminders />;
     case "lease-contract":
       return <LeaseContractList />;
     case "consolidated-report":
@@ -351,6 +358,8 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
       return <LeaseContractForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "lease-payment-schedule":
       return <LeasePaymentSchedule tabId={tab.id} leaseId={tab.entryId} initialTitle={tab.title} />;
+    case "financial-notes-entry":
+      return <FinancialNoteForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     default:
       return <PlaceholderTab title={tab.title} sub={`entry · ${subKind}`} />;
   }

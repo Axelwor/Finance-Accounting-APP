@@ -402,6 +402,10 @@ export interface Item {
   name: string;
   item_type: "goods" | "service";
   is_tracked_stock: boolean;
+  is_active: boolean;
+  unit?: string;
+  sale_price_cents: number;
+  description?: string;
 }
 
 /** Sales quotation list row (GET /api/v1/quotations). */

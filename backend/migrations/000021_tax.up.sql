@@ -3,7 +3,7 @@
 --   2203 Income Tax Payable       (liability)  — PPh 21/23/26/final payable
 --   5208 Income Tax Expense        (expense)   — PPh final UMKM expense
 --   1202 Allowance for Doubtful Accts (asset, contra) — ECL provision (PSAK 48)
---   5205 Bad Debt Expense          (expense)   — ECL charge to P&L
+--   5209 Bad Debt Expense          (expense)   — ECL charge to P&L
 --   4906 Bad Debt Recovery         (revenue)   — written-off receivable recovered
 --   1206 Deferred Tax Asset        (asset)     — PSAK 46 deferred tax (minimal)
 --   5904 Deferred Tax Expense      (expense)   — PSAK 46 deferred tax (minimal)

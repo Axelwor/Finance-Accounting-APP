@@ -1,131 +1,113 @@
 import { useEffect, useMemo, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
-import { MockList, type MockListColumn } from "./MockList";
 import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
-import { makeSalesInvoices, makeSalesReceipts, type SalesInvoice, type SalesReceipt } from "../../lib/mockData";
-import type { QuotationListItem } from "../../types";
+import type { QuotationListItem, InvoiceListItem } from "../../types";
 
-/* ---------------------- Sales Invoice ---------------------- */
-
-function StatusBadge({ status }: { status: SalesInvoice["status"] }) {
-  const cls =
-    status === "POSTED"
-      ? "is-positive"
-      : status === "VOID"
-        ? "is-negative"
-        : "is-muted";
-  return (
-    <span className={`kind-mark ${cls}`} style={{ minWidth: 64, display: "inline-block" }}>
-      {status}
-    </span>
-  );
-}
+/* ---------------------- Sales Invoice (real backend) ---------------------- */
 
 export function SalesInvoiceList() {
   const workbench = useWorkbench();
-  const rows = useMemo(() => makeSalesInvoices(), []);
+  const [items, setItems] = useState<InvoiceListItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const columns: MockListColumn<SalesInvoice>[] = [
-    {
-      key: "date",
-      label: "Date",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)" }}>{r.date}</span>,
-    },
-    {
-      key: "number",
-      label: "Number",
-      primary: true,
-      render: (r) => r.number,
-      secondary: (r) => `Customer: ${r.customer}`,
-    },
-    {
-      key: "dueDate",
-      label: "Due",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)", color: "var(--ink-secondary)" }}>{r.dueDate}</span>,
-    },
-    {
-      key: "amount",
-      label: "Amount",
-      align: "right",
-      tone: (r) => (r.status === "VOID" ? "is-muted" : ""),
-      render: (r) => formatIDR(r.amount),
-    },
-    {
-      key: "status",
-      label: "Status",
-      render: (r) => <StatusBadge status={r.status} />,
-    },
-  ];
+  useEffect(() => {
+    api.listInvoices().then(setItems).catch(() => setItems([])).finally(() => setLoading(false));
+  }, []);
+
+  const openEntry = (it: InvoiceListItem) =>
+    workbench.openEntryExisting("sales-invoice", it.id, it.number, it.status);
 
   return (
-    <MockList
-      title="Sales Invoices"
-      description="Invoices issued to customers (mock data — no backend yet)."
-      kind="sales"
-      columns={columns}
-      rows={rows}
-      searchFields={["number", "customer", "date", "dueDate"]}
-      getRowKey={(r) => r.id}
-      searchPlaceholder="number, customer, date..."
-      onAdd={() => workbench.openEntryDraft("sales-invoice")}
-      onOpen={(r) => workbench.openEntryExisting("sales-invoice", r.id, r.number, r.status)}
-    />
+    <div className="listtab listtab--accurate">
+      <div className="listtab__head">
+        <div className="listtab__title">
+          <span>Sales Invoices</span>
+          <small>Invoices issued to customers.</small>
+        </div>
+      </div>
+      <div className="listtab__toolbar">
+        <div className="listtab__actions">
+          <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.openEntryDraft("sales-invoice")}>+ New Invoice</button>
+          <span className="listtab__count">{items.length}</span>
+        </div>
+      </div>
+      <div className="listtab__body">
+        {loading ? <LoadingState label="Loading invoices..." /> : items.length === 0 ? (
+          <EmptyState title="No invoices yet" message="Issue an invoice to recognize revenue and receivables." action={<button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("sales-invoice")}>New Invoice</button>} />
+        ) : (
+          <div className="ledger-table">
+            <div className="ledger-table__head">
+              <span>Number</span><span>Date</span><span>Customer</span><span>Status</span><span className="right">Receivable</span>
+            </div>
+            {items.map((it) => (
+              <div key={it.id} className="ledger-table__row" role="button" tabIndex={0} onClick={() => openEntry(it)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEntry(it); } }} style={{ cursor: "pointer" }}>
+                <span className="ledger-table__no">{it.number}</span>
+                <span className="ledger-table__date">{it.invoice_date}</span>
+                <span className="ledger-table__cat">{it.customer_name ?? `#${it.customer_id}`}</span>
+                <span><span className={`kind-mark ${it.status === "PAID" ? "is-positive" : it.status === "VOID" ? "is-negative" : ""}`}>{it.status}</span></span>
+                <span className="ledger-table__amount right">{formatIDR(it.receivable_cents)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
-/* ---------------------- Sales Receipt ---------------------- */
+/* ---------------------- Sales Receipt (real backend — paid invoices) ---------------------- */
 
 export function SalesReceiptList() {
   const workbench = useWorkbench();
-  const rows = useMemo(() => makeSalesReceipts(), []);
+  const [items, setItems] = useState<InvoiceListItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const columns: MockListColumn<SalesReceipt>[] = [
-    {
-      key: "date",
-      label: "Date",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)" }}>{r.date}</span>,
-    },
-    {
-      key: "number",
-      label: "Number",
-      primary: true,
-      render: (r) => r.number,
-      secondary: (r) => `Customer: ${r.customer} · ${r.payer}`,
-    },
-    {
-      key: "payer",
-      label: "Payer",
-      render: (r) => r.payer,
-    },
-    {
-      key: "amount",
-      label: "Amount",
-      align: "right",
-      tone: (r) => (r.status === "VOID" ? "is-muted" : "is-positive"),
-      render: (r) => formatIDR(r.amount),
-    },
-    {
-      key: "status",
-      label: "Status",
-      render: (r) => <StatusBadge status={r.status} />,
-    },
-  ];
+  useEffect(() => {
+    api.listInvoices("PAID").then(setItems).catch(() => setItems([])).finally(() => setLoading(false));
+  }, []);
+
+  const totalReceived = useMemo(() => items.reduce((acc, it) => acc + (it.total_cents - it.receivable_cents), 0), [items]);
 
   return (
-    <MockList
-      title="Sales Receipts"
-      description="Receipts collected from customers (mock data — no backend yet)."
-      kind="sales"
-      columns={columns}
-      rows={rows}
-      searchFields={["number", "customer", "payer", "date"]}
-      getRowKey={(r) => r.id}
-      searchPlaceholder="number, customer, payer..."
-      onAdd={() => workbench.openEntryDraft("sales-receipt")}
-      onOpen={(r) => workbench.openEntryExisting("sales-receipt", r.id, r.number, r.status)}
-    />
+    <div className="listtab listtab--accurate">
+      <div className="listtab__head">
+        <div className="listtab__title">
+          <span>Sales Receipts</span>
+          <small>Paid invoices — payments received from customers.</small>
+        </div>
+      </div>
+      <div className="listtab__toolbar">
+        <div className="listtab__actions">
+          <span className="listtab__count">{items.length}</span>
+        </div>
+      </div>
+      <div className="listtab__body">
+        {loading ? <LoadingState label="Loading receipts..." /> : items.length === 0 ? (
+          <EmptyState title="No receipts yet" message="Paid invoices will appear here. Receive payments from the Invoice screen." />
+        ) : (
+          <div className="ledger-table">
+            <div className="ledger-table__head">
+              <span>Number</span><span>Date</span><span>Customer</span><span className="right">Total</span><span className="right">Received</span>
+            </div>
+            {items.map((it) => (
+              <div key={it.id} className="ledger-table__row" role="button" tabIndex={0} onClick={() => workbench.openEntryExisting("sales-invoice", it.id, it.number, it.status)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); workbench.openEntryExisting("sales-invoice", it.id, it.number, it.status); } }} style={{ cursor: "pointer" }}>
+                <span className="ledger-table__no">{it.number}</span>
+                <span className="ledger-table__date">{it.invoice_date}</span>
+                <span className="ledger-table__cat">{it.customer_name ?? `#${it.customer_id}`}</span>
+                <span className="ledger-table__amount right">{formatIDR(it.total_cents)}</span>
+                <span className="ledger-table__amount right">{formatIDR(it.total_cents - it.receivable_cents)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="listtab__footer">
+        <span>Total received <strong>{formatIDR(totalReceived)}</strong></span>
+        <span className="listtab__footer-count">{items.length} receipt(s)</span>
+      </div>
+    </div>
   );
 }
 
