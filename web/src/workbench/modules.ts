@@ -88,6 +88,7 @@ const accountant: Module = {
     { id: "ac-register", label: "Journal Register", hint: "REG", openList: "journal-register" },
     { id: "ac-dimensions", label: "Dimensions", hint: "DIM", openList: "dimensions" },
     { id: "ac-budgets", label: "Budgets", hint: "BGT", openList: "budgets", openEntry: "budget-entry" },
+    { id: "ac-audit", label: "Audit Trail", hint: "AUD", openList: "audit-logs" },
   ],
 };
 
@@ -220,6 +221,8 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Budgets";
     case "budget-vs-actual":
       return "Budget vs Actual";
+    case "audit-logs":
+      return "Audit Trail";
   }
 }
 

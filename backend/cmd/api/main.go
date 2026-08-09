@@ -10,6 +10,7 @@ import (
 
 	"finance-accounting-app/backend/internal/accounting"
 	"finance-accounting-app/backend/internal/assets"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/budget"
 	"finance-accounting-app/backend/internal/cash"
@@ -173,6 +174,9 @@ func main() {
 			// US-090A + US-093: Report frameworks, dimensions, and budget vs actual.
 			budgetHandler := budget.NewHandler(pool)
 			budgetHandler.Routes(router)
+			// US-100/US-101: Attachments (Lampirkan Bukti) + Audit Trail.
+			auditHandler := audit.NewHandler(pool, cfg.StorageRoot)
+			auditHandler.Routes(router)
 		})
 	})
 

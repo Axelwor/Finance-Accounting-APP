@@ -141,6 +141,8 @@ import type {
   BudgetLineInput,
   CreateBudgetInput,
   BudgetVsActualResult,
+  Attachment,
+  AuditLog,
 } from "./types";
 
 /** Reconciliation detail returned by the reconcile endpoints. */
@@ -1164,6 +1166,84 @@ export const api = {
       idempotencyKey: newIdempotencyKey(),
       body: JSON.stringify(input),
     });
+  },
+
+  /* ----------------------- Attachments (US-100) ----------------------- */
+
+  /**
+   * Uploads a proof attachment (POST /attachments, multipart). owner_type +
+   * owner_id identify the entity the file belongs to. Returns metadata.
+   */
+  async uploadAttachment(file: File, ownerType: string, ownerId: number): Promise<Attachment> {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("owner_type", ownerType);
+    form.append("owner_id", String(ownerId));
+    const response = await fetch(`${API_BASE}/attachments`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${getAccessToken()}` },
+      body: form,
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw makeError((body as ApiError)?.code ?? "UPLOAD_FAILED", (body as ApiError)?.message ?? "Upload failed.");
+    }
+    return body as Attachment;
+  },
+
+  /** Lists attachments for an entity (GET /attachments?owner_type=&owner_id=). Failure -> empty array. */
+  async listAttachments(ownerType: string, ownerId: number): Promise<Attachment[]> {
+    try {
+      return await http<Attachment[]>(`/attachments?owner_type=${encodeURIComponent(ownerType)}&owner_id=${ownerId}`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Returns the attachment file as a Blob (GET /attachments/{id}/download, Bearer auth). */
+  async downloadAttachment(id: number, fallbackFileName?: string): Promise<Blob> {
+    const response = await fetch(`${API_BASE}/attachments/${id}/download`, {
+      headers: { Authorization: `Bearer ${getAccessToken()}` },
+    });
+    if (!response.ok) {
+      throw makeError("DOWNLOAD_FAILED", `Download failed (${response.status})`);
+    }
+    return response.blob();
+  },
+
+  /** Deletes an attachment (DELETE /attachments/{id}). Records an audit log. */
+  async deleteAttachment(id: number): Promise<{ id: number; deleted: boolean }> {
+    return http<{ id: number; deleted: boolean }>(`/attachments/${id}`, {
+      method: "DELETE",
+      auth: true,
+    });
+  },
+
+  /* ----------------------- Audit Trail (US-101) ----------------------- */
+
+  /**
+   * Lists audit logs (GET /audit-logs) with optional filters:
+   * entity_type, entity_id, user_id, from_date, to_date. Failure -> empty array.
+   */
+  async listAuditLogs(params: {
+    entity_type?: string;
+    entity_id?: number;
+    user_id?: number;
+    from_date?: string;
+    to_date?: string;
+  } = {}): Promise<AuditLog[]> {
+    const search = new URLSearchParams();
+    if (params.entity_type) search.set("entity_type", params.entity_type);
+    if (params.entity_id) search.set("entity_id", String(params.entity_id));
+    if (params.user_id) search.set("user_id", String(params.user_id));
+    if (params.from_date) search.set("from_date", params.from_date);
+    if (params.to_date) search.set("to_date", params.to_date);
+    const query = search.toString();
+    try {
+      return await http<AuditLog[]>(`/audit-logs${query ? `?${query}` : ""}`, { auth: true });
+    } catch {
+      return [];
+    }
   },
 
   /** Customer list (GET /customers). Failure -> empty array. */

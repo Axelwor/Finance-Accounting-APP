@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/db"
 )
@@ -158,6 +159,17 @@ func (service *Service) unlockPeriod(ctx context.Context, tenantID, userID int64
 		`, periodID); err != nil {
 			return err
 		}
+		// Audit trail: log the period UNLOCK action.
+		after := map[string]any{
+			"period_id":   periodID,
+			"journal_id":  entryID,
+			"number":      number,
+			"status":      "OPEN",
+			"unlocked_by": userID,
+		}
+		if err := audit.Log(ctx, tx, tenantID, userID, "accounting_period", periodID, audit.ActionUnlock, nil, after); err != nil {
+			return err
+		}
 		if err := upsertChainHead(ctx, tx, tenantID, entryID, journal.Hash); err != nil {
 			return err
 		}
@@ -269,6 +281,17 @@ func (service *Service) closePeriod(ctx context.Context, tenantID, userID int64,
 		}
 
 		if _, err := tx.Exec(ctx, `UPDATE accounting_periods SET status = 'CLOSED', closed_at = now(), closed_by = $1 WHERE id = $2`, userID, periodID); err != nil {
+			return err
+		}
+		// Audit trail: log the period CLOSE action.
+		after := map[string]any{
+			"period_id":  periodID,
+			"journal_id": entryID,
+			"number":     number,
+			"status":     "CLOSED",
+			"closed_by":  userID,
+		}
+		if err := audit.Log(ctx, tx, tenantID, userID, "accounting_period", periodID, audit.ActionClose, nil, after); err != nil {
 			return err
 		}
 		if err := upsertChainHead(ctx, tx, tenantID, entryID, journal.Hash); err != nil {
