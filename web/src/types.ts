@@ -50,8 +50,8 @@ export type ListSubKind =
   | "ecl-calculator"
   | "dimensions"
   | "budgets"
-  | "budget-vs-actual";
-  | "audit-logs";
+  | "budget-vs-actual"
+  | "audit-logs"
   | "lease-contract"
   | "consolidated-report";
 
@@ -85,7 +85,7 @@ export type EntrySubKind =
   | "financial-notes-entry"
   | "bom-entry"
   | "production-job-entry"
-  | "budget-entry";
+  | "budget-entry"
   | "lease-contract-entry"
   | "lease-payment-schedule";
 
@@ -1725,6 +1725,8 @@ export interface AuditLog {
   before_data: Record<string, unknown> | null;
   after_data: Record<string, unknown> | null;
   created_at: string;
+}
+
 /** Lease contract list item (US-111, PSAK 73). */
 export interface LeaseContractListItem {
   id: number;
