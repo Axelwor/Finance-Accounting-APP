@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
 import { FormError } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
-import type { FixedAsset, DepreciationMethod } from "../../types";
+import type { FixedAsset, DepreciationMethod, ImpairAssetInput } from "../../types";
 
 interface Props {
   tabId: string;
@@ -38,26 +38,78 @@ export function FixedAssetForm({ tabId, entryId, initialTitle }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // Impairment panel state (PSAK 16 / PSAK 48). Shown only for an existing
+  // ACTIVE asset, mirroring the inline payment panel in InvoiceForm.
+  const [impairDate, setImpairDate] = useState(new Date().toISOString().slice(0, 10));
+  const [impairAmount, setImpairAmount] = useState(0);
+  const [impairDesc, setImpairDesc] = useState("");
+  const [impairError, setImpairError] = useState("");
+  const [impairSuccess, setImpairSuccess] = useState("");
+  const [postingImpair, setPostingImpair] = useState(false);
+
+  const reloadAsset = useCallback(async (id: number) => {
+    const asset = await api.getFixedAsset(id);
+    setExisting(asset);
+    setCode(asset.code);
+    setName(asset.name);
+    setAcquisitionDate(asset.acquisition_date);
+    setAcquisitionCost(String(asset.acquisition_cost_cents));
+    setSalvageValue(String(asset.salvage_value_cents));
+    setUsefulLifeMonths(String(asset.useful_life_months));
+    setMethod(asset.depreciation_method);
+    setRate(asset.rate ?? "");
+    setUnitsTotal(asset.units_total ? String(asset.units_total) : "");
+    return asset;
+  }, []);
+
   useEffect(() => {
     if (!entryId) return;
     const id = Number(entryId);
     if (!Number.isFinite(id)) return;
-    api.getFixedAsset(id).then((asset) => {
-      setExisting(asset);
-      setCode(asset.code);
-      setName(asset.name);
-      setAcquisitionDate(asset.acquisition_date);
-      setAcquisitionCost(String(asset.acquisition_cost_cents));
-      setSalvageValue(String(asset.salvage_value_cents));
-      setUsefulLifeMonths(String(asset.useful_life_months));
-      setMethod(asset.depreciation_method);
-      setRate(asset.rate ?? "");
-      setUnitsTotal(asset.units_total ? String(asset.units_total) : "");
-    }).catch(() => {});
-  }, [entryId]);
+    void reloadAsset(id).catch(() => {});
+  }, [entryId, reloadAsset]);
 
   function markDirty() {
     workbench.markUnsaved(tabId, true);
+  }
+
+  async function handlePostImpairment() {
+    if (!existing) return;
+    setImpairError("");
+    setImpairSuccess("");
+    const impairedCents = impairAmount;
+    if (!Number.isFinite(impairedCents) || impairedCents < 0) {
+      setImpairError("Impaired value must be a non-negative amount.");
+      return;
+    }
+    if (!impairDate) {
+      setImpairError("Entry date is required.");
+      return;
+    }
+    if (impairedCents > existing.book_value_cents) {
+      setImpairError("Impaired value cannot exceed the current book value.");
+      return;
+    }
+    setPostingImpair(true);
+    try {
+      const result = await api.impairAsset(existing.id, {
+        entry_date: impairDate,
+        impaired_value_cents: impairedCents,
+        description: impairDesc.trim() || undefined,
+      } as ImpairAssetInput);
+      setImpairSuccess(
+        `Impairment posted. Loss: ${formatIDR(result.impairment_loss_cents)} · New book value: ${formatIDR(result.new_book_value_cents)}`
+      );
+      setImpairAmount(0);
+      setImpairDesc("");
+      await reloadAsset(existing.id);
+      workbench.markUnsaved(tabId, false);
+    } catch (err) {
+      const apiErr = err as { message?: string };
+      setImpairError(apiErr?.message || (err instanceof Error ? err.message : "Could not post the impairment."));
+    } finally {
+      setPostingImpair(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -344,6 +396,61 @@ export function FixedAssetForm({ tabId, entryId, initialTitle }: Props) {
                   </div>
                 </>
               )}
+
+              {canAct && (
+                <>
+                  <div className="entrytab__detail-title">Record Impairment (PSAK 16)</div>
+                  <p className="field-note" style={{ marginBottom: 8 }}>
+                    Write the asset down to its impaired value. Posts Dr 5207 Impairment Loss / Cr 1401 Accumulated Impairment. Current book value: {formatIDR(existing.book_value_cents)}.
+                  </p>
+                  <div className="detail-grid detail-grid--quote" style={{ gridTemplateColumns: "1fr 1fr 2fr" }}>
+                    <div className="field">
+                      <span className="field__label">Entry date</span>
+                      <input
+                        className="input"
+                        type="date"
+                        value={impairDate}
+                        onChange={(e) => { setImpairDate(e.target.value); setImpairSuccess(""); setImpairError(""); }}
+                      />
+                    </div>
+                    <div className="field">
+                      <span className="field__label">Impaired value (IDR)</span>
+                      <input
+                        className="amount input"
+                        type="text"
+                        inputMode="numeric"
+                        value={centsInput(impairAmount)}
+                        onChange={(e) => { setImpairAmount(parseCents(e.target.value)); setImpairSuccess(""); setImpairError(""); }}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="field">
+                      <span className="field__label">Description</span>
+                      <input
+                        className="input"
+                        type="text"
+                        value={impairDesc}
+                        onChange={(e) => { setImpairDesc(e.target.value); setImpairSuccess(""); setImpairError(""); }}
+                        placeholder="Reason for impairment"
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      disabled={postingImpair}
+                      onClick={() => void handlePostImpairment()}
+                    >
+                      {postingImpair ? "Posting..." : "Post Impairment"}
+                    </button>
+                    {impairSuccess ? (
+                      <span role="status" style={{ fontSize: 12, color: "var(--text-secondary)" }}>{impairSuccess}</span>
+                    ) : null}
+                  </div>
+                  <FormError message={impairError} />
+                </>
+              )}
             </>
           )}
         </div>
@@ -385,4 +492,16 @@ function computeMonthlyPreview(cost: number, salvage: number, months: number): n
   const base = cost - salvage;
   if (base <= 0) return 0;
   return Math.round(base / months);
+}
+
+/** Strip non-digits from a typed amount, returning cents as an integer. */
+function parseCents(raw: string): number {
+  const digits = (raw || "").replace(/[^\d]/g, "");
+  return digits ? parseInt(digits, 10) : 0;
+}
+
+/** Format a cents integer with thousands separators for display in the input. */
+function centsInput(cents: number): string {
+  if (!cents) return "";
+  return new Intl.NumberFormat("en-US").format(cents);
 }

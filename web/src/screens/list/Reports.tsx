@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
-import type { Dimension, ListSubKind, ReportFrameworkRecord } from "../../types";
+import type { Dimension, ListSubKind, ReportFrameworkRecord, ReportFramework } from "../../types";
 
 interface ReportConfig {
   listKind: ListSubKind;
@@ -77,6 +77,20 @@ function fmtIDR(cents: number): string {
   return formatIDR(cents);
 }
 
+/**
+ * Extract a human-readable message from a thrown value. The API layer throws
+ * ApiError ({ code, message }) objects rather than Error instances, so a plain
+ * `err instanceof Error` check would hide the real backend message behind a
+ * generic fallback. Handle both shapes.
+ */
+function extractErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string") {
+    return (err as { message: string }).message;
+  }
+  if (err instanceof Error) return err.message;
+  return fallback;
+}
+
 export function TrialBalanceReport() {
   return (
     <ReportTab
@@ -144,6 +158,9 @@ const FRAMEWORK_OPTIONS: { value: string; label: string }[] = [
  */
 export function ProfitLossReport() {
   const [framework, setFramework] = useState("");
+  /** Whether the tenant's default framework has been loaded yet. */
+  const [frameworkLoaded, setFrameworkLoaded] = useState(false);
+  const [frameworkMsg, setFrameworkMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [dimensionId, setDimensionId] = useState(0);
   const [dimensions, setDimensions] = useState<Dimension[]>([]);
   const [data, setData] = useState<any>(null);
@@ -157,7 +174,7 @@ export function ProfitLossReport() {
       const result = await api.getProfitLoss(undefined, undefined, framework || undefined, dimensionId || undefined);
       setData(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load the report.");
+      setError(extractErrorMessage(err, "Failed to load the report."));
     } finally {
       setLoading(false);
     }
@@ -168,9 +185,38 @@ export function ProfitLossReport() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [framework, dimensionId]);
 
+  // Load the tenant's configured default report framework on mount so the
+  // dropdown reflects the server-side default (US-090A).
+  useEffect(() => {
+    void api
+      .listReportFrameworks()
+      .then((records: ReportFrameworkRecord[]) => {
+        const def = records.find((r) => r.is_default) ?? records[0];
+        if (def?.framework) setFramework(def.framework);
+      })
+      .catch(() => {})
+      .finally(() => setFrameworkLoaded(true));
+  }, []);
+
   useEffect(() => {
     void api.listDimensions().then(setDimensions).catch(() => setDimensions([]));
   }, []);
+
+  /** Persist the chosen framework as the tenant default (POST /report-frameworks). */
+  const changeFramework = async (next: string) => {
+    setFramework(next);
+    setFrameworkMsg(null);
+    if (!next) return; // "Default" — nothing to persist.
+    try {
+      await api.setReportFramework({ framework: next as ReportFramework, is_default: true });
+      setFrameworkMsg({ kind: "ok", text: `Default framework set to ${next}.` });
+    } catch (err) {
+      setFrameworkMsg({
+        kind: "err",
+        text: extractErrorMessage(err, "Could not save the default framework."),
+      });
+    }
+  };
 
   const r = data;
   const net = (r?.profit_cents ?? 0) as number;
@@ -184,13 +230,15 @@ export function ProfitLossReport() {
           <span>Profit &amp; Loss</span>
           <small>Revenue minus expenses {framework ? `· ${framework} presentation` : ""}</small>
         </div>
-        <div className="listtab__toolbar" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="listtab__toolbar" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>Framework</label>
           <select
             className="field__input"
             value={framework}
-            onChange={(e) => setFramework(e.target.value)}
+            onChange={(e) => void changeFramework(e.target.value)}
+            disabled={!frameworkLoaded}
             style={{ minWidth: 180, padding: "4px 8px" }}
+            aria-label="Report framework"
           >
             {FRAMEWORK_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -198,6 +246,17 @@ export function ProfitLossReport() {
               </option>
             ))}
           </select>
+          {frameworkMsg ? (
+            <span
+              style={{
+                fontSize: 11,
+                color: frameworkMsg.kind === "ok" ? "var(--text-secondary)" : "var(--text-danger, #c00)",
+              }}
+              role={frameworkMsg.kind === "err" ? "alert" : undefined}
+            >
+              {frameworkMsg.text}
+            </span>
+          ) : null}
           {dimensions.length > 0 ? (
             <>
               <label style={{ fontSize: 12, color: "var(--text-secondary)", marginLeft: 8 }}>Dimension</label>

@@ -97,7 +97,17 @@ export function OnboardingScreen() {
       setBusiness(state.business);
       navigate("/dashboard", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      // The API throws ApiError ({ code, message }) objects, not Error
+      // instances — extract the message from either shape so the user sees
+      // the real backend error (e.g. opening balance failed to post) instead
+      // of a generic "Something went wrong".
+      const message =
+        err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string"
+          ? (err as { message: string }).message
+          : err instanceof Error
+            ? err.message
+            : "Something went wrong. Please try again.";
+      setError(message);
       setFinishing(false);
     }
   };

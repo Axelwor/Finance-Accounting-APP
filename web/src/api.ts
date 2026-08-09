@@ -414,8 +414,8 @@ async function buildOpeningBalance(input: OnboardingInput): Promise<OpeningBalan
   try {
     accounts = await http<BackendAccount[]>("/accounts", { auth: true });
   } catch {
-    // Network failure -> onboarding still finishes; opening balance is skipped
-    // (completeOnboarding has its own fallback for posting failures).
+    // Network failure looking up accounts -> opening balance is skipped
+    // (buildOpeningBalance returns null below when account ids are unknown).
   }
   const idByCode = new Map(accounts.map((account) => [account.code, account.id]));
   const idOf = (code: string): number => idByCode.get(code) ?? 0;
@@ -1887,7 +1887,8 @@ export const api = {
   /**
    * Completes onboarding: creates the tenant on the backend (POST /tenants),
    * then posts the opening balance (POST /opening-balances) when filled in.
-   * Network failure -> save locally (mock) as graceful degradation.
+   * On failure, local state is still saved for offline retry, but the error is
+   * re-thrown so the caller can show it (it is NOT silently swallowed).
    */
   async completeOnboarding(input: OnboardingInput): Promise<{ business: Business }> {
     if (!input.business.name.trim() || !input.business.businessType.trim()) {
@@ -1910,24 +1911,27 @@ export const api = {
       if (tenant.id > 0) business.id = String(tenant.id);
       const opening = await buildOpeningBalance(input);
       if (opening) {
-        try {
-          await http<BackendJournalResult>("/opening-balances", {
-            method: "POST",
-            auth: true,
-            idempotencyKey: newIdempotencyKey(),
-            body: JSON.stringify(opening),
-          });
-        } catch {
-          // Opening balance failed to post (e.g. balance accounts not yet
-          // created on the backend) — onboarding still finishes with the
-          // tenant saved.
-        }
+        // Surface opening-balance posting errors to the caller instead of
+        // swallowing them silently. The tenant has already been created above;
+        // the outer catch persists local state before re-throwing so the user
+        // can retry without losing the business record — but we do NOT report
+        // success: the caller (OnboardingScreen) shows the error and stays on
+        // the form.
+        await http<BackendJournalResult>("/opening-balances", {
+          method: "POST",
+          auth: true,
+          idempotencyKey: newIdempotencyKey(),
+          body: JSON.stringify(opening),
+        });
       }
       saveState({ ...state, business });
       return delay({ business });
-    } catch {
+    } catch (err) {
+      // Either tenant creation or opening-balance posting failed. Persist local
+      // state for graceful offline retry, but re-throw so the caller can surface
+      // the real error instead of silently marking onboarding complete.
       saveState({ ...state, business });
-      return delay({ business });
+      throw err;
     }
   },
 
