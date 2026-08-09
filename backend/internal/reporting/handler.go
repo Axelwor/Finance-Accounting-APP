@@ -2,6 +2,9 @@ package reporting
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -14,144 +17,188 @@ func NewHandler(pool *pgxpool.Pool) *Service {
 	return &Service{pool: pool}
 }
 
-// TrialBalance returns total debit and credit across all posted journals for a tenant.
-func (service *Service) TrialBalance(writer http.ResponseWriter, request *http.Request) {
-	tenantID := tenantFrom(request)
-	var debitTotal, creditTotal int64
-	err := service.pool.QueryRow(request.Context(), `
-		SELECT COALESCE(SUM(jl.debit_cents), 0), COALESCE(SUM(jl.credit_cents), 0)
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
-	`, tenantID).Scan(&debitTotal, &creditTotal)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
-		return
-	}
-	writeJSON(writer, http.StatusOK, map[string]any{
-		"total_debit_cents":  debitTotal,
-		"total_credit_cents": creditTotal,
-		"balanced":           debitTotal == creditTotal,
-	})
+// TrialBalanceRow is one per-account line in the trial balance.
+type TrialBalanceRow struct {
+	AccountID   int64  `json:"account_id"`
+	AccountCode string `json:"account_code"`
+	AccountName string `json:"account_name"`
+	DebitCents  int64  `json:"debit_cents"`
+	CreditCents int64  `json:"credit_cents"`
 }
 
-// ProfitLoss aggregates revenue and expense groups for the current open period.
-func (service *Service) ProfitLoss(writer http.ResponseWriter, request *http.Request) {
-	tenantID := tenantFrom(request)
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT a.report_group, COALESCE(SUM(CASE
-			WHEN a.report_group IN ('revenue') THEN jl.credit_cents - jl.debit_cents
-			ELSE jl.debit_cents - jl.credit_cents END), 0)
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
-		  AND a.report_group IN ('revenue', 'expense')
-		GROUP BY a.report_group
-	`, tenantID)
+// TrialBalanceResult is the JSON shape returned by GET /reports/trial-balance.
+type TrialBalanceResult struct {
+	Rows             []TrialBalanceRow `json:"rows"`
+	TotalDebitCents  int64             `json:"total_debit_cents"`
+	TotalCreditCents int64             `json:"total_credit_cents"`
+	Balanced         bool              `json:"balanced"`
+}
+
+// ProfitLossResult is the JSON shape returned by GET /reports/profit-loss.
+type ProfitLossResult struct {
+	RevenueCents int64 `json:"revenue_cents"`
+	ExpenseCents int64 `json:"expense_cents"`
+	ProfitCents  int64 `json:"profit_cents"`
+}
+
+// CashFlowResult is the JSON shape returned by GET /reports/cash-flow.
+type CashFlowResult struct {
+	InflowCents      int64 `json:"inflow_cents"`
+	OutflowCents     int64 `json:"outflow_cents"`
+	NetCashFlowCents int64 `json:"net_cash_flow_cents"`
+}
+
+// BalanceSheetResult is the JSON shape returned by GET /reports/balance-sheet.
+// Current-period profit is folded into equity so the sheet balances before
+// the period is closed (engine §21.2: current earnings real-time).
+type BalanceSheetResult struct {
+	AssetCents     int64 `json:"asset_cents"`
+	LiabilityCents int64 `json:"liability_cents"`
+	EquityCents    int64 `json:"equity_cents"`
+	ProfitCents    int64 `json:"profit_cents"`
+	Balanced       bool  `json:"balanced"`
+}
+
+// reportType is the canonical slug used in URLs and dispatch tables.
+type reportType string
+
+const (
+	reportTrialBalance reportType = "trial-balance"
+	reportProfitLoss   reportType = "profit-loss"
+	reportBalanceSheet reportType = "balance-sheet"
+	reportCashFlow     reportType = "cash-flow"
+)
+
+var reportTitles = map[reportType]string{
+	reportTrialBalance: "Trial Balance",
+	reportProfitLoss:   "Profit & Loss",
+	reportBalanceSheet: "Balance Sheet",
+	reportCashFlow:     "Cash Flow",
+}
+
+// dateRange captures the optional from_date / to_date query params used to
+// scope a report. When a bound is empty the report aggregates over all posted
+// entries (current behaviour). For trial-balance and balance-sheet the range
+// is interpreted as "as of to_date" (cumulative); for P&L and cash-flow the
+// movement is measured within [from_date, to_date].
+type dateRange struct {
+	fromDate string // YYYY-MM-DD, may be ""
+	toDate   string // YYYY-MM-DD, may be ""
+}
+
+// parseDateRange reads the optional from_date / to_date query params and
+// validates the YYYY-MM-DD format. Invalid values are silently ignored so the
+// report degrades to "all posted entries" rather than erroring — the toolbar
+// sends blanks when the user clears a picker.
+func parseDateRange(r *http.Request) dateRange {
+	parse := func(raw string) string {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			return ""
+		}
+		if _, err := time.Parse("2006-01-02", raw); err != nil {
+			return ""
+		}
+		return raw
+	}
+	return dateRange{
+		fromDate: parse(r.URL.Query().Get("from_date")),
+		toDate:   parse(r.URL.Query().Get("to_date")),
+	}
+}
+
+// dateRangeLabel renders a human-readable range for export headers, e.g.
+// "Jan 2 – Jan 31 2025" or "All posted entries".
+func dateRangeLabel(fromDate, toDate string) string {
+	fmtDate := func(s string) string {
+		t, err := time.Parse("2006-01-02", s)
+		if err != nil {
+			return s
+		}
+		return t.Format("Jan 2 2006")
+	}
+	switch {
+	case fromDate != "" && toDate != "":
+		return fmtDate(fromDate) + " – " + fmtDate(toDate)
+	case toDate != "":
+		return "As of " + fmtDate(toDate)
+	case fromDate != "":
+		return "From " + fmtDate(fromDate)
+	default:
+		return "All posted entries"
+	}
+}
+
+// dateFilter builds a SQL fragment that restricts journal_entries by entry_date.
+// The returned fragment starts with " AND " so it can be appended to an
+// existing WHERE clause. baseArg is the placeholder offset to use (so the
+// caller can keep tenant_id as $1); date params are appended to *args and the
+// offset incremented for each. When neither bound is supplied the fragment is
+// empty (report aggregates over all posted entries).
+func dateFilter(d dateRange, baseArg int, args *[]any) string {
+	var clauses []string
+	if d.fromDate != "" {
+		*args = append(*args, d.fromDate)
+		clauses = append(clauses, "je.entry_date >= $"+strconv.Itoa(baseArg))
+		baseArg++
+	}
+	if d.toDate != "" {
+		*args = append(*args, d.toDate)
+		clauses = append(clauses, "je.entry_date <= $"+strconv.Itoa(baseArg))
+		baseArg++
+	}
+	if len(clauses) == 0 {
+		return ""
+	}
+	return " AND " + strings.Join(clauses, " AND ")
+}
+
+// TrialBalance returns per-account debit/credit totals across all posted
+// journals for a tenant. With to_date supplied the balance is cumulative from
+// inception to to_date; from_date is ignored (a trial balance is a snapshot,
+// not a movement).
+func (service *Service) TrialBalance(writer http.ResponseWriter, request *http.Request) {
+	dr := parseDateRange(request)
+	result, err := service.fetchTrialBalance(request.Context(), tenantFrom(request), dr)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
 		return
 	}
-	defer rows.Close()
+	writeJSON(writer, http.StatusOK, result)
+}
 
-	result := map[string]int64{"revenue_cents": 0, "expense_cents": 0}
-	for rows.Next() {
-		var group string
-		var amount int64
-		if err := rows.Scan(&group, &amount); err != nil {
-			writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
-			return
-		}
-		result[group+"_cents"] = amount
+// ProfitLoss aggregates revenue and expense groups for the requested range.
+func (service *Service) ProfitLoss(writer http.ResponseWriter, request *http.Request) {
+	dr := parseDateRange(request)
+	result, err := service.fetchProfitLoss(request.Context(), tenantFrom(request), dr)
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
+		return
 	}
-	result["profit_cents"] = result["revenue_cents"] - result["expense_cents"]
 	writeJSON(writer, http.StatusOK, result)
 }
 
 // BalanceSheet aggregates asset, liability, and equity groups. Current-period
 // profit (revenue − expense) is added to equity so the balance sheet balances
-// before the period is closed (engine §21.2: current earnings real-time).
+// before the period is closed (engine §21.2: current earnings real-time). With
+// to_date supplied the snapshot is taken as of that date.
 func (service *Service) BalanceSheet(writer http.ResponseWriter, request *http.Request) {
-	tenantID := tenantFrom(request)
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT a.report_group, COALESCE(SUM(CASE
-			WHEN a.report_group = 'asset' THEN jl.debit_cents - jl.credit_cents
-			ELSE jl.credit_cents - jl.debit_cents END), 0)
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
-		  AND a.report_group IN ('asset', 'liability', 'equity')
-		GROUP BY a.report_group
-	`, tenantID)
+	dr := parseDateRange(request)
+	result, err := service.fetchBalanceSheet(request.Context(), tenantFrom(request), dr)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
 		return
 	}
-	defer rows.Close()
-
-	result := map[string]any{
-		"asset_cents":     int64(0),
-		"liability_cents": int64(0),
-		"equity_cents":    int64(0),
-		"profit_cents":    int64(0),
-	}
-	for rows.Next() {
-		var group string
-		var amount int64
-		if err := rows.Scan(&group, &amount); err != nil {
-			writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
-			return
-		}
-		result[group+"_cents"] = amount
-	}
-
-	// Current-period profit: revenue − expense from posted journals.
-	// Revenue normally credits, expense normally debits, so (credit − debit)
-	// summed across both groups yields revenue − expense.
-	var profit int64
-	err = service.pool.QueryRow(request.Context(), `
-		SELECT COALESCE(SUM(jl.credit_cents - jl.debit_cents), 0)
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
-		  AND a.report_group IN ('revenue', 'expense')
-	`, tenantID).Scan(&profit)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
-		return
-	}
-	result["profit_cents"] = profit
-
-	assets := result["asset_cents"].(int64)
-	liabilities := result["liability_cents"].(int64)
-	equity := result["equity_cents"].(int64)
-	result["balanced"] = assets == liabilities+equity+profit
 	writeJSON(writer, http.StatusOK, result)
 }
 
-// CashFlow aggregates movements across CASH/BANK accounts.
+// CashFlow aggregates movements across CASH/BANK accounts within the range.
 func (service *Service) CashFlow(writer http.ResponseWriter, request *http.Request) {
-	tenantID := tenantFrom(request)
-	var inflow, outflow int64
-	err := service.pool.QueryRow(request.Context(), `
-		SELECT COALESCE(SUM(CASE WHEN jl.debit_cents > 0 THEN jl.debit_cents ELSE 0 END), 0),
-		       COALESCE(SUM(CASE WHEN jl.credit_cents > 0 THEN jl.credit_cents ELSE 0 END), 0)
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
-		  AND a.account_type IN ('CASH', 'BANK')
-	`, tenantID).Scan(&inflow, &outflow)
+	dr := parseDateRange(request)
+	result, err := service.fetchCashFlow(request.Context(), tenantFrom(request), dr)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
 		return
 	}
-	writeJSON(writer, http.StatusOK, map[string]any{
-		"inflow_cents":        inflow,
-		"outflow_cents":       outflow,
-		"net_cash_flow_cents": inflow - outflow,
-	})
+	writeJSON(writer, http.StatusOK, result)
 }

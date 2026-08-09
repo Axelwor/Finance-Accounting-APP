@@ -83,6 +83,12 @@ func main() {
 			router.Get("/reports/balance-sheet", reportingHandler.BalanceSheet)
 			router.Get("/reports/cash-flow", reportingHandler.CashFlow)
 
+			// Export endpoints: ?format=pdf|xlsx plus optional from_date/to_date.
+			router.Get("/reports/trial-balance/export", reportingHandler.Export)
+			router.Get("/reports/profit-loss/export", reportingHandler.Export)
+			router.Get("/reports/balance-sheet/export", reportingHandler.Export)
+			router.Get("/reports/cash-flow/export", reportingHandler.Export)
+
 			router.Post("/periods/close", periodHandler.Close)
 			router.Post("/periods/unlock", periodHandler.Unlock)
 

@@ -835,23 +835,42 @@ export const api = {
   },
 
   /** Trial balance report (GET /reports/trial-balance). */
-  async getTrialBalance(): Promise<BackendTrialBalance> {
-    return http<BackendTrialBalance>("/reports/trial-balance", { auth: true });
+  async getTrialBalance(fromDate?: string, toDate?: string): Promise<BackendTrialBalance> {
+    return http<BackendTrialBalance>(`/reports/trial-balance${reportDateQuery(fromDate, toDate)}`, { auth: true });
   },
 
   /** Profit & Loss report (GET /reports/profit-loss). */
-  async getProfitLoss(): Promise<BackendProfitLoss> {
-    return http<BackendProfitLoss>("/reports/profit-loss", { auth: true });
+  async getProfitLoss(fromDate?: string, toDate?: string): Promise<BackendProfitLoss> {
+    return http<BackendProfitLoss>(`/reports/profit-loss${reportDateQuery(fromDate, toDate)}`, { auth: true });
   },
 
   /** Balance Sheet report (GET /reports/balance-sheet). */
-  async getBalanceSheet(): Promise<BackendBalanceSheet> {
-    return http<BackendBalanceSheet>("/reports/balance-sheet", { auth: true });
+  async getBalanceSheet(fromDate?: string, toDate?: string): Promise<BackendBalanceSheet> {
+    return http<BackendBalanceSheet>(`/reports/balance-sheet${reportDateQuery(fromDate, toDate)}`, { auth: true });
   },
 
   /** Cash Flow report (GET /reports/cash-flow). */
-  async getCashFlow(): Promise<BackendCashFlow> {
-    return http<BackendCashFlow>("/reports/cash-flow", { auth: true });
+  async getCashFlow(fromDate?: string, toDate?: string): Promise<BackendCashFlow> {
+    return http<BackendCashFlow>(`/reports/cash-flow${reportDateQuery(fromDate, toDate)}`, { auth: true });
+  },
+
+  /**
+   * Export a report as PDF or Excel (GET /reports/{reportType}/export).
+   * Returns a Blob suitable for download. Uses a raw fetch (not the shared
+   * http() helper) because http() parses JSON; exports are binary.
+   */
+  async exportReport(reportType: string, format: "pdf" | "xlsx", fromDate?: string, toDate?: string): Promise<Blob> {
+    const qs = new URLSearchParams();
+    qs.set("format", format);
+    if (fromDate) qs.set("from_date", fromDate);
+    if (toDate) qs.set("to_date", toDate);
+    const response = await fetch(`${API_BASE}/reports/${reportType}/export?${qs}`, {
+      headers: { Authorization: `Bearer ${getAccessToken()}` },
+    });
+    if (!response.ok) {
+      throw makeError("EXPORT_FAILED", `Export failed (${response.status})`);
+    }
+    return response.blob();
   },
 
   /** Customer list (GET /customers). Failure -> empty array. */
