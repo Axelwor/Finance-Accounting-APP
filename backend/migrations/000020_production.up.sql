@@ -15,14 +15,14 @@
 --   5901 Production Variance Loss (expense / OTHER_EXPENSE)
 
 INSERT INTO accounts (tenant_id, code, name, report_group, account_type)
-SELECT t.id, code, name, report_group, account_type
+SELECT t.id, v.code, v.val_name, v.report_group, v.account_type
 FROM tenants t
 CROSS JOIN (VALUES
   ('1303', 'Work in Progress', 'asset', 'INVENTORY'),
   ('1304', 'Finished Goods', 'asset', 'INVENTORY'),
   ('4902', 'Production Variance Gain', 'revenue', 'OTHER_INCOME'),
   ('5901', 'Production Variance Loss', 'expense', 'OTHER_EXPENSE')
-) AS v(code, name, report_group, account_type)
+) AS v(code, val_name, report_group, account_type)
 WHERE NOT EXISTS (SELECT 1 FROM accounts a WHERE a.tenant_id = t.id AND a.code = v.code);
 
 -- Bill of Materials (BOM): the recipe for one finished good.
