@@ -24,6 +24,7 @@ import (
 	"finance-accounting-app/backend/internal/reconciliation"
 	"finance-accounting-app/backend/internal/reporting"
 	"finance-accounting-app/backend/internal/sales"
+	"finance-accounting-app/backend/internal/tax"
 	"finance-accounting-app/backend/internal/tenant"
 )
 
@@ -164,6 +165,9 @@ func main() {
 
 			productionHandler := production.NewHandler(pool)
 			productionHandler.Routes(router)
+			// US-080..083: Tax (PPN, PPh Final UMKM, ECL, Deferred Tax).
+			taxHandler := tax.NewHandler(pool)
+			taxHandler.Routes(router)
 		})
 	})
 

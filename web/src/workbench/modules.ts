@@ -89,6 +89,19 @@ const accountant: Module = {
   ],
 };
 
+// Tax (Pajak): PPN reconciliation, PPh Final UMKM, and ECL (penyisihan piutang).
+// These are calculator/report screens that post provisioning journals.
+const tax: Module = {
+  id: "tax",
+  label: "Tax",
+  icon: "ledger",
+  items: [
+    { id: "tx-ppn", label: "PPN Reconciliation", hint: "PPN", openList: "ppn-reconciliation" },
+    { id: "tx-pph", label: "PPh Final", hint: "PPH", openList: "pph-final" },
+    { id: "tx-ecl", label: "ECL", hint: "ECL", openList: "ecl-calculator" },
+  ],
+};
+
 const reports: Module = {
   id: "reports",
   label: "Reports",
@@ -104,6 +117,7 @@ const reports: Module = {
 };
 
 export const MODULES: Module[] = [cashBank, sales, purchases, production, inventory, fixedAssets, accountant, reports];
+export const MODULES: Module[] = [cashBank, sales, purchases, inventory, fixedAssets, accountant, tax, reports];
 
 export function findModule(id: ModuleId): Module | undefined {
   return MODULES.find((m) => m.id === id);
@@ -192,6 +206,12 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Bill of Materials";
     case "production-job":
       return "Production Jobs";
+    case "ppn-reconciliation":
+      return "PPN Reconciliation";
+    case "pph-final":
+      return "PPh Final UMKM";
+    case "ecl-calculator":
+      return "ECL — Penyisihan Piutang";
   }
 }
 

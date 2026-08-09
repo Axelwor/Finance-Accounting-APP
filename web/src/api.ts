@@ -118,6 +118,19 @@ import type {
   DisposeAssetInput,
   AssetDisposalResult,
   ImpairAssetInput,
+  PPNSummary,
+  PPNReconciliationResult,
+  PPNReconciliationRecord,
+  CreatePPNReconciliationInput,
+  PPhFinalResult,
+  CalculatePPhFinalInput,
+  PayPPhFinalInput,
+  CalculateECLResult,
+  CalculateECLInput,
+  WriteOffInput,
+  WriteOffResult,
+  CalculateDeferredTaxInput,
+  CalculateDeferredTaxResult,
 } from "./types";
 
 /** Reconciliation detail returned by the reconcile endpoints. */
@@ -968,6 +981,70 @@ export const api = {
   async listFixedAssets(): Promise<FixedAssetListItem[]> {
     try {
       return await http<FixedAssetListItem[]>("/fixed-assets", { auth: true });
+  /* ----------------------------- Tax (US-080..083) ----------------------------- */
+
+  /** PPN summary across a date range (GET /ppn/summary). */
+  async getPPNSummary(fromDate?: string, toDate?: string): Promise<PPNSummary | null> {
+    const params = new URLSearchParams();
+    if (fromDate) params.set("from_date", fromDate);
+    if (toDate) params.set("to_date", toDate);
+    const query = params.toString() ? `?${params}` : "";
+    try {
+      return await http<PPNSummary>(`/ppn/summary${query}`, { auth: true });
+    } catch {
+      return null;
+    }
+  },
+
+  /** Detailed PPN reconciliation for a calendar month (GET /ppn/reconciliation). */
+  async getPPNReconciliation(periodYear: number, periodMonth: number): Promise<PPNReconciliationResult | null> {
+    try {
+      return await http<PPNReconciliationResult>(
+        `/ppn/reconciliation?period_year=${periodYear}&period_month=${periodMonth}`,
+        { auth: true },
+      );
+    } catch {
+      return null;
+    }
+  },
+
+  /** Files (or re-files) the PPN reconciliation for a month (POST /ppn/reconcile). */
+  async createPPNReconciliation(input: CreatePPNReconciliationInput): Promise<PPNReconciliationRecord> {
+    return http<PPNReconciliationRecord>("/ppn/reconcile", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Calculates and posts the PPh Final UMKM provision (POST /pph-final/calculate). */
+  async calculatePPhFinal(input: CalculatePPhFinalInput): Promise<PPhFinalResult> {
+    return http<PPhFinalResult>("/pph-final/calculate", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Records the PPh Final tax payment (POST /pph-final/pay). */
+  async payPPhFinal(input: PayPPhFinalInput): Promise<PPhFinalResult> {
+    return http<PPhFinalResult>("/pph-final/pay", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Lists cash & bank accounts for the tax-payment account picker. */
+  async listCashAccounts(): Promise<{ id: number; code: string; name: string; account_type: string }[]> {
+    try {
+      const raw = await http<BackendAccount[]>("/accounts", { auth: true });
+      return raw
+        .filter((a) => !a.is_group && a.account_type && (a.account_type === "CASH" || a.account_type === "BANK"))
+        .map((a) => ({ id: a.id, code: a.code, name: a.name, account_type: a.account_type }));
     } catch {
       return [];
     }
@@ -981,6 +1058,9 @@ export const api = {
   /** Registers a new fixed asset (POST /fixed-assets). Posts Dr 1401 / Cr Cash. */
   async registerFixedAsset(input: RegisterFixedAssetInput): Promise<FixedAsset> {
     return http<FixedAsset>("/fixed-assets", {
+  /** Calculates and posts the ECL provision (POST /ecl/calculate). */
+  async calculateECL(input: CalculateECLInput): Promise<CalculateECLResult> {
+    return http<CalculateECLResult>("/ecl/calculate", {
       method: "POST",
       auth: true,
       idempotencyKey: newIdempotencyKey(),
@@ -991,6 +1071,9 @@ export const api = {
   /** Posts depreciation for a period (POST /fixed-assets/{id}/depreciate). Dr 5206 / Cr 1402. */
   async depreciateAsset(id: number, input: DepreciateAssetInput): Promise<DepreciationResult> {
     return http<DepreciationResult>(`/fixed-assets/${id}/depreciate`, {
+  /** Writes off a specific receivable (POST /ecl/write-off). */
+  async writeOffReceivable(input: WriteOffInput): Promise<WriteOffResult> {
+    return http<WriteOffResult>("/ecl/write-off", {
       method: "POST",
       auth: true,
       idempotencyKey: newIdempotencyKey(),
@@ -1021,6 +1104,9 @@ export const api = {
   /** Records an impairment (POST /fixed-assets/{id}/impair). Dr 5207 / Cr 1401. */
   async impairAsset(id: number, input: ImpairAssetInput): Promise<{ journal_entry_id?: number; impairment_loss_cents: number; new_book_value_cents: number }> {
     return http(`/fixed-assets/${id}/impair`, {
+  /** Calculates and posts the deferred tax movement (POST /deferred-tax/calculate). */
+  async calculateDeferredTax(input: CalculateDeferredTaxInput): Promise<CalculateDeferredTaxResult> {
+    return http<CalculateDeferredTaxResult>("/deferred-tax/calculate", {
       method: "POST",
       auth: true,
       idempotencyKey: newIdempotencyKey(),

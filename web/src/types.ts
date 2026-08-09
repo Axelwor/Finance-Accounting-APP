@@ -45,6 +45,9 @@ export type ListSubKind =
   | "due-date-reminders"
   | "bom"
   | "production-job";
+  | "ppn-reconciliation"
+  | "pph-final"
+  | "ecl-calculator";
 
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
@@ -1407,4 +1410,153 @@ export type CreateProductionJobCostInput = AddProductionJobCostInput;
 export interface CompleteProductionJobInput {
   /** Optional completed quantity (defaults to target_qty when omitted). */
   completed_qty?: number;
+/* Tax — PPN, PPh Final UMKM, ECL, Deferred Tax (US-080..083)         */
+/* ------------------------------------------------------------------ */
+
+/** PPN summary (GET /ppn/summary). */
+export interface PPNSummary {
+  from_date: string;
+  to_date: string;
+  ppn_keluaran_cents: number;
+  ppn_masukan_cents: number;
+  net_ppn_cents: number;
+}
+
+/** One VAT movement in the detailed PPN reconciliation. */
+export interface PPNReconciliationLine {
+  entry_id: number;
+  entry_number: string;
+  entry_date: string;
+  description: string;
+  intent_type: string;
+  source_ref: string;
+  account_code: string;
+  account_name: string;
+  direction: "KELUARAN" | "MASUKAN";
+  debit_cents: number;
+  credit_cents: number;
+}
+
+/** PPN reconciliation report (GET /ppn/reconciliation). */
+export interface PPNReconciliationResult {
+  period_year: number;
+  period_month: number;
+  ppn_keluaran_cents: number;
+  ppn_masukan_cents: number;
+  net_ppn_cents: number;
+  lines: PPNReconciliationLine[];
+}
+
+/** Filed PPN reconciliation record (POST /ppn/reconcile). */
+export interface PPNReconciliationRecord {
+  id: number;
+  period_year: number;
+  period_month: number;
+  ppn_keluaran_cents: number;
+  ppn_masukan_cents: number;
+  net_ppn_cents: number;
+  status: string;
+  notes: string;
+  created_at: string;
+}
+
+export interface CreatePPNReconciliationInput {
+  period_year: number;
+  period_month: number;
+  notes?: string;
+}
+
+/** PPh Final UMKM calculation result. */
+export interface PPhFinalResult {
+  journal_entry_id: number;
+  number: string;
+  intent_type: string;
+  entry_date: string;
+  description: string;
+  revenue_cents: number;
+  tax_rate: string;
+  tax_cents: number;
+  payable_balance_cents: number;
+}
+
+export interface CalculatePPhFinalInput {
+  period_year: number;
+  period_month: number;
+  entry_date: string;
+  notes?: string;
+}
+
+export interface PayPPhFinalInput {
+  entry_date: string;
+  cash_account_id: number;
+  amount_cents: number;
+  notes?: string;
+}
+
+/** One ECL aging bucket. */
+export interface ECLBucket {
+  label: string;
+  min_days: number;
+  max_days: number;
+  rate_pct: number;
+  balance_cents: number;
+  provision_cents: number;
+}
+
+/** ECL calculation result. */
+export interface CalculateECLResult {
+  journal_entry_id: number;
+  number: string;
+  intent_type: string;
+  entry_date: string;
+  description: string;
+  as_of_date: string;
+  buckets: ECLBucket[];
+  target_allowance_cents: number;
+  current_allowance_cents: number;
+  adjustment_cents: number;
+}
+
+export interface CalculateECLInput {
+  as_of_date: string;
+  entry_date: string;
+  notes?: string;
+  rates?: Record<string, number>;
+}
+
+export interface WriteOffInput {
+  entry_date: string;
+  invoice_id?: number;
+  amount_cents: number;
+  notes?: string;
+}
+
+export interface WriteOffResult {
+  journal_entry_id: number;
+  number: string;
+  intent_type: string;
+  entry_date: string;
+  description: string;
+  invoice_id: number;
+  amount_cents: number;
+}
+
+/** Deferred tax calculation (US-083). */
+export interface CalculateDeferredTaxInput {
+  temporary_differences_cents: number;
+  tax_rate: number;
+  entry_date: string;
+  notes?: string;
+}
+
+export interface CalculateDeferredTaxResult {
+  journal_entry_id: number;
+  number: string;
+  intent_type: string;
+  entry_date: string;
+  description: string;
+  temporary_differences_cents: number;
+  tax_rate: string;
+  deferred_tax_cents: number;
+  direction: "ASSET" | "REVERSAL";
 }

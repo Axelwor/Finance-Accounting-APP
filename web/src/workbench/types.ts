@@ -21,7 +21,8 @@ export type ModuleId =
   | "inventory"
   | "fixed-assets"
   | "accountant"
-  | "reports";
+  | "reports"
+  | "tax";
 
 export type NestedTabKind = "list" | "entry";
 
