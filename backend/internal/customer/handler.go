@@ -419,6 +419,13 @@ func (service *Service) CreateCustomer(writer http.ResponseWriter, request *http
 		writeError(writer, http.StatusBadRequest, code, message)
 		return
 	}
+	// i-012: pre-check duplicates with clear messages before hitting the DB
+	// constraint (code must be unique per tenant; name is also rejected when
+	// an ACTIVE customer with the same name exists, to catch double-entry).
+	if code, message := service.checkCustomerDuplicates(request.Context(), tenant, req.Code, req.Name); code != "" {
+		writeError(writer, http.StatusConflict, code, message)
+		return
+	}
 	var id int64
 	openingBalanceDate, err := optionalDate(req.OpeningBalanceDate)
 	if err != nil {
@@ -603,6 +610,29 @@ func validateCreateCustomer(req CreateCustomerRequest) (string, string) {
 	}
 	if strings.TrimSpace(req.Name) == "" {
 		return "INVALID_REQUEST", "name is required"
+	}
+	return "", ""
+}
+
+// checkCustomerDuplicates (i-012) rejects duplicate code or duplicate name
+// among ACTIVE customers of the tenant, giving callers a clear 409 before the
+// database unique constraint is reached.
+func (service *Service) checkCustomerDuplicates(ctx context.Context, tenantID int64, code, name string) (string, string) {
+	code = strings.TrimSpace(code)
+	name = strings.TrimSpace(name)
+	var existingCode bool
+	if err := service.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM customers WHERE tenant_id = $1 AND code = $2)`,
+		tenantID, code).Scan(&existingCode); err == nil && existingCode {
+		return "CUSTOMER_CODE_EXISTS", "a customer with this code already exists for this tenant"
+	}
+	if name != "" {
+		var existingName bool
+		if err := service.pool.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM customers WHERE tenant_id = $1 AND is_active = true AND LOWER(name) = LOWER($2))`,
+			tenantID, name).Scan(&existingName); err == nil && existingName {
+			return "CUSTOMER_NAME_EXISTS", "an active customer with this name already exists for this tenant"
+		}
 	}
 	return "", ""
 }

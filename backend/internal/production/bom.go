@@ -346,10 +346,16 @@ func validateBOMRequest(req *CreateBOMRequest) (string, string) {
 		}
 		ct := strings.TrimSpace(line.CostType)
 		if ct == "" {
-			line.CostType = "material"
+			ct = "material"
+			req.Lines[i].CostType = ct
 		}
 		if ct != "material" && ct != "labor" && ct != "overhead" {
 			return "INVALID_REQUEST", fmt.Sprintf("lines[%d]: cost_type must be material, labor, or overhead", i)
+		}
+		// i-016: material lines must carry a positive cost; a zero-cost
+		// material would silently produce zero-cost finished goods.
+		if ct == "material" && line.UnitCostCents <= 0 {
+			return "INVALID_REQUEST", fmt.Sprintf("lines[%d]: material unit_cost_cents must be > 0", i)
 		}
 	}
 	return "", ""

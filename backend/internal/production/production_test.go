@@ -342,15 +342,17 @@ func TestValidateBOMRequest_LineNegativeUnitCost(t *testing.T) {
 	}
 }
 
-func TestValidateBOMRequest_LineZeroUnitCostAllowed(t *testing.T) {
+func TestValidateBOMRequest_LineZeroUnitCostMaterialRejected(t *testing.T) {
+	// i-016: material lines must carry a positive cost; zero-cost material
+	// would silently produce zero-cost finished goods.
 	req := CreateBOMRequest{
 		Code: "BOM-1", Name: "Widget",
 		FinishedGoodItemID: 1, OutputQty: 10,
 		Lines: []BOMLineRequest{{ItemID: 2, Qty: 1, UnitCostCents: 0, CostType: "material"}},
 	}
 	code, _ := validateBOMRequest(&req)
-	if code != "" {
-		t.Error("zero unit_cost_cents should be allowed")
+	if code == "" {
+		t.Error("zero unit_cost_cents on material line should be rejected (i-016)")
 	}
 }
 
@@ -366,19 +368,20 @@ func TestValidateBOMRequest_LineNegativeQty(t *testing.T) {
 	}
 }
 
-func TestValidateBOMRequest_LineEmptyCostTypeFailsDueToBug(t *testing.T) {
-	// NOTE: validateBOMRequest has a latent bug — it sets
-	// `line.CostType = "material"` on the loop copy but checks the
-	// original `ct` variable (still ""), so empty cost_type actually
-	// fails validation. This test documents the current behavior.
+func TestValidateBOMRequest_LineEmptyCostTypeDefaultsToMaterial(t *testing.T) {
+	// Empty cost_type defaults to "material" and the default is persisted
+	// back into the request slice (bug fixed: was previously rejected).
 	req := CreateBOMRequest{
 		Code: "BOM-1", Name: "Widget",
 		FinishedGoodItemID: 1, OutputQty: 10,
 		Lines: []BOMLineRequest{{ItemID: 2, Qty: 1, UnitCostCents: 100, CostType: ""}},
 	}
 	code, _ := validateBOMRequest(&req)
-	if code == "" {
-		t.Error("empty cost_type currently fails due to ct variable not being updated (known behavior)")
+	if code != "" {
+		t.Errorf("empty cost_type should default to material and pass, got code %q", code)
+	}
+	if req.Lines[0].CostType != "material" {
+		t.Errorf("expected cost_type defaulted to material, got %q", req.Lines[0].CostType)
 	}
 }
 

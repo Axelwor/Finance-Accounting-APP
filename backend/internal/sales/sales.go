@@ -31,6 +31,7 @@ func NewHandler(pool *pgxpool.Pool) *Service {
 func (service *Service) Routes(router chi.Router) {
 	router.Post("/quotations", service.Create)
 	router.Get("/quotations", service.List)
+	router.Get("/quotations/conversion-stats", service.ConversionStats)
 	router.Get("/quotations/{id}", service.Get)
 	router.Post("/quotations/{id}/send", service.Send)
 	router.Post("/quotations/{id}/cancel", service.Cancel)

@@ -217,6 +217,26 @@ func (service *Service) Create(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
+	// i-012: pre-check duplicate code/name among active items with clear messages.
+	var codeExists bool
+	_ = tx.QueryRow(request.Context(),
+		`SELECT EXISTS(SELECT 1 FROM items WHERE tenant_id = $1 AND code = $2)`,
+		tenant, strings.TrimSpace(req.Code)).Scan(&codeExists)
+	if codeExists {
+		writeError(writer, http.StatusConflict, "ITEM_CODE_EXISTS", "an item with this code already exists")
+		return
+	}
+	if strings.TrimSpace(req.Name) != "" {
+		var nameExists bool
+		_ = tx.QueryRow(request.Context(),
+			`SELECT EXISTS(SELECT 1 FROM items WHERE tenant_id = $1 AND is_active = true AND LOWER(name) = LOWER($2))`,
+			tenant, strings.TrimSpace(req.Name)).Scan(&nameExists)
+		if nameExists {
+			writeError(writer, http.StatusConflict, "ITEM_NAME_EXISTS", "an active item with this name already exists")
+			return
+		}
+	}
+
 	var id int64
 	err = tx.QueryRow(request.Context(), `
 		INSERT INTO items
