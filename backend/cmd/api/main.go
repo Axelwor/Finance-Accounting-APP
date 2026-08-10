@@ -263,6 +263,7 @@ func main() {
 			router.Get("/items/{id}/prices", itemHandler.ListPrices)
 
 			router.Get("/quotations", salesHandler.List)
+			router.Get("/reports/quotation-stats", salesHandler.ConversionStats)
 			router.Get("/quotations/{id}", salesHandler.Get)
 
 			router.Get("/sales-orders", salesHandler.ListOrders)

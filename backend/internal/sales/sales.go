@@ -31,7 +31,9 @@ func NewHandler(pool *pgxpool.Pool) *Service {
 func (service *Service) Routes(router chi.Router) {
 	router.Post("/quotations", service.Create)
 	router.Get("/quotations", service.List)
-	router.Get("/reports/quotation-stats", service.ConversionStats)
+	// NOTE: GET /reports/quotation-stats is registered manually in
+	// cmd/api/main.go alongside other GET endpoints (sales.Routes is not
+	// called for GET routes — they are registered manually).
 	router.Get("/quotations/{id}", service.Get)
 	router.Post("/quotations/{id}/send", service.Send)
 	router.Post("/quotations/{id}/cancel", service.Cancel)
