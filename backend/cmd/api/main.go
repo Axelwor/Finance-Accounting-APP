@@ -106,7 +106,7 @@ func main() {
 
 			// --- Write operations: admin, accountant, manager, staff ---
 			router.Group(func(router chi.Router) {
-				router.Use(auth.RequireRole(auth.RoleAdmin, auth.RoleAccountant, auth.RoleManager, auth.RoleStaff))
+				router.Use(auth.RequireRole(auth.RoleOwner, auth.RoleAdmin, auth.RoleAccountant, auth.RoleManager, auth.RoleStaff))
 
 				router.Post("/cash-in", cashHandler.CashIn)
 				router.Post("/cash-out", cashHandler.CashOut)
@@ -217,7 +217,7 @@ func main() {
 
 			// --- Admin only: period close/unlock, account deactivation ---
 			router.Group(func(router chi.Router) {
-				router.Use(auth.RequireRole(auth.RoleAdmin))
+				router.Use(auth.RequireRole(auth.RoleOwner, auth.RoleAdmin))
 
 				router.Post("/periods/close", periodHandler.Close)
 				router.Post("/periods/unlock", periodHandler.Unlock)

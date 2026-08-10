@@ -28,7 +28,8 @@ const (
 
 // Role constants per ARCHITECTURE.md §8.2 RBAC matrix.
 const (
-	RoleAdmin    = "admin"
+	RoleOwner      = "owner"
+	RoleAdmin      = "admin"
 	RoleAccountant = "accountant"
 	RoleManager    = "manager"
 	RoleStaff      = "staff"
