@@ -382,10 +382,26 @@ func hashJournal(journal Journal) string {
 // This is the SINGLE source of truth for the hash chain formula. All other
 // packages MUST call this function instead of duplicating the logic.
 // The hash covers: version, tenant_id, source_ref, intent_type, entry_date,
-// previous_hash, and the sorted lines (by SourceLineRef).
+// previous_hash, and the sorted lines.
+//
+// Design notes (m-002, m-003):
+//   - Lines are sorted by (SourceLineRef, AccountID, DebitCents) so the hash
+//     is deterministic even when two lines share a SourceLineRef (or both are
+//     empty). sort.Slice alone is not stable and would make the hash depend on
+//     input order in that case.
+//   - Journal.Description is intentionally NOT hashed: it is editable display
+//     metadata, not part of the financial substance the chain must protect.
 func HashJournal(journal Journal) string {
 	lines := append([]Line(nil), journal.Lines...)
-	sort.Slice(lines, func(left, right int) bool { return lines[left].SourceLineRef < lines[right].SourceLineRef })
+	sort.Slice(lines, func(left, right int) bool {
+		if lines[left].SourceLineRef != lines[right].SourceLineRef {
+			return lines[left].SourceLineRef < lines[right].SourceLineRef
+		}
+		if lines[left].AccountID != lines[right].AccountID {
+			return lines[left].AccountID < lines[right].AccountID
+		}
+		return lines[left].DebitCents < lines[right].DebitCents
+	})
 	payload := fmt.Sprintf("v1|%d|%s|%s|%s|%s|%v", journal.TenantID, journal.SourceRef, journal.IntentType, journal.EntryDate, journal.PreviousHash, lines)
 	sum := sha256.Sum256([]byte(payload))
 	return hex.EncodeToString(sum[:])

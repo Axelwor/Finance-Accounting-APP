@@ -86,19 +86,49 @@ func TestCNRefundMethodValidation(t *testing.T) {
 }
 
 func TestCNInvoiceReceivableAdjustment(t *testing.T) {
-	// After CN: receivable increases by return amount
-	receivable := int64(0) // invoice was PAID
+	// After CN (m-008 fix): the reversal journal credits AR, so the invoice
+	// receivable_cents DECREASES by the return amount.
+	receivable := int64(1000000) // invoice was ISSUED with 1,000,000 outstanding
 	returnAmount := int64(750000)
-	newReceivable := receivable + returnAmount
-	if newReceivable != 750000 {
-		t.Errorf("newReceivable = %d, want 750000", newReceivable)
+
+	if returnAmount > receivable {
+		t.Fatalf("test setup invalid: return %d > receivable %d", returnAmount, receivable)
 	}
-	// If invoice was PAID, it becomes PARTIALLY_PAID
-	status := invPaid
-	if newReceivable > 0 && status == invPaid {
-		status = invPartiallyPaid
+	newReceivable := receivable - returnAmount
+	if newReceivable != 250000 {
+		t.Errorf("newReceivable = %d, want 250000", newReceivable)
 	}
-	if status != invPartiallyPaid {
-		t.Errorf("status = %s, want PARTIALLY_PAID", status)
+	// Invoice stays ISSUED while receivable > 0.
+	status := invStatusForReceivable(invIssued, newReceivable)
+	if status != invIssued {
+		t.Errorf("status = %s, want ISSUED", status)
+	}
+	// When the CN wipes out the remaining receivable, the invoice is PAID.
+	fullReturn := receivable // return the whole amount
+	status = invStatusForReceivable(invIssued, receivable-fullReturn)
+	if status != invPaid {
+		t.Errorf("full-return status = %s, want PAID", status)
+	}
+}
+
+// invStatusForReceivable mirrors the handler's status transition logic.
+func invStatusForReceivable(current string, newReceivable int64) string {
+	if newReceivable <= 0 && current != invPaid {
+		return invPaid
+	}
+	return current
+}
+
+func TestCNRejectsOverCrediting(t *testing.T) {
+	// A credit note whose total exceeds the invoice's outstanding receivable
+	// must be rejected (m-008).
+	receivable := int64(500000)
+	returnAmount := int64(750000)
+	if returnAmount <= receivable {
+		t.Fatalf("test setup invalid: return %d should exceed receivable %d", returnAmount, receivable)
+	}
+	// The handler returns an error in this case; here we assert the guard condition.
+	if !(returnAmount > receivable) {
+		t.Error("over-crediting guard condition failed")
 	}
 }

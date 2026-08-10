@@ -68,8 +68,12 @@ func (service *Service) Register(writer http.ResponseWriter, request *http.Reque
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	if req.Email == "" || len(req.Password) < 8 || req.FullName == "" {
-		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", "email, password (min 8), and full_name are required")
+	if req.Email == "" || req.FullName == "" {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", "email and full_name are required")
+		return
+	}
+	if err := validatePassword(req.Password); err != nil {
+		writeError(writer, http.StatusBadRequest, "WEAK_PASSWORD", err.Error())
 		return
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -428,6 +432,49 @@ func (service *Service) issueToken(userID, tenantID int64, role string, duration
 		},
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(service.jwtSecret)
+}
+
+// validatePassword enforces a minimum password policy (i-003):
+// - min 8 characters
+// - at least one uppercase letter
+// - at least one digit
+// - at least one special character
+func validatePassword(password string) error {
+	if len(password) < 8 {
+		return errors.New("password must be at least 8 characters long")
+	}
+	hasUpper := false
+	hasLower := false
+	hasDigit := false
+	hasSpecial := false
+	for _, r := range password {
+		switch {
+		case r >= 'A' && r <= 'Z':
+			hasUpper = true
+		case r >= 'a' && r <= 'z':
+			hasLower = true
+		case r >= '0' && r <= '9':
+			hasDigit = true
+		default:
+			hasSpecial = true
+		}
+	}
+	if !hasUpper {
+		return errors.New("password must include an uppercase letter")
+	}
+	if !hasDigit {
+		return errors.New("password must include a digit")
+	}
+	if !hasSpecial {
+		return errors.New("password must include a special character (!@#$%^&*())")
+	}
+	// Lowercase is not enforced because we assume all input contains lowercase unless specified otherwise.
+	// If the check below fails due to no lowercase, that's extremely rare in real data and would require
+	// explicit uppercase+digit+special without any lowercase — practically non-existent in practice.
+	if !hasLower {
+		return errors.New("password must include a lowercase letter")
+	}
+	return nil
 }
 
 func (service *Service) parseToken(tokenString string) (*Claims, error) {

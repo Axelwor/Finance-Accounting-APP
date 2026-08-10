@@ -146,6 +146,13 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 		if invStatus == invVoid {
 			return fmt.Errorf("invoice %s is VOID", invNumber)
 		}
+		// M-008: the invoice row must be locked for the whole CN transaction so
+		// concurrent credit notes cannot both pass the receivable check.
+		if _, err := tx.Exec(request.Context(), `
+			SELECT id FROM invoices WHERE tenant_id = $1 AND id = $2 FOR UPDATE
+		`, tenant, req.InvoiceID); err != nil {
+			return err
+		}
 		// Use the invoice's customer if not explicitly provided.
 		if req.CustomerID == 0 {
 			req.CustomerID = customerID
@@ -346,17 +353,33 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 			}
 		}
 
-		// Update invoice: increase receivable (AR deducted on CN).
-		newReceivable := receivable + totalReturn
+		// Update invoice: reduce receivable. The reversal journal credits AR,
+		// so the invoice's receivable_cents must go DOWN (M-008: it previously
+		// went up, which both overstated AR and allowed over-crediting).
+		if totalReturn > receivable {
+			return fmt.Errorf("credit note total %d exceeds the invoice's outstanding receivable %d", totalReturn, receivable)
+		}
+		newReceivable := receivable - totalReturn
 		newStatus := invStatus
-		if newStatus == invPaid {
-			newStatus = invPartiallyPaid
+		if newReceivable <= 0 && newStatus != invPaid {
+			newStatus = invPaid
 		}
 		if _, err := tx.Exec(request.Context(), `
 			UPDATE invoices SET receivable_cents = $1, status = $2, updated_at = now()
 			WHERE tenant_id = $3 AND id = $4
 		`, newReceivable, newStatus, tenant, req.InvoiceID); err != nil {
 			return err
+		}
+
+		// M-007: reduce the AR sub-ledger to mirror the AR credit.
+		if totalReturn > 0 {
+			if _, err := tx.Exec(request.Context(), `
+				UPDATE customer_balances
+				SET ar_cents = GREATEST(ar_cents - $1, 0), updated_at = now()
+				WHERE tenant_id = $2 AND customer_id = $3
+			`, totalReturn, tenant, req.CustomerID); err != nil {
+				return err
+			}
 		}
 
 		// Insert CN header + lines.
