@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS email_queue (
     entity_type VARCHAR(50),
     entity_id BIGINT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTMPTZ NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_email_queue_status ON email_queue(tenant_id, status, created_at);
