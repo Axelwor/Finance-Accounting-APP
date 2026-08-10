@@ -123,17 +123,10 @@ func (service *Service) post(writer http.ResponseWriter, request *http.Request, 
 			Hash:           journal.Hash,
 			PrevHash:       journal.PreviousHash,
 			CreatedBy:      int8(userID),
+			RequestHash:    text(requestHash),
 		})
 		if err != nil {
 			return err
-		}
-		// M-023: Store request hash for future payload comparison.
-		if requestHash != "" {
-			if _, err := tx.Exec(request.Context(),
-				`UPDATE journal_entries SET request_hash = $3 WHERE tenant_id = $1 AND id = $2`,
-				tenant, entry.ID, requestHash); err != nil {
-				return err
-			}
 		}
 		for _, line := range journal.Lines {
 			if err := db.New(tx).InsertJournalLine(request.Context(), db.InsertJournalLineParams{

@@ -17,8 +17,8 @@ WHERE tenant_id = $1 AND idempotency_key = $2;
 -- name: InsertJournalEntry :one
 INSERT INTO journal_entries (
     tenant_id, number, entry_date, period_id, description,
-    source_ref, intent_type, idempotency_key, hash, prev_hash, created_by
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, request_hash
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 RETURNING id, tenant_id, number, entry_date, period_id, status, description,
           source_ref, intent_type, idempotency_key, reversal_of_id,
           void_reason, voided_by, voided_at, hash, prev_hash,

@@ -114,8 +114,8 @@ func (q *Queries) GetJournalEntry(ctx context.Context, arg GetJournalEntryParams
 const insertJournalEntry = `-- name: InsertJournalEntry :one
 INSERT INTO journal_entries (
     tenant_id, number, entry_date, period_id, description,
-    source_ref, intent_type, idempotency_key, hash, prev_hash, created_by
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, request_hash
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 RETURNING id, tenant_id, number, entry_date, period_id, status, description,
           source_ref, intent_type, idempotency_key, reversal_of_id,
           void_reason, voided_by, voided_at, hash, prev_hash,
@@ -134,6 +134,7 @@ type InsertJournalEntryParams struct {
 	Hash           string      `json:"hash"`
 	PrevHash       string      `json:"prev_hash"`
 	CreatedBy      pgtype.Int8 `json:"created_by"`
+	RequestHash    pgtype.Text `json:"request_hash"`
 }
 
 func (q *Queries) InsertJournalEntry(ctx context.Context, arg InsertJournalEntryParams) (JournalEntry, error) {
@@ -149,6 +150,7 @@ func (q *Queries) InsertJournalEntry(ctx context.Context, arg InsertJournalEntry
 		arg.Hash,
 		arg.PrevHash,
 		arg.CreatedBy,
+		arg.RequestHash,
 	)
 	var i JournalEntry
 	err := row.Scan(
