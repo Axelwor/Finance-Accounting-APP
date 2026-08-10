@@ -40,7 +40,7 @@ func (s *Service) ListTemplates(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, err := s.pool.Query(r.Context(), `
 		SELECT id, code, name, document_type, is_default, is_active
-		FROM report_templates WHERE tenant_id = $1
+		FROM report_templates WHERE tenant_id IN ($1, 0)
 		ORDER BY document_type, name
 	`, tid)
 	if err != nil {
@@ -122,7 +122,7 @@ func (s *Service) GetTemplate(w http.ResponseWriter, r *http.Request) {
 	var isDefault, isActive bool
 	err := s.pool.QueryRow(r.Context(), `
 		SELECT code, name, document_type, template_yaml, is_default, is_active
-		FROM report_templates WHERE tenant_id = $1 AND id = $2
+		FROM report_templates WHERE tenant_id IN ($1, 0) AND id = $2
 	`, tid, id).Scan(&code, &name, &docType, &yaml, &isDefault, &isActive)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, errResp{"NOT_FOUND", "template not found"})
@@ -188,7 +188,7 @@ func (s *Service) RenderReport(w http.ResponseWriter, r *http.Request) {
 		format = "pdf"
 	}
 	var yaml string
-	err := s.pool.QueryRow(r.Context(), `SELECT template_yaml FROM report_templates WHERE tenant_id=$1 AND id=$2`, tid, id).Scan(&yaml)
+	err := s.pool.QueryRow(r.Context(), `SELECT template_yaml FROM report_templates WHERE tenant_id IN ($1, 0) AND id=$2`, tid, id).Scan(&yaml)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, errResp{"NOT_FOUND", "template not found"})
 		return
