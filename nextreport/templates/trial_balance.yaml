@@ -1,0 +1,22 @@
+title: Trial Balance
+subtitle: General Ledger Trial Balance
+header_fields:
+  - period_name: Period
+  - as_of_date: As Of Date
+  - company_name: Company
+  - currency: Currency
+sections:
+  - title: Account Balances
+    table: rows
+    columns:
+      - account_code: Account Code
+      - account_name: Account Name
+      - account_type: Type
+      - debit: Debit
+      - credit: Credit
+  - title: Totals
+    table: totals
+    columns:
+      - label: Description
+      - value: Amount
+footer_text: Total debits must equal total credits for a balanced trial balance.

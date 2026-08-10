@@ -1,0 +1,25 @@
+title: Journal Voucher
+subtitle: General Journal Entry Voucher
+header_fields:
+  - number: Journal Number
+  - date: Journal Date
+  - reference: Reference
+  - description: Memo
+  - created_by: Prepared By
+sections:
+  - title: Journal Lines
+    table: rows
+    columns:
+      - account_code: Account Code
+      - account_name: Account Name
+      - description: Description
+      - debit: Debit
+      - credit: Credit
+  - title: Totals
+    table: totals
+    columns:
+      - label: Description
+      - value: Amount
+  - title: Approval
+    content: "Prepared by: ______________   Reviewed by: ______________   Posted by: ______________"
+footer_text: Journal entries are immutable once posted; corrections use reversal entries.

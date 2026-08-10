@@ -1,0 +1,26 @@
+title: Stock Opname
+subtitle: Physical Stock Count Sheet
+header_fields:
+  - number: Opname Number
+  - date: Count Date
+  - warehouse: Warehouse
+  - counted_by: Counted By
+sections:
+  - title: Count Lines
+    table: rows
+    columns:
+      - item_code: Item Code
+      - item_name: Item Name
+      - location: Location
+      - system_qty: System Qty
+      - counted_qty: Counted Qty
+      - variance_qty: Variance
+      - notes: Notes
+  - title: Summary
+    table: totals
+    columns:
+      - label: Description
+      - value: Amount
+  - title: Approval
+    content: "Counted by: ______________   Verified by: ______________   Approved by: ______________"
+footer_text: Post adjustment journals for variances only after approval.

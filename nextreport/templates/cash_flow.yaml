@@ -1,0 +1,28 @@
+title: Cash Flow Statement
+subtitle: Statement of Cash Flows
+header_fields:
+  - period_name: Period
+  - company_name: Company
+  - currency: Currency
+sections:
+  - title: Operating Activities
+    table: operating_rows
+    columns:
+      - description: Description
+      - amount: Amount
+  - title: Investing Activities
+    table: investing_rows
+    columns:
+      - description: Description
+      - amount: Amount
+  - title: Financing Activities
+    table: financing_rows
+    columns:
+      - description: Description
+      - amount: Amount
+  - title: Summary
+    table: totals
+    columns:
+      - label: Description
+      - value: Amount
+footer_text: Prepared using the indirect method from posted accounting entries.

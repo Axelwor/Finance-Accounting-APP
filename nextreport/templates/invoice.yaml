@@ -1,0 +1,25 @@
+title: Invoice
+subtitle: Tax Invoice / Sales Invoice
+header_fields:
+  - number: Invoice Number
+  - date: Invoice Date
+  - due_date: Due Date
+  - customer_name: Customer
+  - customer_address: Address
+  - currency: Currency
+sections:
+  - title: Line Items
+    table: rows
+    columns:
+      - code: Item Code
+      - description: Description
+      - qty: Quantity
+      - unit: Unit
+      - unit_price: Unit Price
+      - amount: Amount
+  - title: Totals
+    table: totals
+    columns:
+      - label: Description
+      - value: Amount
+footer_text: Please remit payment by the due date. Thank you for your business.

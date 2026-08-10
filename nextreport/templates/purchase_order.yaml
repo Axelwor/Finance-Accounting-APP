@@ -1,0 +1,25 @@
+title: Purchase Order
+subtitle: Supplier Purchase Order
+header_fields:
+  - number: PO Number
+  - date: PO Date
+  - expected_date: Expected Delivery
+  - supplier_name: Supplier
+  - supplier_address: Address
+  - currency: Currency
+sections:
+  - title: Order Lines
+    table: rows
+    columns:
+      - code: Item Code
+      - description: Description
+      - qty: Quantity
+      - unit: Unit
+      - unit_price: Unit Price
+      - amount: Amount
+  - title: Totals
+    table: totals
+    columns:
+      - label: Description
+      - value: Amount
+footer_text: Please confirm this purchase order and quote the PO number on delivery.

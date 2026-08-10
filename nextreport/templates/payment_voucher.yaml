@@ -1,0 +1,24 @@
+title: Payment Voucher
+subtitle: Outgoing Payment Voucher
+header_fields:
+  - number: Voucher Number
+  - date: Payment Date
+  - payee_name: Payee
+  - payment_method: Payment Method
+  - bank_account: Bank Account
+  - currency: Currency
+sections:
+  - title: Payment Details
+    table: rows
+    columns:
+      - reference: Reference
+      - description: Description
+      - amount: Amount
+  - title: Totals
+    table: totals
+    columns:
+      - label: Description
+      - value: Amount
+  - title: Approval
+    content: "Prepared by: ______________   Checked by: ______________   Approved by: ______________"
+footer_text: This voucher authorizes the disbursement described above.

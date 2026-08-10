@@ -1,0 +1,31 @@
+title: Balance Sheet
+subtitle: Statement of Financial Position
+header_fields:
+  - as_of_date: As Of Date
+  - company_name: Company
+  - currency: Currency
+sections:
+  - title: Assets
+    table: asset_rows
+    columns:
+      - account_code: Account Code
+      - account_name: Account
+      - amount: Amount
+  - title: Liabilities
+    table: liability_rows
+    columns:
+      - account_code: Account Code
+      - account_name: Account
+      - amount: Amount
+  - title: Equity
+    table: equity_rows
+    columns:
+      - account_code: Account Code
+      - account_name: Account
+      - amount: Amount
+  - title: Totals
+    table: totals
+    columns:
+      - label: Description
+      - value: Amount
+footer_text: Assets must equal liabilities plus equity.

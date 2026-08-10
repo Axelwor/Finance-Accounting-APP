@@ -1,0 +1,20 @@
+title: Delivery Order
+subtitle: Goods Delivery / Shipping Document
+header_fields:
+  - number: Delivery Number
+  - date: Delivery Date
+  - reference: Reference
+  - customer_name: Deliver To
+  - customer_address: Address
+sections:
+  - title: Delivered Items
+    table: rows
+    columns:
+      - code: Item Code
+      - description: Description
+      - qty: Quantity
+      - unit: Unit
+      - notes: Notes
+  - title: Acknowledgement
+    content: "Received by (name / signature / date):"
+footer_text: Please sign and return a copy of this delivery order as proof of receipt.

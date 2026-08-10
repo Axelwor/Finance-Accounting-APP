@@ -1,0 +1,25 @@
+title: Supplier Statement
+subtitle: Statement of Account — Supplier
+header_fields:
+  - number: Statement Number
+  - date: Statement Date
+  - period_start: Period Start
+  - period_end: Period End
+  - supplier_name: Supplier
+  - currency: Currency
+sections:
+  - title: Account Activity
+    table: rows
+    columns:
+      - date: Date
+      - reference: Reference
+      - description: Description
+      - debit: Debit
+      - credit: Credit
+      - balance: Balance
+  - title: Summary
+    table: totals
+    columns:
+      - label: Description
+      - value: Amount
+footer_text: Please reconcile this statement against your records and report discrepancies.

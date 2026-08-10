@@ -1,0 +1,22 @@
+title: Receipt Voucher
+subtitle: Incoming Payment Receipt
+header_fields:
+  - number: Receipt Number
+  - date: Receipt Date
+  - payer_name: Received From
+  - payment_method: Payment Method
+  - bank_account: Bank Account
+  - currency: Currency
+sections:
+  - title: Receipt Details
+    table: rows
+    columns:
+      - reference: Reference
+      - description: Description
+      - amount: Amount
+  - title: Totals
+    table: totals
+    columns:
+      - label: Description
+      - value: Amount
+footer_text: This receipt acknowledges payment received as described above.
