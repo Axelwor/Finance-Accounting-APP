@@ -90,6 +90,7 @@ const accountant: Module = {
     { id: "ac-dimensions", label: "Dimensions", hint: "DIM", openList: "dimensions" },
     { id: "ac-budgets", label: "Budgets", hint: "BGT", openList: "budgets", openEntry: "budget-entry" },
     { id: "ac-audit", label: "Audit Trail", hint: "AUD", openList: "audit-logs" },
+    { id: "ac-statement", label: "Customer Statement", hint: "STMT", openList: "customer-statement" },
   ],
 };
 
@@ -207,6 +208,8 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Financial Notes";
     case "due-date-reminders":
       return "Due Date Reminders";
+    case "customer-statement":
+      return "Customer Statement";
     case "bom":
       return "Bill of Materials";
     case "production-job":

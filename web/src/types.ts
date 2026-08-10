@@ -43,6 +43,7 @@ export type ListSubKind =
   | "report-cash-flow"
   | "financial-notes"
   | "due-date-reminders"
+  | "customer-statement"
   | "bom"
   | "production-job"
   | "ppn-reconciliation"
@@ -402,6 +403,31 @@ export interface Customer {
   name: string;
   payment_term_id?: number | null;
   is_active: boolean;
+}
+
+/** Statement line for customer AR statement. */
+export interface CustomerStatementLine {
+  date: string;
+  type: "invoice" | "payment";
+  reference: string;
+  description: string;
+  debit_cents: number;
+  credit_cents: number;
+  running_balance_cents: number;
+}
+
+/** Customer statement response (GET /customers/{id}/statement). */
+export interface CustomerStatement {
+  customer_id: number;
+  code: string;
+  name: string;
+  from_date: string;
+  to_date: string;
+  opening_balance_cents: number;
+  lines: CustomerStatementLine[];
+  invoiced_cents: number;
+  paid_cents: number;
+  closing_balance_cents: number;
 }
 
 /** Item master data (GET /api/v1/items). */

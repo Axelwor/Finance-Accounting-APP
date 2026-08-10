@@ -40,6 +40,7 @@ import type {
   TransferCommandPayload,
   Business,
   Customer,
+  CustomerStatement,
   Item,
   Quotation,
   QuotationCreateInput,
@@ -1351,6 +1352,16 @@ export const api = {
     } catch {
       return [];
     }
+  },
+
+  /** Customer statement (GET /customers/{id}/statement?from_date=&to_date=). Throws on failure. */
+  async getCustomerStatement(
+    customerId: number,
+    fromDate: string,
+    toDate: string
+  ): Promise<CustomerStatement> {
+    const query = `?from_date=${encodeURIComponent(fromDate)}&to_date=${encodeURIComponent(toDate)}`;
+    return http<CustomerStatement>(`/customers/${customerId}/statement${query}`, { auth: true });
   },
 
   /** Item list (GET /items). Failure -> empty array. */

@@ -10,6 +10,8 @@ import {
   BalanceSheetReport,
   CashFlowReport,
 } from "../screens/list/Reports";
+import { DueDateReminders } from "../screens/list/DueDateReminders";
+import { CustomerStatementScreen } from "../screens/list/CustomerStatement";
 import { DashboardScreen } from "../screens/workbench/DashboardScreen";
 import {
   SalesReceiptList,
@@ -43,7 +45,6 @@ import { GeneralLedger } from "../screens/list/GeneralLedger";
 import { JournalRegister } from "../screens/list/JournalRegister";
 import { AuditLogList } from "../screens/list/AuditLogList";
 import { FinancialNotesList } from "../screens/list/FinancialNotesList";
-import { DueDateReminders } from "../screens/list/DueDateReminders";
 import { JournalEntryForm } from "../screens/entry/JournalEntryForm";
 import { MockEntryForm } from "../screens/entry/MockEntryForm";
 import { QuotationForm } from "../screens/entry/QuotationForm";
@@ -275,6 +276,8 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <FinancialNotesList />;
     case "due-date-reminders":
       return <DueDateReminders />;
+    case "customer-statement":
+      return <CustomerStatementScreen />;
     case "lease-contract":
       return <LeaseContractList />;
     case "consolidated-report":
