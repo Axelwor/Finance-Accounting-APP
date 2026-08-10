@@ -94,14 +94,20 @@ func (service *Service) CreateDP(writer http.ResponseWriter, request *http.Reque
 
 		var soTotal, dpReceived int64
 		var soStatus string
+		// FOR UPDATE serializes concurrent DP postings for the same order so
+		// the accumulation check below cannot be raced (M-006).
 		if err := tx.QueryRow(request.Context(), `
 			SELECT total_cents, dp_received_cents, status
 			FROM sales_orders WHERE tenant_id = $1 AND id = $2
+			FOR UPDATE
 		`, tenant, orderID).Scan(&soTotal, &dpReceived, &soStatus); err != nil {
 			return err
 		}
 		if soStatus != soConfirmed {
 			return fmt.Errorf("order is %s, not CONFIRMED", soStatus)
+		}
+		if req.AmountCents <= 0 {
+			return fmt.Errorf("amount_cents must be > 0")
 		}
 		if dpReceived+req.AmountCents > soTotal {
 			return dpOverflowError{max: soTotal - dpReceived}

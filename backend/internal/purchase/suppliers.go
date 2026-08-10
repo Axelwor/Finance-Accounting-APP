@@ -55,8 +55,8 @@ func (service *Service) CreateSupplier(writer http.ResponseWriter, request *http
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", "invalid JSON body")
 		return
 	}
-	if strings.TrimSpace(req.Code) == "" || strings.TrimSpace(req.Name) == "" {
-		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", "code and name are required")
+	if code, msg := validateSupplierRequest(req); code != "" {
+		writeError(writer, http.StatusBadRequest, code, msg)
 		return
 	}
 
@@ -242,4 +242,15 @@ func (service *Service) DeactivateSupplier(writer http.ResponseWriter, request *
 		return
 	}
 	writeJSON(writer, http.StatusOK, map[string]any{"id": id, "is_active": false})
+}
+
+// ---------------------------------------------------------------------------
+// Validation helpers
+// ---------------------------------------------------------------------------
+
+func validateSupplierRequest(req CreateSupplierRequest) (string, string) {
+	if strings.TrimSpace(req.Code) == "" || strings.TrimSpace(req.Name) == "" {
+		return "INVALID_REQUEST", "code and name are required"
+	}
+	return "", ""
 }

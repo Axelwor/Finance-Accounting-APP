@@ -349,8 +349,10 @@ func finalize(journal Journal) (Journal, error) {
 	if err := BalanceCheck(journal.Lines); err != nil {
 		return Journal{}, err
 	}
-	journal.PreviousHash = "genesis"
-	journal.Hash = hashJournal(journal)
+	// Hash and PreviousHash are set by the posting layer (posting.go) after
+	// locking the tenant's ledger chain head. The engine no longer pre-computes
+	// a hash with a "genesis" placeholder — that was always overwritten and
+	// risked silent misuse if a new caller forgot to re-hash (M-003).
 	return journal, nil
 }
 

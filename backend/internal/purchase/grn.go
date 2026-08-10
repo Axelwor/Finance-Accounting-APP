@@ -146,7 +146,7 @@ func (service *Service) CreateGRN(writer http.ResponseWriter, request *http.Requ
 			if !invAcct.Valid {
 				return fmt.Errorf("item %s (%s) is missing inventory account", itemCode, itemName)
 			}
-			lineTotal := int64(line.Qty * float64(line.UnitCostCents))
+			lineTotal := grnLineTotal(line.Qty, line.UnitCostCents)
 			totalGRN += lineTotal
 			prepared = append(prepared, preparedGRNLine{
 				line:          line,
@@ -287,10 +287,7 @@ func (service *Service) CreateGRN(writer http.ResponseWriter, request *http.Requ
 		}
 
 		// Update PO status to PARTIALLY_RECEIVED or RECEIVED.
-		newStatus := poStatusPartiallyReceived
-		if poStatus == poStatusReceived {
-			newStatus = poStatusReceived
-		}
+		newStatus := poStatusAfterGRN(poStatus)
 		if _, err := tx.Exec(request.Context(), `
 			UPDATE purchase_orders SET status = $1, received_cents = received_cents + $2, updated_at = now()
 			WHERE tenant_id = $3 AND id = $4
@@ -473,6 +470,19 @@ func fetchGRNByJournal(ctx context.Context, tx pgx.Tx, tenant, journalID int64) 
 		grn.JournalEntryID = journalIDOut.Int64
 	}
 	return &grn, nil
+}
+
+func grnLineTotal(qty float64, unitCostCents int64) int64 {
+	return int64(qty * float64(unitCostCents))
+}
+
+// poStatusAfterGRN keeps a RECEIVED PO at RECEIVED and moves any other
+// non-cancelled status to PARTIALLY_RECEIVED (cancelled POs are rejected earlier).
+func poStatusAfterGRN(current string) string {
+	if current == poStatusReceived {
+		return poStatusReceived
+	}
+	return poStatusPartiallyReceived
 }
 
 func validateGRNRequest(req CreateGRNRequest) (string, string) {

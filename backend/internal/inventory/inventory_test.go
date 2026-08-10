@@ -291,7 +291,7 @@ func TestOpnameJournal_Surplus(t *testing.T) {
 	diffQty := 20.0
 	if diffQty > 0 {
 		// Dr 1301 / Cr 4907
-		debitAccount := inventoryAccountCode      // 1301
+		debitAccount := inventoryAccountCode       // 1301
 		creditAccount := adjustmentGainAccountCode // 4907
 		if debitAccount != "1301" || creditAccount != "4907" {
 			t.Errorf("surplus: Dr %s / Cr %s, want Dr 1301 / Cr 4907", debitAccount, creditAccount)
@@ -304,7 +304,7 @@ func TestOpnameJournal_Shortage(t *testing.T) {
 	if diffQty < 0 {
 		// Dr 5907 / Cr 1301
 		debitAccount := adjustmentLossAccountCode // 5907
-		creditAccount := inventoryAccountCode      // 1301
+		creditAccount := inventoryAccountCode     // 1301
 		if debitAccount != "5907" || creditAccount != "1301" {
 			t.Errorf("shortage: Dr %s / Cr %s, want Dr 5907 / Cr 1301", debitAccount, creditAccount)
 		}
@@ -686,8 +686,8 @@ func TestPathID_Empty(t *testing.T) {
 
 func TestLeftPad6(t *testing.T) {
 	tests := []struct {
-		seq   int64
-		want  string
+		seq  int64
+		want string
 	}{
 		{1, "000001"},
 		{10, "000010"},

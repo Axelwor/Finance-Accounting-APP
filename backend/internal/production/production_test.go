@@ -22,8 +22,8 @@ func TestProductionAccountCodeConstants(t *testing.T) {
 		{"WIP", wipAccountCode, "1303"},
 		{"FinishedGoods", finishedGoodsAccountCode, "1304"},
 		{"Inventory (raw materials)", inventoryAccountCode, "1301"},
-		{"Variance Gain", varianceGainAccountCode, "4902"},
-		{"Variance Loss", varianceLossAccountCode, "5901"},
+		{"Variance Gain", varianceGainAccountCode, "4908"},
+		{"Variance Loss", varianceLossAccountCode, "5908"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

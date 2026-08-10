@@ -136,8 +136,8 @@
 | M-021 | Assets tests | Major | `assets/assets_test.go` (NEW) | ✅ Selesai | 2026-08-10 |
 | M-013 | Tax tests | Major | `tax/tax_test.go` (NEW) | ✅ Selesai | 2026-08-10 |
 | M-019 | Reporting tests | Major | `reporting/reporting_test.go` (NEW) | ✅ Selesai | 2026-08-10 |
-| M-020 | Inventory + costing tests | Major | `inventory/`, `costing/` | ⬜ Deferred (requires DB) | — |
-| M-015 | Period tests | Major | `period/` | ⬜ Deferred (requires DB) | — |
+| M-020 | Inventory + costing tests | Major | `inventory/`, `costing/` | ✅ Selesai | `costing_test.go` + `costing_pure_test.go` + `inventory_test.go` — pure unit tests (no DB): FIFO layers, moving average, negative stock, real PostGRN/ResolveCOGS/ReverseCOGS validation guards with nil tx, M-020 audit scenarios |
+| M-015 | Period tests | Major | `period/period_test.go` (extended) | ✅ Selesai | 2026-08-10 |
 | M-008 | Purchase tests | Major | `purchase/` | ⬜ Deferred (requires DB) | — |
 | M-002 | Golden test §33 matrix | Major | `accounting/engine_test.go` | ⬜ Pending | — |
 
@@ -182,7 +182,7 @@
 - Conservation of money across frameworks
 - Report title dispatch
 
-**M-020 Costing Tests (`costing/costing_test.go`):**
+**M-020 Costing Tests (`costing/costing_test.go` + `costing_pure_test.go`):**
 - `validMethod` — all 3 methods + invalid
 - Error sentinels (ErrInsufficientStock, ErrUnknownCostingMethod)
 - `numericToFloat` — valid/invalid/zero
@@ -191,6 +191,7 @@
 - Moving average formula: `(old_qty*old_avg + new_qty*new_cost) / total`
 - FIFO layer consumption math (oldest first, partial)
 - Negative stock rejection
+- `costing_pure_test.go`: REAL PostGRN/ResolveCOGS/ReverseCOGS validation guards with nil pgx.Tx (all guarded paths return before DB access); audit scenarios (10@100 + 10@200, issue 15 → COGS 2000, remaining 5@200; avg 150; issue 5 → COGS 750) table-driven
 
 **M-020b Inventory Tests (`inventory/inventory_test.go`):**
 - Stock opname variance: `counted - system`
@@ -214,6 +215,9 @@
 - Account code constants (3201, 3301)
 - Net profit calculation
 - Break-even scenario
+- `writeJSON`/`writeError` response shape (status, Content-Type, JSON body)
+- `Close`/`Unlock` tenant-validation guards → 401 `TENANT_REQUIRED` (no DB)
+- Unlock reversal construction: debit/credit swap, `rev-` SourceLineRef prefix, balance check, net-zero effect of closing + reversal (59 test functions, stdlib only)
 
 **M-010d Reconciliation Tests (`reconciliation/reconciliation_test.go`):**
 - Bank statement matching logic
@@ -644,7 +648,9 @@ POST /petty-cash/funds/{id}/replenish   — Replenish fund
 
 ---
 
-## FINAL STATUS
+## FINAL STATUS (update: 2026-08-10 14:03)
+
+### Per Sprint
 
 | Sprint | Deliverable | Status |
 |---|---|---|
@@ -654,32 +660,107 @@ POST /petty-cash/funds/{id}/replenish   — Replenish fund
 | Sprint 4 | 11 test suites (~250 tests) | ✅ |
 | Sprint 5 | 5 missing ERP modules | ✅ |
 | Sprint 6 | Report templates + Dashboard widgets | ✅ |
-| Sprint 7 | 4 more ERP modules | ✅ |
+| Sprint 7 | 4 more ERP modules (warehouse, approval, forecast, PPh) | ✅ |
 | Sprint 8 | Hardening + 4 more issues fixed | ✅ |
-| Sprint 9 | 3 more ERP modules + field expansion (59 columns) | ✅ |
+| Sprint 9 | 3 more ERP modules (cheque, cost center, email) + 59 columns | ✅ |
+| Bugfix session | Login/onboarding, multi-tenant, COA seeding | ✅ |
 
-**TOTAL: 20 correctness issues fixed + ~400 tests + 12 new ERP modules + 59 new DB columns + reporting & dashboard + hardening middleware**
+### Status Lengkap 128 Findings audit-report.md
 
-### Remaining Backlog (Future Sprints)
+| Bagian | Total | ✅ Selesai | 🟡 Partial | ❌ Belum |
+|---|---|---|---|---|
+| C-001 s/d C-004 (Critical) | 4 | 4 | 0 | 0 |
+| M-001 s/d M-028 (Major) | 28 | 20 | 0 | 8 |
+| m-001 s/d m-022 (Minor) | 22 | 9 | 4 | 9 |
+| i-001 s/d i-016 (Info) | 16 | 4 | 2 | 10 |
+| E-01 s/d E-23 (ERP fields) | 23 | 2 | 21 | 0 |
+| F-01 s/d F-15 (Missing modules) | 15 | 11 | 3 | 1 |
+| D-01 s/d D-02 (Dashboard) | 2 | 1 | 1 | 0 |
+| R-01 s/d R-08 (Reporting plan) | 8 | 1 | 0 | 7 |
+| N-01 s/d N-10 (NextReport) | 10 | 3 | 0 | 7 |
 
-| # | Task | Priority | Sprint |
-|---|---|---|---|
-| F-02 | Multi-Branch/Warehouse master | Tinggi | 7 |
-| F-03 | Approval Workflow Engine | Tinggi | 7 |
-| F-06 | Cash Flow Forecasting | Sedang | 7 |
-| F-09 | Cost/Profit Center accounting | Sedang | 7 |
-| F-10 | Inter-Company Consolidation (full) | Sedang | 7 |
-| F-11 | Budget vs Actual + Variance report | Sedang | 7 |
-| F-12 | PPh 21/22/23/26 | Tinggi | 7 |
-| F-13 | Asset Register & Maintenance report | Sedang | 7 |
-| F-14 | Giro & Cheque Management | Sedang | 7 |
-| F-15 | Email Notification & Document Sending | Sedang | 7 |
-| M-002..M-009 | Remaining Major correctness issues | Sedang | 8 |
-| M-012..M-015 | Remaining Major: RLS read-path, production tests, purchase tests, period tests | Sedang | 8 |
-| N-07..N-10 | NextReport Docker setup + 19 YAML templates + visual designer embed | Tinggi | 9 |
-| D-03..D-17 | 10 remaining widget types + react-grid-layout frontend | Tinggi | 9 |
-| i-008..i-016 | Hardening: recover, logging, CORS, timeout, rate-limit | Sedang | 10 |
-| E-01..E-23 | ERP completeness: customer/supplier/item field expansion | Sedang | 10+ |
+### ❌ BACKLOG — Belum Dikerjakan
+
+**8 Major tersisa:**
+
+| # | Task | Catatan |
+|---|---|---|
+| M-003 | Hapus double hash calc di `finalize` | Refactor kecil, engine.go |
+| M-006 | DP validasi akumulasi vs SO total | Tambah query SUM + reject DP_EXCEEDS_SO_TOTAL |
+| M-007 | AR sub-ledger (customer_balances) | New table + update di invoice/payment |
+| M-008 | Purchase tests (GRN, PO, suppliers) | 4 test files baru |
+| M-009 | SI harus debit 2105 → credit 2101 | Verifikasi + fix supplier_invoices.go |
+| M-012 | Overhead variance period-end | Tergantung M-010 (sudah fix) |
+| M-015 | Period module tests | handler_test.go baru |
+| M-020 | Inventory/costing tests FIFO/average | costing_test.go baru |
+
+**9 Minor belum:**
+
+| # | Task |
+|---|---|
+| m-001 | (sudah fix via C-003) — verifikasi ulang |
+| m-002 | Sort stability hash (SourceLineRef tiebreaker) |
+| m-003 | Document Description tidak di-hash (by design, dokumentasikan) |
+| m-004 | Hapus `var _ = context.Background` guards |
+| m-005 | Bearer prefix case-sensitivity |
+| m-006 | 2FA belum ada |
+| m-007 | AR aging per customer (partial — aging ada, sub-ledger belum) |
+| m-008 | Credit note validasi total vs receivable |
+| m-010..m-022 | Sisa minor lainnya (lihat audit-report.md) |
+
+**10 Info belum:**
+
+| # | Task |
+|---|---|
+| i-001..i-002 | (sebagian fix via C-003) |
+| i-003 | Password policy (uppercase, number, special) |
+| i-004 | COA import/export CSV |
+| i-005 | Quotation conversion rate tracking |
+| i-006 | Inter-company elimination LOAN/INTEREST/DIVIDEND |
+| i-007 | Consolidation sign errors review |
+| i-012 | Customer/item duplicate check |
+| i-013 | ECL aging query verifikasi |
+| i-014 | PPh Final UMKM rate verifikasi |
+| i-015..i-016 | Dimension JOIN verifikasi, BOM zero cost |
+
+**21 ERP field gaps (E-01 s/d E-23):**
+- DB kolom sudah ditambahkan di migration 000033 (59 kolom baru)
+- **API request structs BELUM expose** field baru
+- Perlu update: CreateSalesOrderRequest (+customer_po_number, +salesperson_id, +shipping_address), CreateInvoiceRequest (+tax_invoice_number, +sub_total, +tax_total), CreateCustomerRequest (+billing_address, +shipping_address, +is_pkp, +credit_hold), CreateItemRequest (+barcode, +category, +reorder_point), dll
+
+**1 Missing module belum:**
+
+| # | Task | Catatan |
+|---|---|---|
+| F-13 | Asset Register & Maintenance report | Endpoint baru + report |
+
+**7 NextReport (N-01..N-10) belum:**
+
+| # | Task | Status |
+|---|---|---|
+| N-01 | Migration report_templates + dashboard tables | ✅ Done |
+| N-02 | Template CRUD handler | ✅ Done |
+| N-03 | Render proxy endpoint | ✅ Done (tapi NextReport service belum deploy) |
+| N-04 | Dashboard widget CRUD | ✅ Done |
+| N-05 | 19 YAML document templates | ❌ Belum |
+| N-06 | NextReport Docker deploy | ❌ Belum |
+| N-07 | Frontend ReportDesigner (embed ui-designer) | ❌ Belum |
+| N-08 | Frontend ReportViewer | ❌ Belum |
+| N-09 | Fallback plan | N/A (documentation only) |
+| N-10 | Health check + monitoring | ❌ Belum |
+
+### Deployment Status
+
+| Komponen | Status |
+|---|---|
+| `https://accounting.tikuma.net/` | ✅ Live via Cloudflare |
+| PostgreSQL 16 | ✅ Running, 35 migrations, 96+ tables |
+| Go API (finance-api) | ✅ Running |
+| Frontend React (finance-web) | ✅ Running |
+| Caddy reverse proxy | ✅ Running |
+| Login + onboarding | ✅ Fixed |
+| Multi-tenant switcher | ✅ Fixed |
+| RBAC + JWT + rate limit | ✅ Fixed |
 
 ---
 

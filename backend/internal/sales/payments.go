@@ -209,6 +209,18 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 			return err
 		}
 
+		// M-007: update the AR sub-ledger (customer_balances).
+		if arApplied > 0 {
+			if _, err := tx.Exec(request.Context(), `
+				INSERT INTO customer_balances (tenant_id, customer_id, ar_cents, updated_at)
+				VALUES ($1, $2, $3, now())
+				ON CONFLICT (tenant_id, customer_id)
+				DO UPDATE SET ar_cents = GREATEST(customer_balances.ar_cents - EXCLUDED.ar_cents, 0), updated_at = now()
+			`, tenant, customerID, arApplied); err != nil {
+				return err
+			}
+		}
+
 		// Insert payment record.
 		pmtNumber, err := nextPMTNumber(request.Context(), tx, tenant)
 		if err != nil {

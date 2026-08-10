@@ -349,6 +349,17 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 		if err != nil {
 			return err
 		}
+		// M-007: update the AR sub-ledger (customer_balances).
+		if receivable != 0 {
+			if _, err := tx.Exec(request.Context(), `
+				INSERT INTO customer_balances (tenant_id, customer_id, ar_cents, updated_at)
+				VALUES ($1, $2, $3, now())
+				ON CONFLICT (tenant_id, customer_id)
+				DO UPDATE SET ar_cents = customer_balances.ar_cents + EXCLUDED.ar_cents, updated_at = now()
+			`, tenant, req.CustomerID, receivable); err != nil {
+				return err
+			}
+		}
 		for position, p := range lines {
 			var qty pgtype.Numeric
 			_ = qty.Scan(p.Line.Qty)

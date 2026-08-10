@@ -600,8 +600,8 @@ func (service *Service) AddProductionJobCost(writer http.ResponseWriter, request
 // CompleteProductionJob handles POST /production-jobs/{id}/complete (US-072).
 //
 // Dr 1304 Finished Goods / Cr 1303 WIP (accumulated cost)
-// If variance > 0 (over-absorbed): Dr 5901 Variance Loss / Cr 1303 WIP
-// If variance < 0 (under-absorbed): Dr 1303 WIP / Cr 4902 Variance Gain
+// If variance > 0 (over-absorbed): Dr 5908 Variance Loss / Cr 1303 WIP
+// If variance < 0 (under-absorbed): Dr 1303 WIP / Cr 4908 Variance Gain
 //
 // Intent type: PRODUCTION_COMPLETE. Status → COMPLETED.
 // Records inventory_movement (PRODUCTION_IN for finished goods).
@@ -695,11 +695,11 @@ func (service *Service) CompleteProductionJob(writer http.ResponseWriter, reques
 			{AccountID: job.WIPAccountID, CreditCents: totalCost, SourceLineRef: "wip-1"},
 		}
 
-		// Book variance if non-zero.
+		// Book variance if non-zero (M-012: accounts are 5908 / 4908).
 		varianceLossAcctID := int64(0)
 		varianceGainAcctID := int64(0)
 		if variance > 0 {
-			// Over-absorbed: loss. Dr 5901 / Cr 1303.
+			// Over-absorbed: loss. Dr 5908 / Cr 1303.
 			varianceLossAcctID, err = resolveAccountByCode(request.Context(), tx, tenant, varianceLossAccountCode)
 			if err != nil {
 				return err
@@ -709,7 +709,7 @@ func (service *Service) CompleteProductionJob(writer http.ResponseWriter, reques
 				accounting.Line{AccountID: job.WIPAccountID, CreditCents: variance, SourceLineRef: "wip-2"},
 			)
 		} else if variance < 0 {
-			// Under-absorbed: gain. Dr 1303 / Cr 4902.
+			// Under-absorbed: gain. Dr 1303 / Cr 4908.
 			varianceGainAcctID, err = resolveAccountByCode(request.Context(), tx, tenant, varianceGainAccountCode)
 			if err != nil {
 				return err

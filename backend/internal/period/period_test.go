@@ -1,6 +1,9 @@
 package period
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"finance-accounting-app/backend/internal/accounting"
@@ -74,10 +77,10 @@ func TestPeriodStatusValuesAreDistinct(t *testing.T) {
 
 func TestNetProfit_Calculation(t *testing.T) {
 	tests := []struct {
-		name     string
-		revenue  int64
-		expense  int64
-		wantNet  int64
+		name    string
+		revenue int64
+		expense int64
+		wantNet int64
 	}{
 		{"profit", 10_000_00, 6_000_00, 4_000_00},
 		{"loss", 5_000_00, 8_000_00, -3_000_00},
@@ -276,9 +279,9 @@ func TestBuildClosingLines_Empty(t *testing.T) {
 
 func TestBuildClosingLines_SkipsZeroAmounts(t *testing.T) {
 	balances := []plBalance{
-		{accountID: 100, amount: 0},        // zero — skipped
-		{accountID: 200, amount: 5_000_00}, // revenue
-		{accountID: 300, amount: 0},        // zero — skipped
+		{accountID: 100, amount: 0},         // zero — skipped
+		{accountID: 200, amount: 5_000_00},  // revenue
+		{accountID: 300, amount: 0},         // zero — skipped
 		{accountID: 400, amount: -2_000_00}, // expense
 	}
 	lines := buildClosingLines(balances, 3201, 3301)
@@ -335,10 +338,10 @@ func TestBuildClosingLines_ExpenseOnly(t *testing.T) {
 
 func TestBuildClosingLines_MultipleAccounts(t *testing.T) {
 	balances := []plBalance{
-		{accountID: 101, amount: 15_000_00},  // revenue
-		{accountID: 102, amount: 5_000_00},   // revenue
-		{accountID: 201, amount: -8_000_00},  // expense
-		{accountID: 202, amount: -4_000_00},  // expense
+		{accountID: 101, amount: 15_000_00}, // revenue
+		{accountID: 102, amount: 5_000_00},  // revenue
+		{accountID: 201, amount: -8_000_00}, // expense
+		{accountID: 202, amount: -4_000_00}, // expense
 	}
 	lines := buildClosingLines(balances, 3201, 3301)
 
@@ -527,8 +530,8 @@ func TestBuildClosingLines_LossSourceLineRefs(t *testing.T) {
 		"to-running",
 		"from-running",
 		"exp-200",
-		"from-retained",  // loss: debit retained
-		"close-running",  // loss: credit running
+		"from-retained", // loss: debit retained
+		"close-running", // loss: credit running
 	}
 	for _, ref := range expectedRefs {
 		if !refs[ref] {
@@ -879,8 +882,8 @@ func TestJournalNumberFormat_LargeSeq(t *testing.T) {
 
 func TestFullClosingEntry_ProfitScenario(t *testing.T) {
 	balances := []plBalance{
-		{accountID: 101, amount: 50_000_00}, // sales revenue
-		{accountID: 102, amount: 10_000_00}, // other income
+		{accountID: 101, amount: 50_000_00},  // sales revenue
+		{accountID: 102, amount: 10_000_00},  // other income
 		{accountID: 201, amount: -20_000_00}, // COGS
 		{accountID: 202, amount: -5_000_00},  // operating expenses
 	}
@@ -950,5 +953,209 @@ func TestFullClosingEntry_BreakEvenScenario(t *testing.T) {
 		if line.AccountID == 3201 {
 			t.Fatalf("break-even should not produce retained earnings lines: %+v", line)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// HTTP helpers: writeJSON / writeError
+// ---------------------------------------------------------------------------
+
+func TestWriteJSON_StatusAndContentType(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+	}{
+		{"ok", http.StatusOK},
+		{"bad request", http.StatusBadRequest},
+		{"unauthorized", http.StatusUnauthorized},
+		{"internal error", http.StatusInternalServerError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			writeJSON(recorder, tt.status, map[string]string{"a": "b"})
+			if recorder.Code != tt.status {
+				t.Fatalf("status = %d, want %d", recorder.Code, tt.status)
+			}
+			if got := recorder.Header().Get("Content-Type"); got != "application/json" {
+				t.Fatalf("Content-Type = %s, want application/json", got)
+			}
+		})
+	}
+}
+
+func TestWriteJSON_BodyIsEncodedPayload(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	writeJSON(recorder, http.StatusOK, map[string]any{"period_id": int64(7), "status": "CLOSED"})
+
+	var decoded map[string]any
+	if err := json.NewDecoder(recorder.Body).Decode(&decoded); err != nil {
+		t.Fatalf("body is not valid JSON: %v", err)
+	}
+	if decoded["status"] != "CLOSED" {
+		t.Fatalf("status = %v, want CLOSED", decoded["status"])
+	}
+	if decoded["period_id"] != float64(7) {
+		t.Fatalf("period_id = %v, want 7", decoded["period_id"])
+	}
+}
+
+func TestWriteError_ResponseShape(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		code    string
+		message string
+	}{
+		{"tenant required", http.StatusUnauthorized, "TENANT_REQUIRED", "tenant context is required"},
+		{"close failed", http.StatusBadRequest, "CLOSE_FAILED", "period already closed"},
+		{"unlock failed", http.StatusBadRequest, "UNLOCK_FAILED", "no closed period"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			writeError(recorder, tt.status, tt.code, tt.message)
+
+			if recorder.Code != tt.status {
+				t.Fatalf("status = %d, want %d", recorder.Code, tt.status)
+			}
+			var decoded errorResponse
+			if err := json.NewDecoder(recorder.Body).Decode(&decoded); err != nil {
+				t.Fatalf("body is not valid JSON: %v", err)
+			}
+			if decoded.Code != tt.code {
+				t.Fatalf("code = %s, want %s", decoded.Code, tt.code)
+			}
+			if decoded.Message != tt.message {
+				t.Fatalf("message = %s, want %s", decoded.Message, tt.message)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Handler tenant-validation guards (no database: the guard returns before
+// any pool access, so a Service built with a nil pool is safe).
+// ---------------------------------------------------------------------------
+
+func TestCloseHandler_RejectsWithoutTenant(t *testing.T) {
+	service := NewHandler(nil)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/periods/close", nil)
+
+	service.Close(recorder, request)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+	var decoded errorResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&decoded); err != nil {
+		t.Fatalf("body is not valid JSON: %v", err)
+	}
+	if decoded.Code != "TENANT_REQUIRED" {
+		t.Fatalf("code = %s, want TENANT_REQUIRED", decoded.Code)
+	}
+}
+
+func TestUnlockHandler_RejectsWithoutTenant(t *testing.T) {
+	service := NewHandler(nil)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/periods/unlock", nil)
+
+	service.Unlock(recorder, request)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+	var decoded errorResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&decoded); err != nil {
+		t.Fatalf("body is not valid JSON: %v", err)
+	}
+	if decoded.Code != "TENANT_REQUIRED" {
+		t.Fatalf("code = %s, want TENANT_REQUIRED", decoded.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Unlock reversal construction: the reversal of the closing journal swaps
+// debits and credits, prefixes SourceLineRef with "rev-", and must balance.
+// (Replicates the inline logic in unlockPeriod, handler.go:85-96.)
+// ---------------------------------------------------------------------------
+
+func reverseLines(lines []accounting.Line) []accounting.Line {
+	var reversed []accounting.Line
+	for _, line := range lines {
+		reversed = append(reversed, accounting.Line{
+			AccountID:     line.AccountID,
+			DebitCents:    line.CreditCents,
+			CreditCents:   line.DebitCents,
+			SourceLineRef: "rev-" + line.SourceLineRef,
+		})
+	}
+	return reversed
+}
+
+func TestUnlockReversal_SwapsDebitsAndCredits(t *testing.T) {
+	closing := []accounting.Line{
+		{AccountID: 101, DebitCents: 10_000_00, SourceLineRef: "rev-101"},
+		{AccountID: 3301, CreditCents: 10_000_00, SourceLineRef: "to-running"},
+	}
+
+	reversed := reverseLines(closing)
+
+	if reversed[0].DebitCents != 0 || reversed[0].CreditCents != 10_000_00 {
+		t.Fatalf("reversed[0] = %+v, want credit 1000000", reversed[0])
+	}
+	if reversed[1].DebitCents != 10_000_00 || reversed[1].CreditCents != 0 {
+		t.Fatalf("reversed[1] = %+v, want debit 1000000", reversed[1])
+	}
+}
+
+func TestUnlockReversal_PrefixesSourceLineRef(t *testing.T) {
+	closing := []accounting.Line{
+		{AccountID: 101, DebitCents: 1_00, SourceLineRef: "rev-101"},
+		{AccountID: 3301, CreditCents: 1_00, SourceLineRef: "to-running"},
+	}
+
+	reversed := reverseLines(closing)
+
+	if reversed[0].SourceLineRef != "rev-rev-101" {
+		t.Fatalf("reversed[0] ref = %s, want rev-rev-101", reversed[0].SourceLineRef)
+	}
+	if reversed[1].SourceLineRef != "rev-to-running" {
+		t.Fatalf("reversed[1] ref = %s, want rev-to-running", reversed[1].SourceLineRef)
+	}
+}
+
+func TestUnlockReversal_BalanceCheckPasses(t *testing.T) {
+	closing := buildClosingLines([]plBalance{
+		{accountID: 4001, amount: 50_000_00},  // revenue
+		{accountID: 6001, amount: -30_000_00}, // expense
+	}, 3201, 3301)
+
+	if err := accounting.BalanceCheck(closing); err != nil {
+		t.Fatalf("closing entry not balanced: %v", err)
+	}
+	if err := accounting.BalanceCheck(reverseLines(closing)); err != nil {
+		t.Fatalf("reversal not balanced: %v", err)
+	}
+}
+
+func TestUnlockReversal_NetEffectIsZero(t *testing.T) {
+	closing := buildClosingLines([]plBalance{
+		{accountID: 4001, amount: 25_000_00},
+		{accountID: 6001, amount: -15_000_00},
+	}, 3201, 3301)
+	reversed := reverseLines(closing)
+
+	combined := append(append([]accounting.Line{}, closing...), reversed...)
+
+	var debitTotal, creditTotal int64
+	for _, line := range combined {
+		debitTotal += line.DebitCents
+		creditTotal += line.CreditCents
+	}
+	if debitTotal != creditTotal {
+		t.Fatalf("closing + reversal: debits %d != credits %d", debitTotal, creditTotal)
 	}
 }

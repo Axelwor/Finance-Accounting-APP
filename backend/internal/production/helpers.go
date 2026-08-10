@@ -32,8 +32,9 @@ const (
 	wipAccountCode           = "1303" // Work in Progress
 	finishedGoodsAccountCode = "1304" // Finished Goods
 	inventoryAccountCode     = "1301" // Inventory (raw materials)
-	varianceGainAccountCode  = "4902" // Production Variance Gain
-	varianceLossAccountCode  = "5901" // Production Variance Loss
+	appliedOverheadCode      = "4902" // Applied Overhead (M-010)
+	varianceGainAccountCode  = "4908" // Production Variance Gain (M-012)
+	varianceLossAccountCode  = "5908" // Production Variance Loss (M-012)
 )
 
 // NewHandler builds the production Service backed by the given pool.
@@ -54,6 +55,9 @@ func (service *Service) Routes(router chi.Router) {
 	router.Get("/production-jobs/{id}", service.GetProductionJob)
 	router.Post("/production-jobs/{id}/costs", service.AddProductionJobCost)
 	router.Post("/production-jobs/{id}/complete", service.CompleteProductionJob)
+
+	// M-012: Overhead variance recognition at period close.
+	router.Post("/overhead-variance", service.PostOverheadVariance)
 }
 
 // ---------------------------------------------------------------------------
