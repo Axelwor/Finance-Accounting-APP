@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/auth"
-	"finance-accounting-app/backend/internal/db"
 )
 
 // ManualLineRequest is one line of a manual journal entry request.

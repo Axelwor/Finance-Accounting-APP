@@ -14,7 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/auth"
-	"finance-accounting-app/backend/internal/db"
 )
 
 // =====================================================================
