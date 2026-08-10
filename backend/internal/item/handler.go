@@ -56,6 +56,22 @@ type ItemRequest struct {
 	RevenueRecognitionMethod *string `json:"revenue_recognition_method"`
 	IsTrackedStock           bool    `json:"is_tracked_stock"`
 	MinStockQty              *string `json:"min_stock_qty"`
+	Barcode                  *string `json:"barcode"`
+	SecondaryUOM             *string `json:"secondary_uom"`
+	UOMConversionFactor      *string `json:"uom_conversion_factor"`
+	Brand                    *string `json:"brand"`
+	Category                 *string `json:"category"`
+	WeightGrams              *string `json:"weight_grams"`
+	VolumeCC                 *string `json:"volume_cc"`
+	DescriptionLong          *string `json:"description_long"`
+	ImageURL                 *string `json:"image_url"`
+	ReorderPoint             *string `json:"reorder_point"`
+	ReorderQty               *string `json:"reorder_qty"`
+	LeadTimeDays             *int32  `json:"lead_time_days"`
+	PreferredSupplierID      *int64  `json:"preferred_supplier_id"`
+	ABCClassification        *string `json:"abc_classification"`
+	SaleUOM                  *string `json:"sale_uom"`
+	PurchaseUOM              *string `json:"purchase_uom"`
 }
 
 type PriceRequest struct {
@@ -82,6 +98,22 @@ type itemRow struct {
 	IsTrackedStock           bool    `json:"is_tracked_stock"`
 	MinStockQty              *string `json:"min_stock_qty"`
 	IsActive                 bool    `json:"is_active"`
+	Barcode                  *string `json:"barcode"`
+	SecondaryUOM             *string `json:"secondary_uom"`
+	UOMConversionFactor      *string `json:"uom_conversion_factor"`
+	Brand                    *string `json:"brand"`
+	Category                 *string `json:"category"`
+	WeightGrams              *string `json:"weight_grams"`
+	VolumeCC                 *string `json:"volume_cc"`
+	DescriptionLong          *string `json:"description_long"`
+	ImageURL                 *string `json:"image_url"`
+	ReorderPoint             *string `json:"reorder_point"`
+	ReorderQty               *string `json:"reorder_qty"`
+	LeadTimeDays             *int32  `json:"lead_time_days"`
+	PreferredSupplierID      *int64  `json:"preferred_supplier_id"`
+	ABCClassification        *string `json:"abc_classification"`
+	SaleUOM                  *string `json:"sale_uom"`
+	PurchaseUOM              *string `json:"purchase_uom"`
 }
 
 type priceRow struct {
@@ -112,7 +144,11 @@ func (service *Service) List(writer http.ResponseWriter, request *http.Request) 
 
 	query := `SELECT id, code, name, item_type, uom, costing_method, sale_account_id,
 		cogs_account_id, inventory_account_id, revenue_recognition_method,
-		is_tracked_stock, min_stock_qty::text, is_active
+		is_tracked_stock, min_stock_qty::text, is_active,
+		barcode, secondary_uom, uom_conversion_factor::text, brand, category,
+		weight_grams::text, volume_cc::text, description_long, image_url,
+		reorder_point::text, reorder_qty::text, lead_time_days, preferred_supplier_id,
+		abc_classification, sale_uom, purchase_uom
 		FROM items WHERE tenant_id = $1`
 	args := []any{tenant}
 	if itemType != "" {
@@ -136,7 +172,11 @@ func (service *Service) List(writer http.ResponseWriter, request *http.Request) 
 		var it itemRow
 		if err := rows.Scan(&it.ID, &it.Code, &it.Name, &it.ItemType, &it.UOM,
 			&it.CostingMethod, &it.SaleAccountID, &it.CogsAccountID, &it.InventoryAccountID,
-			&it.RevenueRecognitionMethod, &it.IsTrackedStock, &it.MinStockQty, &it.IsActive); err != nil {
+			&it.RevenueRecognitionMethod, &it.IsTrackedStock, &it.MinStockQty, &it.IsActive,
+			&it.Barcode, &it.SecondaryUOM, &it.UOMConversionFactor, &it.Brand, &it.Category,
+			&it.WeightGrams, &it.VolumeCC, &it.DescriptionLong, &it.ImageURL,
+			&it.ReorderPoint, &it.ReorderQty, &it.LeadTimeDays, &it.PreferredSupplierID,
+			&it.ABCClassification, &it.SaleUOM, &it.PurchaseUOM); err != nil {
 			writeError(writer, http.StatusInternalServerError, "ITEM_LIST_FAILED", err.Error())
 			return
 		}
@@ -182,16 +222,29 @@ func (service *Service) Create(writer http.ResponseWriter, request *http.Request
 		INSERT INTO items
 			(tenant_id, code, name, item_type, uom, costing_method, sale_account_id,
 			 cogs_account_id, inventory_account_id, revenue_recognition_method,
-			 is_tracked_stock, min_stock_qty)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+			 is_tracked_stock, min_stock_qty,
+			 barcode, secondary_uom, uom_conversion_factor, brand, category,
+			 weight_grams, volume_cc, description_long, image_url,
+			 reorder_point, reorder_qty, lead_time_days, preferred_supplier_id,
+			 abc_classification, sale_uom, purchase_uom)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
+			$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
 		RETURNING id`,
 		tenant, req.Code, req.Name, req.ItemType, orDefault(req.UOM, "pcs"),
 		req.CostingMethod, req.SaleAccountID, req.CogsAccountID, req.InventoryAccountID,
 		req.RevenueRecognitionMethod, req.IsTrackedStock, req.MinStockQty,
+		req.Barcode, req.SecondaryUOM, req.UOMConversionFactor, req.Brand, req.Category,
+		req.WeightGrams, req.VolumeCC, req.DescriptionLong, req.ImageURL,
+		req.ReorderPoint, req.ReorderQty, req.LeadTimeDays, req.PreferredSupplierID,
+		req.ABCClassification, req.SaleUOM, req.PurchaseUOM,
 	).Scan(&id)
 	if err != nil {
 		if isUniqueViolation(err) {
 			writeError(writer, http.StatusConflict, "ITEM_CODE_EXISTS", "an item with this code already exists")
+			return
+		}
+		if isCheckViolation(err) {
+			writeError(writer, http.StatusBadRequest, "ITEM_INVALID_FIELD", "invalid field value (check abc_classification)")
 			return
 		}
 		writeError(writer, http.StatusInternalServerError, "ITEM_CREATE_FAILED", err.Error())
@@ -382,6 +435,13 @@ func validateCreate(req *ItemRequest) string {
 	default:
 		return "item_type must be 'goods' or 'service'"
 	}
+	if req.ABCClassification != nil {
+		switch *req.ABCClassification {
+		case "A", "B", "C":
+		default:
+			return "abc_classification must be A, B, or C"
+		}
+	}
 	return ""
 }
 
@@ -461,6 +521,12 @@ func isUniqueViolation(err error) bool {
 	const pgErrCodeUniqueViolation = "23505"
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == pgErrCodeUniqueViolation
+}
+
+func isCheckViolation(err error) bool {
+	const pgErrCodeCheckViolation = "23514"
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == pgErrCodeCheckViolation
 }
 
 // withTenant sets the RLS tenant context on the transaction so FORCE RLS
