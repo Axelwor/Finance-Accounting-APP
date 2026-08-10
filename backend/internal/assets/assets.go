@@ -79,6 +79,8 @@ func (service *Service) Routes(router chi.Router) {
 	router.Get("/fixed-assets", service.ListAssets)
 	router.Get("/fixed-assets/{id}", service.GetAsset)
 
+	router.Get("/assets/register", service.AssetRegister)
+
 	router.Post("/fixed-assets/{id}/depreciate", service.DepreciateAsset)
 	router.Post("/fixed-assets/{id}/revalue", service.RevalueAsset)
 	router.Post("/fixed-assets/{id}/dispose", service.DisposeAsset)
