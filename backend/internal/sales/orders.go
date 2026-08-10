@@ -34,12 +34,18 @@ type SalesOrderLineRequest struct {
 
 // CreateSalesOrderRequest is the POST /sales-orders body.
 type CreateSalesOrderRequest struct {
-	CustomerID    int64                   `json:"customer_id"`
-	QuotationID   int64                   `json:"quotation_id"`
-	OrderDate     string                  `json:"order_date"`
-	PaymentTermID int64                   `json:"payment_term_id"`
-	Notes         string                  `json:"notes"`
-	Lines         []SalesOrderLineRequest `json:"lines"`
+	CustomerID            int64                   `json:"customer_id"`
+	QuotationID           int64                   `json:"quotation_id"`
+	OrderDate             string                  `json:"order_date"`
+	PaymentTermID         int64                   `json:"payment_term_id"`
+	Notes                 string                  `json:"notes"`
+	Lines                 []SalesOrderLineRequest `json:"lines"`
+	CustomerPONumber      string                  `json:"customer_po_number"`
+	CustomerPODate        string                  `json:"customer_po_date"`
+	RequestedDeliveryDate string                  `json:"requested_delivery_date"`
+	SalespersonID         int64                   `json:"salesperson_id"`
+	ShipToAddress         string                  `json:"ship_to_address"`
+	ShippingTerms         string                  `json:"shipping_terms"`
 }
 
 type orderLineResponse struct {
@@ -57,19 +63,25 @@ type orderLineResponse struct {
 }
 
 type orderResponse struct {
-	ID              int64               `json:"id"`
-	Number          string              `json:"number"`
-	QuotationID     int64               `json:"quotation_id,omitempty"`
-	CustomerID      int64               `json:"customer_id"`
-	CustomerName    string              `json:"customer_name"`
-	OrderDate       string              `json:"order_date"`
-	PaymentTermID   int64               `json:"payment_term_id"`
-	Notes           string              `json:"notes"`
-	Status          string              `json:"status"`
-	TotalCents      int64               `json:"total_cents"`
-	DPReceivedCents int64               `json:"dp_received_cents"`
-	Lines           []orderLineResponse `json:"lines,omitempty"`
-	DownPayments    []dpResponse        `json:"down_payments,omitempty"`
+	ID                    int64               `json:"id"`
+	Number                string              `json:"number"`
+	QuotationID           int64               `json:"quotation_id,omitempty"`
+	CustomerID            int64               `json:"customer_id"`
+	CustomerName          string              `json:"customer_name"`
+	OrderDate             string              `json:"order_date"`
+	PaymentTermID         int64               `json:"payment_term_id"`
+	Notes                 string              `json:"notes"`
+	Status                string              `json:"status"`
+	TotalCents            int64               `json:"total_cents"`
+	DPReceivedCents       int64               `json:"dp_received_cents"`
+	CustomerPONumber      string              `json:"customer_po_number"`
+	CustomerPODate        string              `json:"customer_po_date,omitempty"`
+	RequestedDeliveryDate string              `json:"requested_delivery_date,omitempty"`
+	SalespersonID         int64               `json:"salesperson_id,omitempty"`
+	ShipToAddress         string              `json:"ship_to_address"`
+	ShippingTerms         string              `json:"shipping_terms"`
+	Lines                 []orderLineResponse `json:"lines,omitempty"`
+	DownPayments          []dpResponse        `json:"down_payments,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -155,16 +167,31 @@ func (service *Service) createOrderInTx(ctx context.Context, tx pgx.Tx, tenant i
 		quotationID = pgtype.Int8{Int64: req.QuotationID, Valid: true}
 	}
 
+	customerPODate, err := optionalDate(req.CustomerPODate)
+	if err != nil {
+		return nil, fmt.Errorf("customer_po_date must be a valid YYYY-MM-DD date")
+	}
+	requestedDeliveryDate, err := optionalDate(req.RequestedDeliveryDate)
+	if err != nil {
+		return nil, fmt.Errorf("requested_delivery_date must be a valid YYYY-MM-DD date")
+	}
+
 	var orderID int64
 	err = tx.QueryRow(ctx, `
 		INSERT INTO sales_orders
 			(tenant_id, number, quotation_id, customer_id, order_date,
-			 payment_term_id, notes, status, total_cents, dp_received_cents, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, 'CONFIRMED', $8, 0, $9)
+			 payment_term_id, notes, status, total_cents, dp_received_cents, created_by,
+			 customer_po_number, customer_po_date, requested_delivery_date,
+			 salesperson_id, ship_to_address, shipping_terms)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 'CONFIRMED', $8, 0, $9,
+			$10, $11, $12, $13, $14, $15)
 		RETURNING id
 	`, tenant, number, quotationID, req.CustomerID, orderDate,
 		optionalInt8(req.PaymentTermID), textValueOptional(req.Notes), totalCents,
-		int8Nullable(actingUser)).Scan(&orderID)
+		int8Nullable(actingUser),
+		textValueOptional(req.CustomerPONumber), customerPODate, requestedDeliveryDate,
+		optionalInt8(req.SalespersonID), textValueOptional(req.ShipToAddress),
+		textValueOptional(req.ShippingTerms)).Scan(&orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -433,16 +460,25 @@ func (service *Service) fetchOrder(ctx context.Context, tx pgx.Tx, tenant, id in
 	var quotationID pgtype.Int8
 	var notes pgtype.Text
 	var paymentTermID pgtype.Int8
+	var customerPONumber pgtype.Text
+	var customerPODate, requestedDeliveryDate pgtype.Date
+	var salespersonID pgtype.Int8
+	var shipToAddress pgtype.Text
+	var shippingTerms pgtype.Text
 	err := tx.QueryRow(ctx, `
 		SELECT o.id, o.number, o.quotation_id, o.customer_id, c.name AS customer_name,
 		       o.order_date, o.payment_term_id, o.notes, o.status,
-		       o.total_cents, o.dp_received_cents
+		       o.total_cents, o.dp_received_cents,
+		       o.customer_po_number, o.customer_po_date, o.requested_delivery_date,
+		       o.salesperson_id, o.ship_to_address, o.shipping_terms
 		FROM sales_orders o
 		JOIN customers c ON c.tenant_id = o.tenant_id AND c.id = o.customer_id
 		WHERE o.tenant_id = $1 AND o.id = $2
 	`, tenant, id).Scan(&result.ID, &result.Number, &quotationID, &result.CustomerID, &result.CustomerName,
 		&orderDate, &paymentTermID, &notes, &result.Status,
-		&result.TotalCents, &result.DPReceivedCents)
+		&result.TotalCents, &result.DPReceivedCents,
+		&customerPONumber, &customerPODate, &requestedDeliveryDate,
+		&salespersonID, &shipToAddress, &shippingTerms)
 	if err != nil {
 		return nil, err
 	}
@@ -454,6 +490,14 @@ func (service *Service) fetchOrder(ctx context.Context, tx pgx.Tx, tenant, id in
 		result.PaymentTermID = paymentTermID.Int64
 	}
 	result.Notes = textValue(notes)
+	result.CustomerPONumber = textValue(customerPONumber)
+	result.CustomerPODate = dateString(customerPODate)
+	result.RequestedDeliveryDate = dateString(requestedDeliveryDate)
+	if salespersonID.Valid {
+		result.SalespersonID = salespersonID.Int64
+	}
+	result.ShipToAddress = textValue(shipToAddress)
+	result.ShippingTerms = textValue(shippingTerms)
 
 	rows, err := tx.Query(ctx, `
 		SELECT l.id, l.item_id, i.code AS item_code, i.name AS item_name,

@@ -13,35 +13,59 @@ import (
 )
 
 type CreateSupplierRequest struct {
-	Code             string `json:"code"`
-	Name             string `json:"name"`
-	NPWP             string `json:"npwp"`
-	ContactPerson    string `json:"contact_person"`
-	Phone            string `json:"phone"`
-	Email            string `json:"email"`
-	Address          string `json:"address"`
-	City             string `json:"city"`
-	Province         string `json:"province"`
-	PostalCode       string `json:"postal_code"`
-	PaymentTermID    int64  `json:"payment_term_id"`
-	CreditLimitCents int64  `json:"credit_limit_cents"`
+	Code                string `json:"code"`
+	Name                string `json:"name"`
+	NPWP                string `json:"npwp"`
+	ContactPerson       string `json:"contact_person"`
+	Phone               string `json:"phone"`
+	Email               string `json:"email"`
+	Address             string `json:"address"`
+	City                string `json:"city"`
+	Province            string `json:"province"`
+	PostalCode          string `json:"postal_code"`
+	PaymentTermID       int64  `json:"payment_term_id"`
+	CreditLimitCents    int64  `json:"credit_limit_cents"`
+	SupplierType        string `json:"supplier_type"`
+	IsPKP               bool   `json:"is_pkp"`
+	CurrencyCode        string `json:"currency_code"`
+	BankName            string `json:"bank_name"`
+	BankAccountNumber   string `json:"bank_account_number"`
+	BankAccountName     string `json:"bank_account_name"`
+	Website             string `json:"website"`
+	Fax                 string `json:"fax"`
+	ContactPerson2      string `json:"contact_person_2"`
+	Phone2              string `json:"phone_2"`
+	OpeningBalanceCents int64  `json:"opening_balance_cents"`
+	OpeningBalanceDate  string `json:"opening_balance_date"`
 }
 
 type supplierResponse struct {
-	ID               int64  `json:"id"`
-	Code             string `json:"code"`
-	Name             string `json:"name"`
-	NPWP             string `json:"npwp"`
-	ContactPerson    string `json:"contact_person"`
-	Phone            string `json:"phone"`
-	Email            string `json:"email"`
-	Address          string `json:"address"`
-	City             string `json:"city"`
-	Province         string `json:"province"`
-	PostalCode       string `json:"postal_code"`
-	PaymentTermID    int64  `json:"payment_term_id"`
-	CreditLimitCents int64  `json:"credit_limit_cents"`
-	IsActive         bool   `json:"is_active"`
+	ID                  int64  `json:"id"`
+	Code                string `json:"code"`
+	Name                string `json:"name"`
+	NPWP                string `json:"npwp"`
+	ContactPerson       string `json:"contact_person"`
+	Phone               string `json:"phone"`
+	Email               string `json:"email"`
+	Address             string `json:"address"`
+	City                string `json:"city"`
+	Province            string `json:"province"`
+	PostalCode          string `json:"postal_code"`
+	PaymentTermID       int64  `json:"payment_term_id"`
+	CreditLimitCents    int64  `json:"credit_limit_cents"`
+	IsActive            bool   `json:"is_active"`
+	SupplierType        string `json:"supplier_type"`
+	IsPKP               bool   `json:"is_pkp"`
+	CurrencyCode        string `json:"currency_code"`
+	BankName            string `json:"bank_name"`
+	BankAccountNumber   string `json:"bank_account_number"`
+	BankAccountName     string `json:"bank_account_name"`
+	Website             string `json:"website"`
+	Fax                 string `json:"fax"`
+	ContactPerson2      string `json:"contact_person_2"`
+	Phone2              string `json:"phone_2"`
+	OpeningBalanceCents int64  `json:"opening_balance_cents"`
+	OpeningBalanceDate  string `json:"opening_balance_date"`
 }
 
 func (service *Service) CreateSupplier(writer http.ResponseWriter, request *http.Request) {
@@ -57,6 +81,11 @@ func (service *Service) CreateSupplier(writer http.ResponseWriter, request *http
 	}
 	if code, msg := validateSupplierRequest(req); code != "" {
 		writeError(writer, http.StatusBadRequest, code, msg)
+		return
+	}
+	supplierOpeningBalanceDate, err := optionalDate(req.OpeningBalanceDate)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", "opening_balance_date must be a valid YYYY-MM-DD date")
 		return
 	}
 
@@ -91,17 +120,47 @@ func (service *Service) CreateSupplier(writer http.ResponseWriter, request *http
 			postalCode = textValueOptional(req.PostalCode)
 		}
 
+		supplierType, currencyCode := pgtype.Text{}, pgtype.Text{}
+		bankName, bankAccountNumber, bankAccountName := pgtype.Text{}, pgtype.Text{}, pgtype.Text{}
+		website, fax, contactPerson2, phone2 := pgtype.Text{}, pgtype.Text{}, pgtype.Text{}, pgtype.Text{}
+		openingBalanceCents := pgtype.Int8{}
+		openingBalanceDate := pgtype.Date{}
+
 		err := tx.QueryRow(request.Context(), `
-			INSERT INTO suppliers (tenant_id, code, name, npwp, contact_person, phone, email, address, city, province, postal_code, payment_term_id, credit_limit_cents)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-			RETURNING id, code, name, npwp, contact_person, phone, email, address, city, province, postal_code, payment_term_id, credit_limit_cents, is_active
+			INSERT INTO suppliers (tenant_id, code, name, npwp, contact_person, phone, email, address, city, province, postal_code, payment_term_id, credit_limit_cents,
+				supplier_type, is_pkp, currency_code, bank_name, bank_account_number, bank_account_name, website, fax, contact_person_2, phone_2, opening_balance_cents, opening_balance_date)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+			RETURNING id, code, name, npwp, contact_person, phone, email, address, city, province, postal_code, payment_term_id, credit_limit_cents, is_active,
+				supplier_type, is_pkp, currency_code, bank_name, bank_account_number, bank_account_name, website, fax, contact_person_2, phone_2, opening_balance_cents, opening_balance_date
 		`, tenant, strings.TrimSpace(req.Code), strings.TrimSpace(req.Name),
 			npwp, contactPerson, phone, email, address, city, province, postalCode,
 			optionalInt8(req.PaymentTermID), optionalInt8(req.CreditLimitCents),
+			textValueOptional(req.SupplierType), req.IsPKP, textValueOptional(req.CurrencyCode),
+			textValueOptional(req.BankName), textValueOptional(req.BankAccountNumber), textValueOptional(req.BankAccountName),
+			textValueOptional(req.Website), textValueOptional(req.Fax), textValueOptional(req.ContactPerson2), textValueOptional(req.Phone2),
+			req.OpeningBalanceCents, supplierOpeningBalanceDate,
 		).Scan(&result.ID, &result.Code, &result.Name, &result.NPWP, &result.ContactPerson,
 			&result.Phone, &result.Email, &result.Address, &result.City, &result.Province,
-			&result.PostalCode, &result.PaymentTermID, &result.CreditLimitCents, &result.IsActive)
-		return err
+			&result.PostalCode, &result.PaymentTermID, &result.CreditLimitCents, &result.IsActive,
+			&supplierType, &result.IsPKP, &currencyCode, &bankName, &bankAccountNumber, &bankAccountName,
+			&website, &fax, &contactPerson2, &phone2, &openingBalanceCents, &openingBalanceDate)
+		if err != nil {
+			return err
+		}
+		result.SupplierType = textValue(supplierType)
+		result.CurrencyCode = textValue(currencyCode)
+		result.BankName = textValue(bankName)
+		result.BankAccountNumber = textValue(bankAccountNumber)
+		result.BankAccountName = textValue(bankAccountName)
+		result.Website = textValue(website)
+		result.Fax = textValue(fax)
+		result.ContactPerson2 = textValue(contactPerson2)
+		result.Phone2 = textValue(phone2)
+		if openingBalanceCents.Valid {
+			result.OpeningBalanceCents = openingBalanceCents.Int64
+		}
+		result.OpeningBalanceDate = dateString(openingBalanceDate)
+		return nil
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -126,7 +185,8 @@ func (service *Service) ListSuppliers(writer http.ResponseWriter, request *http.
 			return err
 		}
 		rows, err := tx.Query(request.Context(), `
-			SELECT id, code, name, npwp, contact_person, phone, email, address, city, province, postal_code, payment_term_id, credit_limit_cents, is_active
+			SELECT id, code, name, npwp, contact_person, phone, email, address, city, province, postal_code, payment_term_id, credit_limit_cents, is_active,
+				supplier_type, is_pkp, currency_code, bank_name, bank_account_number, bank_account_name, website, fax, contact_person_2, phone_2, opening_balance_cents, opening_balance_date
 			FROM suppliers
 			ORDER BY name
 		`)
@@ -138,9 +198,15 @@ func (service *Service) ListSuppliers(writer http.ResponseWriter, request *http.
 		for rows.Next() {
 			var s supplierResponse
 			var npwp, contactPerson, phone, email, address, city, province, postalCode pgtype.Text
-			var paymentTermID, creditLimit pgtype.Int8
+			var paymentTermID, creditLimit, openingBalanceCents pgtype.Int8
+			var supplierType, currencyCode pgtype.Text
+			var bankName, bankAccountNumber, bankAccountName pgtype.Text
+			var website, fax, contactPerson2, phone2 pgtype.Text
+			var openingBalanceDate pgtype.Date
 			if err := rows.Scan(&s.ID, &s.Code, &s.Name, &npwp, &contactPerson, &phone, &email,
-				&address, &city, &province, &postalCode, &paymentTermID, &creditLimit, &s.IsActive); err != nil {
+				&address, &city, &province, &postalCode, &paymentTermID, &creditLimit, &s.IsActive,
+				&supplierType, &s.IsPKP, &currencyCode, &bankName, &bankAccountNumber, &bankAccountName,
+				&website, &fax, &contactPerson2, &phone2, &openingBalanceCents, &openingBalanceDate); err != nil {
 				return err
 			}
 			s.NPWP = textValue(npwp)
@@ -157,6 +223,19 @@ func (service *Service) ListSuppliers(writer http.ResponseWriter, request *http.
 			if creditLimit.Valid {
 				s.CreditLimitCents = creditLimit.Int64
 			}
+			s.SupplierType = textValue(supplierType)
+			s.CurrencyCode = textValue(currencyCode)
+			s.BankName = textValue(bankName)
+			s.BankAccountNumber = textValue(bankAccountNumber)
+			s.BankAccountName = textValue(bankAccountName)
+			s.Website = textValue(website)
+			s.Fax = textValue(fax)
+			s.ContactPerson2 = textValue(contactPerson2)
+			s.Phone2 = textValue(phone2)
+			if openingBalanceCents.Valid {
+				s.OpeningBalanceCents = openingBalanceCents.Int64
+			}
+			s.OpeningBalanceDate = dateString(openingBalanceDate)
 			results = append(results, s)
 		}
 		return rows.Err()
@@ -185,12 +264,19 @@ func (service *Service) GetSupplier(writer http.ResponseWriter, request *http.Re
 			return err
 		}
 		var npwp, contactPerson, phone, email, address, city, province, postalCode pgtype.Text
-		var paymentTermID, creditLimit pgtype.Int8
+		var paymentTermID, creditLimit, openingBalanceCents pgtype.Int8
+		var supplierType, currencyCode pgtype.Text
+		var bankName, bankAccountNumber, bankAccountName pgtype.Text
+		var website, fax, contactPerson2, phone2 pgtype.Text
+		var openingBalanceDate pgtype.Date
 		err := tx.QueryRow(request.Context(), `
-			SELECT id, code, name, npwp, contact_person, phone, email, address, city, province, postal_code, payment_term_id, credit_limit_cents, is_active
+			SELECT id, code, name, npwp, contact_person, phone, email, address, city, province, postal_code, payment_term_id, credit_limit_cents, is_active,
+				supplier_type, is_pkp, currency_code, bank_name, bank_account_number, bank_account_name, website, fax, contact_person_2, phone_2, opening_balance_cents, opening_balance_date
 			FROM suppliers WHERE tenant_id = $1 AND id = $2
 		`, tenant, id).Scan(&result.ID, &result.Code, &result.Name, &npwp, &contactPerson, &phone, &email,
-			&address, &city, &province, &postalCode, &paymentTermID, &creditLimit, &result.IsActive)
+			&address, &city, &province, &postalCode, &paymentTermID, &creditLimit, &result.IsActive,
+			&supplierType, &result.IsPKP, &currencyCode, &bankName, &bankAccountNumber, &bankAccountName,
+			&website, &fax, &contactPerson2, &phone2, &openingBalanceCents, &openingBalanceDate)
 		if err != nil {
 			return err
 		}
@@ -208,6 +294,19 @@ func (service *Service) GetSupplier(writer http.ResponseWriter, request *http.Re
 		if creditLimit.Valid {
 			result.CreditLimitCents = creditLimit.Int64
 		}
+		result.SupplierType = textValue(supplierType)
+		result.CurrencyCode = textValue(currencyCode)
+		result.BankName = textValue(bankName)
+		result.BankAccountNumber = textValue(bankAccountNumber)
+		result.BankAccountName = textValue(bankAccountName)
+		result.Website = textValue(website)
+		result.Fax = textValue(fax)
+		result.ContactPerson2 = textValue(contactPerson2)
+		result.Phone2 = textValue(phone2)
+		if openingBalanceCents.Valid {
+			result.OpeningBalanceCents = openingBalanceCents.Int64
+		}
+		result.OpeningBalanceDate = dateString(openingBalanceDate)
 		return nil
 	})
 	if err != nil {
