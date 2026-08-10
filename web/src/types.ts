@@ -23,6 +23,7 @@ export type ListSubKind =
   | "purchase-order"
   | "grn"
   | "purchase-supplier"
+  | "customer-list"
   | "purchase-invoice"
   | "supplier-invoice"
   | "purchase-payment"
@@ -71,6 +72,7 @@ export type EntrySubKind =
   | "purchase-order-entry"
   | "grn-entry"
   | "purchase-supplier-entry"
+  | "customer-entry"
   | "purchase-invoice"
   | "supplier-invoice-entry"
   | "purchase-payment"
@@ -413,6 +415,7 @@ export interface Customer {
   website?: string | null;
   fax?: string | null;
   contact_person_2?: string | null;
+  phone?: string | null;
   phone_2?: string | null;
   npwp_name?: string | null;
   opening_balance_cents: number;

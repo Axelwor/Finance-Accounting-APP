@@ -24,6 +24,7 @@ const sales: Module = {
   label: "Sales",
   icon: "sale",
   items: [
+    { id: "sl-customer", label: "Customers", hint: "CUS", openList: "customer-list", openEntry: "customer-entry" },
     { id: "sl-quotation", label: "Quotations", hint: "SQ", openList: "sales-quotation", openEntry: "sales-quotation-entry" },
     { id: "sl-order", label: "Sales Orders", hint: "SO", openList: "sales-order", openEntry: "sales-order-entry" },
     { id: "sl-delivery", label: "Delivery Orders", hint: "DO", openList: "delivery-order", openEntry: "delivery-order-entry" },
@@ -168,6 +169,8 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Goods Received Notes";
     case "purchase-supplier":
       return "Suppliers";
+    case "customer-list":
+      return "Customers";
     case "supplier-invoice":
       return "Supplier Invoices";
     case "purchase-invoice":
@@ -262,6 +265,8 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Goods Received Note";
     case "purchase-supplier-entry":
       return "Supplier";
+    case "customer-entry":
+      return "Customer";
     case "purchase-invoice":
       return "Purchase Invoice";
     case "supplier-invoice-entry":
@@ -320,6 +325,7 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "purchase-order-entry": return "PO-DRAFT";
     case "grn-entry": return "GRN-DRAFT";
     case "purchase-supplier-entry": return "SUP-DRAFT";
+    case "customer-entry": return "CUS-DRAFT";
     case "purchase-invoice": return "PI-DRAFT";
     case "supplier-invoice-entry": return "BIL-DRAFT";
     case "purchase-payment": return "PP-DRAFT";

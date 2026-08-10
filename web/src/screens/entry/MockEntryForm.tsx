@@ -53,6 +53,7 @@ const PARTY_LABEL: Record<EntrySubKind, string> = {
   "budget-entry": "Budget Name",
   "lease-contract-entry": "Lessee Name",
   "lease-payment-schedule": "Lease Number",
+  "customer-entry": "Customer",
 };
 
 const HEADER_TITLE: Record<EntrySubKind, string> = {
@@ -87,6 +88,7 @@ const HEADER_TITLE: Record<EntrySubKind, string> = {
   "budget-entry": "Budget",
   "lease-contract-entry": "Lease Contract",
   "lease-payment-schedule": "Lease Payment Schedule",
+  "customer-entry": "Customer",
 };
 
 const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
@@ -102,6 +104,7 @@ const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
     "purchase-order-entry": { label: "Order lines" },
     "grn-entry": { label: "Received items" },
     "purchase-supplier-entry": { label: "Supplier info" },
+    "customer-entry": { label: "Customer info" },
     "purchase-return-entry": { label: "Return lines" },
     "purchase-invoice": { label: "Inventory / Expense" },
     "supplier-invoice-entry": { label: "Uninvoiced Payables" },

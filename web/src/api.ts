@@ -41,6 +41,7 @@ import type {
   Business,
   Customer,
   CustomerStatement,
+  CreateCustomerInput,
   Item,
   Quotation,
   QuotationCreateInput,
@@ -1580,6 +1581,14 @@ export const api = {
 
   async createSupplier(input: CreateSupplierInput): Promise<Supplier> {
     return http<Supplier>("/suppliers", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  async createCustomer(input: CreateCustomerInput): Promise<Customer> {
+    return http<Customer>("/customers", {
       method: "POST",
       auth: true,
       body: JSON.stringify(input),

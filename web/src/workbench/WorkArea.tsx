@@ -24,6 +24,7 @@ import { CreditNoteList } from "../screens/list/CreditNoteList";
 import { PurchaseOrderList } from "../screens/list/PurchaseOrderList";
 import { GRNList } from "../screens/list/GRNList";
 import { PurchaseSupplierList } from "../screens/list/PurchaseSupplierList";
+import { CustomerList } from "../screens/list/CustomerList";
 import { PurchaseReturnList } from "../screens/list/PurchaseReturnList";
 import {
   PurchaseInvoiceList,
@@ -55,6 +56,7 @@ import { CreditNoteForm } from "../screens/entry/CreditNoteForm";
 import { PurchaseOrderForm } from "../screens/entry/PurchaseOrderForm";
 import { GRNForm } from "../screens/entry/GRNForm";
 import { PurchaseSupplierForm } from "../screens/entry/PurchaseSupplierForm";
+import { CustomerForm } from "../screens/entry/CustomerForm";
 import { SupplierInvoiceForm } from "../screens/entry/SupplierInvoiceForm";
 import { PurchaseReturnForm } from "../screens/entry/PurchaseReturnForm";
 import { StockOpnameForm } from "../screens/entry/StockOpnameForm";
@@ -218,6 +220,8 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <GRNList />;
     case "purchase-supplier":
       return <PurchaseSupplierList />;
+    case "customer-list":
+      return <CustomerList />;
     case "supplier-invoice":
       return <SupplierInvoiceList />;
     case "purchase-return":
@@ -334,6 +338,8 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
       return <PurchaseReturnForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "purchase-supplier-entry":
       return <PurchaseSupplierForm />;
+    case "customer-entry":
+      return <CustomerForm />;
     case "stock-opname-entry":
       return <StockOpnameForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "stock-transfer-entry":
