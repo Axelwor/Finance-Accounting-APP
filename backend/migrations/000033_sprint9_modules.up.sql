@@ -122,7 +122,7 @@ CREATE TABLE IF NOT EXISTS email_templates (
     )),
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(tenant_id, code)
 );
 
