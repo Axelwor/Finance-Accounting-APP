@@ -3,7 +3,9 @@ package tenant
 import (
 	"errors"
 	"net/http"
+	"os"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -225,4 +227,42 @@ func (service *Service) GetMyTenant(writer http.ResponseWriter, request *http.Re
 
 func Health(writer http.ResponseWriter, request *http.Request) {
 	writeJSON(writer, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// HealthDetailed returns component-level health (N-10): API always ok if it
+// can respond, database via a ping, and the NextReport rendering sidecar via
+// its /health endpoint (only checked when NEXTREPORT_URL is configured).
+func (service *Service) HealthDetailed(writer http.ResponseWriter, request *http.Request) {
+	result := map[string]any{"status": "ok"}
+
+	// Database connectivity.
+	if err := service.pool.Ping(request.Context()); err != nil {
+		result["database"] = map[string]any{"status": "down", "error": err.Error()}
+		result["status"] = "degraded"
+	} else {
+		result["database"] = map[string]any{"status": "up"}
+	}
+
+	// NextReport rendering sidecar (optional — only when configured).
+	nextreportURL := os.Getenv("NEXTREPORT_URL")
+	if nextreportURL != "" {
+		client := http.Client{Timeout: 3 * time.Second}
+		resp, err := client.Get(nextreportURL + "/health")
+		if err != nil {
+			result["nextreport"] = map[string]any{"status": "down", "error": err.Error()}
+			result["status"] = "degraded"
+		} else {
+			defer resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				result["nextreport"] = map[string]any{"status": "up"}
+			} else {
+				result["nextreport"] = map[string]any{"status": "down", "http_code": resp.StatusCode}
+				result["status"] = "degraded"
+			}
+		}
+	} else {
+		result["nextreport"] = map[string]any{"status": "not_configured"}
+	}
+
+	writeJSON(writer, http.StatusOK, result)
 }

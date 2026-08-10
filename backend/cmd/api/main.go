@@ -94,6 +94,7 @@ func main() {
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)
 
 	router.Get("/healthz", tenant.Health)
+	router.Get("/healthz/detail", tenantHandler.HealthDetailed)
 	router.Route("/api/v1", func(router chi.Router) {
 		router.With(loginLimiter.Middleware).Post("/auth/login", authService.Login)
 		router.Post("/auth/register", authService.Register)
@@ -240,6 +241,7 @@ func main() {
 			router.Get("/journal-register", accountingHandler.GetJournalRegister)
 
 			router.Get("/accounts", coaHandler.List)
+			router.Get("/accounts/export", coaHandler.Export)
 			router.Get("/categories", coaHandler.ListCategories)
 
 			router.Get("/reports/trial-balance", reportingHandler.TrialBalance)
