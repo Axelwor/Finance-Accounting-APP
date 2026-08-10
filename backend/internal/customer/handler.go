@@ -182,8 +182,8 @@ func (service *Service) ListCustomers(writer http.ResponseWriter, request *http.
 	}
 	rows, err := service.pool.Query(request.Context(), `
 		SELECT id, code, name, npwp, contact_person, phone, email, address, city,
-		       province, postal_code, payment_term_id, credit_limit_cents, is_active,
-		       default_revenue_account_id, default_receivable_account_id,
+		       province, postal_code, payment_term_id, credit_limit_cents,
+		       default_revenue_account_id, default_receivable_account_id, is_active,
 		       billing_address, shipping_address, customer_group, price_level, currency_code,
 		       is_pkp, credit_hold, website, fax, contact_person_2, phone_2, npwp_name,
 		       opening_balance_cents, opening_balance_date
@@ -473,8 +473,8 @@ func (service *Service) GetCustomer(writer http.ResponseWriter, request *http.Re
 	}
 	row := service.pool.QueryRow(request.Context(), `
 		SELECT id, code, name, npwp, contact_person, phone, email, address, city,
-		       province, postal_code, payment_term_id, credit_limit_cents, is_active,
-		       default_revenue_account_id, default_receivable_account_id,
+		       province, postal_code, payment_term_id, credit_limit_cents,
+		       default_revenue_account_id, default_receivable_account_id, is_active,
 		       billing_address, shipping_address, customer_group, price_level, currency_code,
 		       is_pkp, credit_hold, website, fax, contact_person_2, phone_2, npwp_name,
 		       opening_balance_cents, opening_balance_date
