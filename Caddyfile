@@ -1,19 +1,30 @@
-# Caddyfile untuk Finance Accounting App
-# Compatible with Cloudflare proxy (any SSL mode).
-# Caddy serves both HTTP (:80) and HTTPS (:443).
-# Cloudflare terminates SSL and forwards to port 80 or 443.
+# Caddyfile for Finance Accounting App with Cloudflare proxy.
+# Cloudflare terminates SSL for the public. Caddy serves HTTP on :80
+# and HTTPS on :443 with a self-signed cert (sufficient for Cloudflare Full mode).
+# No domain-specific auto-HTTPS needed — Cloudflare handles public TLS.
 
-:80, :443 {
+:80 {
 	encode gzip
-
 	handle /healthz {
 		reverse_proxy api:8080
 	}
-
 	handle /api/* {
 		reverse_proxy api:8080
 	}
+	handle {
+		reverse_proxy web:80
+	}
+}
 
+:443 {
+	tls internal
+	encode gzip
+	handle /healthz {
+		reverse_proxy api:8080
+	}
+	handle /api/* {
+		reverse_proxy api:8080
+	}
 	handle {
 		reverse_proxy web:80
 	}
