@@ -34,6 +34,7 @@ import type {
   OpeningBalancePayload,
   PeriodResult,
   RegisterInput,
+  Tenant,
   Transaction,
   TransactionInput,
   TransferCommandPayload,
@@ -527,6 +528,70 @@ export const api = {
     const state = loadState();
     saveState({ ...state, user: null });
     return delay(undefined);
+  },
+
+  /** Lists every tenant (book) the signed-in user belongs to. */
+  async listTenants(): Promise<Tenant[]> {
+    try {
+      const response = await http<{ tenants: Tenant[] }>("/tenants", { auth: true });
+      return response.tenants ?? [];
+    } catch {
+      return [];
+    }
+  },
+
+  /** Switches the active tenant: rotates tokens and re-binds the session to
+   *  the chosen book. Returns the new business so callers can update state. */
+  async switchTenant(tenant: Tenant): Promise<{ business: Business }> {
+    const refreshToken = readRefreshToken();
+    if (!refreshToken) {
+      throw makeError("AUTH_REQUIRED", "You need to sign in again.");
+    }
+    const response = await http<{
+      access_token: string;
+      refresh_token: string;
+      family_id: string;
+      tenant_id: number;
+      role: string;
+    }>("/auth/switch-tenant", {
+      method: "POST",
+      body: JSON.stringify({ tenant_id: Number(tenant.id), refresh_token: refreshToken }),
+    });
+    storeSession(response);
+    const business: Business = {
+      id: tenant.id,
+      name: tenant.name,
+      businessType: tenant.role || "owner",
+      currency: "IDR",
+      fiscalYearStart: 1,
+    };
+    saveState({ ...loadState(), business });
+    return delay({ business });
+  },
+
+  /** Adds a new tenant (book) to the signed-in user's account and switches
+   *  the session onto it, so the user starts entering data there right away. */
+  async createTenant(name: string, slug?: string): Promise<{ business: Business }> {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      throw makeError("VALIDATION_ERROR", "Business name is required.");
+    }
+    const tenant = await http<{ id: number; name: string; slug: string }>("/tenants/new", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify({ name: trimmed, slug: slug?.trim() || slugify(trimmed) }),
+    });
+    const business: Business = {
+      id: String(tenant.id),
+      name: tenant.name,
+      businessType: "owner",
+      currency: "IDR",
+      fiscalYearStart: 1,
+    };
+    saveState({ ...loadState(), business });
+    // Re-bind the session to the new tenant so subsequent calls use it.
+    await api.switchTenant({ id: String(tenant.id), name: tenant.name, slug: tenant.slug, role: "owner" });
+    return delay({ business });
   },
 
   /**

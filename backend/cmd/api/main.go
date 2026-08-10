@@ -99,13 +99,18 @@ func main() {
 		router.Post("/auth/register", authService.Register)
 		router.With(loginLimiter.Middleware).Post("/auth/refresh", authService.Refresh)
 		router.Post("/auth/logout", authService.Logout)
+		router.Post("/auth/switch-tenant", authService.SwitchTenant)
 
 		router.Group(func(router chi.Router) {
 			router.Use(authService.Middleware)
 
-			// Tenant lifecycle: create (onboarding) + get current tenant.
-			// Mounted under auth so the user identity is available.
+			// Tenant lifecycle: create (onboarding, idempotent), create-new
+			// (additional tenant for multi-book accounts), list (tenant
+			// switcher), and get current tenant. Mounted under auth so the
+			// user identity is available.
 			router.Post("/tenants", tenantHandler.Create)
+			router.Post("/tenants/new", tenantHandler.CreateAdditional)
+			router.Get("/tenants", tenantHandler.List)
 			router.Get("/tenants/me", tenantHandler.GetMyTenant)
 
 			// --- Write operations: admin, accountant, manager, staff ---

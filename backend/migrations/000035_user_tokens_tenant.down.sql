@@ -1,0 +1,2 @@
+ALTER TABLE user_tokens DROP COLUMN IF EXISTS role;
+ALTER TABLE user_tokens DROP COLUMN IF EXISTS tenant_id;

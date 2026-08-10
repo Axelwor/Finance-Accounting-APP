@@ -2796,3 +2796,45 @@ select.input {
 .sidebar-group { display: flex; flex-direction: column; gap: 1px; }
 
 .right { text-align: right; }
+
+/* ------------------------------------------------------------------ */
+/* Tenant (business) switcher — dropdown in the top bar               */
+/* ------------------------------------------------------------------ */
+.tenant-switcher { position: relative; }
+.tenant-switcher__toggle {
+  max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 600; color: var(--ink);
+}
+.tenant-switcher__menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+  min-width: 240px; max-width: 320px;
+  background: var(--panel, #fff); border: 1px solid var(--line, #d9d9d9);
+  border-radius: 8px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  padding: 6px; display: flex; flex-direction: column; gap: 2px;
+}
+.tenant-switcher__item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 10px; border-radius: 6px; border: none; background: transparent;
+  font: inherit; color: var(--ink); cursor: pointer; text-align: left;
+}
+.tenant-switcher__item:hover:not(:disabled) { background: var(--panel-muted, #f2f4f7); }
+.tenant-switcher__item:disabled { opacity: 0.6; cursor: default; }
+.tenant-switcher__item.is-active { background: var(--panel-muted, #eef1f6); font-weight: 600; }
+.tenant-switcher__item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tenant-switcher__item-role {
+  font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+.tenant-switcher__empty { margin: 4px 10px; color: var(--ink-muted); font-size: 13px; }
+.tenant-switcher__add {
+  margin-top: 4px; padding: 8px 10px; border-radius: 6px; border: 1px dashed var(--line, #cfd4dc);
+  background: transparent; font: inherit; color: var(--ink-muted); cursor: pointer; text-align: left;
+}
+.tenant-switcher__add:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-muted); }
+.tenant-switcher__form { padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.tenant-switcher__form input {
+  width: 100%; padding: 7px 10px; border: 1px solid var(--line, #cfd4dc);
+  border-radius: 6px; font: inherit; box-sizing: border-box;
+}
+.tenant-switcher__form-actions { display: flex; gap: 6px; }
+.tenant-switcher__error { margin: 4px 10px; color: var(--negative, #c0392b); font-size: 13px; }

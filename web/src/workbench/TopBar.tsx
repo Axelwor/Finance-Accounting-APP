@@ -1,15 +1,15 @@
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useAppState } from "../state";
+import { TenantSwitcher } from "./TenantSwitcher";
 
 /**
- * Top navigation: brand, business identity, and sign out.
+ * Top navigation: brand, business identity (tenant switcher), and sign out.
  * Corporate Wave-style bar — no live clock or connection-status
  * dots that added visual noise.
  */
 export function TopBar() {
-  const { user, business, setUser, setBusiness, setTransactions } = useAppState();
-  const businessName = business?.name || user?.businessName || "Your business";
+  const { user, setUser, setBusiness, setTransactions } = useAppState();
 
   const handleLogout = async () => {
     await api.logout();
@@ -29,7 +29,7 @@ export function TopBar() {
       </div>
 
       <div className="topbar__business" aria-label="Business identity">
-        <span className="topbar__business-name">{businessName}</span>
+        <TenantSwitcher />
       </div>
 
       <div className="topbar__actions">

@@ -224,7 +224,7 @@ func (service *Service) Login(writer http.ResponseWriter, request *http.Request)
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue token")
 		return
 	}
-	refreshToken, familyID, err := service.issueRefreshToken(request.Context(), userID, request.RemoteAddr, request.UserAgent())
+	refreshToken, familyID, err := service.issueRefreshToken(request.Context(), userID, tenantID, role, request.RemoteAddr, request.UserAgent())
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue refresh token")
 		return
@@ -254,15 +254,19 @@ func (service *Service) Refresh(writer http.ResponseWriter, request *http.Reques
 	var familyID string
 	var expiresAt time.Time
 	var role string
+	// The tenant + role are taken from the token row itself (set at login or
+	// tenant switch) so a refreshed session stays on the ACTIVE tenant even
+	// when the user has several tenants. Legacy rows without tenant_id fall
+	// back to the user's first membership.
 	err := service.pool.QueryRow(request.Context(), `
 		SELECT t.id, t.user_id, t.family_id, t.expires_at,
-		       COALESCE((
+		       COALESCE(t.tenant_id, (
 		           SELECT ut.tenant_id FROM user_tenants ut
 		            WHERE ut.user_id = t.user_id
 		            ORDER BY ut.id
 		            LIMIT 1
 		       ), 0),
-		       COALESCE((
+		       COALESCE(t.role, (
 		           SELECT ut.role FROM user_tenants ut
 		            WHERE ut.user_id = t.user_id
 		            ORDER BY ut.id
@@ -276,7 +280,7 @@ func (service *Service) Refresh(writer http.ResponseWriter, request *http.Reques
 		return
 	}
 	// Rotate: revoke the old token and store a new one in the same family.
-	newRefresh, newFamily, err := service.rotateRefreshToken(request.Context(), tokenID, userID, familyID, request.RemoteAddr, request.UserAgent())
+	newRefresh, newFamily, err := service.rotateRefreshToken(request.Context(), tokenID, userID, tenantID, role, familyID, request.RemoteAddr, request.UserAgent())
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not rotate refresh token")
 		return
@@ -312,25 +316,98 @@ func (service *Service) Logout(writer http.ResponseWriter, request *http.Request
 	writeJSON(writer, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (service *Service) issueRefreshToken(ctx context.Context, userID int64, ip, agent string) (token, family string, err error) {
+// SwitchTenantRequest asks for a new token pair bound to another tenant the
+// user belongs to.
+type SwitchTenantRequest struct {
+	TenantID     int64  `json:"tenant_id"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+// SwitchTenant issues a fresh access + refresh token pair for a different
+// tenant of the authenticated user. It is the multi-tenant equivalent of
+// login: the caller must present a valid (non-revoked) refresh token, which
+// is rotated, and the user's membership in the requested tenant is verified
+// against user_tenants (so a user can never switch into a tenant they do
+// not belong to).
+func (service *Service) SwitchTenant(writer http.ResponseWriter, request *http.Request) {
+	var req SwitchTenantRequest
+	if err := decodeJSON(request, &req); err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	if req.TenantID <= 0 {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", "tenant_id is required")
+		return
+	}
+	if req.RefreshToken == "" {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", "refresh_token is required")
+		return
+	}
+
+	hash := hashToken(req.RefreshToken)
+	var tokenID, userID int64
+	var familyID string
+	var expiresAt time.Time
+	err := service.pool.QueryRow(request.Context(), `
+		SELECT id, user_id, family_id, expires_at
+		FROM user_tokens
+		WHERE token_hash = $1 AND token_type = 'refresh' AND revoked_at IS NULL
+	`, hash).Scan(&tokenID, &userID, &familyID, &expiresAt)
+	if err != nil || time.Now().After(expiresAt) {
+		writeError(writer, http.StatusUnauthorized, "INVALID_REFRESH", "refresh token is invalid or expired")
+		return
+	}
+
+	// Verify membership and resolve the role in the requested tenant.
+	var role string
+	err = service.pool.QueryRow(request.Context(),
+		`SELECT role FROM user_tenants WHERE user_id = $1 AND tenant_id = $2`, userID, req.TenantID,
+	).Scan(&role)
+	if err != nil {
+		writeError(writer, http.StatusForbidden, "NOT_A_MEMBER", "you are not a member of that tenant")
+		return
+	}
+
+	// Rotate the refresh token so the old one cannot be reused, storing the
+	// newly-active tenant on the new row.
+	newRefresh, newFamily, err := service.rotateRefreshToken(request.Context(), tokenID, userID, req.TenantID, role, familyID, request.RemoteAddr, request.UserAgent())
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not rotate refresh token")
+		return
+	}
+	accessToken, err := service.issueToken(userID, req.TenantID, role, 15*time.Minute)
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue token")
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"access_token":  accessToken,
+		"refresh_token": newRefresh,
+		"family_id":     newFamily,
+		"tenant_id":     req.TenantID,
+		"role":          role,
+	})
+}
+
+func (service *Service) issueRefreshToken(ctx context.Context, userID, tenantID int64, role, ip, agent string) (token, family string, err error) {
 	token = randomToken()
 	family = randomUUID()
 	if _, err = service.pool.Exec(ctx, `
-		INSERT INTO user_tokens (user_id, token_type, token_hash, family_id, expires_at, ip_address, user_agent)
-		VALUES ($1, 'refresh', $2, $3, now() + interval '30 days', $4, $5)
-	`, userID, hashToken(token), family, ip, agent); err != nil {
+		INSERT INTO user_tokens (user_id, token_type, token_hash, family_id, expires_at, ip_address, user_agent, tenant_id, role)
+		VALUES ($1, 'refresh', $2, $3, now() + interval '30 days', $4, $5, $6, $7)
+	`, userID, hashToken(token), family, ip, agent, tenantID, role); err != nil {
 		return "", "", err
 	}
 	return token, family, nil
 }
 
-func (service *Service) rotateRefreshToken(ctx context.Context, oldID, userID int64, family, ip, agent string) (token, newFamily string, err error) {
+func (service *Service) rotateRefreshToken(ctx context.Context, oldID, userID, tenantID int64, role, family, ip, agent string) (token, newFamily string, err error) {
 	token = randomToken()
 	newFamily = family
 	if _, err = service.pool.Exec(ctx, `
-		INSERT INTO user_tokens (user_id, token_type, token_hash, family_id, expires_at, replaced_by, ip_address, user_agent)
-		VALUES ($1, 'refresh', $2, $3, now() + interval '30 days', $4, $5, $6)
-	`, userID, hashToken(token), family, oldID, ip, agent); err != nil {
+		INSERT INTO user_tokens (user_id, token_type, token_hash, family_id, expires_at, replaced_by, ip_address, user_agent, tenant_id, role)
+		VALUES ($1, 'refresh', $2, $3, now() + interval '30 days', $4, $5, $6, $7, $8)
+	`, userID, hashToken(token), family, oldID, ip, agent, tenantID, role); err != nil {
 		return "", "", err
 	}
 	if _, err = service.pool.Exec(ctx,

@@ -100,6 +100,15 @@ export interface Business {
   fiscalYearStart: number;
 }
 
+/** A tenant (book) the signed-in user belongs to, from GET /tenants. */
+export interface Tenant {
+  id: string;
+  name: string;
+  slug: string;
+  role: string;
+}
+
+
 /** Accounting book period. */
 export interface BookPeriod {
   /** Fiscal year, e.g. 2026. */
