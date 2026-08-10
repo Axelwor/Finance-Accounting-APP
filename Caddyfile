@@ -1,7 +1,8 @@
 # Caddyfile untuk Finance Accounting App
-# Domain utama + www + subdomain accounting
+# Cloudflare proxy mode (Flexible SSL): Caddy serves HTTP only on :80,
+# Cloudflare terminates TLS and forwards to port 80.
 
-tikuma.net, www.tikuma.net, accounting.tikuma.net {
+:80 {
 	encode gzip
 
 	handle /healthz {
