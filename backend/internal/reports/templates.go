@@ -603,4 +603,5 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 }
 
 // Ensure db import is used
-var _ = db.WithTransaction
+// Note: this unused import guard was removed in audit session (m-004).
+// The db package is still used via db.WithTransaction elsewhere.
