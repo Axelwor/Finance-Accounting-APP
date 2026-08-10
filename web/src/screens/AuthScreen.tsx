@@ -33,11 +33,14 @@ export function AuthScreen() {
       if (mode === "register") {
         const { user } = await api.register({ email, password, businessName });
         setUser(user);
+        navigate("/onboarding", { replace: true });
       } else {
-        const { user } = await api.login({ email, password });
+        const { user, hasTenant } = await api.login({ email, password });
         setUser(user);
+        // Repeat logins with an existing tenant skip onboarding and go
+        // straight to the dashboard; first-time logins need onboarding.
+        navigate(hasTenant ? "/" : "/onboarding", { replace: true });
       }
-      navigate("/onboarding", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reach the server. Try again.");
     } finally {

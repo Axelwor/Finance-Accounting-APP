@@ -468,8 +468,13 @@ export const api = {
     return delay({ user });
   },
 
-  /** Opens a session via the backend; stores access + refresh tokens. */
-  async login(input: LoginInput): Promise<{ user: { id: string; email: string; businessName: string } }> {
+  /** Opens a session via the backend; stores access + refresh tokens.
+   * After a successful login the backend tenant (if the user already completed
+   * onboarding) is loaded so repeat logins go straight to the dashboard
+   * instead of being sent back to onboarding. */
+  async login(
+    input: LoginInput,
+  ): Promise<{ user: { id: string; email: string; businessName: string }; hasTenant: boolean }> {
     const email = input.email.trim().toLowerCase();
     if (!email || !input.password) {
       throw makeError("VALIDATION_ERROR", "Please enter your email and password.");
@@ -479,13 +484,33 @@ export const api = {
       body: JSON.stringify({ email, password: input.password }),
     });
     storeSession(response);
+
+    // Load the tenant linked to this user (404 when onboarding is pending).
+    let business: Business | null = null;
+    try {
+      const tenant = await http<{ id: string; name: string; slug?: string; role?: string }>("/tenants/me", {
+        auth: true,
+      });
+      if (tenant && tenant.id) {
+        business = {
+          id: tenant.id,
+          name: tenant.name,
+          businessType: tenant.role ?? "owner",
+          currency: "IDR",
+          fiscalYearStart: 1,
+        };
+      }
+    } catch {
+      // 404 NO_TENANT → user has not completed onboarding yet; leave business null.
+    }
+
     const user = {
       id: "usr-" + (response.family_id ?? Date.now()),
       email,
-      businessName: email.split("@")[0] || "My business",
+      businessName: business?.name || email.split("@")[0] || "My business",
     };
-    saveState({ ...loadState(), user });
-    return delay({ user });
+    saveState({ ...loadState(), user, business });
+    return delay({ user, hasTenant: business !== null });
   },
 
   /** Closes the session: revokes the refresh token on the backend + clears local data. */
