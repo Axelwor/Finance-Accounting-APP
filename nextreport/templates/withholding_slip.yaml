@@ -1,0 +1,24 @@
+title: Withholding Tax Slip
+subtitle: Withholding Tax Certificate
+header_fields:
+  - number: Slip Number
+  - date: Payment Date
+  - payee_name: Payee
+  - payee_tax_id: Payee Tax ID
+  - tax_rate: Withholding Rate
+  - currency: Currency
+sections:
+  - title: Withheld Amounts
+    table: rows
+    columns:
+      - reference: Reference
+      - description: Description
+      - gross_amount: Gross Amount
+      - tax_amount: Tax Withheld
+      - net_amount: Net Amount
+  - title: Summary
+    table: totals
+    columns:
+      - label: Description
+      - value: Amount
+footer_text: This certificate evidences tax withheld at source. Retain for tax filing purposes.

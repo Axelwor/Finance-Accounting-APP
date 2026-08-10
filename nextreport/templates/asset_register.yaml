@@ -1,0 +1,23 @@
+title: Asset Register
+subtitle: Fixed Asset Register
+header_fields:
+  - as_of_date: As Of Date
+  - company_name: Company
+  - currency: Currency
+sections:
+  - title: Assets
+    table: rows
+    columns:
+      - asset_code: Asset Code
+      - asset_name: Asset Name
+      - category: Category
+      - acquired_date: Acquired
+      - cost: Cost
+      - accumulated_depreciation: Accum. Depreciation
+      - net_book_value: Net Book Value
+  - title: Totals
+    table: totals
+    columns:
+      - label: Description
+      - value: Amount
+footer_text: Net book value equals cost less accumulated depreciation to date.

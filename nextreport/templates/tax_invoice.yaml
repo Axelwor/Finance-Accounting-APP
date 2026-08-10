@@ -1,0 +1,26 @@
+title: Tax Invoice
+subtitle: VAT / GST Tax Invoice
+header_fields:
+  - number: Tax Invoice Number
+  - date: Invoice Date
+  - tax_id: Seller Tax ID
+  - customer_name: Buyer
+  - customer_tax_id: Buyer Tax ID
+  - currency: Currency
+sections:
+  - title: Taxable Items
+    table: rows
+    columns:
+      - code: Item Code
+      - description: Description
+      - qty: Quantity
+      - unit_price: Unit Price
+      - amount: Amount
+      - tax_rate: Tax Rate
+      - tax_amount: Tax Amount
+  - title: Tax Summary
+    table: totals
+    columns:
+      - label: Description
+      - value: Amount
+footer_text: This document is an official tax invoice. Retain for tax filing purposes.

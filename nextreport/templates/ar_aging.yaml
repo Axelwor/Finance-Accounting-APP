@@ -1,0 +1,23 @@
+title: Accounts Receivable Aging
+subtitle: AR Aging Summary
+header_fields:
+  - as_of_date: As Of Date
+  - company_name: Company
+  - currency: Currency
+sections:
+  - title: Aging by Customer
+    table: rows
+    columns:
+      - customer_name: Customer
+      - current: Current
+      - days_30: 1-30 Days
+      - days_60: 31-60 Days
+      - days_90: 61-90 Days
+      - over_90: Over 90 Days
+      - total: Total
+  - title: Totals
+    table: totals
+    columns:
+      - label: Description
+      - value: Amount
+footer_text: Aging buckets are calculated from invoice due dates as of the report date.

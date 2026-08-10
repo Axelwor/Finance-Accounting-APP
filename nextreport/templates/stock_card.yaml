@@ -1,0 +1,25 @@
+title: Stock Card
+subtitle: Item Movement History
+header_fields:
+  - item_code: Item Code
+  - item_name: Item Name
+  - warehouse: Warehouse
+  - location: Location
+  - unit: Unit
+  - opening_qty: Opening Balance
+sections:
+  - title: Movements
+    table: rows
+    columns:
+      - date: Date
+      - reference: Reference
+      - description: Description
+      - in_qty: In
+      - out_qty: Out
+      - balance_qty: Balance
+  - title: Summary
+    table: totals
+    columns:
+      - label: Description
+      - value: Amount
+footer_text: Stock card quantities are derived from posted inventory movements.
