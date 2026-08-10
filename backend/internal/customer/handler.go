@@ -51,6 +51,20 @@ type CreateCustomerRequest struct {
 	CreditLimitCents           *int64  `json:"credit_limit_cents"`
 	DefaultRevenueAccountID    *int64  `json:"default_revenue_account_id"`
 	DefaultReceivableAccountID *int64  `json:"default_receivable_account_id"`
+	BillingAddress             *string `json:"billing_address"`
+	ShippingAddress            *string `json:"shipping_address"`
+	CustomerGroup              *string `json:"customer_group"`
+	PriceLevel                 *string `json:"price_level"`
+	CurrencyCode               *string `json:"currency_code"`
+	IsPKP                      *bool   `json:"is_pkp"`
+	CreditHold                 *bool   `json:"credit_hold"`
+	Website                    *string `json:"website"`
+	Fax                        *string `json:"fax"`
+	ContactPerson2             *string `json:"contact_person_2"`
+	Phone2                     *string `json:"phone_2"`
+	NpwpName                   *string `json:"npwp_name"`
+	OpeningBalanceCents        *int64  `json:"opening_balance_cents"`
+	OpeningBalanceDate         *string `json:"opening_balance_date"`
 }
 
 // CreatePaymentTermRequest is the JSON body for POST /payment-terms.
@@ -84,6 +98,21 @@ type Customer struct {
 	PaymentTermID    *int64  `json:"payment_term_id"`
 	CreditLimitCents *int64  `json:"credit_limit_cents"`
 	IsActive         bool    `json:"is_active"`
+
+	BillingAddress      *string `json:"billing_address"`
+	ShippingAddress     *string `json:"shipping_address"`
+	CustomerGroup       *string `json:"customer_group"`
+	PriceLevel          *string `json:"price_level"`
+	CurrencyCode        *string `json:"currency_code"`
+	IsPKP               bool    `json:"is_pkp"`
+	CreditHold          bool    `json:"credit_hold"`
+	Website             *string `json:"website"`
+	Fax                 *string `json:"fax"`
+	ContactPerson2      *string `json:"contact_person_2"`
+	Phone2              *string `json:"phone_2"`
+	NpwpName            *string `json:"npwp_name"`
+	OpeningBalanceCents int64   `json:"opening_balance_cents"`
+	OpeningBalanceDate  *string `json:"opening_balance_date"`
 }
 
 // PaymentTerm is the JSON shape for a payment_terms row. discount_percent is
@@ -111,7 +140,10 @@ func (service *Service) ListCustomers(writer http.ResponseWriter, request *http.
 	}
 	rows, err := service.pool.Query(request.Context(), `
 		SELECT id, code, name, npwp, contact_person, phone, email, address, city,
-		       province, postal_code, payment_term_id, credit_limit_cents, is_active
+		       province, postal_code, payment_term_id, credit_limit_cents, is_active,
+		       billing_address, shipping_address, customer_group, price_level, currency_code,
+		       is_pkp, credit_hold, website, fax, contact_person_2, phone_2, npwp_name,
+		       opening_balance_cents, opening_balance_date
 		FROM customers
 		WHERE tenant_id = $1 AND is_active = true
 		ORDER BY code
@@ -158,18 +190,35 @@ func (service *Service) CreateCustomer(writer http.ResponseWriter, request *http
 		return
 	}
 	var id int64
+	openingBalanceDate, err := optionalDate(req.OpeningBalanceDate)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "CUSTOMER_INVALID_FIELD", "opening_balance_date must be a valid YYYY-MM-DD date")
+		return
+	}
 	err = service.pool.QueryRow(request.Context(), `
 		INSERT INTO customers (
 			tenant_id, code, name, npwp, contact_person, phone, email, address,
 			city, province, postal_code, payment_term_id, credit_limit_cents,
-			default_revenue_account_id, default_receivable_account_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+			default_revenue_account_id, default_receivable_account_id,
+			billing_address, shipping_address, customer_group, price_level, currency_code,
+			is_pkp, credit_hold, website, fax, contact_person_2, phone_2, npwp_name,
+			opening_balance_cents, opening_balance_date
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+			$16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
 		RETURNING id
 	`, tenant, req.Code, req.Name, req.NPWP, req.ContactPerson, req.Phone,
 		req.Email, req.Address, req.City, req.Province, req.PostalCode,
 		req.PaymentTermID, req.CreditLimitCents, req.DefaultRevenueAccountID,
-		req.DefaultReceivableAccountID).Scan(&id)
+		req.DefaultReceivableAccountID,
+		req.BillingAddress, req.ShippingAddress, req.CustomerGroup, req.PriceLevel, req.CurrencyCode,
+		boolOrFalse(req.IsPKP), boolOrFalse(req.CreditHold), req.Website, req.Fax,
+		req.ContactPerson2, req.Phone2, req.NpwpName,
+		int64OrZero(req.OpeningBalanceCents), openingBalanceDate).Scan(&id)
 	if err != nil {
+		if isCheckViolation(err) {
+			writeError(writer, http.StatusBadRequest, "CUSTOMER_INVALID_FIELD", "invalid field value (check price_level/currency_code)")
+			return
+		}
 		if isUniqueViolation(err) {
 			writeError(writer, http.StatusConflict, "CUSTOMER_CODE_EXISTS", "a customer with this code already exists for this tenant")
 			return
@@ -194,7 +243,10 @@ func (service *Service) GetCustomer(writer http.ResponseWriter, request *http.Re
 	}
 	row := service.pool.QueryRow(request.Context(), `
 		SELECT id, code, name, npwp, contact_person, phone, email, address, city,
-		       province, postal_code, payment_term_id, credit_limit_cents, is_active
+		       province, postal_code, payment_term_id, credit_limit_cents, is_active,
+		       billing_address, shipping_address, customer_group, price_level, currency_code,
+		       is_pkp, credit_hold, website, fax, contact_person_2, phone_2, npwp_name,
+		       opening_balance_cents, opening_balance_date
 		FROM customers
 		WHERE tenant_id = $1 AND id = $2
 	`, tenant, id)
@@ -350,10 +402,18 @@ func scanCustomer(row scannable) (Customer, error) {
 		npwp, contact, phone, email             pgtype.Text
 		address, city, province, postal         pgtype.Text
 		paymentTermID, creditLimit, rev, receiv pgtype.Int8
+		billingAddr, shipAddr, group, price     pgtype.Text
+		currency                                pgtype.Text
+		website, fax, contact2, phone2, npwpN   pgtype.Text
+		openingBalance                          pgtype.Int8
+		openingBalanceDate                      pgtype.Date
 	)
 	if err := row.Scan(&customer.ID, &customer.Code, &customer.Name,
 		&npwp, &contact, &phone, &email, &address, &city, &province, &postal,
-		&paymentTermID, &creditLimit, &rev, &receiv, &customer.IsActive); err != nil {
+		&paymentTermID, &creditLimit, &rev, &receiv, &customer.IsActive,
+		&billingAddr, &shipAddr, &group, &price, &currency,
+		&customer.IsPKP, &customer.CreditHold, &website, &fax, &contact2, &phone2, &npwpN,
+		&openingBalance, &openingBalanceDate); err != nil {
 		return Customer{}, err
 	}
 	customer.NPWP = textOrNil(npwp)
@@ -366,6 +426,21 @@ func scanCustomer(row scannable) (Customer, error) {
 	customer.PostalCode = textOrNil(postal)
 	customer.PaymentTermID = int8OrNil(paymentTermID)
 	customer.CreditLimitCents = int8OrNil(creditLimit)
+	customer.BillingAddress = textOrNil(billingAddr)
+	customer.ShippingAddress = textOrNil(shipAddr)
+	customer.CustomerGroup = textOrNil(group)
+	customer.PriceLevel = textOrNil(price)
+	customer.CurrencyCode = textOrNil(currency)
+	customer.Website = textOrNil(website)
+	customer.Fax = textOrNil(fax)
+	customer.ContactPerson2 = textOrNil(contact2)
+	customer.Phone2 = textOrNil(phone2)
+	customer.NpwpName = textOrNil(npwpN)
+	customer.OpeningBalanceCents = openingBalance.Int64
+	if openingBalanceDate.Valid {
+		formatted := openingBalanceDate.Time.Format("2006-01-02")
+		customer.OpeningBalanceDate = &formatted
+	}
 	return customer, nil
 }
 

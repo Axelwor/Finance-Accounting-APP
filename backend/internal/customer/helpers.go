@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -88,4 +90,39 @@ func int4OrNil(value pgtype.Int4) *int32 {
 	}
 	out := value.Int32
 	return &out
+}
+
+// boolOrFalse dereferences a *bool, defaulting to false when nil.
+func boolOrFalse(value *bool) bool {
+	if value == nil {
+		return false
+	}
+	return *value
+}
+
+// int64OrZero dereferences a *int64, defaulting to 0 when nil.
+func int64OrZero(value *int64) int64 {
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
+// optionalDate parses an optional YYYY-MM-DD string into a pgtype.Date.
+func optionalDate(raw *string) (pgtype.Date, error) {
+	if raw == nil || strings.TrimSpace(*raw) == "" {
+		return pgtype.Date{}, nil
+	}
+	parsed, err := time.Parse("2006-01-02", strings.TrimSpace(*raw))
+	if err != nil {
+		return pgtype.Date{}, err
+	}
+	return pgtype.Date{Time: parsed, Valid: true}, nil
+}
+
+// isCheckViolation reports whether err is a PostgreSQL check_violation.
+func isCheckViolation(err error) bool {
+	const pgErrCodeCheckViolation = "23514"
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == pgErrCodeCheckViolation
 }
