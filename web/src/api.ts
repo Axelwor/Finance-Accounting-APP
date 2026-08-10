@@ -1605,6 +1605,7 @@ export const api = {
     return http<PurchaseOrder>("/purchase-orders", {
       method: "POST",
       auth: true,
+      idempotencyKey: newIdempotencyKey(),
       body: JSON.stringify(input),
     });
   },

@@ -403,6 +403,53 @@ export interface Customer {
   name: string;
   payment_term_id?: number | null;
   is_active: boolean;
+  billing_address?: string | null;
+  shipping_address?: string | null;
+  customer_group?: string | null;
+  price_level?: "RETAIL" | "WHOLESALE" | "DISTRIBUTOR" | "SPECIAL";
+  currency_code?: string;
+  is_pkp: boolean;
+  credit_hold: boolean;
+  website?: string | null;
+  fax?: string | null;
+  contact_person_2?: string | null;
+  phone_2?: string | null;
+  npwp_name?: string | null;
+  opening_balance_cents: number;
+  opening_balance_date?: string | null;
+}
+
+/** Customer price levels (migration 000033). */
+export type PriceLevel = "RETAIL" | "WHOLESALE" | "DISTRIBUTOR" | "SPECIAL";
+
+/** Payload POST /api/v1/customers. */
+export interface CreateCustomerInput {
+  code: string;
+  name: string;
+  npwp?: string;
+  contact_person?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  province?: string;
+  postal_code?: string;
+  payment_term_id?: number;
+  credit_limit_cents?: number;
+  billing_address?: string;
+  shipping_address?: string;
+  customer_group?: string;
+  price_level?: PriceLevel;
+  currency_code?: string;
+  is_pkp?: boolean;
+  credit_hold?: boolean;
+  website?: string;
+  fax?: string;
+  contact_person_2?: string;
+  phone_2?: string;
+  npwp_name?: string;
+  opening_balance_cents?: number;
+  opening_balance_date?: string;
 }
 
 /** Statement line for customer AR statement. */
@@ -441,6 +488,22 @@ export interface Item {
   unit?: string;
   sale_price_cents: number;
   description?: string;
+  barcode?: string | null;
+  secondary_uom?: string | null;
+  uom_conversion_factor?: number | null;
+  brand?: string | null;
+  category?: string | null;
+  weight_grams?: number | null;
+  volume_cc?: number | null;
+  description_long?: string | null;
+  image_url?: string | null;
+  reorder_point?: number | null;
+  reorder_qty?: number | null;
+  lead_time_days?: number | null;
+  preferred_supplier_id?: number | null;
+  abc_classification?: "A" | "B" | "C" | null;
+  sale_uom?: string | null;
+  purchase_uom?: string | null;
 }
 
 /** Sales quotation list row (GET /api/v1/quotations). */
@@ -547,6 +610,12 @@ export interface DownPayment {
 export interface SalesOrder extends SalesOrderListItem {
   lines: SalesOrderLine[];
   down_payments: DownPayment[];
+  customer_po_number?: string | null;
+  customer_po_date?: string | null;
+  requested_delivery_date?: string | null;
+  salesperson_id?: number | null;
+  ship_to_address?: string | null;
+  shipping_terms?: "FOB" | "CIF" | "EXW" | "CFR" | "DAP";
 }
 
 /** Input line for POST /api/v1/sales-orders. */
@@ -566,6 +635,12 @@ export interface SalesOrderCreateInput {
   order_date: string;
   payment_term_id?: number;
   notes?: string;
+  customer_po_number?: string;
+  customer_po_date?: string;
+  requested_delivery_date?: string;
+  salesperson_id?: number;
+  ship_to_address?: string;
+  shipping_terms?: "FOB" | "CIF" | "EXW" | "CFR" | "DAP";
   lines: SalesOrderLineInput[];
 }
 
@@ -671,6 +746,14 @@ export interface InvoiceLine {
 /** Full invoice with lines. */
 export interface Invoice extends InvoiceListItem {
   lines: InvoiceLine[];
+  tax_invoice_number?: string | null;
+  sub_total_cents?: number;
+  discount_total_cents?: number;
+  tax_total_cents?: number;
+  shipping_fee_cents?: number;
+  other_charges_cents?: number;
+  rounding_cents?: number;
+  salesperson_id?: number | null;
 }
 
 /** Input line for POST /api/v1/invoices. */
@@ -692,6 +775,11 @@ export interface CreateInvoiceInput {
   due_date?: string;
   payment_term_id?: number;
   notes?: string;
+  tax_invoice_number?: string;
+  shipping_fee_cents?: number;
+  other_charges_cents?: number;
+  rounding_cents?: number;
+  salesperson_id?: number;
   lines: InvoiceLineInput[];
 }
 
@@ -806,6 +894,18 @@ export interface Supplier extends SupplierListItem {
   postal_code?: string;
   payment_term_id?: number;
   credit_limit_cents?: number;
+  supplier_type?: "GOODS" | "SERVICE" | "MIXED";
+  is_pkp?: boolean;
+  currency_code?: string;
+  bank_name?: string | null;
+  bank_account_number?: string | null;
+  bank_account_name?: string | null;
+  website?: string | null;
+  fax?: string | null;
+  contact_person_2?: string | null;
+  phone_2?: string | null;
+  opening_balance_cents?: number;
+  opening_balance_date?: string | null;
 }
 
 export interface CreateSupplierInput {
@@ -817,6 +917,20 @@ export interface CreateSupplierInput {
   email?: string;
   address?: string;
   city?: string;
+  province?: string;
+  postal_code?: string;
+  supplier_type?: "GOODS" | "SERVICE" | "MIXED";
+  is_pkp?: boolean;
+  currency_code?: string;
+  bank_name?: string;
+  bank_account_number?: string;
+  bank_account_name?: string;
+  website?: string;
+  fax?: string;
+  contact_person_2?: string;
+  phone_2?: string;
+  opening_balance_cents?: number;
+  opening_balance_date?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -834,6 +948,9 @@ export interface PurchaseOrderListItem {
   status: "CONFIRMED" | "PARTIALLY_RECEIVED" | "RECEIVED" | "CANCELLED";
   total_cents: number;
   received_cents: number;
+  supplier_quote_number?: string | null;
+  supplier_quote_date?: string | null;
+  buyer_id?: number | null;
 }
 
 export interface PurchaseOrderLine {
@@ -869,6 +986,9 @@ export interface CreatePurchaseOrderInput {
   order_date: string;
   payment_term_id?: number;
   notes?: string;
+  supplier_quote_number?: string;
+  supplier_quote_date?: string;
+  buyer_id?: number;
   lines: PurchaseOrderLineInput[];
 }
 

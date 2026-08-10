@@ -68,6 +68,7 @@ export function PurchaseOrderList() {
               <span>Number</span>
               <span>Date</span>
               <span>Supplier</span>
+              <span>Quote #</span>
               <span>Status</span>
               <span className="right">Received</span>
               <span className="right">Total</span>
@@ -85,6 +86,9 @@ export function PurchaseOrderList() {
                 <span className="ledger-table__no">{it.number}</span>
                 <span className="ledger-table__date">{it.order_date}</span>
                 <span className="ledger-table__cat">{it.supplier_name ?? `#${it.supplier_id}`}</span>
+                <span className="ledger-table__desc-text">
+                  <span className="ledger-table__desc-title">{it.supplier_quote_number ?? "—"}</span>
+                </span>
                 <span><span className={`kind-mark ${PO_STATUS_TONE[it.status] ?? "is-muted"}`}>{it.status}</span></span>
                 <span className="ledger-table__amount right">{it.received_cents > 0 ? formatIDR(it.received_cents) : "—"}</span>
                 <span className="ledger-table__amount right">{formatIDR(it.total_cents)}</span>

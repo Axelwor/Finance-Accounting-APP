@@ -38,6 +38,9 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
   const [items, setItems] = useState<Item[]>([]);
   const [supplierId, setSupplierId] = useState("");
   const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10));
+  const [supplierQuoteNumber, setSupplierQuoteNumber] = useState("");
+  const [supplierQuoteDate, setSupplierQuoteDate] = useState("");
+  const [buyerId, setBuyerId] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
   const [saving, setSaving] = useState(false);
@@ -54,6 +57,9 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
         setSupplierId(String(po.supplier_id));
         setOrderDate(po.order_date);
         setNotes(po.notes || "");
+        setSupplierQuoteNumber(po.supplier_quote_number ?? "");
+        setSupplierQuoteDate(po.supplier_quote_date ?? "");
+        setBuyerId(po.buyer_id ? String(po.buyer_id) : "");
         setLines(
           po.lines.map((l) => ({
             id: String(l.id),
@@ -120,6 +126,9 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
         supplier_id: Number(supplierId),
         order_date: orderDate,
         notes: notes || undefined,
+        supplier_quote_number: supplierQuoteNumber || undefined,
+        supplier_quote_date: supplierQuoteDate || undefined,
+        buyer_id: buyerId ? Number(buyerId) : undefined,
         lines: inputLines,
       });
       replaceDraft(tabId, po.number, po.status);
@@ -164,6 +173,36 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
             <span className="field__label">Notes</span>
             <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={isExisting} />
           </label>
+
+          <fieldset className="fieldset">
+            <legend className="fieldset__legend">Referensi Supplier</legend>
+            <div className="entrytab__detail-title" style={{ marginBottom: "8px" }}>
+              <div className="entrytab__header-grid">
+                <div className="entrytab__header-col">
+                  <label className="field">
+                    <span className="field__label">Supplier Quote Number</span>
+                    <input className="input" type="text" value={supplierQuoteNumber} onChange={(e) => setSupplierQuoteNumber(e.target.value)} placeholder="PO-12345" />
+                  </label>
+                </div>
+                <div className="entrytab__header-col">
+                  <label className="field">
+                    <span className="field__label">Supplier Quote Date</span>
+                    <input className="input" type="date" value={supplierQuoteDate} onChange={(e) => setSupplierQuoteDate(e.target.value)} />
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="entrytab__detail-title" style={{ marginTop: "8px", marginBottom: "8px" }}>
+              <div className="entrytab__header-grid">
+                <div className="entrytab__header-col">
+                  <label className="field">
+                    <span className="field__label">Buyer ID</span>
+                    <input className="input" type="number" value={buyerId} onChange={(e) => setBuyerId(e.target.value)} placeholder="e.g., 1" />
+                  </label>
+                </div>
+              </div>
+            </div>
+          </fieldset>
 
           <div className="entrytab__detail-title">Item lines *</div>
           <div className="detail-grid detail-grid--quote">
