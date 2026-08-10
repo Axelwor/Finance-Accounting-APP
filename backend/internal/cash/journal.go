@@ -2,12 +2,9 @@ package cash
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sort"
 	"strconv"
 	"time"
 
@@ -43,18 +40,25 @@ type postingResult struct {
 func (service *Service) post(writer http.ResponseWriter, request *http.Request, tenant int64, idem string, build postingFunc, reversalOfID int64) {
 	var result postingResult
 	userID, _ := auth.UserIDFromContext(request.Context())
+
+	// Compute request hash from the request body for idempotency payload matching (M-023).
+	requestHash := computeRequestHash(request)
+
 	err := db.WithTransaction(request.Context(), service.pool, func(tx pgx.Tx) error {
-		// Scope RLS to this tenant for the whole transaction (temporary until
-		// JWT auth carries the tenant; matches the coa handler pattern).
 		if _, err := tx.Exec(request.Context(), `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tenant, 10)); err != nil {
 			return err
 		}
-		// Idempotent replay: an identical retry returns the stored journal
-		// instead of creating a second one.
+		// Idempotent replay: if the key exists, check the request hash matches.
 		if existing, err := db.New(tx).GetJournalByIdempotencyKey(request.Context(), db.GetJournalByIdempotencyKeyParams{
 			TenantID:       tenant,
 			IdempotencyKey: uuid(idem),
 		}); err == nil {
+			// M-023: verify payload match. If request_hash differs, reject.
+			var storedHash string
+			_ = tx.QueryRow(request.Context(), `SELECT COALESCE(request_hash, '') FROM journal_entries WHERE id = $1`, existing.ID).Scan(&storedHash)
+			if storedHash != "" && requestHash != "" && storedHash != requestHash {
+				return errIdempotencyKeyReuse
+			}
 			result = postingResult{
 				ID:       existing.ID,
 				Number:   existing.Number,
@@ -122,6 +126,14 @@ func (service *Service) post(writer http.ResponseWriter, request *http.Request, 
 		})
 		if err != nil {
 			return err
+		}
+		// M-023: Store request hash for future payload comparison.
+		if requestHash != "" {
+			if _, err := tx.Exec(request.Context(),
+				`UPDATE journal_entries SET request_hash = $3 WHERE tenant_id = $1 AND id = $2`,
+				tenant, entry.ID, requestHash); err != nil {
+				return err
+			}
 		}
 		for _, line := range journal.Lines {
 			if err := db.New(tx).InsertJournalLine(request.Context(), db.InsertJournalLineParams{
@@ -330,15 +342,10 @@ func journalPayload(journal accounting.Journal, entryID int64, number string) []
 	return data
 }
 
-// computeHash reproduces the engine's canonical hash for a journal. The pure
-// engine hashes with PreviousHash = "genesis"; the service recomputes with the
-// real previous hash from ledger_chain_heads so the chain is tamper-evident.
+// computeHash delegates to the engine's canonical hash so the chain is
+// tamper-evident and all packages share a single formula.
 func computeHash(journal accounting.Journal) string {
-	lines := append([]accounting.Line(nil), journal.Lines...)
-	sort.Slice(lines, func(left, right int) bool { return lines[left].SourceLineRef < lines[right].SourceLineRef })
-	payload := fmt.Sprintf("v1|%d|%s|%s|%s|%s|%v", journal.TenantID, journal.SourceRef, journal.IntentType, journal.EntryDate, journal.PreviousHash, lines)
-	sum := sha256.Sum256([]byte(payload))
-	return hex.EncodeToString(sum[:])
+	return accounting.HashJournal(journal)
 }
 
 // parseDate converts a YYYY-MM-DD string into a pgtype.Date.

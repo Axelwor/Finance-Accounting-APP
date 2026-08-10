@@ -2,13 +2,10 @@ package lease
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -24,12 +21,14 @@ import (
 	"finance-accounting-app/backend/internal/db"
 )
 
-// Shared account codes (seeded by migration 000024 / auth.seedDefaultCOA).
+// Shared account codes (seeded by migration 000024 / 000026 / auth.seedDefaultCOA).
 const (
-	rouAssetAccountCode        = "1701" // Right-of-Use Asset
-	leaseLiabilityAccountCode  = "2301" // Lease Liability
-	interestExpenseAccountCode = "5906" // Interest Expense
-	cashAccountCode            = "1101" // Cash (default payment counter)
+	rouAssetAccountCode            = "1701" // Right-of-Use Asset
+	accumRouDepAccountCode         = "1702" // Accumulated RoU Depreciation
+	leaseLiabilityAccountCode      = "2301" // Lease Liability
+	interestExpenseAccountCode     = "5906" // Interest Expense
+	rouDepreciationExpenseCode     = "5209" // RoU Depreciation Expense
+	cashAccountCode                = "1101" // Cash (default payment counter)
 )
 
 // Lease statuses (stored in lease_contracts.status).
@@ -41,8 +40,9 @@ const (
 
 // Intent types for lease journal entries.
 const (
-	intentLeaseInitial = "LEASE_INITIAL"
-	intentLeasePayment = "LEASE_PAYMENT"
+	intentLeaseInitial     = "LEASE_INITIAL"
+	intentLeasePayment     = "LEASE_PAYMENT"
+	intentLeaseDepreciation = "LEASE_DEPRECIATION"
 )
 
 // Payment frequencies (stored in lease_contracts.payment_frequency).
@@ -65,6 +65,8 @@ func (service *Service) Routes(router chi.Router) {
 	router.Get("/lease-contracts", service.ListLeaseContracts)
 	router.Get("/lease-contracts/{id}", service.GetLeaseContract)
 	router.Post("/lease-contracts/{id}/payments/{payment_no}/post", service.PostLeasePayment)
+	router.Post("/lease-contracts/{id}/depreciate", service.DepreciateLeaseContract)
+	router.Get("/lease-contracts/{id}/depreciation-log", service.ListDepreciationLog)
 
 	router.Post("/entity-hierarchy", service.CreateEntityHierarchy)
 	router.Get("/entity-hierarchy", service.ListEntityHierarchy)
@@ -324,13 +326,7 @@ func insertOutbox(ctx context.Context, tx pgx.Tx, tenantID int64, topic string, 
 }
 
 func hashJournal(journal accounting.Journal) string {
-	lines := append([]accounting.Line(nil), journal.Lines...)
-	sort.Slice(lines, func(l, r int) bool { return lines[l].SourceLineRef < lines[r].SourceLineRef })
-	payload := fmt.Sprintf("v1|%d|%s|%s|%s|%s|%v",
-		journal.TenantID, journal.SourceRef, journal.IntentType,
-		journal.EntryDate, journal.PreviousHash, lines)
-	sum := sha256.Sum256([]byte(payload))
-	return hex.EncodeToString(sum[:])
+	return accounting.HashJournal(journal)
 }
 
 func mustJSON(value any) []byte {

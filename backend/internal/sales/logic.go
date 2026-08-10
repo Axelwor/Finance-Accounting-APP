@@ -44,11 +44,17 @@ type preparedLine struct {
 }
 
 // lineTotalCents computes line_total_cents = qty * unit_price_cents - discount_cents.
-// qty is NUMERIC(18,3); it is converted to float64 for the multiplication and the
-// gross is rounded to whole cents before the (already integer) discount is applied.
+// qty is NUMERIC(18,3); to avoid float64 rounding errors we convert qty to
+// milliunits (qty * 1000, rounded to nearest integer), multiply by
+// unit_price_cents (integer), then divide by 1000 with rounding (round half up).
 func lineTotalCents(qty float64, unitPriceCents, discountCents int64) int64 {
-	gross := qty * float64(unitPriceCents)
-	return int64(math.Round(gross)) - discountCents
+	qtyMilli := int64(math.Round(qty * 1000))
+	if qtyMilli <= 0 {
+		return -discountCents
+	}
+	grossMilli := qtyMilli * unitPriceCents
+	grossCents := (grossMilli + 500) / 1000 // round half up
+	return grossCents - discountCents
 }
 
 // validDate reports whether raw is a YYYY-MM-DD date.

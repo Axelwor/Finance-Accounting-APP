@@ -2,9 +2,12 @@ package cash
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,6 +21,26 @@ import (
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/db"
 )
+
+// ErrIdempotencyKeyReuse is returned when an idempotency key is reused with a
+// different request payload (M-023).
+var errIdempotencyKeyReuse = errors.New("IDEMPOTENCY_KEY_REUSE")
+
+// computeRequestHash reads the request body and returns a SHA-256 hash.
+// The body is restored so downstream handlers can still read it.
+func computeRequestHash(request *http.Request) string {
+	if request.Body == nil {
+		return ""
+	}
+	bodyBytes, err := io.ReadAll(request.Body)
+	if err != nil {
+		return ""
+	}
+	// Restore the body for downstream consumers.
+	request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+	sum := sha256.Sum256(bodyBytes)
+	return hex.EncodeToString(sum[:])
+}
 
 // errorResponse is the JSON error envelope used by every cash handler.
 type errorResponse struct {
@@ -140,6 +163,9 @@ func resolveEquityAccount(ctx context.Context, tx pgx.Tx, tenantID int64) (int64
 
 // errorFor maps a posting error to the HTTP status/error code/message.
 func errorFor(err error) (int, string, string) {
+	if errors.Is(err, errIdempotencyKeyReuse) {
+		return http.StatusConflict, "IDEMPOTENCY_KEY_REUSE", "this Idempotency-Key was already used with a different payload"
+	}
 	if isNoRows(err) {
 		return http.StatusNotFound, "ACCOUNT_NOT_FOUND", "account does not exist for this tenant"
 	}

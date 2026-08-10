@@ -2,12 +2,9 @@ package purchase
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sort"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -563,13 +560,7 @@ func insertOutbox(ctx context.Context, tx pgx.Tx, tenantID int64, topic string, 
 }
 
 func hashJournal(journal accounting.Journal) string {
-	lines := append([]accounting.Line(nil), journal.Lines...)
-	sort.Slice(lines, func(l, r int) bool { return lines[l].SourceLineRef < lines[r].SourceLineRef })
-	payload := fmt.Sprintf("v1|%d|%s|%s|%s|%s|%v",
-		journal.TenantID, journal.SourceRef, journal.IntentType,
-		journal.EntryDate, journal.PreviousHash, lines)
-	sum := sha256.Sum256([]byte(payload))
-	return hex.EncodeToString(sum[:])
+	return accounting.HashJournal(journal)
 }
 
 func mustJSON(value any) []byte {

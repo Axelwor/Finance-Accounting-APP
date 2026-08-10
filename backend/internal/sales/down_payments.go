@@ -2,13 +2,10 @@ package sales
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
@@ -630,11 +627,7 @@ func dpPayload(journal accounting.Journal, entryID int64, number string) []byte 
 }
 
 func hashDP(journal accounting.Journal) string {
-	lines := append([]accounting.Line(nil), journal.Lines...)
-	sort.Slice(lines, func(l, r int) bool { return lines[l].SourceLineRef < lines[r].SourceLineRef })
-	payload := fmt.Sprintf("v1|%d|%s|%s|%s|%s|%v", journal.TenantID, journal.SourceRef, journal.IntentType, journal.EntryDate, journal.PreviousHash, lines)
-	sum := sha256.Sum256([]byte(payload))
-	return hex.EncodeToString(sum[:])
+	return accounting.HashJournal(journal)
 }
 
 func mustJSON(value any) []byte {

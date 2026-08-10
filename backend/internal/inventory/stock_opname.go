@@ -2,11 +2,8 @@ package inventory
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -573,13 +570,7 @@ func validateStockOpname(req CreateStockOpnameRequest) (string, string) {
 }
 
 func hashJournalForOpname(journal accounting.Journal) string {
-	lines := append([]accounting.Line(nil), journal.Lines...)
-	sort.Slice(lines, func(l, r int) bool { return lines[l].SourceLineRef < lines[r].SourceLineRef })
-	payload := fmt.Sprintf("v1|%d|%s|%s|%s|%s|%v",
-		journal.TenantID, journal.SourceRef, journal.IntentType,
-		journal.EntryDate, journal.PreviousHash, lines)
-	sum := sha256.Sum256([]byte(payload))
-	return hex.EncodeToString(sum[:])
+	return accounting.HashJournal(journal)
 }
 
 // pgtypeFloat converts a float64 into a pgtype.Numeric for NUMERIC columns.

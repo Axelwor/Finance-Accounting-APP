@@ -164,9 +164,11 @@ func pgtypeTextValue(value string) pgtype.Text {
 // accountForEngine converts a loaded accountRow into the pure engine shape.
 func accountForEngine(row accountRow) Account {
 	return Account{
-		ID:       row.ID,
-		IsGroup:  row.IsGroup,
-		IsActive: row.IsActive,
+		ID:          row.ID,
+		ReportGroup: row.ReportGroup,
+		Type:        AccountType(row.AccountType),
+		IsGroup:     row.IsGroup,
+		IsActive:    row.IsActive,
 	}
 }
 

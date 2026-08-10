@@ -2,12 +2,9 @@ package period
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sort"
 	"strconv"
 	"time"
 
@@ -240,7 +237,7 @@ func (service *Service) closePeriod(ctx context.Context, tenantID, userID int64,
 			return err
 		}
 
-		balances, err := loadPLBalances(ctx, tx, tenantID)
+		balances, err := loadPLBalances(ctx, tx, tenantID, periodID)
 		if err != nil {
 			return err
 		}
@@ -343,16 +340,18 @@ type plBalance struct {
 	amount    int64
 }
 
-func loadPLBalances(ctx context.Context, tx pgx.Tx, tenantID int64) ([]plBalance, error) {
+func loadPLBalances(ctx context.Context, tx pgx.Tx, tenantID, periodID int64) ([]plBalance, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT jl.account_id, COALESCE(SUM(jl.credit_cents - jl.debit_cents), 0)
 		FROM journal_lines jl
 		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
 		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+		JOIN accounting_periods p ON p.tenant_id = $1 AND p.id = $2
 		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
 		  AND a.report_group IN ('revenue', 'expense')
+		  AND je.entry_date >= p.period_start AND je.entry_date <= p.period_end
 		GROUP BY jl.account_id
-	`, tenantID)
+	`, tenantID, periodID)
 	if err != nil {
 		return nil, err
 	}
@@ -486,11 +485,7 @@ func upsertChainHead(ctx context.Context, tx pgx.Tx, tenantID, lastJournalID int
 }
 
 func computeHash(journal accounting.Journal) string {
-	lines := append([]accounting.Line(nil), journal.Lines...)
-	sort.Slice(lines, func(left, right int) bool { return lines[left].SourceLineRef < lines[right].SourceLineRef })
-	payload := fmt.Sprintf("v1|%d|%s|%s|%s|%s|%v", journal.TenantID, journal.SourceRef, journal.IntentType, journal.EntryDate, journal.PreviousHash, lines)
-	sum := sha256.Sum256([]byte(payload))
-	return hex.EncodeToString(sum[:])
+	return accounting.HashJournal(journal)
 }
 
 func mustJSON(value any) []byte {

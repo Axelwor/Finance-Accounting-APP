@@ -328,24 +328,114 @@ func (service *Service) fetchBalanceSheet(ctx context.Context, tenantID int64, f
 	return result, nil
 }
 
-// fetchCashFlow aggregates movements across CASH/BANK accounts within the range.
+// fetchCashFlow classifies cash movements into operating, investing, and
+// financing activities per ACCOUNTING_ENGINE §17.
+//
+// Classification rules (based on the offsetting account — the non-cash leg):
+//   - Revenue/Expense accounts → Operating
+//   - AR/AP accounts            → Operating
+//   - Inventory/WIP accounts    → Operating
+//   - Asset (fixed/intangible)  → Investing
+//   - Liability (loans/leases)  → Financing
+//   - Equity accounts           → Financing
+//   - Cash-to-Cash (transfers)  → Not classified (internal movement)
 func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f reportFilter) (CashFlowResult, error) {
 	args := []any{tenantID}
 	join, dateBase := dimensionJoin(f, 2, &args)
-	var r CashFlowResult
-	err := service.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(CASE WHEN jl.debit_cents > 0 THEN jl.debit_cents ELSE 0 END), 0),
-		       COALESCE(SUM(CASE WHEN jl.credit_cents > 0 THEN jl.credit_cents ELSE 0 END), 0)
+	query := `
+		SELECT
+			-- Operating: revenue, expense, AR, AP, inventory, WIP
+			COALESCE(SUM(CASE
+				WHEN ca.account_type IN ('REVENUE','EXPENSE','COGS','DEPRECIATION_EXPENSE',
+				                          'OTHER_EXPENSE','OTHER_REVENUE')
+			      OR ca.code LIKE '1201%'  -- AR
+			      OR ca.code LIKE '2101%'  -- AP
+			      OR ca.code LIKE '1301%'  -- Inventory
+			      OR ca.code LIKE '1302%'  -- WIP
+			      OR ca.code LIKE '1303%'  -- WIP Production
+			      OR ca.code LIKE '2105%'  -- Uninvoiced Payables
+			      OR ca.code LIKE '2202%'  -- Output VAT
+			      OR ca.code LIKE '1103%'  -- VAT Input
+				THEN CASE WHEN jl.debit_cents > 0 THEN jl.debit_cents ELSE 0 END
+			END), 0),
+			COALESCE(SUM(CASE
+				WHEN ca.account_type IN ('REVENUE','EXPENSE','COGS','DEPRECIATION_EXPENSE',
+				                          'OTHER_EXPENSE','OTHER_REVENUE')
+			      OR ca.code LIKE '1201%'
+			      OR ca.code LIKE '2101%'
+			      OR ca.code LIKE '1301%'
+			      OR ca.code LIKE '1302%'
+			      OR ca.code LIKE '1303%'
+			      OR ca.code LIKE '2105%'
+			      OR ca.code LIKE '2202%'
+			      OR ca.code LIKE '1103%'
+				THEN CASE WHEN jl.credit_cents > 0 THEN jl.credit_cents ELSE 0 END
+			END), 0),
+			-- Investing: fixed assets, intangible assets, RoU
+			COALESCE(SUM(CASE
+				WHEN ca.account_type IN ('FIXED_ASSET','INTANGIBLE_ASSET','ACCUMULATED_DEPRECIATION')
+			      OR ca.code LIKE '1701%'  -- RoU Asset
+			      OR ca.code LIKE '1702%'  -- Accumulated RoU
+			      OR ca.code LIKE '1501%'  -- Fixed Assets
+			      OR ca.code LIKE '1502%'  -- Accumulated Depreciation
+			      OR ca.code LIKE '1601%'  -- Intangible
+				THEN CASE WHEN jl.debit_cents > 0 THEN jl.debit_cents ELSE 0 END
+			END), 0),
+			COALESCE(SUM(CASE
+				WHEN ca.account_type IN ('FIXED_ASSET','INTANGIBLE_ASSET','ACCUMULATED_DEPRECIATION')
+			      OR ca.code LIKE '1701%'
+			      OR ca.code LIKE '1702%'
+			      OR ca.code LIKE '1501%'
+			      OR ca.code LIKE '1502%'
+			      OR ca.code LIKE '1601%'
+				THEN CASE WHEN jl.credit_cents > 0 THEN jl.credit_cents ELSE 0 END
+			END), 0),
+			-- Financing: loans, leases, equity, dividends
+			COALESCE(SUM(CASE
+				WHEN ca.account_type IN ('EQUITY','LOAN_PAYABLE')
+			      OR ca.code LIKE '2301%'  -- Lease Liability
+			      OR ca.code LIKE '2401%'  -- Long-term Loan
+			      OR ca.code LIKE '3101%'  -- Capital
+			      OR ca.code LIKE '3201%'  -- Retained Earnings
+			      OR ca.code LIKE '3301%'  -- Current Earnings
+			      OR ca.code LIKE '3302%'  -- Dividends Payable
+				THEN CASE WHEN jl.debit_cents > 0 THEN jl.debit_cents ELSE 0 END
+			END), 0),
+			COALESCE(SUM(CASE
+				WHEN ca.account_type IN ('EQUITY','LOAN_PAYABLE')
+			      OR ca.code LIKE '2301%'
+			      OR ca.code LIKE '2401%'
+			      OR ca.code LIKE '3101%'
+			      OR ca.code LIKE '3201%'
+			      OR ca.code LIKE '3301%'
+			      OR ca.code LIKE '3302%'
+				THEN CASE WHEN jl.credit_cents > 0 THEN jl.credit_cents ELSE 0 END
+			END), 0)
 		FROM journal_lines jl
 		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
 		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		`+join+`
+		-- Join the offsetting account (the non-cash leg) to classify the activity.
+		JOIN journal_lines ol ON ol.tenant_id = jl.tenant_id AND ol.entry_id = jl.entry_id
+		                       AND ol.account_id != jl.account_id
+		JOIN accounts ca ON ca.tenant_id = jl.tenant_id AND ca.id = ol.account_id
+		` + join + `
 		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
-		  AND a.account_type IN ('CASH', 'BANK')`+dateFilter(f.dateRange, dateBase, &args)+`
-	`, args...).Scan(&r.InflowCents, &r.OutflowCents)
+		  AND a.account_type IN ('CASH', 'BANK')` + dateFilter(f.dateRange, dateBase, &args) + `
+	`
+	var r CashFlowResult
+	err := service.pool.QueryRow(ctx, query, args...).Scan(
+		&r.OperatingInflowCents, &r.OperatingOutflowCents,
+		&r.InvestingInflowCents, &r.InvestingOutflowCents,
+		&r.FinancingInflowCents, &r.FinancingOutflowCents,
+	)
 	if err != nil {
 		return CashFlowResult{}, err
 	}
+	r.NetOperatingCents = r.OperatingInflowCents - r.OperatingOutflowCents
+	r.NetInvestingCents = r.InvestingInflowCents - r.InvestingOutflowCents
+	r.NetFinancingCents = r.FinancingInflowCents - r.FinancingOutflowCents
+	r.InflowCents = r.OperatingInflowCents + r.InvestingInflowCents + r.FinancingInflowCents
+	r.OutflowCents = r.OperatingOutflowCents + r.InvestingOutflowCents + r.FinancingOutflowCents
 	r.NetCashFlowCents = r.InflowCents - r.OutflowCents
 	return r, nil
 }

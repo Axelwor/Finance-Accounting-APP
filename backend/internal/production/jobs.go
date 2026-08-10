@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -424,13 +425,27 @@ func (service *Service) AddProductionJobCost(writer http.ResponseWriter, request
 				return err
 			}
 		} else {
-			// Labor / Overhead: Dr WIP / Cr Cash (1101).
-			cashAcctID, err := resolveAccountByCode(request.Context(), tx, tenant, "1101")
-			if err != nil {
-				return err
+			// Labor: Dr WIP / Cr 5201 Direct Labor Expense
+			// Overhead: Dr WIP / Cr 4902 Overhead Applied
+			var counterCode string
+			switch costType {
+			case "labor":
+				counterCode = "5201"
+			case "overhead":
+				counterCode = "4902"
+			default:
+				counterCode = "5201" // fallback to labor
 			}
-			counterAccountID = cashAcctID
-			totalCents = int64(qty * float64(req.UnitCostCents))
+			counterAccountID, err = resolveAccountByCode(request.Context(), tx, tenant, counterCode)
+			if err != nil {
+				return fmt.Errorf("account %s not found: %w", counterCode, err)
+			}
+			// Integer math: qtyMilli * unitCostCents / 1000 (round half up)
+			qtyMilli := int64(math.Round(qty * 1000))
+			if qtyMilli <= 0 {
+				qtyMilli = 1000
+			}
+			totalCents = (qtyMilli*req.UnitCostCents + 500) / 1000
 			if totalCents <= 0 {
 				totalCents = req.UnitCostCents
 			}

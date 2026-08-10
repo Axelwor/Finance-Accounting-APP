@@ -74,29 +74,33 @@ func (service *Service) List(writer http.ResponseWriter, request *http.Request) 
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT `+accountColumns+`
-		FROM accounts
-		WHERE tenant_id = $1
-		ORDER BY code
-	`, tenantID)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "ACCOUNTS_LIST_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
-	accounts := make([]account, 0)
-	for rows.Next() {
-		var row accountRow
-		if err := rows.Scan(&row.ID, &row.Code, &row.Name, &row.ReportGroup, &row.AccountType,
-			&row.ParentID, &row.IsGroup, &row.IsActive, &row.ValidFrom, &row.ValidTo); err != nil {
-			writeError(writer, http.StatusInternalServerError, "ACCOUNTS_LIST_FAILED", err.Error())
-			return
+	// M-026: Use withTenantRead so RLS (set_config app.tenant_id) is active
+	// as a second layer of defense alongside the explicit WHERE tenant_id.
+	var accounts []account
+	err = withTenantRead(request.Context(), service.pool, tenantID, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT `+accountColumns+`
+			FROM accounts
+			WHERE tenant_id = $1
+			ORDER BY code
+		`, tenantID)
+		if err != nil {
+			return err
 		}
-		accounts = append(accounts, row.toJSON())
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+
+		accounts = make([]account, 0)
+		for rows.Next() {
+			var row accountRow
+			if err := rows.Scan(&row.ID, &row.Code, &row.Name, &row.ReportGroup, &row.AccountType,
+				&row.ParentID, &row.IsGroup, &row.IsActive, &row.ValidFrom, &row.ValidTo); err != nil {
+				return err
+			}
+			accounts = append(accounts, row.toJSON())
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "ACCOUNTS_LIST_FAILED", err.Error())
 		return
 	}

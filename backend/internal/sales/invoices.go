@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -21,6 +22,10 @@ const arAccountCode = "1201"
 
 // revenueAccountCode is the seeded "Sales Revenue" account (4101).
 const revenueAccountCode = "4101"
+
+// outputVATAccountCode is the PPN Output (VAT Payable) account (2202).
+// Seeded by migration 000027. Used when invoice lines have tax_rate > 0.
+const outputVATAccountCode = "2202"
 
 // INV statuses.
 const (
@@ -140,10 +145,17 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 			return err
 		}
 
-		// Prepare lines and compute total.
+		// Prepare lines and compute total (includes PPN).
 		lines, totalCents, err := prepareInvoiceLines(req.Lines)
 		if err != nil {
 			return err
+		}
+
+		// Compute total DPP (revenue) and total PPN across all lines.
+		var totalDPPCents, totalPPNCents int64
+		for _, pl := range lines {
+			totalDPPCents += pl.LineTotalCents
+			totalPPNCents += pl.PPNCents
 		}
 
 		// Resolve accounts.
@@ -167,10 +179,22 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 			}
 		}
 
-		// 1. Revenue journal: Dr AR / Cr Revenue.
+		// 1. Revenue journal: Dr AR (DPP+PPN) / Cr Revenue (DPP) / Cr Output VAT (PPN).
 		revenueLines := []accounting.Line{
 			{AccountID: arAccountID, DebitCents: totalCents, SourceLineRef: "ar"},
-			{AccountID: revenueAccountID, CreditCents: totalCents, SourceLineRef: "revenue"},
+			{AccountID: revenueAccountID, CreditCents: totalDPPCents, SourceLineRef: "revenue"},
+		}
+		// Add PPN line only if there is VAT to credit.
+		if totalPPNCents > 0 {
+			vatAccountID, err := resolveAccountByCode(request.Context(), tx, tenant, outputVATAccountCode)
+			if err != nil {
+				return err
+			}
+			revenueLines = append(revenueLines, accounting.Line{
+				AccountID:     vatAccountID,
+				CreditCents:   totalPPNCents,
+				SourceLineRef: "output-vat",
+			})
 		}
 		if err := accounting.BalanceCheck(revenueLines); err != nil {
 			return err
@@ -493,15 +517,17 @@ func validateInvoiceRequest(req CreateInvoiceRequest) (string, string) {
 	return "", ""
 }
 
-// preparedInvoiceLine carries a validated invoice line plus its computed total.
+// preparedInvoiceLine carries a validated invoice line plus its computed DPP
+// ( Dasar Pengenaan Pajak / taxable base), PPN (VAT), and grand total.
 type preparedInvoiceLine struct {
 	Line           InvoiceLineRequest
-	LineTotalCents int64
+	LineTotalCents int64 // DPP (net before PPN)
+	PPNCents       int64 // PPN = DPP * taxRate / 100 (integer, rounded)
 }
 
 func prepareInvoiceLines(lines []InvoiceLineRequest) ([]preparedInvoiceLine, int64, error) {
 	prepared := make([]preparedInvoiceLine, 0, len(lines))
-	var total int64
+	var total int64 // grand total including PPN
 	for _, line := range lines {
 		if line.Qty <= 0 {
 			return nil, 0, fmt.Errorf("lines: qty must be greater than 0")
@@ -513,8 +539,16 @@ func prepareInvoiceLines(lines []InvoiceLineRequest) ([]preparedInvoiceLine, int
 			return nil, 0, fmt.Errorf("lines: discount_cents must be >= 0")
 		}
 		lineTotal := lineTotalCents(line.Qty, line.UnitPriceCents, line.DiscountCents)
-		total += lineTotal
-		prepared = append(prepared, preparedInvoiceLine{Line: line, LineTotalCents: lineTotal})
+		// PPN: taxRate is a percentage (0–100). Compute using integer math:
+		// ppnCents = lineTotal * taxRateMilli / 100000, where taxRateMilli = taxRate * 1000.
+		// This avoids float64 entirely while supporting up to 3 decimal places of rate precision.
+		taxRateMilli := int64(math.Round(line.TaxRate * 1000))
+		if taxRateMilli < 0 {
+			taxRateMilli = 0
+		}
+		ppnCents := lineTotal * taxRateMilli / 100000
+		total += lineTotal + ppnCents
+		prepared = append(prepared, preparedInvoiceLine{Line: line, LineTotalCents: lineTotal, PPNCents: ppnCents})
 	}
 	return prepared, total, nil
 }

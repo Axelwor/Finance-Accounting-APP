@@ -10,7 +10,7 @@ import (
 func TestIssueAndParseToken(t *testing.T) {
 	service := NewService(nil, "test-secret")
 
-	token, err := service.issueToken(1, 2, 15*time.Minute)
+	token, err := service.issueToken(1, 2, RoleAdmin, 15*time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,7 +19,7 @@ func TestIssueAndParseToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if claims.UserID != 1 || claims.TenantID != 2 {
+	if claims.UserID != 1 || claims.TenantID != 2 || claims.Role != RoleAdmin {
 		t.Fatalf("unexpected claims: %+v", claims)
 	}
 }

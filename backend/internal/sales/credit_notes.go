@@ -299,12 +299,13 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 			if err != nil {
 				return err
 			}
+			cogsIdemKey := idem + "-cogs"
 			err = tx.QueryRow(request.Context(), `
-				INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, hash, prev_hash, created_by)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+				INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 				RETURNING id
 			`, tenant, cogsJrnNumber, cogsJournal.EntryDate, periodID, cogsJournal.Description,
-				cogsJournal.SourceRef, string(cogsJournal.IntentType),
+				cogsJournal.SourceRef, string(cogsJournal.IntentType), cogsIdemKey,
 				cogsJournal.Hash, cogsJournal.PreviousHash, int8Value(userID)).Scan(&cogsEntryID)
 			if err != nil {
 				return err

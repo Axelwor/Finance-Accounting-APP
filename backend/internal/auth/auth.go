@@ -23,6 +23,16 @@ type contextKey string
 const (
 	tenantIDKey contextKey = "tenant_id"
 	userIDKey   contextKey = "user_id"
+	roleKey     contextKey = "role"
+)
+
+// Role constants per ARCHITECTURE.md §8.2 RBAC matrix.
+const (
+	RoleAdmin    = "admin"
+	RoleAccountant = "accountant"
+	RoleManager    = "manager"
+	RoleStaff      = "staff"
+	RoleViewer     = "viewer"
 )
 
 type Service struct {
@@ -35,8 +45,9 @@ func NewService(pool *pgxpool.Pool, secret string) *Service {
 }
 
 type Claims struct {
-	UserID   int64 `json:"user_id"`
-	TenantID int64 `json:"tenant_id"`
+	UserID   int64  `json:"user_id"`
+	TenantID int64  `json:"tenant_id"`
+	Role     string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -108,7 +119,7 @@ func (service *Service) Register(writer http.ResponseWriter, request *http.Reque
 		return
 	}
 
-	accessToken, err := service.issueToken(userID, tenantID, 15*time.Minute)
+	accessToken, err := service.issueToken(userID, tenantID, RoleAdmin, 15*time.Minute)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue token")
 		return
@@ -117,6 +128,7 @@ func (service *Service) Register(writer http.ResponseWriter, request *http.Reque
 		"id":           userID,
 		"email":        req.Email,
 		"tenant_id":    tenantID,
+		"role":         RoleAdmin,
 		"access_token": accessToken,
 	})
 }
@@ -192,20 +204,21 @@ func (service *Service) Login(writer http.ResponseWriter, request *http.Request)
 	var userID int64
 	var tenantID int64
 	var passwordHash string
+	var role string
 	err := service.pool.QueryRow(request.Context(),
-		`SELECT u.id, u.password_hash, COALESCE(ut.tenant_id, 0)
+		`SELECT u.id, u.password_hash, COALESCE(ut.tenant_id, 0), COALESCE(ut.role, 'viewer')
 		   FROM users u
 		   LEFT JOIN user_tenants ut ON ut.user_id = u.id
 		  WHERE u.email = $1 AND u.is_active = true
 		  ORDER BY ut.id
 		  LIMIT 1`,
 		req.Email,
-	).Scan(&userID, &passwordHash, &tenantID)
+	).Scan(&userID, &passwordHash, &tenantID, &role)
 	if err != nil || bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) != nil {
 		writeError(writer, http.StatusUnauthorized, "INVALID_CREDENTIALS", "email or password is incorrect")
 		return
 	}
-	accessToken, err := service.issueToken(userID, tenantID, 15*time.Minute)
+	accessToken, err := service.issueToken(userID, tenantID, role, 15*time.Minute)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue token")
 		return
@@ -219,6 +232,7 @@ func (service *Service) Login(writer http.ResponseWriter, request *http.Request)
 		"access_token":  accessToken,
 		"refresh_token": refreshToken,
 		"family_id":     familyID,
+		"role":          role,
 	})
 }
 
@@ -238,6 +252,7 @@ func (service *Service) Refresh(writer http.ResponseWriter, request *http.Reques
 	var tokenID int64
 	var familyID string
 	var expiresAt time.Time
+	var role string
 	err := service.pool.QueryRow(request.Context(), `
 		SELECT t.id, t.user_id, t.family_id, t.expires_at,
 		       COALESCE((
@@ -245,10 +260,16 @@ func (service *Service) Refresh(writer http.ResponseWriter, request *http.Reques
 		            WHERE ut.user_id = t.user_id
 		            ORDER BY ut.id
 		            LIMIT 1
-		       ), 0)
+		       ), 0),
+		       COALESCE((
+		           SELECT ut.role FROM user_tenants ut
+		            WHERE ut.user_id = t.user_id
+		            ORDER BY ut.id
+		            LIMIT 1
+		       ), 'viewer')
 		  FROM user_tokens t
 		 WHERE t.token_hash = $1 AND t.token_type = 'refresh' AND t.revoked_at IS NULL
-	`, hash).Scan(&tokenID, &userID, &familyID, &expiresAt, &tenantID)
+	`, hash).Scan(&tokenID, &userID, &familyID, &expiresAt, &tenantID, &role)
 	if err != nil || time.Now().After(expiresAt) {
 		writeError(writer, http.StatusUnauthorized, "INVALID_REFRESH", "refresh token is invalid or expired")
 		return
@@ -261,7 +282,7 @@ func (service *Service) Refresh(writer http.ResponseWriter, request *http.Reques
 	}
 	// Preserve the tenant claim: re-issue the access token with the user's
 	// default tenant (resolved above) instead of tenant_id 0.
-	accessToken, err := service.issueToken(userID, tenantID, 15*time.Minute)
+	accessToken, err := service.issueToken(userID, tenantID, role, 15*time.Minute)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue token")
 		return
@@ -270,6 +291,7 @@ func (service *Service) Refresh(writer http.ResponseWriter, request *http.Reques
 		"access_token":  accessToken,
 		"refresh_token": newRefresh,
 		"family_id":     newFamily,
+		"role":          role,
 	})
 }
 
@@ -317,10 +339,11 @@ func (service *Service) rotateRefreshToken(ctx context.Context, oldID, userID in
 	return token, newFamily, nil
 }
 
-func (service *Service) issueToken(userID, tenantID int64, duration time.Duration) (string, error) {
+func (service *Service) issueToken(userID, tenantID int64, role string, duration time.Duration) (string, error) {
 	claims := Claims{
 		UserID:   userID,
 		TenantID: tenantID,
+		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(duration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -343,7 +366,7 @@ func (service *Service) parseToken(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
-// Middleware validates the Bearer token and injects tenant_id/user_id into context.
+// Middleware validates the Bearer token and injects tenant_id/user_id/role into context.
 func (service *Service) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		tokenString := bearerToken(request)
@@ -358,15 +381,34 @@ func (service *Service) Middleware(next http.Handler) http.Handler {
 		}
 		ctx := context.WithValue(request.Context(), tenantIDKey, claims.TenantID)
 		ctx = context.WithValue(ctx, userIDKey, claims.UserID)
+		ctx = context.WithValue(ctx, roleKey, claims.Role)
 		next.ServeHTTP(writer, request.WithContext(ctx))
 	})
 }
 
+// RequireRole returns middleware that rejects requests whose role is not in
+// the allowed set. Must be used after Middleware (which sets the role).
+func RequireRole(allowedRoles ...string) func(http.Handler) http.Handler {
+	allowed := make(map[string]bool, len(allowedRoles))
+	for _, r := range allowedRoles {
+		allowed[r] = true
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			role, _ := RoleFromContext(request.Context())
+			if role == "" || !allowed[role] {
+				writeError(writer, http.StatusForbidden, "FORBIDDEN", "you do not have permission to perform this action")
+				return
+			}
+			next.ServeHTTP(writer, request.WithContext(request.Context()))
+		})
+	}
+}
+
 func bearerToken(request *http.Request) string {
-	const prefix = "Bearer "
 	header := request.Header.Get("Authorization")
-	if len(header) > len(prefix) && header[:len(prefix)] == prefix {
-		return header[len(prefix):]
+	if len(header) > 7 && strings.EqualFold(header[:7], "Bearer ") {
+		return header[7:]
 	}
 	return ""
 }
@@ -403,6 +445,12 @@ func TenantIDFromContext(ctx context.Context) (int64, bool) {
 // UserIDFromContext returns the user id set by Middleware.
 func UserIDFromContext(ctx context.Context) (int64, bool) {
 	value, ok := ctx.Value(userIDKey).(int64)
+	return value, ok
+}
+
+// RoleFromContext returns the role set by Middleware.
+func RoleFromContext(ctx context.Context) (string, bool) {
+	value, ok := ctx.Value(roleKey).(string)
 	return value, ok
 }
 

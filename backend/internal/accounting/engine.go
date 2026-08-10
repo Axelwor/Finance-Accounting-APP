@@ -373,6 +373,15 @@ func isCashOrBank(accountType AccountType) bool {
 }
 
 func hashJournal(journal Journal) string {
+	return HashJournal(journal)
+}
+
+// HashJournal computes the deterministic SHA-256 hash of a journal entry.
+// This is the SINGLE source of truth for the hash chain formula. All other
+// packages MUST call this function instead of duplicating the logic.
+// The hash covers: version, tenant_id, source_ref, intent_type, entry_date,
+// previous_hash, and the sorted lines (by SourceLineRef).
+func HashJournal(journal Journal) string {
 	lines := append([]Line(nil), journal.Lines...)
 	sort.Slice(lines, func(left, right int) bool { return lines[left].SourceLineRef < lines[right].SourceLineRef })
 	payload := fmt.Sprintf("v1|%d|%s|%s|%s|%s|%v", journal.TenantID, journal.SourceRef, journal.IntentType, journal.EntryDate, journal.PreviousHash, lines)

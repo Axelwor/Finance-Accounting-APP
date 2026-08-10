@@ -1,6 +1,7 @@
 package coa
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,9 +12,29 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/auth"
 )
+
+// withTenantRead wraps a read-only query in a short-lived transaction that
+// sets app.tenant_id for RLS enforcement (M-026). This ensures the database
+// Row Level Security policies are active even for read paths, providing
+// defense-in-depth on top of the explicit WHERE tenant_id = $1 filter.
+func withTenantRead(ctx context.Context, pool *pgxpool.Pool, tenantID int64, fn func(ctx context.Context, tx pgx.Tx) error) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tenantID, 10)); err != nil {
+		return err
+	}
+	if err := fn(ctx, tx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
 
 // errorResponse is the JSON error envelope used by every coa handler.
 type errorResponse struct {

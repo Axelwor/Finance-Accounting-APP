@@ -122,21 +122,23 @@ func parseDate(raw string) pgtype.Date {
 
 // accountRow is the minimal account shape the accountant endpoints need.
 type accountRow struct {
-	ID       int64
-	Code     string
-	Name     string
-	IsGroup  bool
-	IsActive bool
+	ID          int64
+	Code        string
+	Name        string
+	ReportGroup string
+	AccountType string
+	IsGroup     bool
+	IsActive    bool
 }
 
 // loadAccount reads one account for the tenant inside the transaction.
 func loadAccount(ctx context.Context, tx pgx.Tx, tenantID, accountID int64) (accountRow, error) {
 	var row accountRow
 	err := tx.QueryRow(ctx, `
-		SELECT id, code, name, is_group, is_active
+		SELECT id, code, name, report_group, account_type, is_group, is_active
 		FROM accounts
 		WHERE tenant_id = $1 AND id = $2
-	`, tenantID, accountID).Scan(&row.ID, &row.Code, &row.Name, &row.IsGroup, &row.IsActive)
+	`, tenantID, accountID).Scan(&row.ID, &row.Code, &row.Name, &row.ReportGroup, &row.AccountType, &row.IsGroup, &row.IsActive)
 	if err != nil {
 		return accountRow{}, err
 	}

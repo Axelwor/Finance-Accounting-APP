@@ -56,10 +56,21 @@ type ProfitLossResult struct {
 }
 
 // CashFlowResult is the JSON shape returned by GET /reports/cash-flow.
+// Cash movements are classified into operating, investing, and financing
+// activities per PSAK 2 / IAS 7.
 type CashFlowResult struct {
-	InflowCents      int64 `json:"inflow_cents"`
-	OutflowCents     int64 `json:"outflow_cents"`
-	NetCashFlowCents int64 `json:"net_cash_flow_cents"`
+	OperatingInflowCents    int64 `json:"operating_inflow_cents"`
+	OperatingOutflowCents   int64 `json:"operating_outflow_cents"`
+	InvestingInflowCents    int64 `json:"investing_inflow_cents"`
+	InvestingOutflowCents   int64 `json:"investing_outflow_cents"`
+	FinancingInflowCents    int64 `json:"financing_inflow_cents"`
+	FinancingOutflowCents   int64 `json:"financing_outflow_cents"`
+	InflowCents             int64 `json:"inflow_cents"`
+	OutflowCents            int64 `json:"outflow_cents"`
+	NetCashFlowCents        int64 `json:"net_cash_flow_cents"`
+	NetOperatingCents       int64 `json:"net_operating_cents"`
+	NetInvestingCents       int64 `json:"net_investing_cents"`
+	NetFinancingCents       int64 `json:"net_financing_cents"`
 }
 
 // BalanceSheetResult is the JSON shape returned by GET /reports/balance-sheet.
@@ -204,6 +215,23 @@ func (service *Service) TrialBalance(writer http.ResponseWriter, request *http.R
 	result, err := service.fetchTrialBalance(request.Context(), tenantFrom(request), f)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
+		return
+	}
+	if !result.Balanced {
+		diff := result.TotalDebitCents - result.TotalCreditCents
+		writeJSON(writer, http.StatusConflict, map[string]any{
+			"code":    "TRIAL_BALANCE_NOT_BALANCED",
+			"message": "trial balance is not balanced — possible data corruption",
+			"details": map[string]any{
+				"total_debit_cents":  result.TotalDebitCents,
+				"total_credit_cents": result.TotalCreditCents,
+				"diff_cents":         diff,
+			},
+			"rows":              result.Rows,
+			"total_debit_cents":  result.TotalDebitCents,
+			"total_credit_cents": result.TotalCreditCents,
+			"balanced":           false,
+		})
 		return
 	}
 	writeJSON(writer, http.StatusOK, result)
