@@ -1,9 +1,14 @@
-# Caddyfile for Finance Accounting App with Cloudflare proxy.
-# Cloudflare terminates SSL for the public. Caddy serves HTTP on :80
-# and HTTPS on :443 with a self-signed cert (sufficient for Cloudflare Full mode).
-# No domain-specific auto-HTTPS needed — Cloudflare handles public TLS.
+# Caddyfile for Finance Accounting App
+# Cloudflare proxy mode: Cloudflare handles public SSL.
+# Caddy serves HTTP on :80 (for Cloudflare Flexible mode)
+# and HTTPS on :443 with Let's Encrypt (for Cloudflare Full mode).
+#
+# IMPORTANT: Cloudflare SSL mode must be set to "Full" (not Flexible)
+# in Cloudflare dashboard → SSL/TLS → Overview.
+# With "Full", Cloudflare connects to origin on port 443 and accepts
+# any valid cert (including Let's Encrypt).
 
-:80 {
+accounting.tikuma.net {
 	encode gzip
 	handle /healthz {
 		reverse_proxy api:8080
@@ -16,8 +21,8 @@
 	}
 }
 
-:443 {
-	tls internal
+# HTTP fallback (no redirect — Cloudflare needs plain HTTP for Flexible mode)
+:80 {
 	encode gzip
 	handle /healthz {
 		reverse_proxy api:8080
