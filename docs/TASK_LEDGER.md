@@ -49,3 +49,5 @@ Durable task registry for all AI Agent sessions.
 - A task is `DONE` only after verification commands pass.
 - Shared contracts require a separate coordination task.
 - No commit or push without explicit approval.
+| F-13-001 | DONE | 2026-08-10 session | Asset register report endpoint; backend/internal/assets/register.go, register_test.go | GET /assets/register returns assets with NBV + totals; 6 table-driven tests pass; deployed live | 2026-08-10 21:21 UTC | e8a20ee |
+| NRPT-001 | DONE | 2026-08-10 session | Report templates screen (N-07, N-08); web/src/screens/list/ReportTemplateList.tsx, api.ts, types.ts, workbench wiring | CRUD + render PDF/HTML via objectURL; 19 templates visible; deployed live | 2026-08-10 21:21 UTC | c2d9ef0 |
