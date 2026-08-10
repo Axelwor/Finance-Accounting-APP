@@ -15,7 +15,7 @@ RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 COPY --from=builder /bin/api /app/api
-COPY --from=builder /app/backend/migrations /app/migrations
+COPY --from=builder /app/migrations /app/migrations
 
 ENV DATABASE_URL=""
 ENV JWT_SECRET=""
