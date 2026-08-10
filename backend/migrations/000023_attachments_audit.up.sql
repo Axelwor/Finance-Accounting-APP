@@ -29,7 +29,12 @@ CREATE INDEX attachments_owner_idx ON attachments (tenant_id, owner_type, owner_
 
 -- Audit trail (append-only). No UPDATE/DELETE path is ever issued from the
 -- application; the table is a ledger of who-did-what-when.
-CREATE TABLE audit_logs (
+--
+-- NOTE: migration 000001 already creates audit_logs (with before_json/
+-- after_json). CREATE TABLE IF NOT EXISTS makes this a no-op on databases
+-- where the table exists; migration 000034 then reconciles the column names
+-- to before_data/after_data (which the application code uses).
+CREATE TABLE IF NOT EXISTS audit_logs (
     id BIGSERIAL PRIMARY KEY,
     tenant_id BIGINT NOT NULL REFERENCES tenants(id),
     user_id BIGINT REFERENCES users(id),
@@ -43,8 +48,8 @@ CREATE TABLE audit_logs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (tenant_id, id)
 );
-CREATE INDEX audit_logs_tenant_entity_idx ON audit_logs (tenant_id, entity_type, entity_id, created_at DESC);
-CREATE INDEX audit_logs_tenant_user_idx ON audit_logs (tenant_id, user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_logs_tenant_entity_idx ON audit_logs (tenant_id, entity_type, entity_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_logs_tenant_user_idx ON audit_logs (tenant_id, user_id, created_at DESC);
 
 -- Row Level Security: both tables are tenant-scoped. The application sets
 -- app.tenant_id at the start of each transaction (see scopeTenant helpers).
@@ -55,6 +60,9 @@ CREATE POLICY tenant_isolation_attachments ON attachments
     USING (tenant_id = current_setting('app.tenant_id', true)::BIGINT)
     WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::BIGINT);
 
+-- Migration 000001 may have already created tenant_isolation_audit_logs;
+-- recreate it idempotently (PostgreSQL's CREATE POLICY has no IF NOT EXISTS).
+DROP POLICY IF EXISTS tenant_isolation_audit_logs ON audit_logs;
 CREATE POLICY tenant_isolation_audit_logs ON audit_logs
     USING (tenant_id = current_setting('app.tenant_id', true)::BIGINT)
     WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::BIGINT);
