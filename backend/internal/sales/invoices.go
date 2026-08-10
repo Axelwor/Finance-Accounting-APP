@@ -49,13 +49,21 @@ type InvoiceLineRequest struct {
 
 // CreateInvoiceRequest is the POST /invoices body.
 type CreateInvoiceRequest struct {
-	SalesOrderID  int64                `json:"sales_order_id"`
-	CustomerID    int64                `json:"customer_id"`
-	InvoiceDate   string               `json:"invoice_date"`
-	DueDate       string               `json:"due_date"`
-	PaymentTermID int64                `json:"payment_term_id"`
-	Notes         string               `json:"notes"`
-	Lines         []InvoiceLineRequest `json:"lines"`
+	SalesOrderID       int64                `json:"sales_order_id"`
+	CustomerID         int64                `json:"customer_id"`
+	InvoiceDate        string               `json:"invoice_date"`
+	DueDate            string               `json:"due_date"`
+	PaymentTermID      int64                `json:"payment_term_id"`
+	Notes              string               `json:"notes"`
+	Lines              []InvoiceLineRequest `json:"lines"`
+	TaxInvoiceNumber   string               `json:"tax_invoice_number"`
+	SubTotalCents      int64                `json:"sub_total_cents"`
+	DiscountTotalCents int64                `json:"discount_total_cents"`
+	TaxTotalCents      int64                `json:"tax_total_cents"`
+	ShippingFeeCents   int64                `json:"shipping_fee_cents"`
+	OtherChargesCents  int64                `json:"other_charges_cents"`
+	RoundingCents      int64                `json:"rounding_cents"`
+	SalespersonID      int64                `json:"salesperson_id"`
 }
 
 type invoiceLineResponse struct {
@@ -74,20 +82,28 @@ type invoiceLineResponse struct {
 }
 
 type invoiceResponse struct {
-	ID              int64                 `json:"id"`
-	Number          string                `json:"number"`
-	SalesOrderID    int64                 `json:"sales_order_id,omitempty"`
-	CustomerID      int64                 `json:"customer_id"`
-	CustomerName    string                `json:"customer_name"`
-	InvoiceDate     string                `json:"invoice_date"`
-	DueDate         string                `json:"due_date,omitempty"`
-	PaymentTermID   int64                 `json:"payment_term_id"`
-	Notes           string                `json:"notes"`
-	Status          string                `json:"status"`
-	TotalCents      int64                 `json:"total_cents"`
-	DPAppliedCents  int64                 `json:"dp_applied_cents"`
-	ReceivableCents int64                 `json:"receivable_cents"`
-	Lines           []invoiceLineResponse `json:"lines,omitempty"`
+	ID                 int64                 `json:"id"`
+	Number             string                `json:"number"`
+	SalesOrderID       int64                 `json:"sales_order_id,omitempty"`
+	CustomerID         int64                 `json:"customer_id"`
+	CustomerName       string                `json:"customer_name"`
+	InvoiceDate        string                `json:"invoice_date"`
+	DueDate            string                `json:"due_date,omitempty"`
+	PaymentTermID      int64                 `json:"payment_term_id"`
+	Notes              string                `json:"notes"`
+	Status             string                `json:"status"`
+	TotalCents         int64                 `json:"total_cents"`
+	DPAppliedCents     int64                 `json:"dp_applied_cents"`
+	ReceivableCents    int64                 `json:"receivable_cents"`
+	TaxInvoiceNumber   string                `json:"tax_invoice_number,omitempty"`
+	SubTotalCents      int64                 `json:"sub_total_cents"`
+	DiscountTotalCents int64                 `json:"discount_total_cents"`
+	TaxTotalCents      int64                 `json:"tax_total_cents"`
+	ShippingFeeCents   int64                 `json:"shipping_fee_cents"`
+	OtherChargesCents  int64                 `json:"other_charges_cents"`
+	RoundingCents      int64                 `json:"rounding_cents"`
+	SalespersonID      int64                 `json:"salesperson_id,omitempty"`
+	Lines              []invoiceLineResponse `json:"lines,omitempty"`
 }
 
 // CreateInvoice posts an invoice with two journals:
@@ -340,12 +356,18 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 			INSERT INTO invoices
 				(tenant_id, number, sales_order_id, customer_id, invoice_date, due_date,
 				 payment_term_id, notes, status, total_cents, dp_applied_cents,
-				 receivable_cents, revenue_journal_entry_id, dp_journal_entry_id, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ISSUED', $9, $10, $11, $12, $13, $14)
+				 receivable_cents, revenue_journal_entry_id, dp_journal_entry_id, created_by,
+				 tax_invoice_number, sub_total_cents, discount_total_cents, tax_total_cents,
+				 shipping_fee_cents, other_charges_cents, rounding_cents, salesperson_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ISSUED', $9, $10, $11, $12, $13, $14,
+				$15, $16, $17, $18, $19, $20, $21, $22)
 			RETURNING id
 		`, tenant, invNumber, soID, req.CustomerID, invoiceDate, dueDate,
 			optionalInt8(req.PaymentTermID), textValueOptional(req.Notes), totalCents, dpApplied,
-			receivable, int8Value(revenueEntryID), int8Value(dpEntryID), int8Value(userID)).Scan(&invID)
+			receivable, int8Value(revenueEntryID), int8Value(dpEntryID), int8Value(userID),
+			textValueOptional(req.TaxInvoiceNumber), req.SubTotalCents, req.DiscountTotalCents,
+			req.TaxTotalCents, req.ShippingFeeCents, req.OtherChargesCents, req.RoundingCents,
+			optionalInt8(req.SalespersonID)).Scan(&invID)
 		if err != nil {
 			return err
 		}
@@ -580,16 +602,23 @@ func (service *Service) fetchInvoice(ctx context.Context, tx pgx.Tx, tenant, id 
 	var invoiceDate, dueDate pgtype.Date
 	var notes pgtype.Text
 	var soID, paymentTermID pgtype.Int8
+	var taxInvoiceNumber pgtype.Text
+	var subTotalCents, discountTotalCents, taxTotalCents, shippingFeeCents, otherChargesCents, roundingCents int64
+	var salespersonID pgtype.Int8
 	err := tx.QueryRow(ctx, `
 		SELECT i.id, i.number, i.sales_order_id, i.customer_id, c.name AS customer_name,
 		       i.invoice_date, i.due_date, i.payment_term_id, i.notes, i.status,
-		       i.total_cents, i.dp_applied_cents, i.receivable_cents
+		       i.total_cents, i.dp_applied_cents, i.receivable_cents,
+		       i.tax_invoice_number, i.sub_total_cents, i.discount_total_cents, i.tax_total_cents,
+		       i.shipping_fee_cents, i.other_charges_cents, i.rounding_cents, i.salesperson_id
 		FROM invoices i
 		JOIN customers c ON c.tenant_id = i.tenant_id AND c.id = i.customer_id
 		WHERE i.tenant_id = $1 AND i.id = $2
 	`, tenant, id).Scan(&result.ID, &result.Number, &soID, &result.CustomerID, &result.CustomerName,
 		&invoiceDate, &dueDate, &paymentTermID, &notes, &result.Status,
-		&result.TotalCents, &result.DPAppliedCents, &result.ReceivableCents)
+		&result.TotalCents, &result.DPAppliedCents, &result.ReceivableCents,
+		&taxInvoiceNumber, &subTotalCents, &discountTotalCents, &taxTotalCents,
+		&shippingFeeCents, &otherChargesCents, &roundingCents, &salespersonID)
 	if err != nil {
 		return nil, err
 	}
@@ -602,6 +631,16 @@ func (service *Service) fetchInvoice(ctx context.Context, tx pgx.Tx, tenant, id 
 		result.PaymentTermID = paymentTermID.Int64
 	}
 	result.Notes = textValue(notes)
+	result.TaxInvoiceNumber = textValue(taxInvoiceNumber)
+	result.SubTotalCents = subTotalCents
+	result.DiscountTotalCents = discountTotalCents
+	result.TaxTotalCents = taxTotalCents
+	result.ShippingFeeCents = shippingFeeCents
+	result.OtherChargesCents = otherChargesCents
+	result.RoundingCents = roundingCents
+	if salespersonID.Valid {
+		result.SalespersonID = salespersonID.Int64
+	}
 
 	rows, err := tx.Query(ctx, `
 		SELECT l.id, l.item_id, i.code AS item_code, i.name AS item_name,
