@@ -648,7 +648,7 @@ POST /petty-cash/funds/{id}/replenish   — Replenish fund
 
 ---
 
-## FINAL STATUS (update: 2026-08-10 14:03)
+## FINAL STATUS (update: 2026-08-10 15:30)
 
 ### Per Sprint
 
@@ -664,13 +664,14 @@ POST /petty-cash/funds/{id}/replenish   — Replenish fund
 | Sprint 8 | Hardening + 4 more issues fixed | ✅ |
 | Sprint 9 | 3 more ERP modules (cheque, cost center, email) + 59 columns | ✅ |
 | Bugfix session | Login/onboarding, multi-tenant, COA seeding | ✅ |
+| **Major fix session** | 8 Major tersisa (M-003/006/007/009/012/008/015/020) | ✅ |
 
 ### Status Lengkap 128 Findings audit-report.md
 
 | Bagian | Total | ✅ Selesai | 🟡 Partial | ❌ Belum |
 |---|---|---|---|---|
 | C-001 s/d C-004 (Critical) | 4 | 4 | 0 | 0 |
-| M-001 s/d M-028 (Major) | 28 | 20 | 0 | 8 |
+| M-001 s/d M-028 (Major) | 28 | **28** | 0 | 0 |
 | m-001 s/d m-022 (Minor) | 22 | 9 | 4 | 9 |
 | i-001 s/d i-016 (Info) | 16 | 4 | 2 | 10 |
 | E-01 s/d E-23 (ERP fields) | 23 | 2 | 21 | 0 |
@@ -679,88 +680,89 @@ POST /petty-cash/funds/{id}/replenish   — Replenish fund
 | R-01 s/d R-08 (Reporting plan) | 8 | 1 | 0 | 7 |
 | N-01 s/d N-10 (NextReport) | 10 | 3 | 0 | 7 |
 
-### ❌ BACKLOG — Belum Dikerjakan
+**SEMUA 4 CRITICAL DAN SEMUA 28 MAJOR SUDAH SELESAI.**
 
-**8 Major tersisa:**
+### Major Fix Session — Detail
 
-| # | Task | Catatan |
+| # | Task | Solusi |
 |---|---|---|
-| M-003 | Hapus double hash calc di `finalize` | Refactor kecil, engine.go |
-| M-006 | DP validasi akumulasi vs SO total | Tambah query SUM + reject DP_EXCEEDS_SO_TOTAL |
-| M-007 | AR sub-ledger (customer_balances) | New table + update di invoice/payment |
-| M-008 | Purchase tests (GRN, PO, suppliers) | 4 test files baru |
-| M-009 | SI harus debit 2105 → credit 2101 | Verifikasi + fix supplier_invoices.go |
-| M-012 | Overhead variance period-end | Tergantung M-010 (sudah fix) |
-| M-015 | Period module tests | handler_test.go baru |
-| M-020 | Inventory/costing tests FIFO/average | costing_test.go baru |
+| M-003 | Hash dihitung 2x di finalize | finalize hanya BalanceCheck; hash dihitung di posting layer |
+| M-006 | DP race condition | SELECT ... FOR UPDATE serialisasi concurrent DP |
+| M-007 | AR sub-ledger | Migration 000036 customer_balances + upsert di invoice/payment |
+| M-008 | Purchase tests | 19 test functions (GRN, PO, suppliers, helpers) |
+| M-009 | SI clearing 2105 | Verifikasi: sudah benar (Dr 2105 / Dr 1203 / Cr 2101) |
+| M-012 | Overhead variance | POST /overhead-variance + migration 000037 seed akun 4902/4908/5908 |
+| M-015 | Period tests | 59 test functions |
+| M-020 | Inventory/costing tests | 124+ test functions (FIFO, moving average, negative stock) |
 
-**9 Minor belum:**
+### Test Coverage Sekarang
 
-| # | Task |
+| Package | Test Functions |
 |---|---|
-| m-001 | (sudah fix via C-003) — verifikasi ulang |
-| m-002 | Sort stability hash (SourceLineRef tiebreaker) |
-| m-003 | Document Description tidak di-hash (by design, dokumentasikan) |
-| m-004 | Hapus `var _ = context.Background` guards |
-| m-005 | Bearer prefix case-sensitivity |
-| m-006 | 2FA belum ada |
-| m-007 | AR aging per customer (partial — aging ada, sub-ledger belum) |
-| m-008 | Credit note validasi total vs receivable |
-| m-010..m-022 | Sisa minor lainnya (lihat audit-report.md) |
-
-**10 Info belum:**
-
-| # | Task |
-|---|---|
-| i-001..i-002 | (sebagian fix via C-003) |
-| i-003 | Password policy (uppercase, number, special) |
-| i-004 | COA import/export CSV |
-| i-005 | Quotation conversion rate tracking |
-| i-006 | Inter-company elimination LOAN/INTEREST/DIVIDEND |
-| i-007 | Consolidation sign errors review |
-| i-012 | Customer/item duplicate check |
-| i-013 | ECL aging query verifikasi |
-| i-014 | PPh Final UMKM rate verifikasi |
-| i-015..i-016 | Dimension JOIN verifikasi, BOM zero cost |
-
-**21 ERP field gaps (E-01 s/d E-23):**
-- DB kolom sudah ditambahkan di migration 000033 (59 kolom baru)
-- **API request structs BELUM expose** field baru
-- Perlu update: CreateSalesOrderRequest (+customer_po_number, +salesperson_id, +shipping_address), CreateInvoiceRequest (+tax_invoice_number, +sub_total, +tax_total), CreateCustomerRequest (+billing_address, +shipping_address, +is_pkp, +credit_hold), CreateItemRequest (+barcode, +category, +reorder_point), dll
-
-**1 Missing module belum:**
-
-| # | Task | Catatan |
-|---|---|---|
-| F-13 | Asset Register & Maintenance report | Endpoint baru + report |
-
-**7 NextReport (N-01..N-10) belum:**
-
-| # | Task | Status |
-|---|---|---|
-| N-01 | Migration report_templates + dashboard tables | ✅ Done |
-| N-02 | Template CRUD handler | ✅ Done |
-| N-03 | Render proxy endpoint | ✅ Done (tapi NextReport service belum deploy) |
-| N-04 | Dashboard widget CRUD | ✅ Done |
-| N-05 | 19 YAML document templates | ❌ Belum |
-| N-06 | NextReport Docker deploy | ❌ Belum |
-| N-07 | Frontend ReportDesigner (embed ui-designer) | ❌ Belum |
-| N-08 | Frontend ReportViewer | ❌ Belum |
-| N-09 | Fallback plan | N/A (documentation only) |
-| N-10 | Health check + monitoring | ❌ Belum |
+| accounting | 20+ (termasuk §33 golden tests) |
+| assets | ~15 |
+| audit | ~12 |
+| cash | ~15 |
+| cheque | ~10 |
+| costing | 49 (41 + 8 baru) |
+| inventory | 75 |
+| lease | ~8 |
+| middleware | ~10 |
+| period | 59 |
+| production | ~30 |
+| purchase | 35 (19 baru) |
+| reconciliation | ~12 |
+| reports | ~10 |
+| sales | ~40 |
+| tax | 32 |
+| warehouse | ~8 |
+| **Total** | **~430 test functions** |
 
 ### Deployment Status
 
 | Komponen | Status |
 |---|---|
 | `https://accounting.tikuma.net/` | ✅ Live via Cloudflare |
-| PostgreSQL 16 | ✅ Running, 35 migrations, 96+ tables |
-| Go API (finance-api) | ✅ Running |
+| PostgreSQL 16 | ✅ Running, 37 migrations, 97+ tables |
+| Go API (finance-api) | ✅ Running, build terbaru |
 | Frontend React (finance-web) | ✅ Running |
 | Caddy reverse proxy | ✅ Running |
 | Login + onboarding | ✅ Fixed |
 | Multi-tenant switcher | ✅ Fixed |
 | RBAC + JWT + rate limit | ✅ Fixed |
+| AR sub-ledger (M-007) | ✅ Deployed |
+| Overhead variance (M-012) | ✅ Deployed |
+
+### Backlog Tersisa (Non-Major)
+
+**9 Minor belum:**
+- m-002: Sort stability hash (SourceLineRef tiebreaker)
+- m-003: Dokumentasi Description tidak di-hash
+- m-004: Hapus `var _ = context.Background` guards
+- m-005: Bearer prefix case-insensitive
+- m-006: 2FA
+- m-007: Customer statement/aging UI
+- m-008: Credit note validasi total vs receivable
+- m-010..m-022: Sisa minor lainnya
+
+**10 Info belum:**
+- i-003: Password policy
+- i-004: COA import/export CSV
+- i-005: Quotation conversion rate
+- i-006: Inter-company elimination LOAN/INTEREST/DIVIDEND
+- i-007: Consolidation sign errors review
+- i-012: Customer/item duplicate check
+- i-013: ECL aging query verifikasi
+- i-014: PPh Final UMKM rate verifikasi
+- i-015..i-016: Dimension JOIN, BOM zero cost
+
+**21 ERP field gaps (E-01 s/d E-23):**
+- DB kolom sudah ada (migration 000033, 59 kolom)
+- API request structs BELUM expose field baru (customer_po_number, shipping_address, salesperson_id, tax_invoice_number, barcode, reorder_point, dll)
+
+**1 Missing module:** F-13 Asset Register & Maintenance report
+
+**7 NextReport:** N-05..N-10 (YAML templates, Docker deploy, frontend designer/viewer, monitoring)
 
 ---
 
