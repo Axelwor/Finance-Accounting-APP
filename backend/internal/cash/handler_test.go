@@ -394,3 +394,43 @@ func TestRoutesRegistered(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// M-023 regression: decodeJSON must restore the request body so that
+// computeRequestHash (called later in post) sees the real payload instead of
+// an already-consumed body. Without the restore, every request hashes to
+// SHA-256("") and replay with a different payload is never detected.
+// ---------------------------------------------------------------------------
+
+func TestDecodeJSONRestoresBody(t *testing.T) {
+	body := `{"source_ref":"BK-1","amount_cents":500000}`
+	req := httptest.NewRequest("POST", "/api/v1/cash-in", strings.NewReader(body))
+
+	var target CashRequest
+	if err := decodeJSON(req, &target); err != nil {
+		t.Fatalf("decodeJSON: %v", err)
+	}
+	if target.SourceRef != "BK-1" || target.AmountCents != 500000 {
+		t.Fatalf("unexpected decoded value: %+v", target)
+	}
+
+	// Body must still be fully readable after decoding.
+	hash := computeRequestHash(req)
+	if hash == "" {
+		t.Fatal("computeRequestHash returned empty hash after decodeJSON")
+	}
+	emptyHash := computeRequestHash(httptest.NewRequest("POST", "/x", strings.NewReader("")))
+	if hash == emptyHash {
+		t.Fatal("computeRequestHash hashed an empty body — decodeJSON did not restore the body")
+	}
+
+	// Different payloads must produce different hashes.
+	req2 := httptest.NewRequest("POST", "/api/v1/cash-in", strings.NewReader(`{"source_ref":"BK-1","amount_cents":999999}`))
+	if err := decodeJSON(req2, &target); err != nil {
+		t.Fatalf("decodeJSON(req2): %v", err)
+	}
+	hash2 := computeRequestHash(req2)
+	if hash == hash2 {
+		t.Fatal("different payloads produced the same request hash")
+	}
+}

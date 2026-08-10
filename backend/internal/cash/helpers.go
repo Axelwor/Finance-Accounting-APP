@@ -1,6 +1,7 @@
 package cash
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -49,7 +50,15 @@ type errorResponse struct {
 }
 
 func decodeJSON(request *http.Request, target any) error {
-	return json.NewDecoder(request.Body).Decode(target)
+	// Buffer the body so it can be restored for downstream consumers (e.g.
+	// the idempotency request-hash computed in post). Without this the body
+	// is consumed here and the hash is always SHA-256("") — see M-023.
+	bodyBytes, err := io.ReadAll(request.Body)
+	if err != nil {
+		return err
+	}
+	request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	return json.Unmarshal(bodyBytes, target)
 }
 
 func writeJSON(writer http.ResponseWriter, status int, payload any) {
