@@ -154,6 +154,8 @@ import type {
   CreateEntityHierarchyInput,
   ConsolidatedTrialBalanceResult,
   ConsolidatedProfitLossResult,
+  ReportTemplate,
+  CreateReportTemplateInput,
 } from "./types";
 
 /** Reconciliation detail returned by the reconcile endpoints. */
@@ -2117,6 +2119,73 @@ export const api = {
     } catch {
       return { revenue_cents: 0, expense_cents: 0, profit_cents: 0, elimination_cents: 0, consolidated_tenant_ids: [] };
     }
+  },
+
+  // -- Report Templates (US-090A) --
+
+  /** List report templates (GET /reports/templates). */
+  async listReportTemplates(): Promise<ReportTemplate[]> {
+    try {
+      return await http<ReportTemplate[]>(`/reports/templates`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /** Get a single template (GET /reports/templates/{id}). */
+  async getReportTemplate(id: number): Promise<ReportTemplate> {
+    return http<ReportTemplate>(`/reports/templates/${id}`, { auth: true });
+  },
+
+  /** Create a template (POST /reports/templates). Returns {id, code}. */
+  async createReportTemplate(input: CreateReportTemplateInput): Promise<{ id: number; code: string }> {
+    return http<{ id: number; code: string }>(`/reports/templates`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Update a template (PUT /reports/templates/{id}). Returns {id, message}. */
+  async updateReportTemplate(id: number, input: CreateReportTemplateInput): Promise<{ id: number; message: string }> {
+    return http<{ id: number; message: string }>(`/reports/templates/${id}`, {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Delete a template (DELETE /reports/templates/{id}). */
+  async deleteReportTemplate(id: number): Promise<{ id: number; message: string }> {
+    return http<{ id: number; message: string }>(`/reports/templates/${id}`, {
+      method: "DELETE",
+      auth: true,
+    });
+  },
+
+  /** Full URL for the render endpoint (for iframe/anchor use). Requires
+   * Bearer auth — prefer `renderReportTemplate` (fetch + object URL). */
+  renderReportTemplateUrl(id: number, format: "pdf" | "html"): string {
+    return `${API_BASE}/reports/templates/${id}/render?format=${format}`;
+  },
+
+  /** Render a template and return the raw blob for download or display.
+   * This uses a raw fetch with Bearer token because the endpoint returns PDF/HTML binary.
+   */
+  async renderReportTemplate(id: number, format: "pdf" | "html"): Promise<Blob> {
+    const token = getAccessToken();
+    if (!token) {
+      throw makeError("UNAUTHORIZED", "Authentication required to render templates.");
+    }
+    const response = await fetch(`${API_BASE}/reports/templates/${id}/render?format=${format}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw makeError(`RENDER_FAILED_${response.status}`, `Render failed (${response.status}): ${text || ""}`);
+    }
+    return response.blob();
   },
 
   /** Access token for protected API calls (used later). */

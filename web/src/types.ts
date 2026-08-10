@@ -55,7 +55,8 @@ export type ListSubKind =
   | "budget-vs-actual"
   | "audit-logs"
   | "lease-contract"
-  | "consolidated-report";
+  | "consolidated-report"
+  | "report-templates";
 
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
@@ -1997,3 +1998,73 @@ export interface ConsolidatedProfitLossResult {
   elimination_cents: number;
   consolidated_tenant_ids: number[];
 }
+
+/* ------------------------------------------------------------------ */
+/* Report Templates (US-090A)                                         */
+/* ------------------------------------------------------------------ */
+
+export type ReportTemplateDocumentType =
+  | "invoice"
+  | "purchase_order"
+  | "delivery_order"
+  | "tax_invoice"
+  | "withholding_slip"
+  | "customer_statement"
+  | "supplier_statement"
+  | "payment_voucher"
+  | "receipt_voucher"
+  | "journal_voucher"
+  | "stock_card"
+  | "trial_balance"
+  | "profit_loss"
+  | "balance_sheet"
+  | "cash_flow"
+  | "ar_aging"
+  | "ap_aging"
+  | "asset_register"
+  | "stock_opname";
+
+export interface ReportTemplate {
+  id: number;
+  tenant_id?: number;
+  code: string;
+  name: string;
+  document_type: ReportTemplateDocumentType;
+  /** Present only on GET /reports/templates/{id}; the list endpoint omits it. */
+  template_yaml?: string;
+  is_default: boolean;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreateReportTemplateInput {
+  code: string;
+  name: string;
+  document_type: ReportTemplateDocumentType;
+  template_yaml: string;
+  is_default?: boolean;
+}
+
+/** Document types with labels for dropdowns. */
+export const REPORT_TEMPLATE_TYPES: Record<ReportTemplateDocumentType, string> = {
+  invoice: "Invoice",
+  purchase_order: "Purchase Order",
+  delivery_order: "Delivery Order",
+  tax_invoice: "Tax Invoice",
+  withholding_slip: "Withholding Slip",
+  customer_statement: "Customer Statement",
+  supplier_statement: "Supplier Statement",
+  payment_voucher: "Payment Voucher",
+  receipt_voucher: "Receipt Voucher",
+  journal_voucher: "Journal Voucher",
+  stock_card: "Stock Card",
+  trial_balance: "Trial Balance",
+  profit_loss: "Profit & Loss",
+  balance_sheet: "Balance Sheet",
+  cash_flow: "Cash Flow",
+  ar_aging: "AR Aging",
+  ap_aging: "AP Aging",
+  asset_register: "Asset Register",
+  stock_opname: "Stock Opname",
+};

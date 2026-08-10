@@ -45,6 +45,7 @@ import { JournalEntryList } from "../screens/list/JournalEntryList";
 import { GeneralLedger } from "../screens/list/GeneralLedger";
 import { JournalRegister } from "../screens/list/JournalRegister";
 import { AuditLogList } from "../screens/list/AuditLogList";
+import { ReportTemplateList } from "../screens/list/ReportTemplateList";
 import { FinancialNotesList } from "../screens/list/FinancialNotesList";
 import { JournalEntryForm } from "../screens/entry/JournalEntryForm";
 import { MockEntryForm } from "../screens/entry/MockEntryForm";
@@ -286,6 +287,8 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <LeaseContractList />;
     case "consolidated-report":
       return <ConsolidatedReport />;
+    case "report-templates":
+      return <ReportTemplateList />;
     default:
       return <PlaceholderTab title={tab.title} sub={`list · ${subKind}`} />;
   }

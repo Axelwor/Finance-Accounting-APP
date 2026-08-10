@@ -121,6 +121,7 @@ const reports: Module = {
     { id: "rp-reminders", label: "Due Date Reminders", hint: "DUE", openList: "due-date-reminders" },
     { id: "rp-budget-actual", label: "Budget vs Actual", hint: "BVA", openList: "budget-vs-actual" },
     { id: "rp-consol-tb", label: "Consolidated TB", hint: "CTB", openList: "consolidated-report" },
+    { id: "rp-templates", label: "Report Templates", hint: "TPL", openList: "report-templates" },
   ],
 };
 
@@ -235,6 +236,8 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Lease Contracts";
     case "consolidated-report":
       return "Consolidated Report";
+    case "report-templates":
+      return "Report Templates";
   }
 }
 
