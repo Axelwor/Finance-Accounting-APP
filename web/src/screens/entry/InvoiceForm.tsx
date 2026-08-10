@@ -4,7 +4,7 @@ import { FormError } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
-import type { Customer, Item, InvoiceLineInput, SalesOrderListItem, InvoicePayment, CreatePaymentInput } from "../../types";
+import type { Customer, Item, InvoiceLineInput, SalesOrderListItem, InvoicePayment, CreatePaymentInput, Invoice } from "../../types";
 import { AttachmentPanel } from "../../components/AttachmentPanel";
 
 interface Props {
@@ -51,6 +51,8 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
   const [payDesc, setPayDesc] = useState("");
   const [payError, setPayError] = useState<string | null>(null);
   const [postingPay, setPostingPay] = useState(false);
+  const [taxInvoiceNumber, setTaxInvoiceNumber] = useState("");
+  const [salespersonId, setSalespersonId] = useState("");
 
   useEffect(() => {
     workbench.markUnsaved(tabId, true);
@@ -84,7 +86,10 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
       setDate(inv.invoice_date);
       setDueDate(inv.due_date ?? "");
       setCustomerId(String(inv.customer_id));
+      setSalesOrderId(inv.sales_order_id ? String(inv.sales_order_id) : "");
       setNotes(inv.notes ?? "");
+      setTaxInvoiceNumber(inv.tax_invoice_number ?? "");
+      setSalespersonId(inv.salesperson_id ? String(inv.salesperson_id) : "");
       setLines(
         inv.lines.map((l) => ({
           id: `ln-${l.id}`,
@@ -168,6 +173,8 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
         invoice_date: date,
         due_date: dueDate || undefined,
         notes: notes.trim() || undefined,
+        tax_invoice_number: taxInvoiceNumber.trim() || undefined,
+        salesperson_id: salespersonId ? Number(salespersonId) : undefined,
         lines: payloadLines,
       });
       setInvId(created.id);
@@ -276,6 +283,28 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
             <span className="field__label">Notes</span>
             <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Tax notes, NPWP, references..." disabled={isExisting} />
           </label>
+
+          <div className="entrytab__section" style={{ marginTop: "16px", marginBottom: "16px" }}>
+            <div className="entrytab__section-head">
+              <div className="entrytab__section-title">Erp Details</div>
+            </div>
+            <div className="entrytab__detail-title" style={{ marginBottom: "8px" }}>
+              <div className="entrytab__header-grid">
+                <div className="entrytab__header-col">
+                  <label className="field">
+                    <span className="field__label">Tax Invoice Number</span>
+                    <input className="input" type="text" value={taxInvoiceNumber} onChange={(e) => setTaxInvoiceNumber(e.target.value)} placeholder="Faktur Pajak" disabled={isExisting} />
+                  </label>
+                </div>
+                <div className="entrytab__header-col">
+                  <label className="field">
+                    <span className="field__label">Salesperson ID</span>
+                    <input className="input" type="number" value={salespersonId} onChange={(e) => setSalespersonId(e.target.value)} placeholder="e.g., 1" disabled={isExisting} />
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div className="entrytab__detail">
             <div className="entrytab__detail-title">Item lines *</div>

@@ -89,6 +89,7 @@ export function SalesOrderList() {
               <span>Number</span>
               <span>Date</span>
               <span>Customer</span>
+              <span>Customer PO</span>
               <span>Status</span>
               <span className="right">DP Received</span>
               <span className="right">Total</span>
@@ -111,6 +112,7 @@ export function SalesOrderList() {
                 <span className="ledger-table__no">{it.number}</span>
                 <span className="ledger-table__date">{it.order_date}</span>
                 <span className="ledger-table__cat">{it.customer_name ?? `#${it.customer_id}`}</span>
+                <span>{it.customer_po_number ?? "—"}</span>
                 <span>
                   <span className={`kind-mark ${SO_STATUS_TONE[it.status] ?? "is-muted"}`}>{it.status}</span>
                 </span>

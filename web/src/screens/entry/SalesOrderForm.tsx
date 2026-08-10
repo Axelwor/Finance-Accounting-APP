@@ -4,7 +4,7 @@ import { FormError } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
-import type { Customer, Item, SalesOrderLineInput, DownPayment } from "../../types";
+import type { Customer, Item, SalesOrderLineInput, DownPayment, SalesOrder } from "../../types";
 
 interface Props {
   tabId: string;
@@ -48,6 +48,12 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
   const [dpDesc, setDpDesc] = useState("");
   const [dpError, setDpError] = useState<string | null>(null);
   const [postingDP, setPostingDP] = useState(false);
+  const [customerPONumber, setCustomerPONumber] = useState("");
+  const [customerPODate, setCustomerPODate] = useState("");
+  const [requestedDeliveryDate, setRequestedDeliveryDate] = useState("");
+  const [shippingTerms, setShippingTerms] = useState<SalesOrder["shipping_terms"] | undefined>(undefined);
+  const [shipToAddress, setShipToAddress] = useState("");
+  const [salespersonId, setSalespersonId] = useState("");
 
   useEffect(() => {
     workbench.markUnsaved(tabId, true);
@@ -80,6 +86,12 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
       setDate(order.order_date);
       setCustomerId(String(order.customer_id));
       setNotes(order.notes ?? "");
+      setCustomerPONumber(order.customer_po_number ?? "");
+      setCustomerPODate(order.customer_po_date ?? "");
+      setRequestedDeliveryDate(order.requested_delivery_date ?? "");
+      setShippingTerms(order.shipping_terms);
+      setShipToAddress(order.ship_to_address ?? "");
+      setSalespersonId(order.salesperson_id ? String(order.salesperson_id) : "");
       setLines(
         order.lines.map((l) => ({
           id: `ln-${l.id}`,
@@ -154,6 +166,12 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
         customer_id: Number(customerId),
         order_date: date,
         notes: notes.trim() || undefined,
+        customer_po_number: customerPONumber.trim() || undefined,
+        customer_po_date: customerPODate || undefined,
+        requested_delivery_date: requestedDeliveryDate || undefined,
+        salesperson_id: salespersonId ? Number(salespersonId) : undefined,
+        ship_to_address: shipToAddress.trim() || undefined,
+        shipping_terms: shippingTerms,
         lines: payloadLines,
       });
       setOrderId(created.id);
@@ -261,6 +279,61 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
             <span className="field__label">Notes</span>
             <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Terms, delivery instructions, references..." disabled={isExisting} />
           </label>
+
+          <fieldset className="fieldset">
+            <legend className="fieldset__legend">Referensi Customer</legend>
+            <div className="entrytab__detail-title" style={{ marginBottom: "8px" }}>
+              <div className="entrytab__header-grid">
+                <div className="entrytab__header-col">
+                  <label className="field">
+                    <span className="field__label">Customer PO Number</span>
+                    <input className="input" type="text" value={customerPONumber} onChange={(e) => setCustomerPONumber(e.target.value)} placeholder="PO-12345" disabled={isExisting} />
+                  </label>
+                </div>
+                <div className="entrytab__header-col">
+                  <label className="field">
+                    <span className="field__label">Customer PO Date</span>
+                    <input className="input" type="date" value={customerPODate} onChange={(e) => setCustomerPODate(e.target.value)} disabled={isExisting} />
+                  </label>
+                </div>
+                <div className="entrytab__header-col">
+                  <label className="field">
+                    <span className="field__label">Requested Delivery Date</span>
+                    <input className="input" type="date" value={requestedDeliveryDate} onChange={(e) => setRequestedDeliveryDate(e.target.value)} disabled={isExisting} />
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="entrytab__detail-title" style={{ marginTop: "8px", marginBottom: "8px" }}>
+              <div className="entrytab__header-grid">
+                <div className="entrytab__header-col">
+                  <label className="field">
+                    <span className="field__label">Shipping Terms</span>
+                    <select className="input" value={shippingTerms ?? ""} onChange={(e) => setShippingTerms(e.target.value ? (e.target.value as NonNullable<SalesOrder["shipping_terms"]>) : undefined)} disabled={isExisting}>
+                      <option value="">None</option>
+                      <option value="FOB">FOB</option>
+                      <option value="CIF">CIF</option>
+                      <option value="EXW">EXW</option>
+                      <option value="CFR">CFR</option>
+                      <option value="DAP">DAP</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="entrytab__header-col">
+                  <label className="field">
+                    <span className="field__label">Salesperson ID</span>
+                    <input className="input" type="number" value={salespersonId} onChange={(e) => setSalespersonId(e.target.value)} placeholder="e.g., 1" disabled={isExisting} />
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="field">
+              <label className="field">
+                <span className="field__label">Ship To Address</span>
+                <textarea className="input" rows={2} value={shipToAddress} onChange={(e) => setShipToAddress(e.target.value)} placeholder="Full delivery address..." disabled={isExisting} />
+              </label>
+            </div>
+          </fieldset>
 
           <div className="entrytab__detail">
             <div className="entrytab__detail-title">Item lines *</div>

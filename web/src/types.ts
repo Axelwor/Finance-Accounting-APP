@@ -487,6 +487,7 @@ export interface Item {
   is_active: boolean;
   unit?: string;
   sale_price_cents: number;
+  qty_on_hand?: number | null;
   description?: string;
   barcode?: string | null;
   secondary_uom?: string | null;
@@ -576,6 +577,7 @@ export interface SalesOrderListItem {
   status: "CONFIRMED" | "CLOSED" | "CANCELLED";
   total_cents: number;
   dp_received_cents: number;
+  customer_po_number?: string | null;
 }
 
 /** A sales order line (GET /api/v1/sales-orders/{id}). */
@@ -610,7 +612,6 @@ export interface DownPayment {
 export interface SalesOrder extends SalesOrderListItem {
   lines: SalesOrderLine[];
   down_payments: DownPayment[];
-  customer_po_number?: string | null;
   customer_po_date?: string | null;
   requested_delivery_date?: string | null;
   salesperson_id?: number | null;

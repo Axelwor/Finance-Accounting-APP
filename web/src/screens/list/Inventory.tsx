@@ -52,29 +52,51 @@ export function InventoryItemsList() {
             <div className="ledger-table__head">
               <span>Code</span>
               <span>Name</span>
+              <span>Barcode</span>
               <span>Type</span>
+              <span>Category</span>
               <span>UoM</span>
               <span className="right">Price</span>
               <span>Status</span>
             </div>
-            {items.map((it) => (
-              <div
-                key={it.id}
-                className="ledger-table__row"
-                role="button"
-                tabIndex={0}
-                onClick={() => workbench.openEntryExisting("inventory-item", it.id, it.code, it.is_active ? "ACTIVE" : "INACTIVE")}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); workbench.openEntryExisting("inventory-item", it.id, it.code, it.is_active ? "ACTIVE" : "INACTIVE"); } }}
-                style={{ cursor: "pointer" }}
-              >
-                <span className="ledger-table__no">{it.code}</span>
-                <span className="ledger-table__cat">{it.name}</span>
-                <span><span className={`kind-mark ${it.item_type === "goods" ? "" : "is-muted"}`}>{it.item_type}</span></span>
-                <span className="ledger-table__memo">{it.unit || "—"}</span>
-                <span className="ledger-table__amount right">{it.sale_price_cents ? formatIDR(it.sale_price_cents) : "—"}</span>
-                <span><span className={`kind-mark ${it.is_active ? "is-positive" : "is-negative"}`}>{it.is_active ? "Active" : "Inactive"}</span></span>
-              </div>
-            ))}
+            {items.map((it) => {
+              const belowReorder =
+                typeof it.reorder_point === "number" &&
+                it.reorder_point > 0 &&
+                typeof it.qty_on_hand === "number" &&
+                it.qty_on_hand < it.reorder_point;
+              return (
+                <div
+                  key={it.id}
+                  className="ledger-table__row"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => workbench.openEntryExisting("inventory-item", it.id, it.code, it.is_active ? "ACTIVE" : "INACTIVE")}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); workbench.openEntryExisting("inventory-item", it.id, it.code, it.is_active ? "ACTIVE" : "INACTIVE"); } }}
+                  style={{ cursor: "pointer" }}
+                >
+                  <span className="ledger-table__no">{it.code}</span>
+                  <span className="ledger-table__cat">
+                    {belowReorder && (
+                      <span
+                        className="kind-mark"
+                        style={{ color: "var(--warning)", background: "var(--warning-soft)", marginRight: "6px", borderRadius: "4px", padding: "0 4px" }}
+                        title={`Stock ${it.qty_on_hand} below reorder point ${it.reorder_point}`}
+                      >
+                        ⚠
+                      </span>
+                    )}
+                    {it.name}
+                  </span>
+                  <span>{it.barcode || "—"}</span>
+                  <span><span className={`kind-mark ${it.item_type === "goods" ? "" : "is-muted"}`}>{it.item_type}</span></span>
+                  <span>{it.category || "—"}</span>
+                  <span className="ledger-table__memo">{it.unit || "—"}</span>
+                  <span className="ledger-table__amount right">{it.sale_price_cents ? formatIDR(it.sale_price_cents) : "—"}</span>
+                  <span><span className={`kind-mark ${it.is_active ? "is-positive" : "is-negative"}`}>{it.is_active ? "Active" : "Inactive"}</span></span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

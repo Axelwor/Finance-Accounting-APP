@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
 import { FormError } from "../../components/ui";
+import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
-import type { EntrySubKind } from "../../types";
+import type { EntrySubKind, SupplierListItem } from "../../types";
 
 interface Props {
   tabId: string;
@@ -138,16 +139,48 @@ export function MockEntryForm({ tabId, subKind, title, initialTitle }: Props) {
   const [counterLines, setCounterLines] = useState<CounterLine[]>([seedCounterLine()]);
   const [accountSearch, setAccountSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
+  
+  // ERP fields for inventory-item (optional)
+  const [itemCode, setItemCode] = useState("");
+  const [itemNameERP, setItemNameERP] = useState("");
+  const [barcode, setBarcode] = useState("");
+  const [category, setCategory] = useState("");
+  const [brand, setBrand] = useState("");
+  const [abcClassification, setAbcClassification] = useState<"A" | "B" | "C">("A");
+  const [secondaryUom, setSecondaryUom] = useState("");
+  const [uomConversionFactor, setUomConversionFactor] = useState("");
+  const [saleUom, setSaleUom] = useState("");
+  const [purchaseUom, setPurchaseUom] = useState("");
+  const [weightGrams, setWeightGrams] = useState("");
+  const [volumeCc, setVolumeCc] = useState("");
+  const [leadTimeDays, setLeadTimeDays] = useState("");
+  const [reorderPoint, setReorderPoint] = useState("");
+  const [reorderQty, setReorderQty] = useState("");
+  const [preferredSupplierId, setPreferredSupplierId] = useState("");
+  const [descriptionLong, setDescriptionLong] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [suppliers, setSuppliers] = useState<SupplierListItem[]>([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
 
   useEffect(() => {
+    if (subKind === "inventory-item") {
+      setLoadingSuppliers(true);
+      api.listSuppliers().then(setSuppliers).finally(() => setLoadingSuppliers(false));
+    }
+  }, [subKind]);
+  
+  useEffect(() => {
     workbench.markUnsaved(tabId, true);
-  }, [tabId, date, number, party, description, counterLines, workbench]);
+  }, [tabId, date, number, party, description, counterLines, itemCode, itemNameERP, barcode, category, brand, abcClassification, secondaryUom, uomConversionFactor, saleUom, purchaseUom, weightGrams, volumeCc, leadTimeDays, reorderPoint, reorderQty, preferredSupplierId, descriptionLong, imageUrl, workbench]);
 
   const primary = PRIMARY_ACCOUNT_HINT[subKind];
   const totalCents = useMemo(
     () => counterLines.reduce((sum, line) => sum + parseCents(line.amount), 0),
     [counterLines],
   );
+
+  // ERP fields display logic for inventory-item
+  const showErpFields = subKind === "inventory-item";
 
   const updateCounter = (id: string, patch: Partial<CounterLine>) => {
     setCounterLines((current) => current.map((line) => (line.id === id ? { ...line, ...patch } : line)));
@@ -229,6 +262,130 @@ export function MockEntryForm({ tabId, subKind, title, initialTitle }: Props) {
               placeholder="Short description"
             />
           </label>
+
+          {showErpFields && (
+            <>
+              <div className="entrytab__header-grid">
+                <div className="entrytab__header-col">
+                  <label className="field">
+                    <span className="field__label">Item Code *</span>
+                    <input className="input" value={itemCode} onChange={(e) => setItemCode(e.target.value)} placeholder="e.g. ITM-0001" />
+                  </label>
+                </div>
+                <div className="entrytab__header-col">
+                  <label className="field">
+                    <span className="field__label">Item Name *</span>
+                    <input className="input" value={itemNameERP} onChange={(e) => setItemNameERP(e.target.value)} placeholder="Item name" />
+                  </label>
+                </div>
+              </div>
+
+              <fieldset className="entrytab__section">
+                <legend className="entrytab__section-title">Klasifikasi</legend>
+                <div className="entrytab__header-grid">
+                  <label className="field">
+                    <span className="field__label">Category</span>
+                    <input className="input" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Bahan Baku" />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">Brand</span>
+                    <input className="input" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Brand name" />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">ABC Classification</span>
+                    <select className="input" value={abcClassification} onChange={(e) => setAbcClassification(e.target.value as "A" | "B" | "C")}>
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                      <option value="C">C</option>
+                    </select>
+                  </label>
+                </div>
+              </fieldset>
+
+              <fieldset className="entrytab__section">
+                <legend className="entrytab__section-title">Identifikasi</legend>
+                <div className="entrytab__header-grid">
+                  <label className="field">
+                    <span className="field__label">Barcode</span>
+                    <input className="input" value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="EAN / UPC / internal barcode" />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">Image URL</span>
+                    <input className="input" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://…" />
+                  </label>
+                </div>
+              </fieldset>
+
+              <fieldset className="entrytab__section">
+                <legend className="entrytab__section-title">Satuan</legend>
+                <div className="entrytab__header-grid">
+                  <label className="field">
+                    <span className="field__label">Secondary UoM</span>
+                    <input className="input" value={secondaryUom} onChange={(e) => setSecondaryUom(e.target.value)} placeholder="e.g. box" />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">Conversion Factor</span>
+                    <input className="input" type="number" min="0" step="any" value={uomConversionFactor} onChange={(e) => setUomConversionFactor(e.target.value)} placeholder="e.g. 12 (1 box = 12 pcs)" />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">Sale UoM</span>
+                    <input className="input" value={saleUom} onChange={(e) => setSaleUom(e.target.value)} placeholder="e.g. pcs" />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">Purchase UoM</span>
+                    <input className="input" value={purchaseUom} onChange={(e) => setPurchaseUom(e.target.value)} placeholder="e.g. box" />
+                  </label>
+                </div>
+              </fieldset>
+
+              <fieldset className="entrytab__section">
+                <legend className="entrytab__section-title">Logistik</legend>
+                <div className="entrytab__header-grid">
+                  <label className="field">
+                    <span className="field__label">Weight (grams)</span>
+                    <input className="input" type="number" min="0" step="any" value={weightGrams} onChange={(e) => setWeightGrams(e.target.value)} placeholder="0" />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">Volume (cc)</span>
+                    <input className="input" type="number" min="0" step="any" value={volumeCc} onChange={(e) => setVolumeCc(e.target.value)} placeholder="0" />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">Lead Time (days)</span>
+                    <input className="input" type="number" min="0" step="1" value={leadTimeDays} onChange={(e) => setLeadTimeDays(e.target.value)} placeholder="0" />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">Preferred Supplier</span>
+                    {suppliers.length > 0 ? (
+                      <select className="input" value={preferredSupplierId} onChange={(e) => setPreferredSupplierId(e.target.value)} disabled={loadingSuppliers}>
+                        <option value="">Choose supplier...</option>
+                        {suppliers.map((s) => (
+                          <option key={s.id} value={s.id}>{s.code} · {s.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input className="input" type="number" min="0" step="1" value={preferredSupplierId} onChange={(e) => setPreferredSupplierId(e.target.value)} placeholder="Supplier ID" />
+                    )}
+                  </label>
+                  <label className="field">
+                    <span className="field__label">Reorder Point</span>
+                    <input className="input" type="number" min="0" step="any" value={reorderPoint} onChange={(e) => setReorderPoint(e.target.value)} placeholder="0" />
+                  </label>
+                  <label className="field">
+                    <span className="field__label">Reorder Qty</span>
+                    <input className="input" type="number" min="0" step="any" value={reorderQty} onChange={(e) => setReorderQty(e.target.value)} placeholder="0" />
+                  </label>
+                </div>
+              </fieldset>
+
+              <fieldset className="entrytab__section">
+                <legend className="entrytab__section-title">Deskripsi</legend>
+                <label className="field">
+                  <span className="field__label">Description (Long)</span>
+                  <textarea className="input" rows={3} value={descriptionLong} onChange={(e) => setDescriptionLong(e.target.value)} placeholder="Detailed item description" />
+                </label>
+              </fieldset>
+            </>
+          )}
 
           <div className="entrytab__search">
             <input
