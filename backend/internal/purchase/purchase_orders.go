@@ -35,11 +35,14 @@ type PurchaseOrderLineRequest struct {
 }
 
 type CreatePurchaseOrderRequest struct {
-	SupplierID    int64                      `json:"supplier_id"`
-	OrderDate     string                     `json:"order_date"`
-	PaymentTermID int64                      `json:"payment_term_id"`
-	Notes         string                     `json:"notes"`
-	Lines         []PurchaseOrderLineRequest `json:"lines"`
+	SupplierID          int64                      `json:"supplier_id"`
+	OrderDate           string                     `json:"order_date"`
+	PaymentTermID       int64                      `json:"payment_term_id"`
+	Notes               string                     `json:"notes"`
+	Lines               []PurchaseOrderLineRequest `json:"lines"`
+	SupplierQuoteNumber string                     `json:"supplier_quote_number"`
+	SupplierQuoteDate   string                     `json:"supplier_quote_date"`
+	BuyerID             int64                      `json:"buyer_id"`
 }
 
 type poLineResponse struct {
@@ -58,17 +61,20 @@ type poLineResponse struct {
 }
 
 type purchaseOrderResponse struct {
-	ID            int64            `json:"id"`
-	Number        string           `json:"number"`
-	SupplierID    int64            `json:"supplier_id"`
-	SupplierName  string           `json:"supplier_name"`
-	OrderDate     string           `json:"order_date"`
-	PaymentTermID int64            `json:"payment_term_id"`
-	Notes         string           `json:"notes"`
-	Status        string           `json:"status"`
-	TotalCents    int64            `json:"total_cents"`
-	ReceivedCents int64            `json:"received_cents"`
-	Lines         []poLineResponse `json:"lines,omitempty"`
+	ID                  int64            `json:"id"`
+	Number              string           `json:"number"`
+	SupplierID          int64            `json:"supplier_id"`
+	SupplierName        string           `json:"supplier_name"`
+	OrderDate           string           `json:"order_date"`
+	PaymentTermID       int64            `json:"payment_term_id"`
+	Notes               string           `json:"notes"`
+	Status              string           `json:"status"`
+	TotalCents          int64            `json:"total_cents"`
+	ReceivedCents       int64            `json:"received_cents"`
+	SupplierQuoteNumber string           `json:"supplier_quote_number,omitempty"`
+	SupplierQuoteDate   string           `json:"supplier_quote_date,omitempty"`
+	BuyerID             int64            `json:"buyer_id,omitempty"`
+	Lines               []poLineResponse `json:"lines,omitempty"`
 }
 
 // CreatePurchaseOrder handles POST /purchase-orders.
@@ -93,6 +99,11 @@ func (service *Service) CreatePurchaseOrder(writer http.ResponseWriter, request 
 		return
 	}
 	orderDate, _ := parseDate(req.OrderDate)
+	supplierQuoteDate, err := optionalDate(req.SupplierQuoteDate)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", "supplier_quote_date must be a valid YYYY-MM-DD date")
+		return
+	}
 
 	var result purchaseOrderResponse
 	err = db.WithTransaction(request.Context(), service.pool, func(tx pgx.Tx) error {
@@ -115,11 +126,13 @@ func (service *Service) CreatePurchaseOrder(writer http.ResponseWriter, request 
 		}
 		// Insert header.
 		err = tx.QueryRow(request.Context(), `
-			INSERT INTO purchase_orders (tenant_id, number, supplier_id, order_date, payment_term_id, notes, status, total_cents)
-			VALUES ($1, $2, $3, $4, $5, $6, 'CONFIRMED', $7)
+			INSERT INTO purchase_orders (tenant_id, number, supplier_id, order_date, payment_term_id, notes, status, total_cents,
+				supplier_quote_number, supplier_quote_date, buyer_id)
+			VALUES ($1, $2, $3, $4, $5, $6, 'CONFIRMED', $7, $8, $9, $10)
 			RETURNING id, number
 		`, tenant, number, req.SupplierID, orderDate, optionalInt8(req.PaymentTermID),
-			textValueOptional(req.Notes), total).Scan(&result.ID, &result.Number)
+			textValueOptional(req.Notes), total,
+			textValueOptional(req.SupplierQuoteNumber), supplierQuoteDate, optionalInt8(req.BuyerID)).Scan(&result.ID, &result.Number)
 		if err != nil {
 			return err
 		}
@@ -153,6 +166,9 @@ func (service *Service) CreatePurchaseOrder(writer http.ResponseWriter, request 
 		result.Notes = strings.TrimSpace(req.Notes)
 		result.Status = poStatusConfirmed
 		result.TotalCents = total
+		result.SupplierQuoteNumber = strings.TrimSpace(req.SupplierQuoteNumber)
+		result.SupplierQuoteDate = dateString(supplierQuoteDate)
+		result.BuyerID = req.BuyerID
 		return nil
 	})
 	if err != nil {
@@ -179,7 +195,8 @@ func (service *Service) ListPurchaseOrders(writer http.ResponseWriter, request *
 		query := `
 			SELECT po.id, po.number, po.supplier_id, s.name,
 			       po.order_date, po.payment_term_id, po.notes, po.status,
-			       po.total_cents, po.received_cents
+			       po.total_cents, po.received_cents,
+			       po.supplier_quote_number, po.supplier_quote_date, po.buyer_id
 			FROM purchase_orders po
 			JOIN suppliers s ON s.tenant_id = po.tenant_id AND s.id = po.supplier_id
 		`
@@ -200,8 +217,12 @@ func (service *Service) ListPurchaseOrders(writer http.ResponseWriter, request *
 			var orderDate pgtype.Date
 			var paymentTerm pgtype.Int8
 			var notes pgtype.Text
+			var quoteNumber pgtype.Text
+			var quoteDate pgtype.Date
+			var buyerID pgtype.Int8
 			if err := rows.Scan(&po.ID, &po.Number, &po.SupplierID, &po.SupplierName,
-				&orderDate, &paymentTerm, &notes, &po.Status, &po.TotalCents, &po.ReceivedCents); err != nil {
+				&orderDate, &paymentTerm, &notes, &po.Status, &po.TotalCents, &po.ReceivedCents,
+				&quoteNumber, &quoteDate, &buyerID); err != nil {
 				return err
 			}
 			po.OrderDate = dateString(orderDate)
@@ -209,6 +230,11 @@ func (service *Service) ListPurchaseOrders(writer http.ResponseWriter, request *
 				po.PaymentTermID = paymentTerm.Int64
 			}
 			po.Notes = textValue(notes)
+			po.SupplierQuoteNumber = textValue(quoteNumber)
+			po.SupplierQuoteDate = dateString(quoteDate)
+			if buyerID.Valid {
+				po.BuyerID = buyerID.Int64
+			}
 			results = append(results, po)
 		}
 		return rows.Err()
@@ -253,15 +279,20 @@ func fetchPO(ctx context.Context, tx pgx.Tx, tenant, poID int64) (*purchaseOrder
 	var orderDate pgtype.Date
 	var paymentTerm pgtype.Int8
 	var notes pgtype.Text
+	var quoteNumber pgtype.Text
+	var quoteDate pgtype.Date
+	var buyerID pgtype.Int8
 	err := tx.QueryRow(ctx, `
 		SELECT po.id, po.number, po.supplier_id, s.name,
 		       po.order_date, po.payment_term_id, po.notes, po.status,
-		       po.total_cents, po.received_cents
+		       po.total_cents, po.received_cents,
+		       po.supplier_quote_number, po.supplier_quote_date, po.buyer_id
 		FROM purchase_orders po
 		JOIN suppliers s ON s.tenant_id = po.tenant_id AND s.id = po.supplier_id
 		WHERE po.tenant_id = $1 AND po.id = $2
 	`, tenant, poID).Scan(&po.ID, &po.Number, &po.SupplierID, &po.SupplierName,
-		&orderDate, &paymentTerm, &notes, &po.Status, &po.TotalCents, &po.ReceivedCents)
+		&orderDate, &paymentTerm, &notes, &po.Status, &po.TotalCents, &po.ReceivedCents,
+		&quoteNumber, &quoteDate, &buyerID)
 	if err != nil {
 		return nil, err
 	}
@@ -270,6 +301,11 @@ func fetchPO(ctx context.Context, tx pgx.Tx, tenant, poID int64) (*purchaseOrder
 		po.PaymentTermID = paymentTerm.Int64
 	}
 	po.Notes = textValue(notes)
+	po.SupplierQuoteNumber = textValue(quoteNumber)
+	po.SupplierQuoteDate = dateString(quoteDate)
+	if buyerID.Valid {
+		po.BuyerID = buyerID.Int64
+	}
 
 	rows, err := tx.Query(ctx, `
 		SELECT pol.id, pol.item_id, i.code, i.name, pol.line_no, pol.qty,
