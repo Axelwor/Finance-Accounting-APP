@@ -10,6 +10,13 @@ import (
 // freshly created tenant. It runs inside the registration transaction so a
 // failure rolls the whole registration back.
 func seedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
+	return SeedDefaultCOA(ctx, tx, tenantID)
+}
+
+// SeedDefaultCOA is the exported variant so other packages (e.g. tenant, which
+// creates additional books for an existing user) can provision a new tenant
+// with the same default chart of accounts, categories, and open period.
+func SeedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 	accounts := []struct {
 		code        string
 		name        string

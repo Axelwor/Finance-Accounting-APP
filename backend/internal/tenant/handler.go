@@ -102,8 +102,10 @@ func (service *Service) createTenant(writer http.ResponseWriter, request *http.R
 		return
 	}
 
-	// Create the tenant and link it to the user in one transaction so a
-	// failure between the two statements can never leave an orphan tenant.
+	// Create the tenant, link it to the user, and provision the default chart
+	// of accounts / categories / open period — all in one transaction so a
+	// failure between the statements can never leave an orphan or unusable
+	// tenant.
 	var tenantID int64
 	txErr := pgx.BeginFunc(request.Context(), service.pool, func(tx pgx.Tx) error {
 		err := tx.QueryRow(request.Context(),
@@ -112,11 +114,15 @@ func (service *Service) createTenant(writer http.ResponseWriter, request *http.R
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(request.Context(),
+		if _, err = tx.Exec(request.Context(),
 			`INSERT INTO user_tenants (user_id, tenant_id, role) VALUES ($1, $2, 'owner')`,
 			userID, tenantID,
-		)
-		return err
+		); err != nil {
+			return err
+		}
+		// Provision the default COA so the new book can post immediately
+		// (without this, every posting fails with ACCOUNT_NOT_FOUND).
+		return auth.SeedDefaultCOA(request.Context(), tx, tenantID)
 	})
 	if txErr != nil {
 		writeError(writer, http.StatusInternalServerError, "TENANT_CREATE_FAILED", txErr.Error())
