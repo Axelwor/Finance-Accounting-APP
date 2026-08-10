@@ -42,7 +42,7 @@ sections:
     columns:
       - label: Description
       - value: Amount
-footer_text: Please remit payment by the due date. Thank you for your business.$$),
+footer_text: Please remit payment by the due date. Thank you for your business.$$, true, true),
        (0, 'PO-STD', 'Standard Purchase Order', 'purchase_order',
         $$title: Purchase Order
 subtitle: Supplier Purchase Order
@@ -68,7 +68,7 @@ sections:
     columns:
       - label: Description
       - value: Amount
-footer_text: Please confirm this purchase order and quote the PO number on delivery.$$),
+footer_text: Please confirm this purchase order and quote the PO number on delivery.$$, true, true),
        (0, 'DO-STD', 'Delivery Order', 'delivery_order',
         $$title: Delivery Order
 subtitle: Goods Delivery / Shipping Document
@@ -89,7 +89,7 @@ sections:
       - notes: Notes
   - title: Acknowledgement
     content: "Received by (name / signature / date):"
-footer_text: Please sign and return a copy of this delivery order as proof of receipt.$$),
+footer_text: Please sign and return a copy of this delivery order as proof of receipt.$$, true, true),
        (0, 'TAX-STD', 'Tax Invoice', 'tax_invoice',
         $$title: Tax Invoice
 subtitle: VAT / GST Tax Invoice
@@ -116,7 +116,7 @@ sections:
     columns:
       - label: Description
       - value: Amount
-footer_text: This document is an official tax invoice. Retain for tax filing purposes.$$),
+footer_text: This document is an official tax invoice. Retain for tax filing purposes.$$, true, true),
        (0, 'WH-STD', 'Withholding Tax Slip', 'withholding_slip',
         $$title: Withholding Tax Slip
 subtitle: Withholding Tax Certificate
@@ -141,7 +141,7 @@ sections:
     columns:
       - label: Description
       - value: Amount
-footer_text: This certificate evidences tax withheld at source. Retain for tax filing purposes.$$),
+footer_text: This certificate evidences tax withheld at source. Retain for tax filing purposes.$$, true, true),
        (0, 'CUS-STD', 'Customer Statement', 'customer_statement',
         $$title: Customer Statement
 subtitle: Statement of Account — Customer
@@ -167,7 +167,7 @@ sections:
     columns:
       - label: Description
       - value: Amount
-footer_text: Please contact us if you have questions about any item on this statement.$$),
+footer_text: Please contact us if you have questions about any item on this statement.$$, true, true),
        (0, 'SUP-STD', 'Supplier Statement', 'supplier_statement',
         $$title: Supplier Statement
 subtitle: Statement of Account — Supplier
@@ -193,7 +193,7 @@ sections:
     columns:
       - label: Description
       - value: Amount
-footer_text: Please reconcile this statement against your records and report discrepancies.$$),
+footer_text: Please reconcile this statement against your records and report discrepancies.$$, true, true),
        (0, 'PV-STD', 'Payment Voucher', 'payment_voucher',
         $$title: Payment Voucher
 subtitle: Outgoing Payment Voucher
@@ -218,7 +218,7 @@ sections:
       - value: Amount
   - title: Approval
     content: "Prepared by: ______________   Checked by: ______________   Approved by: ______________"
-footer_text: This voucher authorizes the disbursement described above.$$),
+footer_text: This voucher authorizes the disbursement described above.$$, true, true),
        (0, 'RV-STD', 'Receipt Voucher', 'receipt_voucher',
         $$title: Receipt Voucher
 subtitle: Incoming Payment Receipt
@@ -241,7 +241,7 @@ sections:
     columns:
       - label: Description
       - value: Amount
-footer_text: This receipt acknowledges payment received as described above.$$),
+footer_text: This receipt acknowledges payment received as described above.$$, true, true),
        (0, 'JV-STD', 'Journal Voucher', 'journal_voucher',
         $$title: Journal Voucher
 subtitle: General Journal Entry Voucher
@@ -267,7 +267,7 @@ sections:
       - value: Amount
   - title: Approval
     content: "Prepared by: ______________   Reviewed by: ______________   Posted by: ______________"
-footer_text: Journal entries are immutable once posted; corrections use reversal entries.$$),
+footer_text: Journal entries are immutable once posted; corrections use reversal entries.$$, true, true),
        (0, 'SC-STD', 'Stock Card', 'stock_card',
         $$title: Stock Card
 subtitle: Item Movement History
@@ -293,7 +293,7 @@ sections:
     columns:
       - label: Description
       - value: Amount
-footer_text: Stock card quantities are derived from posted inventory movements.$$),
+footer_text: Stock card quantities are derived from posted inventory movements.$$, true, true),
        (0, 'TB-STD', 'Trial Balance', 'trial_balance',
         $$title: Trial Balance
 subtitle: General Ledger Trial Balance
@@ -316,7 +316,7 @@ sections:
     columns:
       - label: Description
       - value: Amount
-footer_text: Total debits must equal total credits for a balanced trial balance.$$),
+footer_text: Total debits must equal total credits for a balanced trial balance.$$, true, true),
        (0, 'PL-STD', 'Profit and Loss', 'profit_loss',
         $$title: Profit and Loss
 subtitle: Income Statement
@@ -342,7 +342,7 @@ sections:
     columns:
       - label: Description
       - value: Amount
-footer_text: Figures reflect posted journals for the selected period only.$$),
+footer_text: Figures reflect posted journals for the selected period only.$$, true, true),
        (0, 'BS-STD', 'Balance Sheet', 'balance_sheet',
         $$title: Balance Sheet
 subtitle: Statement of Financial Position
@@ -374,7 +374,7 @@ sections:
     columns:
       - label: Description
       - value: Amount
-footer_text: Assets must equal liabilities plus equity.$$),
+footer_text: Assets must equal liabilities plus equity.$$, true, true),
        (0, 'CF-STD', 'Cash Flow Statement', 'cash_flow',
         $$title: Cash Flow Statement
 subtitle: Statement of Cash Flows
@@ -403,7 +403,7 @@ sections:
     columns:
       - label: Description
       - value: Amount
-footer_text: Prepared using the indirect method from posted accounting entries.$$),
+footer_text: Prepared using the indirect method from posted accounting entries.$$, true, true),
        (0, 'AR-STD', 'Accounts Receivable Aging', 'ar_aging',
         $$title: Accounts Receivable Aging
 subtitle: AR Aging Summary
@@ -427,7 +427,7 @@ sections:
     columns:
       - label: Description
       - value: Amount
-footer_text: Aging buckets are calculated from invoice due dates as of the report date.$$),
+footer_text: Aging buckets are calculated from invoice due dates as of the report date.$$, true, true),
        (0, 'AP-STD', 'Accounts Payable Aging', 'ap_aging',
         $$title: Accounts Payable Aging
 subtitle: AP Aging Summary
@@ -451,7 +451,7 @@ sections:
     columns:
       - label: Description
       - value: Amount
-footer_text: Aging buckets are calculated from bill due dates as of the report date.$$),
+footer_text: Aging buckets are calculated from bill due dates as of the report date.$$, true, true),
        (0, 'ASR-STD', 'Asset Register', 'asset_register',
         $$title: Asset Register
 subtitle: Fixed Asset Register
@@ -475,7 +475,7 @@ sections:
     columns:
       - label: Description
       - value: Amount
-footer_text: Net book value equals cost less accumulated depreciation to date.$$),
+footer_text: Net book value equals cost less accumulated depreciation to date.$$, true, true),
        (0, 'STK-STD', 'Stock Opname', 'stock_opname',
         $$title: Stock Opname
 subtitle: Physical Stock Count Sheet
@@ -502,4 +502,4 @@ sections:
       - value: Amount
   - title: Approval
     content: "Counted by: ______________   Verified by: ______________   Approved by: ______________"
-footer_text: Post adjustment journals for variances only after approval.$$);
+footer_text: Post adjustment journals for variances only after approval.$$, true, true);
