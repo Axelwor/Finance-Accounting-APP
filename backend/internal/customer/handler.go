@@ -87,20 +87,22 @@ type CreatePaymentTermRequest struct {
 // Customer is the JSON shape for a customer row. Nullable text/id columns are
 // pointers so they serialize as null when set.
 type Customer struct {
-	ID               int64   `json:"id"`
-	Code             string  `json:"code"`
-	Name             string  `json:"name"`
-	NPWP             *string `json:"npwp"`
-	ContactPerson    *string `json:"contact_person"`
-	Phone            *string `json:"phone"`
-	Email            *string `json:"email"`
-	Address          *string `json:"address"`
-	City             *string `json:"city"`
-	Province         *string `json:"province"`
-	PostalCode       *string `json:"postal_code"`
-	PaymentTermID    *int64  `json:"payment_term_id"`
-	CreditLimitCents *int64  `json:"credit_limit_cents"`
-	IsActive         bool    `json:"is_active"`
+	ID                         int64   `json:"id"`
+	Code                       string  `json:"code"`
+	Name                       string  `json:"name"`
+	NPWP                       *string `json:"npwp"`
+	ContactPerson              *string `json:"contact_person"`
+	Phone                      *string `json:"phone"`
+	Email                      *string `json:"email"`
+	Address                    *string `json:"address"`
+	City                       *string `json:"city"`
+	Province                   *string `json:"province"`
+	PostalCode                 *string `json:"postal_code"`
+	PaymentTermID              *int64  `json:"payment_term_id"`
+	CreditLimitCents           *int64  `json:"credit_limit_cents"`
+	DefaultRevenueAccountID    *int64  `json:"default_revenue_account_id"`
+	DefaultReceivableAccountID *int64  `json:"default_receivable_account_id"`
+	IsActive                   bool    `json:"is_active"`
 
 	BillingAddress      *string `json:"billing_address"`
 	ShippingAddress     *string `json:"shipping_address"`
@@ -133,27 +135,27 @@ type PaymentTerm struct {
 // StatementLine is one row of a customer statement: an issued invoice
 // (debit increases the receivable) or a payment (credit decreases it).
 type StatementLine struct {
-	Date               string `json:"date"`
-	Type               string `json:"type"`
-	Reference          string `json:"reference"`
-	Description        string `json:"description"`
-	DebitCents         int64  `json:"debit_cents"`
-	CreditCents        int64  `json:"credit_cents"`
-	RunningBalanceCents int64 `json:"running_balance_cents"`
+	Date                string `json:"date"`
+	Type                string `json:"type"`
+	Reference           string `json:"reference"`
+	Description         string `json:"description"`
+	DebitCents          int64  `json:"debit_cents"`
+	CreditCents         int64  `json:"credit_cents"`
+	RunningBalanceCents int64  `json:"running_balance_cents"`
 }
 
 // CustomerStatementResponse is the JSON shape for GET /customers/{id}/statement.
 type CustomerStatementResponse struct {
-	CustomerID           int64           `json:"customer_id"`
-	Code                 string          `json:"code"`
-	Name                 string          `json:"name"`
-	FromDate             string          `json:"from_date"`
-	ToDate               string          `json:"to_date"`
-	OpeningBalanceCents  int64           `json:"opening_balance_cents"`
-	Lines                []StatementLine `json:"lines"`
-	InvoicedCents        int64           `json:"invoiced_cents"`
-	PaidCents            int64           `json:"paid_cents"`
-	ClosingBalanceCents  int64           `json:"closing_balance_cents"`
+	CustomerID          int64           `json:"customer_id"`
+	Code                string          `json:"code"`
+	Name                string          `json:"name"`
+	FromDate            string          `json:"from_date"`
+	ToDate              string          `json:"to_date"`
+	OpeningBalanceCents int64           `json:"opening_balance_cents"`
+	Lines               []StatementLine `json:"lines"`
+	InvoicedCents       int64           `json:"invoiced_cents"`
+	PaidCents           int64           `json:"paid_cents"`
+	ClosingBalanceCents int64           `json:"closing_balance_cents"`
 }
 
 // statementRow is the raw row shape before the running balance is computed.
@@ -181,6 +183,7 @@ func (service *Service) ListCustomers(writer http.ResponseWriter, request *http.
 	rows, err := service.pool.Query(request.Context(), `
 		SELECT id, code, name, npwp, contact_person, phone, email, address, city,
 		       province, postal_code, payment_term_id, credit_limit_cents, is_active,
+		       default_revenue_account_id, default_receivable_account_id,
 		       billing_address, shipping_address, customer_group, price_level, currency_code,
 		       is_pkp, credit_hold, website, fax, contact_person_2, phone_2, npwp_name,
 		       opening_balance_cents, opening_balance_date
@@ -471,6 +474,7 @@ func (service *Service) GetCustomer(writer http.ResponseWriter, request *http.Re
 	row := service.pool.QueryRow(request.Context(), `
 		SELECT id, code, name, npwp, contact_person, phone, email, address, city,
 		       province, postal_code, payment_term_id, credit_limit_cents, is_active,
+		       default_revenue_account_id, default_receivable_account_id,
 		       billing_address, shipping_address, customer_group, price_level, currency_code,
 		       is_pkp, credit_hold, website, fax, contact_person_2, phone_2, npwp_name,
 		       opening_balance_cents, opening_balance_date
@@ -653,6 +657,8 @@ func scanCustomer(row scannable) (Customer, error) {
 	customer.PostalCode = textOrNil(postal)
 	customer.PaymentTermID = int8OrNil(paymentTermID)
 	customer.CreditLimitCents = int8OrNil(creditLimit)
+	customer.DefaultRevenueAccountID = int8OrNil(rev)
+	customer.DefaultReceivableAccountID = int8OrNil(receiv)
 	customer.BillingAddress = textOrNil(billingAddr)
 	customer.ShippingAddress = textOrNil(shipAddr)
 	customer.CustomerGroup = textOrNil(group)
