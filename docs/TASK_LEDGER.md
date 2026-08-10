@@ -51,3 +51,7 @@ Durable task registry for all AI Agent sessions.
 - No commit or push without explicit approval.
 | F-13-001 | DONE | 2026-08-10 session | Asset register report endpoint; backend/internal/assets/register.go, register_test.go | GET /assets/register returns assets with NBV + totals; 6 table-driven tests pass; deployed live | 2026-08-10 21:21 UTC | e8a20ee |
 | NRPT-001 | DONE | 2026-08-10 session | Report templates screen (N-07, N-08); web/src/screens/list/ReportTemplateList.tsx, api.ts, types.ts, workbench wiring | CRUD + render PDF/HTML via objectURL; 19 templates visible; deployed live | 2026-08-10 21:21 UTC | c2d9ef0 |
+| I-004-001 | DONE | 2026-08-10 session | COA CSV export endpoint (i-004); backend/internal/coa/export.go | GET /accounts/export returns CSV download of full chart of accounts; deployed live | 2026-08-10 22:24 UTC | c18ea38 |
+| N-010-001 | DONE | 2026-08-10 session | Detailed health check (N-10); backend/internal/tenant/handler.go, Caddyfile | GET /healthz/detail reports DB + NextReport status; Caddy routes /healthz* to API | 2026-08-10 22:24 UTC | c18ea38, fdf0ee2 |
+| I-013-001 | DONE | 2026-08-10 session | ECL aging verification (i-013) | Verified rates correct: 0-30=1%, 31-60=2.5%, 61-90=5%, >90=10%; matches audit spec | 2026-08-10 22:24 UTC | (verification only) |
+| I-014-001 | DONE | 2026-08-10 session | PPh Final UMKM rate verification (i-014) | Verified: tax_rates seed 0.5% (PP 23/2018), resolveTaxRate divides by 100 → 0.005 decimal; calculation correct | 2026-08-10 22:24 UTC | (verification only) |
