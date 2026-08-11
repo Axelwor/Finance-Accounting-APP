@@ -826,3 +826,54 @@ All Critical (4) and Major (28) issues resolved. F-03 approval enforcement, M-00
 ---
 
 *Update file ini setiap kali task selesai atau status berubah.*
+
+---
+
+## Sprint 7 — Audit Sweep Final (SELESAI) — 2026-08-11
+
+### Fix Tambahan (commits bbb2653, 5e52fd6)
+
+| # | Finding | Fix | Commit |
+|---|---|---|---|
+| C-003 (sisa) | production/jobs.go `hashJobJournal` masih duplikat | Delegate ke `accounting.HashJournal` + hapus unused sha256/hex imports | bbb2653 |
+| m-004 | 3 dead-code guards (forecast, ledger, ppn) | Dihapus + unused context imports | bbb2653 |
+| m-013 | Lease zero-rate PV return 0 | Return `payment*n` (undiscounted sum) | bbb2653 |
+| m-020 | Komentar stale "X-Tenant-ID temporary" | Diperbarui ke JWT context | bbb2653 |
+| m-021 | Period Unlock abaikan Idempotency-Key | Validasi UUID wajib (helper lokal) | bbb2653 |
+| m-007 | slugify mangles Unicode | NFD normalize + strip diacritics | 5e52fd6 |
+| m-017 | MockEntryForm nama menyesatkan | Rename → DemoEntryForm | 5e52fd6 |
+
+### Verifikasi Final (semua series)
+
+**i-series (Info):**
+- ✅ i-003 password policy (uppercase/digit/special enforced)
+- ✅ i-004 COA export CSV (`internal/coa/export.go`)
+- ✅ i-005 quotation conversion stats (`internal/sales/stats.go`)
+- ✅ i-012 customer/item duplicate check
+- ⏸️ i-006 inter-company LOAN/INTEREST/DIVIDEND elimination — masih deferred (deferred sejak awal, butuh full consolidation module)
+
+**E-series (ERP fields di API):**
+- ✅ Customer: 17 refs (billing/shipping/is_pkp/credit_hold/price_level)
+- ✅ Item: 16 refs (barcode/category/reorder_point/abc_classification)
+- ✅ Sales Order: 12 refs (customer_po_number/salesperson_id/ship_to_address/shipping_terms)
+- ✅ Invoice: 8 refs (tax_invoice_number/sub_total/tax_total)
+- ✅ Purchase Order: 7 refs (supplier_quote_number/buyer_id)
+
+**N-series (NextReport):**
+- ✅ 19 YAML templates di `nextreport/templates/`
+- ✅ `nextreport/server.js` zero-dep rendering service
+- ✅ 19 templates seeded di DB
+- ✅ NextReport container running healthy (verified via /healthz/detail)
+
+### Status Final
+- **Build:** SUCCESS
+- **Tests:** 35 packages pass / 0 FAIL
+- **Deploy:** live & verified di `https://accounting.tikuma.net/`
+
+### Backlog yang Masih Deferred (by design / scope besar)
+- m-006: 2FA (butuh TOTP implementation)
+- m-014: Lease modification/termination (deferred sejak awal)
+- i-006: Inter-company LOAN/INTEREST/DIVIDEND (butuh full consolidation module)
+- m-016: Frontend struktur refactor ke ARCHITECTURE.md (large refactor)
+- m-018: styles.css modularization (tech debt, large refactor)
+- m-019: API_CONTRACT.md sync (dokumentasi)
