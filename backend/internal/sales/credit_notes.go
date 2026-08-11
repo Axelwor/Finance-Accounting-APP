@@ -411,7 +411,7 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 		}
 		for position, p := range prepared {
 			var qty pgtype.Numeric
-			_ = qty.Scan(p.line.Qty)
+			_ = qty.Scan(fmt.Sprintf("%g", p.line.Qty))
 			lineNo := position + 1
 			var invLineID pgtype.Int8
 			if p.line.InvoiceLineID > 0 {

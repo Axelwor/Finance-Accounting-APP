@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -113,4 +114,13 @@ func textValue(value pgtype.Text) string {
 		return ""
 	}
 	return strings.TrimSpace(value.String)
+}
+
+// pgtypeFloat converts a float64 into a pgtype.Numeric for NUMERIC columns.
+// Uses string conversion (like inventory.pgtypeFloat) because pgtype.Numeric.Scan
+// does not accept float64 directly.
+func pgtypeFloat(v float64) pgtype.Numeric {
+	var n pgtype.Numeric
+	_ = n.Scan(strings.TrimSpace(fmt.Sprintf("%g", v)))
+	return n
 }

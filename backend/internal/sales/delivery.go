@@ -273,7 +273,7 @@ func (service *Service) CreateDelivery(writer http.ResponseWriter, request *http
 		}
 		for position, p := range prepared {
 			var qty pgtype.Numeric
-			_ = qty.Scan(p.line.Qty)
+			_ = qty.Scan(fmt.Sprintf("%g", p.line.Qty))
 			lineNo := position + 1
 			_, err := tx.Exec(request.Context(), `
 				INSERT INTO delivery_orders_lines

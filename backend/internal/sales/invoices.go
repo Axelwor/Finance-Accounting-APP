@@ -391,8 +391,7 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 			}
 		}
 		for position, p := range lines {
-			var qty pgtype.Numeric
-			_ = qty.Scan(p.Line.Qty)
+			qty := pgtypeFloat(p.Line.Qty)
 			lineNo := position + 1
 			var deliveryID pgtype.Int8
 			if p.Line.DeliveryID > 0 {
@@ -406,7 +405,7 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 			`, tenant, invID, p.Line.ItemID, deliveryID, lineNo, qty,
 				p.Line.UnitPriceCents, p.Line.DiscountCents,
-				p.Line.TaxRate, p.LineTotalCents,
+				pgtypeFloat(p.Line.TaxRate), p.LineTotalCents,
 				revenueAccountID, textValueOptional(p.Line.Description))
 			if err != nil {
 				return err

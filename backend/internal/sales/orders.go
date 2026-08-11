@@ -202,7 +202,7 @@ func (service *Service) createOrderInTx(ctx context.Context, tx pgx.Tx, tenant i
 			return nil, err
 		}
 		var qty pgtype.Numeric
-		_ = qty.Scan(prepared.Line.Qty)
+		_ = qty.Scan(fmt.Sprintf("%g", prepared.Line.Qty))
 		lineNo := position + 1
 		_, err = tx.Exec(ctx, `
 			INSERT INTO sales_orders_lines

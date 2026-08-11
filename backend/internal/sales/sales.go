@@ -217,7 +217,7 @@ func (service *Service) createInTx(ctx context.Context, tx pgx.Tx, tenant int64,
 		}
 		var lineID int64
 		var qty pgtype.Numeric
-		_ = qty.Scan(prepared.Line.Qty)
+		_ = qty.Scan(fmt.Sprintf("%g", prepared.Line.Qty))
 		lineNo := position + 1
 		_ = tx.QueryRow(ctx, `
 			INSERT INTO sales_quotations_lines
