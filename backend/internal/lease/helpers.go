@@ -67,6 +67,9 @@ func (service *Service) Routes(router chi.Router) {
 	router.Post("/lease-contracts/{id}/payments/{payment_no}/post", service.PostLeasePayment)
 	router.Post("/lease-contracts/{id}/depreciate", service.DepreciateLeaseContract)
 	router.Get("/lease-contracts/{id}/depreciation-log", service.ListDepreciationLog)
+	// m-014: lease modification & termination.
+	router.Post("/lease-contracts/{id}/modify", service.ModifyLeaseContract)
+	router.Post("/lease-contracts/{id}/terminate", service.TerminateLeaseContract)
 
 	router.Post("/entity-hierarchy", service.CreateEntityHierarchy)
 	router.Get("/entity-hierarchy", service.ListEntityHierarchy)

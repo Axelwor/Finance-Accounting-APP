@@ -372,15 +372,29 @@ func (service *Service) computeEliminations(ctx context.Context, tenantIDs []int
 		txs = append(txs, t)
 	}
 
-	// Match SALE (A→B) with PURCHASE (B→A) of the same amount.
+	// i-006: elimination pairing rules. Each tx_type pairs with its mirror
+	// direction: SALE(A→B)↔PURCHASE(B→A), LOAN(A→B)↔LOAN(B→A),
+	// INTEREST(A→B)↔INTEREST(B→A), DIVIDEND(A→B)↔DIVIDEND(B→A).
+	pairType := map[string]string{
+		"SALE":     "PURCHASE",
+		"LOAN":     "LOAN",
+		"INTEREST": "INTEREST",
+		"DIVIDEND": "DIVIDEND",
+	}
+
+	// Match each transaction with its counterparty mirror of the same amount.
 	var elimEntries []eliminationEntry
 	for i, sale := range txs {
-		if sale.used || sale.txType != "SALE" {
+		if sale.used {
+			continue
+		}
+		wantType, ok := pairType[sale.txType]
+		if !ok {
 			continue
 		}
 		for j := range txs {
 			purchase := &txs[j]
-			if purchase.used || purchase.txType != "PURCHASE" {
+			if purchase.used || purchase.txType != wantType {
 				continue
 			}
 			if purchase.tenantID == sale.counterpartyTenantID &&

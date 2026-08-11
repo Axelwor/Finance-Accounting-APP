@@ -14,6 +14,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -198,6 +199,9 @@ func randomSuffix() string {
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	// TOTPC is the 6-digit authenticator code, required only when the user
+	// has 2FA enabled (m-006).
+	TOTPC string `json:"totp_code"`
 }
 
 func (service *Service) Login(writer http.ResponseWriter, request *http.Request) {
@@ -210,18 +214,32 @@ func (service *Service) Login(writer http.ResponseWriter, request *http.Request)
 	var tenantID int64
 	var passwordHash string
 	var role string
+	var totpEnabled bool
+	var totpSecret pgtype.Text
 	err := service.pool.QueryRow(request.Context(),
-		`SELECT u.id, u.password_hash, COALESCE(ut.tenant_id, 0), COALESCE(ut.role, 'viewer')
+		`SELECT u.id, u.password_hash, COALESCE(ut.tenant_id, 0), COALESCE(ut.role, 'viewer'),
+		        u.totp_enabled, u.totp_secret
 		   FROM users u
 		   LEFT JOIN user_tenants ut ON ut.user_id = u.id
 		  WHERE u.email = $1 AND u.is_active = true
 		  ORDER BY ut.id
 		  LIMIT 1`,
 		req.Email,
-	).Scan(&userID, &passwordHash, &tenantID, &role)
+	).Scan(&userID, &passwordHash, &tenantID, &role, &totpEnabled, &totpSecret)
 	if err != nil || bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) != nil {
 		writeError(writer, http.StatusUnauthorized, "INVALID_CREDENTIALS", "email or password is incorrect")
 		return
+	}
+	// m-006: when 2FA is enabled the login must carry a valid TOTP code.
+	if totpEnabled {
+		if req.TOTPC == "" {
+			writeError(writer, http.StatusUnauthorized, "TOTP_REQUIRED", "a 6-digit authenticator code is required")
+			return
+		}
+		if !totpSecret.Valid || !ValidateTOTP(totpSecret.String, strings.TrimSpace(req.TOTPC)) {
+			writeError(writer, http.StatusUnauthorized, "INVALID_TOTP", "authenticator code is incorrect")
+			return
+		}
 	}
 	accessToken, err := service.issueToken(userID, tenantID, role, 15*time.Minute)
 	if err != nil {
@@ -391,6 +409,114 @@ func (service *Service) SwitchTenant(writer http.ResponseWriter, request *http.R
 		"tenant_id":     req.TenantID,
 		"role":          role,
 	})
+}
+
+// ---------------------------------------------------------------------------
+// m-006: Two-factor authentication (TOTP) endpoints.
+// ---------------------------------------------------------------------------
+
+// Setup2FA generates a TOTP secret for the authenticated user and returns the
+// secret + provisioning URI. The secret is stored unverified; 2FA only
+// activates after Setup2FAVerify succeeds.
+func (service *Service) Setup2FA(writer http.ResponseWriter, request *http.Request) {
+	userID, ok := UserIDFromContext(request.Context())
+	if !ok || userID <= 0 {
+		writeError(writer, http.StatusUnauthorized, "AUTH_REQUIRED", "user context is required")
+		return
+	}
+	var email string
+	if err := service.pool.QueryRow(request.Context(),
+		`SELECT email FROM users WHERE id = $1`, userID,
+	).Scan(&email); err != nil {
+		writeError(writer, http.StatusInternalServerError, "USER_NOT_FOUND", err.Error())
+		return
+	}
+	secret, err := GenerateTOTPSecret()
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "TOTP_SETUP_FAILED", err.Error())
+		return
+	}
+	if _, err := service.pool.Exec(request.Context(),
+		`UPDATE users SET totp_secret = $2, totp_enabled = false WHERE id = $1`,
+		userID, secret); err != nil {
+		writeError(writer, http.StatusInternalServerError, "TOTP_SETUP_FAILED", err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"secret": secret,
+		"uri":    TOTPUri(secret, email, "FinanceAccounting"),
+	})
+}
+
+type Verify2FARequest struct {
+	Code string `json:"code"`
+}
+
+// Setup2FAVerify activates 2FA once the user proves possession of the secret
+// by submitting a valid current TOTP code.
+func (service *Service) Setup2FAVerify(writer http.ResponseWriter, request *http.Request) {
+	userID, ok := UserIDFromContext(request.Context())
+	if !ok || userID <= 0 {
+		writeError(writer, http.StatusUnauthorized, "AUTH_REQUIRED", "user context is required")
+		return
+	}
+	var req Verify2FARequest
+	if err := decodeJSON(request, &req); err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	var secret pgtype.Text
+	if err := service.pool.QueryRow(request.Context(),
+		`SELECT totp_secret FROM users WHERE id = $1`, userID,
+	).Scan(&secret); err != nil {
+		writeError(writer, http.StatusInternalServerError, "USER_NOT_FOUND", err.Error())
+		return
+	}
+	if !secret.Valid {
+		writeError(writer, http.StatusBadRequest, "TOTP_NOT_SETUP", "run 2FA setup first")
+		return
+	}
+	if !ValidateTOTP(secret.String, strings.TrimSpace(req.Code)) {
+		writeError(writer, http.StatusUnauthorized, "INVALID_TOTP", "authenticator code is incorrect")
+		return
+	}
+	if _, err := service.pool.Exec(request.Context(),
+		`UPDATE users SET totp_enabled = true WHERE id = $1`, userID); err != nil {
+		writeError(writer, http.StatusInternalServerError, "TOTP_ENABLE_FAILED", err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"enabled": true})
+}
+
+// Disable2FA turns off 2FA for the authenticated user after verifying a code.
+func (service *Service) Disable2FA(writer http.ResponseWriter, request *http.Request) {
+	userID, ok := UserIDFromContext(request.Context())
+	if !ok || userID <= 0 {
+		writeError(writer, http.StatusUnauthorized, "AUTH_REQUIRED", "user context is required")
+		return
+	}
+	var req Verify2FARequest
+	if err := decodeJSON(request, &req); err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	var secret pgtype.Text
+	if err := service.pool.QueryRow(request.Context(),
+		`SELECT totp_secret FROM users WHERE id = $1`, userID,
+	).Scan(&secret); err != nil {
+		writeError(writer, http.StatusInternalServerError, "USER_NOT_FOUND", err.Error())
+		return
+	}
+	if !secret.Valid || !ValidateTOTP(secret.String, strings.TrimSpace(req.Code)) {
+		writeError(writer, http.StatusUnauthorized, "INVALID_TOTP", "authenticator code is incorrect")
+		return
+	}
+	if _, err := service.pool.Exec(request.Context(),
+		`UPDATE users SET totp_secret = NULL, totp_enabled = false WHERE id = $1`, userID); err != nil {
+		writeError(writer, http.StatusInternalServerError, "TOTP_DISABLE_FAILED", err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{"enabled": false})
 }
 
 func (service *Service) issueRefreshToken(ctx context.Context, userID, tenantID int64, role, ip, agent string) (token, family string, err error) {

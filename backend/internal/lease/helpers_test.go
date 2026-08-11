@@ -187,3 +187,51 @@ func TestFormatIntSlice(t *testing.T) {
 		t.Errorf("formatIntSlice(nil) = %q", got)
 	}
 }
+
+// m-014: lease lifecycle pure-function tests.
+
+func TestParseRate(t *testing.T) {
+	cases := []struct {
+		raw     string
+		want    float64
+		wantErr bool
+	}{
+		{"0.01", 0.01, false},
+		{"0.125", 0.125, false},
+		{"1", 1.0, false},
+		{"", 0, true},
+		{"abc", 0, true},
+	}
+	for _, tc := range cases {
+		got, err := parseRate(tc.raw)
+		if tc.wantErr {
+			if err == nil {
+				t.Errorf("parseRate(%q): expected error", tc.raw)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("parseRate(%q): %v", tc.raw, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("parseRate(%q) = %v, want %v", tc.raw, got, tc.want)
+		}
+	}
+}
+
+func TestModificationDeltaDirection(t *testing.T) {
+	// Modification with higher new PV must produce a positive delta (increase).
+	newPV := presentValueCents(1_000_000, 0.01, 12)
+	currentLiability := presentValueCents(900_000, 0.01, 12)
+	delta := newPV - currentLiability
+	if delta <= 0 {
+		t.Errorf("expected positive delta for larger payment, got %d", delta)
+	}
+	// Smaller payment must produce a negative delta (decrease).
+	smallerPV := presentValueCents(800_000, 0.01, 12)
+	deltaDown := smallerPV - currentLiability
+	if deltaDown >= 0 {
+		t.Errorf("expected negative delta for smaller payment, got %d", deltaDown)
+	}
+}

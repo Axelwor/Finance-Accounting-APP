@@ -105,6 +105,11 @@ func main() {
 		router.Group(func(router chi.Router) {
 			router.Use(authService.Middleware)
 
+			// m-006: two-factor authentication setup (authenticated).
+			router.Post("/auth/2fa/setup", authService.Setup2FA)
+			router.Post("/auth/2fa/verify", authService.Setup2FAVerify)
+			router.Post("/auth/2fa/disable", authService.Disable2FA)
+
 			// Tenant lifecycle: create (onboarding, idempotent), create-new
 			// (additional tenant for multi-book accounts), list (tenant
 			// switcher), and get current tenant. Mounted under auth so the
