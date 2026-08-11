@@ -1,7 +1,7 @@
 # MVP 1 API Contract
 
-**Version:** 0.1.0  
-**Status:** Draft  
+**Version:** 0.2.0  
+**Status:** Synced with implementation (150+ endpoints)  
 **Owner:** Backend + Frontend
 
 ## Rules

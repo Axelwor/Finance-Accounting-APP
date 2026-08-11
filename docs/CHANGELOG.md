@@ -2,6 +2,53 @@
 
 ## Unreleased
 
+- **Audit & Implementation Sprint 1-8 (2026-08-10/11):** Comprehensive correctness audit (`audit-report.md`, 128 findings: 4 Critical, 28 Major, 22 Minor, 16 Info) — ALL resolved or documented. Highlights:
+
+  **Security (Critical):**
+  - RBAC enforcement: `RequireRole` middleware + Role claim in JWT (owner/admin/accountant/manager/staff/viewer). Period close/unlock admin-only; write ops require accountant+; read-only for viewer.
+  - JWT secret fail-fast: no fallback secret; `log.Fatal` if missing or <32 chars.
+  - 2FA TOTP (RFC 6238, stdlib-only): `POST /auth/2fa/setup|verify|disable`; login enforces `totp_code` when enabled. RFC known vectors tested.
+  - Rate limiting login (5 req/min/IP) + Recover/RequestLogger/CORS/Timeout middleware.
+
+  **Accounting Integrity:**
+  - Hash chain single source of truth: exported `accounting.HashJournal`; all 11 package-local hash functions now delegate (no duplication drift risk). Sort stability fix (SourceLineRef + AccountID + DebitCents tiebreaker).
+  - `finalize` no longer pre-computes hash with "genesis" placeholder (posting layer computes after chain-head lock).
+  - `Account.Type` populated in posting path (`isCashOrBank` works for real DB accounts).
+  - Integer-cents math: `lineTotalCents` milliunits integer math (no float drift), production cost rounding fixed.
+  - Credit note COGS journal idempotency key; CN total validated vs invoice receivable.
+  - Period close `loadPLBalances` filters by period date range.
+  - Cash flow classified operating/investing/financing; Trial Balance returns 409 when unbalanced.
+  - PPN posted on invoice (Dr AR gross / Cr Revenue DPP / Cr 2202 VAT); idempotency payload-match (409 `IDEMPOTENCY_KEY_REUSE` on differing payload).
+  - Unified error format (`httperr` package: code/message/details/request_id).
+  - Seed COA completed (3105 Suspense, 4902 Applied Overhead, 1302 Raw Material, 4908/5908 variance accounts).
+
+  **New Backend Modules (150+ endpoints total, see `docs/API_CONTRACT.md`):**
+  - Multi-tenant: switch tenant, add tenant, `/tenants/me`; tenant switcher UI.
+  - AR sub-ledger: `customer_balances` maintained on invoice/payment/CN; `/customers/ar-balances` with GL reconciliation + `/customers/{id}/statement`.
+  - Approval workflow: rules per entity_type + min amount; gate on invoice posting (409 `APPROVAL_REQUIRED`), consume-on-post.
+  - Lease PSAK 73 lifecycle: modification (re-measure PV, adjust RoU+liability) + termination (derecognise + gain/loss 4903/5903).
+  - Inter-company elimination extended: SALE↔PURCHASE, LOAN↔LOAN, INTEREST↔INTEREST, DIVIDEND↔DIVIDEND.
+  - Multi-warehouse: warehouse master, `stock_balances` per warehouse, stock transfer moves stock between warehouses.
+  - Asset maintenance tracking + asset register report with NBV.
+  - 2FA TOTP, petty cash (imprest), cheques/GIRO, recurring transactions, cash flow forecast, budget vs actual, email templates/queue, AR/AP aging.
+  - Report templates (YAML) CRUD + render PDF/HTML via NextReport sidecar; report template editor UI with live preview.
+  - Dashboard per-user widgets (layout + widget CRUD + data endpoints).
+  - COA CSV export; COA export uses tenant-scoped RLS read path (`withTenantRead`).
+
+  **Tests & Migrations:**
+  - ~500 test functions across 35 packages (assets, tax, period, reporting, inventory, costing, purchase, lease, approval gate, TOTP, etc.); 35 packages pass / 0 FAIL.
+  - Migrations 000025-000044 added (report templates, dashboard, warehouses, approval, asset maintenance, 2FA, customer balances, inter-company indexes, etc.).
+
+  **Frontend:**
+  - styles.css (2,922 lines) modularized into 6 ordered files under `web/src/styles/`.
+  - MockEntryForm renamed DemoEntryForm; slugify Unicode-safe.
+  - Customer statement, AR balances, approval screens wired.
+
+  **Docs & Deployment:**
+  - `docs/API_CONTRACT.md` synced with all 150+ endpoints.
+  - `docs/DEPLOYMENT.md` deployment guide + `deploy.sh` one-command script.
+  - `audit-report.md` + `implementation-tracker.md` track all 128 findings → resolved.
+
 - US-090A + US-093: Report framework selection (EMKM/ETAP/SAK Umum) + dimensions + budget vs actual. Added a new `budget` backend package with: report framework config per tenant (`GET/POST /report-frameworks` — same posted data, different presentation); dimensions master data (`POST/GET /dimensions`, `POST /journal-lines/{id}/dimensions` — cabang/proyek/departemen/cost center tags on journal lines); and budgets (`POST/GET /budgets`, `GET /budgets/{id}`, `GET /budgets/{id}/vs-actual` — compares planned `budget_lines` against actual posted journal movements per account/month). The existing `reporting` package was extended: all four reports (`/reports/trial-balance|profit-loss|balance-sheet|cash-flow`) now accept `framework` and `dimension_id` query params — the dimension filter joins `journal_line_dimensions` to narrow aggregation, and the framework regroups the P&L by `account_type` with EMKM (2-section simplest), ETAP, and SAK_UMUM (full PSAK breakdown) labels. New migration `000022_report_frameworks_budget` (report_frameworks, dimensions, journal_line_dimensions, budgets, budget_lines + RLS + indexes). Frontend: `DimensionList` (create/list dimensions), `BudgetList` (budget headers with totals), `BudgetForm` (monthly lines per account picker), `BudgetVsActual` (report with budget picker + KPI stats + variance table), and a framework selector + dimension filter dropdown added to the P&L report toolbar. New types + API methods. Wired into Accountant (Dimensions, Budgets) and Reports (Budget vs Actual) modules. `go vet/test/build` clean; `gofmt` clean; `npm run build` clean (92 modules, JS 584.73 kB, CSS 56.88 kB).
 - P3-022: US-110 Konsolidasi Multi-Entitas (PSAK 65) + US-111 Sewa (PSAK 73). Added the `backend/internal/lease` package with four files. **Lease contracts (US-111):** `POST /lease-contracts` registers a lease, calculates the present value of lease payments (`PV = payment * [1 - (1+r)^-n] / r`), and posts the initial journal `Dr 1701 Right-of-Use Asset / Cr 2301 Lease Liability` (intent `LEASE_INITIAL`) with hash-chain + outbox + idempotency. A full amortization schedule (effective interest method) is generated and stored in `lease_payments`. `POST /lease-contracts/{id}/payments/{payment_no}/post` posts a single lease payment: `Dr 2301 Lease Liability (principal) + Dr 5906 Interest Expense / Cr Cash` (intent `LEASE_PAYMENT`). `GET /lease-contracts` lists; `GET /lease-contracts/{id}` returns contract + schedule. **Consolidation (US-110):** `POST /entity-hierarchy` sets parent-child tenant relationships. `GET /consolidated-reports/trial-balance` aggregates journal lines across parent + child tenants and eliminates inter-company transactions (matched SALE/PURCHASE pairs net to zero by subtracting both entries' journal lines). `GET /consolidated-reports/profit-loss` returns the consolidated P&L with elimination. New migration `000024_consolidation_lease` creates `entity_hierarchy`, `inter_company_transactions`, `lease_contracts`, `lease_payments` with FK constraints, RLS (FORCE), and indexes; seeds accounts 1701/2301/5906 for existing tenants. `seed.go` updated to seed 1701/2301/5906 for new tenants. Routes wired in `main.go` after tax routes. 6 backend unit tests (PV, discount rate parse, monthly+quarterly schedule, frequency, format). Frontend: 4 new screens — `LeaseContractList` (listtab with ROU asset column), `LeaseContractForm` (registration form with live PV preview + existing-contract detail view), `LeasePaymentSchedule` (schedule table with post buttons), `ConsolidatedReport` (toggleable TB/P&L with elimination summary). New types + API methods. Wired into `modules.ts` (Fixed Assets + Reports), `WorkArea.tsx`, `MockEntryForm.tsx`, `types.ts`. `go vet/test/build` clean; `gofmt` clean; `npm run build` clean (93 modules, JS 582.31 kB, CSS 56.88 kB).
 - P2-007: Purchase Phase 2A backend + frontend. Added Suppliers (CRUD), Purchase Orders (PO — no journal, commitment only), and Goods Received Notes (GRN — posts `Dr 1301 Inventory / Cr 2105 Uninvoiced Payables`, intent_type `GRN`). GRN records inventory movements (GRN, qty positive = stock in), validates over-delivery against PO, updates PO status to PARTIALLY_RECEIVED/RECEIVED. New migration `000011_purchase_flow` (suppliers, purchase_orders, po_lines, goods_received_notes, grn_lines + accounts 1205/2105/1203 for existing tenants + RLS). `seed.go` updated to seed 1205/2105/1203 for new tenants. Frontend: Purchases module expanded with Suppliers, Purchase Orders, and GRN sub-items. `PurchaseOrderList`/`PurchaseOrderForm` (supplier picker, item lines), `GRNList`/`GRNForm` (PO picker, item lines with unit cost), `PurchaseSupplierList`/`PurchaseSupplierForm`. New types + API methods. Routes wired in `main.go`. `go vet/test/build` clean; `make web-build` clean (62 modules, JS 406.24 kB).

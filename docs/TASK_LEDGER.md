@@ -64,3 +64,17 @@ Durable task registry for all AI Agent sessions.
 | F-02-001 | DONE | 2026-08-11 session | Multi-warehouse stock transfer (F-02); backend/migrations/000039, internal/costing/costing.go, internal/inventory/stock_transfer.go | warehouse_id on stock_balances/cost_layers/movements/transfer_lines; costing functions accept warehouseID; stock transfer moves actual stock between warehouses; all 6 callers updated; build+tests pass; deployed live | 2026-08-11 07:12 UTC | f794f90 |
 | F-13-002 | DONE | 2026-08-11 session | Asset maintenance tracking (F-13); backend/migrations/000040, internal/assets/maintenance.go + maintenance_test.go | asset_maintenance table with RLS; POST/GET /asset-maintenance + GET /asset-maintenance/upcoming; 5 maintenance types; 11 validation test cases; deployed live | 2026-08-11 07:12 UTC | f794f90 |
 | N-05-001 | DONE | 2026-08-11 session | Invoice template field alignment (N-05); nextreport/templates/invoice.yaml | Template now uses real API field names (invoice_date, item_code, item_name, unit_price_cents, line_total_cents, sub_total_cents, tax_total_cents, etc.); matches Invoice interface in web/src/types.ts | 2026-08-11 07:12 UTC | f794f90 |
+
+---
+
+## Docs Sync Sprint (SELESAI) — 2026-08-11
+
+| Task | Status |
+|---|---|
+| README.md rewritten with full project progress, tech stack, 150+ endpoints, deployment guide | ✅ |
+| docs/CHANGELOG.md updated with Sprint 1-8 audit + implementation summary | ✅ |
+| docs/API_CONTRACT.md version bump 0.1.0 → 0.2.0, status synced | ✅ |
+| docs/DEPLOYMENT.md + deploy.sh created (previous sprint) | ✅ |
+| implementation-tracker.md Sprint 8 final | ✅ |
+
+**All project documentation synced with current implementation state (150+ endpoints, 44 migrations, 35 test packages, 128/128 audit findings resolved).**
