@@ -21,80 +21,80 @@ func strPtr(s string) *string { return &s }
 
 func TestValidateCheque(t *testing.T) {
 	tests := []struct {
-		name    string
-		req     CreateChequeRequest
+		name     string
+		req      CreateChequeRequest
 		wantCode string
 		wantMsg  string
 	}{
 		{
-			name:    "valid cheque received",
-			req:     CreateChequeRequest{ChequeNumber: "CHQ-001", ChequeType: "cheque", Direction: "received", AmountCents: 50000, IssueDate: "2026-01-15"},
+			name:     "valid cheque received",
+			req:      CreateChequeRequest{ChequeNumber: "CHQ-001", ChequeType: "cheque", Direction: "received", AmountCents: 50000, IssueDate: "2026-01-15"},
 			wantCode: "",
 			wantMsg:  "",
 		},
 		{
-			name:    "valid giro issued with whitespace and case",
-			req:     CreateChequeRequest{ChequeNumber: "  GIRO-9  ", ChequeType: "  Giro ", Direction: " ISSUED ", AmountCents: 1, IssueDate: "2026-02-01"},
+			name:     "valid giro issued with whitespace and case",
+			req:      CreateChequeRequest{ChequeNumber: "  GIRO-9  ", ChequeType: "  Giro ", Direction: " ISSUED ", AmountCents: 1, IssueDate: "2026-02-01"},
 			wantCode: "",
 			wantMsg:  "",
 		},
 		{
-			name:    "missing cheque number",
-			req:     CreateChequeRequest{ChequeNumber: "   ", ChequeType: "CHEQUE", Direction: "RECEIVED", AmountCents: 100, IssueDate: "2026-01-15"},
+			name:     "missing cheque number",
+			req:      CreateChequeRequest{ChequeNumber: "   ", ChequeType: "CHEQUE", Direction: "RECEIVED", AmountCents: 100, IssueDate: "2026-01-15"},
 			wantCode: "INVALID_REQUEST",
 			wantMsg:  "cheque_number is required",
 		},
 		{
-			name:    "empty cheque number",
-			req:     CreateChequeRequest{ChequeNumber: "", ChequeType: "CHEQUE", Direction: "RECEIVED", AmountCents: 100, IssueDate: "2026-01-15"},
+			name:     "empty cheque number",
+			req:      CreateChequeRequest{ChequeNumber: "", ChequeType: "CHEQUE", Direction: "RECEIVED", AmountCents: 100, IssueDate: "2026-01-15"},
 			wantCode: "INVALID_REQUEST",
 			wantMsg:  "cheque_number is required",
 		},
 		{
-			name:    "invalid cheque type",
-			req:     CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "WARRANT", Direction: "RECEIVED", AmountCents: 100, IssueDate: "2026-01-15"},
+			name:     "invalid cheque type",
+			req:      CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "WARRANT", Direction: "RECEIVED", AmountCents: 100, IssueDate: "2026-01-15"},
 			wantCode: "INVALID_REQUEST",
 			wantMsg:  "cheque_type must be CHEQUE or GIRO",
 		},
 		{
-			name:    "empty cheque type",
-			req:     CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "", Direction: "RECEIVED", AmountCents: 100, IssueDate: "2026-01-15"},
+			name:     "empty cheque type",
+			req:      CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "", Direction: "RECEIVED", AmountCents: 100, IssueDate: "2026-01-15"},
 			wantCode: "INVALID_REQUEST",
 			wantMsg:  "cheque_type must be CHEQUE or GIRO",
 		},
 		{
-			name:    "invalid direction",
-			req:     CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "CHEQUE", Direction: "SIDWAYS", AmountCents: 100, IssueDate: "2026-01-15"},
+			name:     "invalid direction",
+			req:      CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "CHEQUE", Direction: "SIDWAYS", AmountCents: 100, IssueDate: "2026-01-15"},
 			wantCode: "INVALID_REQUEST",
 			wantMsg:  "direction must be RECEIVED or ISSUED",
 		},
 		{
-			name:    "empty direction",
-			req:     CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "CHEQUE", Direction: "", AmountCents: 100, IssueDate: "2026-01-15"},
+			name:     "empty direction",
+			req:      CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "CHEQUE", Direction: "", AmountCents: 100, IssueDate: "2026-01-15"},
 			wantCode: "INVALID_REQUEST",
 			wantMsg:  "direction must be RECEIVED or ISSUED",
 		},
 		{
-			name:    "zero amount cents",
-			req:     CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "CHEQUE", Direction: "RECEIVED", AmountCents: 0, IssueDate: "2026-01-15"},
+			name:     "zero amount cents",
+			req:      CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "CHEQUE", Direction: "RECEIVED", AmountCents: 0, IssueDate: "2026-01-15"},
 			wantCode: "INVALID_REQUEST",
 			wantMsg:  "amount_cents must be positive",
 		},
 		{
-			name:    "negative amount cents",
-			req:     CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "CHEQUE", Direction: "RECEIVED", AmountCents: -500, IssueDate: "2026-01-15"},
+			name:     "negative amount cents",
+			req:      CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "CHEQUE", Direction: "RECEIVED", AmountCents: -500, IssueDate: "2026-01-15"},
 			wantCode: "INVALID_REQUEST",
 			wantMsg:  "amount_cents must be positive",
 		},
 		{
-			name:    "missing issue date",
-			req:     CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "CHEQUE", Direction: "RECEIVED", AmountCents: 100, IssueDate: ""},
+			name:     "missing issue date",
+			req:      CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "CHEQUE", Direction: "RECEIVED", AmountCents: 100, IssueDate: ""},
 			wantCode: "INVALID_REQUEST",
 			wantMsg:  "issue_date is required",
 		},
 		{
-			name:    "whitespace issue date",
-			req:     CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "CHEQUE", Direction: "RECEIVED", AmountCents: 100, IssueDate: "   "},
+			name:     "whitespace issue date",
+			req:      CreateChequeRequest{ChequeNumber: "CHQ-1", ChequeType: "CHEQUE", Direction: "RECEIVED", AmountCents: 100, IssueDate: "   "},
 			wantCode: "INVALID_REQUEST",
 			wantMsg:  "issue_date is required",
 		},
