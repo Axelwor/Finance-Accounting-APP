@@ -2,6 +2,7 @@ package approval
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -40,7 +41,7 @@ func (g *Gate) RequiresApproval(ctx context.Context, tx pgx.Tx, tenantID int64, 
 		LIMIT 1
 	`, tenantID, entityType, amountCents).Scan(&approverRole)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return "", false, nil
 		}
 		return "", false, err

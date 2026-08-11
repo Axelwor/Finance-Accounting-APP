@@ -167,7 +167,7 @@ func TestIsNoRows(t *testing.T) {
 	}{
 		{name: "pgx.ErrNoRows is detected", err: pgx.ErrNoRows, want: true},
 		{name: "nil error is not no-rows", err: nil, want: false},
-		{name: "wrapped ErrNoRows (fmt.Errorf %w) NOT detected (uses ==)", err: wrapErr(pgx.ErrNoRows), want: false},
+		{name: "wrapped ErrNoRows (fmt.Errorf %w) IS detected (uses errors.Is)", err: wrapErr(pgx.ErrNoRows), want: true},
 		{name: "generic error not detected", err: errGeneric("some failure"), want: false},
 		{name: "different sentinel not detected", err: errGeneric("no rows in result set"), want: false},
 	}
@@ -201,7 +201,7 @@ type errGeneric string
 func (e errGeneric) Error() string { return string(e) }
 
 // wrapErr mimics fmt.Errorf("...: %w", err) so we can verify isNoRows uses
-// direct identity comparison (==) rather than errors.Is.
+// errors.Is (which unwraps) rather than direct identity comparison (==).
 func wrapErr(err error) error {
 	return wrappedError{inner: err, msg: "wrapped: " + err.Error()}
 }

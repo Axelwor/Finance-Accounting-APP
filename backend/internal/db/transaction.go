@@ -12,9 +12,11 @@ func WithTransaction(ctx context.Context, pool *pgxpool.Pool, fn func(pgx.Tx) er
 	if err != nil {
 		return err
 	}
+	// Ensure rollback runs even if fn panics. After a successful Commit the
+	// Rollback is a safe no-op (returns pgx.ErrTxClosed).
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := fn(tx); err != nil {
-		_ = tx.Rollback(ctx)
 		return err
 	}
 

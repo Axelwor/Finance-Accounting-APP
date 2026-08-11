@@ -415,29 +415,60 @@ func (service *Service) SwitchTenant(writer http.ResponseWriter, request *http.R
 // m-006: Two-factor authentication (TOTP) endpoints.
 // ---------------------------------------------------------------------------
 
+// Setup2FARequest carries an optional TOTP code. When 2FA is already
+// enabled, a valid current code is required to authorize changing the secret.
+type Setup2FARequest struct {
+	TOTPCode string `json:"totp_code"`
+}
+
 // Setup2FA generates a TOTP secret for the authenticated user and returns the
 // secret + provisioning URI. The secret is stored unverified; 2FA only
-// activates after Setup2FAVerify succeeds.
+// activates after Setup2FAVerify succeeds. If 2FA is already enabled, the
+// caller must supply a valid current TOTP code to authorize changing the
+// secret — this prevents a stolen JWT from silently replacing the secret
+// and downgrading 2FA.
 func (service *Service) Setup2FA(writer http.ResponseWriter, request *http.Request) {
 	userID, ok := UserIDFromContext(request.Context())
 	if !ok || userID <= 0 {
 		writeError(writer, http.StatusUnauthorized, "AUTH_REQUIRED", "user context is required")
 		return
 	}
+	// Best-effort decode: the body may be empty for first-time setup.
+	var req Setup2FARequest
+	_ = decodeJSON(request, &req)
+
 	var email string
+	var totpEnabled bool
+	var currentSecret pgtype.Text
 	if err := service.pool.QueryRow(request.Context(),
-		`SELECT email FROM users WHERE id = $1`, userID,
-	).Scan(&email); err != nil {
+		`SELECT email, totp_enabled, totp_secret FROM users WHERE id = $1`, userID,
+	).Scan(&email, &totpEnabled, &currentSecret); err != nil {
 		writeError(writer, http.StatusInternalServerError, "USER_NOT_FOUND", err.Error())
 		return
+	}
+	// If 2FA is already enabled, require a valid current TOTP code to
+	// authorize changing the secret.
+	if totpEnabled {
+		if strings.TrimSpace(req.TOTPCode) == "" {
+			writeError(writer, http.StatusUnauthorized, "TOTP_REQUIRED", "a current authenticator code is required to re-setup 2FA")
+			return
+		}
+		if !currentSecret.Valid || !ValidateTOTP(currentSecret.String, strings.TrimSpace(req.TOTPCode)) {
+			writeError(writer, http.StatusUnauthorized, "INVALID_TOTP", "authenticator code is incorrect")
+			return
+		}
 	}
 	secret, err := GenerateTOTPSecret()
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "TOTP_SETUP_FAILED", err.Error())
 		return
 	}
+	// Store the new secret in totp_pending_secret; keep totp_secret and
+	// totp_enabled at their current values. The old secret stays valid
+	// until Setup2FAVerify copies the pending secret to totp_secret, so a
+	// lost setup response never locks the user out.
 	if _, err := service.pool.Exec(request.Context(),
-		`UPDATE users SET totp_secret = $2, totp_enabled = false WHERE id = $1`,
+		`UPDATE users SET totp_pending_secret = $2 WHERE id = $1`,
 		userID, secret); err != nil {
 		writeError(writer, http.StatusInternalServerError, "TOTP_SETUP_FAILED", err.Error())
 		return
@@ -453,7 +484,9 @@ type Verify2FARequest struct {
 }
 
 // Setup2FAVerify activates 2FA once the user proves possession of the secret
-// by submitting a valid current TOTP code.
+// by submitting a valid current TOTP code. It reads the pending secret (set
+// by Setup2FA), verifies the code against it, and then atomically copies it
+// to totp_secret, sets totp_enabled = true, and clears the pending value.
 func (service *Service) Setup2FAVerify(writer http.ResponseWriter, request *http.Request) {
 	userID, ok := UserIDFromContext(request.Context())
 	if !ok || userID <= 0 {
@@ -465,23 +498,25 @@ func (service *Service) Setup2FAVerify(writer http.ResponseWriter, request *http
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	var secret pgtype.Text
+	var pendingSecret pgtype.Text
 	if err := service.pool.QueryRow(request.Context(),
-		`SELECT totp_secret FROM users WHERE id = $1`, userID,
-	).Scan(&secret); err != nil {
+		`SELECT totp_pending_secret FROM users WHERE id = $1`, userID,
+	).Scan(&pendingSecret); err != nil {
 		writeError(writer, http.StatusInternalServerError, "USER_NOT_FOUND", err.Error())
 		return
 	}
-	if !secret.Valid {
+	if !pendingSecret.Valid {
 		writeError(writer, http.StatusBadRequest, "TOTP_NOT_SETUP", "run 2FA setup first")
 		return
 	}
-	if !ValidateTOTP(secret.String, strings.TrimSpace(req.Code)) {
+	if !ValidateTOTP(pendingSecret.String, strings.TrimSpace(req.Code)) {
 		writeError(writer, http.StatusUnauthorized, "INVALID_TOTP", "authenticator code is incorrect")
 		return
 	}
+	// Promote the pending secret to the active secret and enable 2FA.
 	if _, err := service.pool.Exec(request.Context(),
-		`UPDATE users SET totp_enabled = true WHERE id = $1`, userID); err != nil {
+		`UPDATE users SET totp_secret = $2, totp_enabled = true, totp_pending_secret = NULL WHERE id = $1`,
+		userID, pendingSecret.String); err != nil {
 		writeError(writer, http.StatusInternalServerError, "TOTP_ENABLE_FAILED", err.Error())
 		return
 	}
@@ -512,7 +547,7 @@ func (service *Service) Disable2FA(writer http.ResponseWriter, request *http.Req
 		return
 	}
 	if _, err := service.pool.Exec(request.Context(),
-		`UPDATE users SET totp_secret = NULL, totp_enabled = false WHERE id = $1`, userID); err != nil {
+		`UPDATE users SET totp_secret = NULL, totp_pending_secret = NULL, totp_enabled = false WHERE id = $1`, userID); err != nil {
 		writeError(writer, http.StatusInternalServerError, "TOTP_DISABLE_FAILED", err.Error())
 		return
 	}

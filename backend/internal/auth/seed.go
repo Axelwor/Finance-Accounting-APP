@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -78,7 +79,7 @@ func SeedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 			RETURNING id
 		`, tenantID, account.code, account.name, account.reportGroup, account.accountType).Scan(&id)
 		if err != nil {
-			if err == pgx.ErrNoRows {
+			if errors.Is(err, pgx.ErrNoRows) {
 				// Already existed; fetch it.
 				if err := tx.QueryRow(ctx,
 					`SELECT id FROM accounts WHERE tenant_id = $1 AND code = $2`,

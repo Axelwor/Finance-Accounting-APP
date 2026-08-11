@@ -3,8 +3,8 @@
 package middleware
 
 import (
-	"context"
 	"log"
+	"net"
 	"net/http"
 	"runtime/debug"
 	"strings"
@@ -62,9 +62,13 @@ type CORSConfig struct {
 // DefaultCORSConfig returns a config suitable for a React dev server.
 func DefaultCORSConfig() CORSConfig {
 	return CORSConfig{
-		AllowedOrigins: []string{"*"},
+		AllowedOrigins: []string{
+			"https://accounting.tikuma.net",
+			"http://localhost:5173",
+			"http://localhost:4173",
+		},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"Content-Type", "Authorization", "Idempotency-Key", "X-Tenant-ID"},
+		AllowedHeaders: []string{"Content-Type", "Authorization", "Idempotency-Key"},
 	}
 }
 
@@ -104,30 +108,13 @@ func CORS(cfg CORSConfig) func(http.Handler) http.Handler {
 // ---------------------------------------------------------------------------
 
 // Timeout sets a per-request deadline. If the handler does not finish within
-// the given duration, the context is cancelled and a 504 Gateway Timeout is
-// returned.
+// the given duration, http.TimeoutHandler returns a 503 Service Unavailable
+// with the given JSON body. Unlike a manual goroutine + context approach,
+// http.TimeoutHandler correctly manages the goroutine lifecycle and prevents
+// concurrent writes to the ResponseWriter.
 func Timeout(duration time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx, cancel := context.WithTimeout(r.Context(), duration)
-			defer cancel()
-			r = r.WithContext(ctx)
-
-			done := make(chan struct{})
-			go func() {
-				next.ServeHTTP(w, r)
-				close(done)
-			}()
-
-			select {
-			case <-done:
-				// Request completed normally.
-			case <-ctx.Done():
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusGatewayTimeout)
-				_, _ = w.Write([]byte(`{"code":"REQUEST_TIMEOUT","message":"request timed out"}`))
-			}
-		})
+		return http.TimeoutHandler(next, duration, `{"code":"REQUEST_TIMEOUT","message":"Request timed out"}`)
 	}
 }
 
@@ -224,19 +211,44 @@ func (rl *RateLimiter) cleanup() {
 	}
 }
 
-// clientIP extracts the client IP from X-Forwarded-For or RemoteAddr.
+// isTrustedProxy reports whether the direct connection comes from a trusted
+// proxy: localhost or a private (RFC 1918) / Docker-internal address. Only
+// trusted proxies may set X-Forwarded-For.
+func isTrustedProxy(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr // no port
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	// Trust loopback (localhost) and private ranges (Docker bridge / VPN).
+	return ip.IsLoopback() || ip.IsPrivate()
+}
+
+// clientIP extracts the client IP from X-Forwarded-For or RemoteAddr. The
+// X-Forwarded-For header is only honored when the direct connection comes
+// from a trusted proxy (localhost or a private/Docker network). When honored,
+// the XFF list is walked right-to-left and the rightmost non-trusted entry
+// is returned — this is the real client IP appended by the last trusted
+// proxy, and prevents spoofing by clients who inject a fake IP at the start.
 func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first IP in the list.
-		if idx := strings.Index(xff, ","); idx > 0 {
-			return strings.TrimSpace(xff[:idx])
+	if isTrustedProxy(r.RemoteAddr) {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			for i := len(parts) - 1; i >= 0; i-- {
+				ip := strings.TrimSpace(parts[i])
+				if ip != "" && !isTrustedProxy(ip) {
+					return ip
+				}
+			}
+			// All entries are trusted proxies — fall through to RemoteAddr.
 		}
-		return strings.TrimSpace(xff)
 	}
 	// Fall back to RemoteAddr (host:port).
-	addr := r.RemoteAddr
-	if idx := strings.LastIndex(addr, ":"); idx > 0 {
-		return addr[:idx]
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
 	}
-	return addr
+	return r.RemoteAddr
 }

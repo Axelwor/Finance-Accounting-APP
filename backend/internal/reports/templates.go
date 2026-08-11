@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -582,7 +583,7 @@ func (s *Service) ensureLayout(ctx context.Context, tid, uid int64) (int64, erro
 }
 
 func isNoRows(err error) bool {
-	return err == pgx.ErrNoRows
+	return errors.Is(err, pgx.ErrNoRows)
 }
 
 func pathID(raw string) int64 {

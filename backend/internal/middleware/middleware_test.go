@@ -39,8 +39,10 @@ func TestCORS_AllowAll(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Origin", "http://localhost:5173")
 	handler.ServeHTTP(rr, req)
-	if rr.Header().Get("Access-Control-Allow-Origin") != "*" {
-		t.Errorf("expected *, got %s", rr.Header().Get("Access-Control-Allow-Origin"))
+	// After B-07, origins are specific (no wildcard). The allowed origin
+	// is echoed back.
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5173" {
+		t.Errorf("expected http://localhost:5173, got %s", got)
 	}
 }
 
@@ -155,8 +157,12 @@ func TestClientIP(t *testing.T) {
 		remote string
 		want   string
 	}{
-		{"X-Forwarded-For single", "1.2.3.4", "9.9.9.9:80", "1.2.3.4"},
-		{"X-Forwarded-For multiple", "1.2.3.4, 5.6.7.8", "9.9.9.9:80", "1.2.3.4"},
+		{"XFF single IP (trusted proxy)", "1.2.3.4", "127.0.0.1:80", "1.2.3.4"},
+		{"XFF client + trusted proxy", "1.2.3.4, 127.0.0.1", "127.0.0.1:80", "1.2.3.4"},
+		{"XFF spoofed + real (trusted proxy)", "1.2.3.4, 5.6.7.8", "127.0.0.1:80", "5.6.7.8"},
+		{"XFF all trusted proxies (fall back)", "127.0.0.1, ::1", "127.0.0.1:80", "127.0.0.1"},
+		{"XFF ignored from untrusted proxy", "1.2.3.4", "9.9.9.9:80", "9.9.9.9"},
+		{"XFF from Docker network (trusted)", "203.0.113.1", "172.17.0.1:80", "203.0.113.1"},
 		{"RemoteAddr only", "", "1.2.3.4:80", "1.2.3.4"},
 		{"RemoteAddr no port", "", "1.2.3.4", "1.2.3.4"},
 	}

@@ -2,6 +2,7 @@ package costing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 
@@ -360,7 +361,7 @@ func lockBalance(ctx context.Context, tx pgx.Tx, tenantID, itemID int64, warehou
 
 // isNoRows reports whether err is pgx.ErrNoRows.
 func isNoRows(err error) bool {
-	return err == pgx.ErrNoRows
+	return errors.Is(err, pgx.ErrNoRows)
 }
 
 // numericToFloat converts a pgtype.Numeric to float64 (0 when not set).

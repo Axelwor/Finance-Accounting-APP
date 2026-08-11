@@ -106,9 +106,9 @@ func main() {
 			router.Use(authService.Middleware)
 
 			// m-006: two-factor authentication setup (authenticated).
-			router.Post("/auth/2fa/setup", authService.Setup2FA)
-			router.Post("/auth/2fa/verify", authService.Setup2FAVerify)
-			router.Post("/auth/2fa/disable", authService.Disable2FA)
+			router.With(loginLimiter.Middleware).Post("/auth/2fa/setup", authService.Setup2FA)
+			router.With(loginLimiter.Middleware).Post("/auth/2fa/verify", authService.Setup2FAVerify)
+			router.With(loginLimiter.Middleware).Post("/auth/2fa/disable", authService.Disable2FA)
 
 			// Tenant lifecycle: create (onboarding, idempotent), create-new
 			// (additional tenant for multi-book accounts), list (tenant
