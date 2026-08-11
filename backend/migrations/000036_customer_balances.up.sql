@@ -25,7 +25,7 @@ ALTER TABLE customer_balances FORCE ROW LEVEL SECURITY;
 INSERT INTO customer_balances (tenant_id, customer_id, ar_cents, updated_at)
 SELECT tenant_id, customer_id, COALESCE(SUM(receivable_cents), 0), now()
 FROM invoices
-WHERE status IN ('POSTED', 'PARTIALLY_PAID')
+WHERE status IN ('ISSUED', 'PARTIALLY_PAID')
 GROUP BY tenant_id, customer_id
 ON CONFLICT (tenant_id, customer_id)
 DO UPDATE SET ar_cents = EXCLUDED.ar_cents, updated_at = now();

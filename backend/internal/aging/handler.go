@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -91,12 +92,20 @@ func (service *Service) APAging(writer http.ResponseWriter, request *http.Reques
 }
 
 func fetchARAging(ctx context.Context, pool *pgxpool.Pool, tenantID int64, asOf time.Time) ([]agingRow, error) {
-	rows, err := pool.Query(ctx, `
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tenantID, 10)); err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, `
 		SELECT i.id, COALESCE(c.name, ''), i.number, i.invoice_date, i.due_date,
 		       i.receivable_cents
 		FROM invoices i
 		LEFT JOIN customers c ON c.tenant_id = i.tenant_id AND c.id = i.customer_id
-		WHERE i.tenant_id = $1 AND i.status = 'POSTED' AND i.receivable_cents > 0
+		WHERE i.tenant_id = $1 AND i.status IN ('ISSUED', 'PARTIALLY_PAID') AND i.receivable_cents > 0
 		  AND i.invoice_date <= $2
 		ORDER BY i.due_date
 	`, tenantID, asOf)
@@ -122,12 +131,20 @@ func fetchARAging(ctx context.Context, pool *pgxpool.Pool, tenantID int64, asOf 
 }
 
 func fetchAPAging(ctx context.Context, pool *pgxpool.Pool, tenantID int64, asOf time.Time) ([]agingRow, error) {
-	rows, err := pool.Query(ctx, `
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tenantID, 10)); err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, `
 		SELECT si.id, COALESCE(s.name, ''), si.supplier_invoice_number, si.invoice_date, si.due_date,
 		       si.payable_cents
 		FROM supplier_invoices si
 		LEFT JOIN suppliers s ON s.tenant_id = si.tenant_id AND s.id = si.supplier_id
-		WHERE si.tenant_id = $1 AND si.status = 'POSTED' AND si.payable_cents > 0
+		WHERE si.tenant_id = $1 AND si.status IN ('ISSUED', 'PARTIALLY_PAID') AND si.payable_cents > 0
 		  AND si.invoice_date <= $2
 		ORDER BY si.due_date
 	`, tenantID, asOf)

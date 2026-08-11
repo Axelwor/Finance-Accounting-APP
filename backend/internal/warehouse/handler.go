@@ -1,6 +1,7 @@
 package warehouse
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/auth"
@@ -71,13 +73,18 @@ func (s *Service) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var resp WarehouseResponse
-	err := s.pool.QueryRow(r.Context(), `
-		INSERT INTO warehouses (tenant_id, code, name, address, city, is_active)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, code, name, address, city, is_active, created_at
-	`, tid, strings.ToUpper(strings.TrimSpace(req.Code)), strings.TrimSpace(req.Name),
-		strings.TrimSpace(req.Address), strings.TrimSpace(req.City), true).Scan(
-		&resp.ID, &resp.Code, &resp.Name, &resp.Address, &resp.City, &resp.IsActive, &resp.CreatedAt)
+	err := pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(r.Context(), `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tid, 10)); err != nil {
+			return err
+		}
+		return tx.QueryRow(r.Context(), `
+			INSERT INTO warehouses (tenant_id, code, name, address, city, is_active)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			RETURNING id, code, name, address, city, is_active, created_at
+		`, tid, strings.ToUpper(strings.TrimSpace(req.Code)), strings.TrimSpace(req.Name),
+			strings.TrimSpace(req.Address), strings.TrimSpace(req.City), true).Scan(
+			&resp.ID, &resp.Code, &resp.Name, &resp.Address, &resp.City, &resp.IsActive, &resp.CreatedAt)
+	})
 	if err != nil {
 		writeErr(w, http.StatusConflict, "CREATE_FAILED", err.Error())
 		return
@@ -91,23 +98,28 @@ func (s *Service) List(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "TENANT_REQUIRED", "tenant context is required")
 		return
 	}
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT id, code, name, address, city, is_active, created_at
-		FROM warehouses WHERE tenant_id = $1 ORDER BY code
-	`, tid)
+	var results []WarehouseResponse
+	err := withTenant(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT id, code, name, address, city, is_active, created_at
+			FROM warehouses WHERE tenant_id = $1 ORDER BY code
+		`, tid)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var wh WarehouseResponse
+			if err := rows.Scan(&wh.ID, &wh.Code, &wh.Name, &wh.Address, &wh.City, &wh.IsActive, &wh.CreatedAt); err != nil {
+				return err
+			}
+			results = append(results, wh)
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
-	}
-	defer rows.Close()
-	var results []WarehouseResponse
-	for rows.Next() {
-		var wh WarehouseResponse
-		if err := rows.Scan(&wh.ID, &wh.Code, &wh.Name, &wh.Address, &wh.City, &wh.IsActive, &wh.CreatedAt); err != nil {
-			writeErr(w, http.StatusInternalServerError, "SCAN_FAILED", err.Error())
-			return
-		}
-		results = append(results, wh)
 	}
 	if results == nil {
 		results = []WarehouseResponse{}
@@ -127,10 +139,12 @@ func (s *Service) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var resp WarehouseResponse
-	err := s.pool.QueryRow(r.Context(), `
-		SELECT id, code, name, address, city, is_active, created_at
-		FROM warehouses WHERE tenant_id = $1 AND id = $2
-	`, tid, id).Scan(&resp.ID, &resp.Code, &resp.Name, &resp.Address, &resp.City, &resp.IsActive, &resp.CreatedAt)
+	err := withTenant(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT id, code, name, address, city, is_active, created_at
+			FROM warehouses WHERE tenant_id = $1 AND id = $2
+		`, tid, id).Scan(&resp.ID, &resp.Code, &resp.Name, &resp.Address, &resp.City, &resp.IsActive, &resp.CreatedAt)
+	})
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "NOT_FOUND", "warehouse not found")
 		return
@@ -155,13 +169,15 @@ func (s *Service) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var resp WarehouseResponse
-	err := s.pool.QueryRow(r.Context(), `
-		UPDATE warehouses SET name = $3, address = $4, city = $5, is_active = $6, updated_at = now()
-		WHERE tenant_id = $1 AND id = $2
-		RETURNING id, code, name, address, city, is_active, created_at
-	`, tid, id, strings.TrimSpace(req.Name), strings.TrimSpace(req.Address),
-		strings.TrimSpace(req.City), req.IsActive).Scan(
-		&resp.ID, &resp.Code, &resp.Name, &resp.Address, &resp.City, &resp.IsActive, &resp.CreatedAt)
+	err := withTenant(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			UPDATE warehouses SET name = $3, address = $4, city = $5, is_active = $6, updated_at = now()
+			WHERE tenant_id = $1 AND id = $2
+			RETURNING id, code, name, address, city, is_active, created_at
+		`, tid, id, strings.TrimSpace(req.Name), strings.TrimSpace(req.Address),
+			strings.TrimSpace(req.City), req.IsActive).Scan(
+			&resp.ID, &resp.Code, &resp.Name, &resp.Address, &resp.City, &resp.IsActive, &resp.CreatedAt)
+	})
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "NOT_FOUND", "warehouse not found")
 		return
@@ -180,10 +196,13 @@ func (s *Service) Deactivate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "INVALID_REQUEST", "id must be a positive integer")
 		return
 	}
-	_, err := s.pool.Exec(r.Context(), `
-		UPDATE warehouses SET is_active = false, updated_at = now()
-		WHERE tenant_id = $1 AND id = $2
-	`, tid, id)
+	err := withTenant(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		_, execErr := tx.Exec(r.Context(), `
+			UPDATE warehouses SET is_active = false, updated_at = now()
+			WHERE tenant_id = $1 AND id = $2
+		`, tid, id)
+		return execErr
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DEACTIVATE_FAILED", err.Error())
 		return
@@ -202,33 +221,38 @@ func (s *Service) ListStock(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "INVALID_REQUEST", "id must be a positive integer")
 		return
 	}
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT i.id, i.code, i.name, COALESCE(sb.qty_on_hand, 0), COALESCE(sb.avg_unit_cost_cents, 0)
-		FROM items i
-		LEFT JOIN stock_balances sb ON sb.tenant_id = i.tenant_id AND sb.item_id = i.id AND sb.warehouse_id = $2
-		WHERE i.tenant_id = $1 AND i.is_active = true
-		ORDER BY i.code
-	`, tid, id)
+	type stockRow struct {
+		ItemID           int64   `json:"item_id"`
+		ItemCode         string  `json:"item_code"`
+		ItemName         string  `json:"item_name"`
+		QtyOnHand        float64 `json:"qty_on_hand"`
+		AvgUnitCostCents int64   `json:"avg_unit_cost_cents"`
+	}
+	var results []stockRow
+	err := withTenant(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT i.id, i.code, i.name, COALESCE(sb.qty_on_hand, 0), COALESCE(sb.avg_unit_cost_cents, 0)
+			FROM items i
+			LEFT JOIN stock_balances sb ON sb.tenant_id = i.tenant_id AND sb.item_id = i.id AND sb.warehouse_id = $2
+			WHERE i.tenant_id = $1 AND i.is_active = true
+			ORDER BY i.code
+		`, tid, id)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var row stockRow
+			if err := rows.Scan(&row.ItemID, &row.ItemCode, &row.ItemName, &row.QtyOnHand, &row.AvgUnitCostCents); err != nil {
+				return err
+			}
+			results = append(results, row)
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
-	}
-	defer rows.Close()
-	type stockRow struct {
-		ItemID            int64   `json:"item_id"`
-		ItemCode          string  `json:"item_code"`
-		ItemName          string  `json:"item_name"`
-		QtyOnHand         float64 `json:"qty_on_hand"`
-		AvgUnitCostCents  int64   `json:"avg_unit_cost_cents"`
-	}
-	var results []stockRow
-	for rows.Next() {
-		var row stockRow
-		if err := rows.Scan(&row.ItemID, &row.ItemCode, &row.ItemName, &row.QtyOnHand, &row.AvgUnitCostCents); err != nil {
-			writeErr(w, http.StatusInternalServerError, "SCAN_FAILED", err.Error())
-			return
-		}
-		results = append(results, row)
 	}
 	if results == nil {
 		results = []stockRow{}
@@ -239,6 +263,18 @@ func (s *Service) ListStock(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 // Validation & Helpers
 // ---------------------------------------------------------------------------
+
+// withTenant runs fn inside a transaction with the RLS tenant scope set, so
+// row-level security acts as a second layer of defense alongside the explicit
+// WHERE tenant_id filters.
+func withTenant(ctx context.Context, pool *pgxpool.Pool, tenantID int64, fn func(tx pgx.Tx) error) error {
+	return pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tenantID, 10)); err != nil {
+			return err
+		}
+		return fn(tx)
+	})
+}
 
 func validateWarehouse(req CreateWarehouseRequest) (string, string) {
 	if strings.TrimSpace(req.Code) == "" {

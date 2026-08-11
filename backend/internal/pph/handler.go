@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/auth"
@@ -109,27 +110,39 @@ func (s *Service) Create(w http.ResponseWriter, r *http.Request) {
 			year = parsed.Year()
 		}
 	}
-	var seq int64
-	_ = s.pool.QueryRow(r.Context(), `
-		INSERT INTO document_numbering (tenant_id, doc_type, prefix, fiscal_year, last_seq)
-		VALUES ($1, 'BUPOT', 'BUPOT', $2, 1)
-		ON CONFLICT (tenant_id, doc_type, prefix, fiscal_year) DO UPDATE
-		SET last_seq = document_numbering.last_seq + 1
-		RETURNING last_seq
-	`, tid, year).Scan(&seq)
 
 	var resp PPhResponse
-	err := s.pool.QueryRow(r.Context(), `
-		INSERT INTO pph_calculations
+	err := pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(r.Context(), `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tid, 10)); err != nil {
+			return err
+		}
+		var seq int64
+		if err := tx.QueryRow(r.Context(), `
+			INSERT INTO document_numbering (tenant_id, doc_type, prefix, fiscal_year, last_seq)
+			VALUES ($1, 'BUPOT', 'BUPOT', $2, 1)
+			ON CONFLICT (tenant_id, doc_type, prefix, fiscal_year) DO UPDATE
+			SET last_seq = document_numbering.last_seq + 1
+			RETURNING last_seq
+		`, tid, year).Scan(&seq); err != nil {
+			return err
+		}
+
+		if err := tx.QueryRow(r.Context(), `
+			INSERT INTO pph_calculations
 		    (tenant_id, pph_type, calculation_date, dpp_cents, rate_percent, pph_cents,
 		     entity_name, entity_npwp, description, status, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'DRAFT', $10)
-		RETURNING id, pph_type, calculation_date, dpp_cents, rate_percent, pph_cents,
-		          entity_name, entity_npwp, description, status
-	`, tid, strings.ToUpper(req.PphType), req.CalculationDate, req.DppCents, req.RatePercent,
-		pphCents, req.EntityName, req.EntityNPWP, req.Description, uid).Scan(
-		&resp.ID, &resp.PphType, &resp.CalculationDate, &resp.DppCents, &resp.RatePercent,
-		&resp.PphCents, &resp.EntityName, &resp.EntityNPWP, &resp.Description, &resp.Status)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'DRAFT', $10)
+			RETURNING id, pph_type, calculation_date, dpp_cents, rate_percent, pph_cents,
+			          entity_name, entity_npwp, description, status
+		`, tid, strings.ToUpper(req.PphType), req.CalculationDate, req.DppCents, req.RatePercent,
+			pphCents, req.EntityName, req.EntityNPWP, req.Description, uid).Scan(
+			&resp.ID, &resp.PphType, &resp.CalculationDate, &resp.DppCents, &resp.RatePercent,
+			&resp.PphCents, &resp.EntityName, &resp.EntityNPWP, &resp.Description, &resp.Status); err != nil {
+			return err
+		}
+		resp.Status = "POSTED"
+		return nil
+	})
 	if err != nil {
 		writeErr(w, http.StatusConflict, "CREATE_FAILED", err.Error())
 		return
@@ -155,21 +168,30 @@ func (s *Service) List(w http.ResponseWriter, r *http.Request) {
 	}
 	query += ` ORDER BY calculation_date DESC LIMIT 100`
 
-	rows, err := s.pool.Query(r.Context(), query, args...)
+	var results []PPhResponse
+	err := pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(r.Context(), `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tid, 10)); err != nil {
+			return err
+		}
+		rows, err := tx.Query(r.Context(), query, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var resp PPhResponse
+			if err := rows.Scan(&resp.ID, &resp.PphType, &resp.CalculationDate, &resp.DppCents,
+				&resp.RatePercent, &resp.PphCents, &resp.EntityName, &resp.EntityNPWP,
+				&resp.Description, &resp.Status); err != nil {
+				return err
+			}
+			results = append(results, resp)
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
-	}
-	defer rows.Close()
-	var results []PPhResponse
-	for rows.Next() {
-		var resp PPhResponse
-		if err := rows.Scan(&resp.ID, &resp.PphType, &resp.CalculationDate, &resp.DppCents,
-			&resp.RatePercent, &resp.PphCents, &resp.EntityName, &resp.EntityNPWP,
-			&resp.Description, &resp.Status); err != nil {
-			continue
-		}
-		results = append(results, resp)
 	}
 	if results == nil {
 		results = []PPhResponse{}
@@ -185,13 +207,18 @@ func (s *Service) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	id := pathID(chi.URLParam(r, "id"))
 	var resp PPhResponse
-	err := s.pool.QueryRow(r.Context(), `
-		SELECT id, pph_type, calculation_date, dpp_cents, rate_percent, pph_cents,
-		       entity_name, entity_npwp, description, status
-		FROM pph_calculations WHERE tenant_id = $1 AND id = $2
-	`, tid, id).Scan(&resp.ID, &resp.PphType, &resp.CalculationDate, &resp.DppCents,
-		&resp.RatePercent, &resp.PphCents, &resp.EntityName, &resp.EntityNPWP,
-		&resp.Description, &resp.Status)
+	err := pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(r.Context(), `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tid, 10)); err != nil {
+			return err
+		}
+		return tx.QueryRow(r.Context(), `
+			SELECT id, pph_type, calculation_date, dpp_cents, rate_percent, pph_cents,
+			       entity_name, entity_npwp, description, status
+			FROM pph_calculations WHERE tenant_id = $1 AND id = $2
+		`, tid, id).Scan(&resp.ID, &resp.PphType, &resp.CalculationDate, &resp.DppCents,
+			&resp.RatePercent, &resp.PphCents, &resp.EntityName, &resp.EntityNPWP,
+			&resp.Description, &resp.Status)
+	})
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "NOT_FOUND", "PPh calculation not found")
 		return
@@ -206,9 +233,15 @@ func (s *Service) Post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := pathID(chi.URLParam(r, "id"))
-	_, err := s.pool.Exec(r.Context(), `
-		UPDATE pph_calculations SET status = 'POSTED' WHERE tenant_id = $1 AND id = $2 AND status = 'DRAFT'
-	`, tid, id)
+	err := pgx.BeginFunc(r.Context(), s.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(r.Context(), `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tid, 10)); err != nil {
+			return err
+		}
+		_, execErr := tx.Exec(r.Context(), `
+			UPDATE pph_calculations SET status = 'POSTED' WHERE tenant_id = $1 AND id = $2 AND status = 'DRAFT'
+		`, tid, id)
+		return execErr
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "POST_FAILED", err.Error())
 		return
