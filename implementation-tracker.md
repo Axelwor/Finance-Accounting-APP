@@ -877,3 +877,31 @@ All Critical (4) and Major (28) issues resolved. F-03 approval enforcement, M-00
 - m-016: Frontend struktur refactor ke ARCHITECTURE.md (large refactor)
 - m-018: styles.css modularization (tech debt, large refactor)
 - m-019: API_CONTRACT.md sync (dokumentasi)
+
+---
+
+## Sprint 8 — Remaining Deferred Items (SELESAI) — 2026-08-11
+
+### Fixed This Sprint
+
+| # | Finding | Fix | Commit |
+|---|---|---|---|
+| m-019 | API_CONTRACT.md drift (50+ endpoints undocumented) | Synced contract with all 150+ routes (extended endpoints section) | 124af9c |
+| m-018 | styles.css 2,922-line monolith | Split into 6 ordered modules in `styles/` (base/shell/components/auth/workbench/features), byte-identical before removing monolith | fd5d001 |
+| m-016 | Frontend structure vs ARCHITECTURE.md | Assessed: current structure (screens/list, screens/entry, workbench/) is functionally organized; full restructure is high-risk/low-value — documented as acceptable deviation | (documented) |
+
+### Verification
+- Backend: `go build ./...` SUCCESS, 35 packages pass / 0 FAIL
+- Frontend: `npx tsc --noEmit` pass, `npm run build` pass
+- Live: frontend 200, health detail ok (DB up, NextReport up)
+
+### Deployment
+- All commits pushed to `origin/main`, deployed to `https://accounting.tikuma.net/`
+
+### Remaining Deferred (documented, not blocking)
+- m-016 full frontend restructure — high-risk/low-value, kept as documented deviation
+- NextReport N-06 Docker production hardening, N-09 fallback tested — operational tasks
+
+---
+
+**All audit findings now resolved or documented as intentional deferrals.**
