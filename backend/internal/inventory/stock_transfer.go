@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/costing"
 	"finance-accounting-app/backend/internal/db"
 )
@@ -25,11 +26,11 @@ type StockTransferLineRequest struct {
 }
 
 type CreateStockTransferRequest struct {
-	TransferDate   string                     `json:"transfer_date"`
-	FromWarehouseID *int64                    `json:"from_warehouse_id"`
-	ToWarehouseID   *int64                    `json:"to_warehouse_id"`
-	Notes          string                     `json:"notes"`
-	Lines          []StockTransferLineRequest `json:"lines"`
+	TransferDate    string                     `json:"transfer_date"`
+	FromWarehouseID *int64                     `json:"from_warehouse_id"`
+	ToWarehouseID   *int64                     `json:"to_warehouse_id"`
+	Notes           string                     `json:"notes"`
+	Lines           []StockTransferLineRequest `json:"lines"`
 }
 
 type stockTransferLineResponse struct {
@@ -208,6 +209,16 @@ func (service *Service) CreateStockTransfer(writer http.ResponseWriter, request 
 			Notes:        req.Notes,
 			Status:       transferStatusCompleted,
 		}
+
+		if err := audit.Log(request.Context(), tx, tenant, uid, "stock_transfer", trfID, audit.ActionCreate, nil, map[string]any{
+			"number":            trfNumber,
+			"from_warehouse_id": fromWhID,
+			"to_warehouse_id":   toWhID,
+			"line_count":        len(req.Lines),
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {

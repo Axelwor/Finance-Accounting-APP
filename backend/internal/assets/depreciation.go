@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -197,6 +198,19 @@ func (service *Service) DepreciateAsset(writer http.ResponseWriter, request *htt
 			DepreciationCents: depCents, JournalEntryID: entryID, ScheduleID: schedID,
 			BookValueCents: newBookValue, AccumDepCents: newAccumDep, Status: asset.Status,
 		}
+
+		if err := audit.Log(request.Context(), tx, tenant, uid, "fixed_asset", assetID, audit.ActionPost, nil, map[string]any{
+			"action":             "depreciation",
+			"period_year":        req.PeriodYear,
+			"period_month":       req.PeriodMonth,
+			"depreciation_cents": depCents,
+			"book_value_cents":   newBookValue,
+			"accum_dep_cents":    newAccumDep,
+			"journal_entry_id":   entryID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -362,6 +376,19 @@ func (service *Service) RevalueAsset(writer http.ResponseWriter, request *http.R
 			AssetID: assetID, Code: asset.Code, AdjustmentCents: absAmount,
 			Direction: direction, JournalEntryID: entryID, BookValueCents: newBookValue, Status: asset.Status,
 		}
+
+		if err := audit.Log(request.Context(), tx, tenant, uid, "fixed_asset", assetID, audit.ActionPost, map[string]any{
+			"book_value_cents": asset.BookValueCents,
+		}, map[string]any{
+			"action":           "revaluation",
+			"direction":        direction,
+			"adjustment_cents": absAmount,
+			"new_book_value":   newBookValue,
+			"journal_entry_id": entryID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -542,6 +569,22 @@ func (service *Service) DisposeAsset(writer http.ResponseWriter, request *http.R
 			CostCents: asset.AcquisitionCostCents, GainLossCents: gainLoss,
 			GainLossDirection: direction, JournalEntryID: entryID, Status: statusDisposed,
 		}
+
+		if err := audit.Log(request.Context(), tx, tenant, uid, "fixed_asset", assetID, audit.ActionPost, map[string]any{
+			"book_value_cents": bookValue,
+			"accum_dep_cents":  asset.AccumDepCents,
+			"cost_cents":       asset.AcquisitionCostCents,
+		}, map[string]any{
+			"action":              "disposal",
+			"proceeds_cents":      req.ProceedsCents,
+			"gain_loss_cents":     gainLoss,
+			"gain_loss_direction": direction,
+			"status":              statusDisposed,
+			"journal_entry_id":    entryID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -687,6 +730,19 @@ func (service *Service) ImpairAsset(writer http.ResponseWriter, request *http.Re
 			AssetID: assetID, Code: asset.Code, ImpairmentLossCents: loss,
 			NewBookValueCents: req.ImpairedValueCents, JournalEntryID: entryID, Status: statusImpaired,
 		}
+
+		if err := audit.Log(request.Context(), tx, tenant, uid, "fixed_asset", assetID, audit.ActionPost, map[string]any{
+			"book_value_cents": asset.BookValueCents,
+		}, map[string]any{
+			"action":           "impairment",
+			"impairment_loss":  loss,
+			"new_book_value":   req.ImpairedValueCents,
+			"status":           statusImpaired,
+			"journal_entry_id": entryID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {

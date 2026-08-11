@@ -11,13 +11,15 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/db"
 )
 
 // DepreciateLeaseContract handles POST /lease-contracts/{id}/depreciate.
 //
 // It posts the monthly RoU depreciation journal:
-//   Dr 5209 RoU Depreciation Expense / Cr 1702 Accumulated RoU Depreciation
+//
+//	Dr 5209 RoU Depreciation Expense / Cr 1702 Accumulated RoU Depreciation
 //
 // The depreciation amount is: rou_cost_cents / total_months
 // (straight-line over the lease term).
@@ -197,6 +199,17 @@ func (service *Service) postRoUDepreciation(ctx context.Context, tenantID, contr
 			"accum_dep_cents":    alreadyDepreciated + amount,
 			"rou_cost_cents":     rouCostCents,
 		}
+
+		if err := audit.Log(ctx, tx, tenantID, userID, "lease_contract", contractID, audit.ActionPost, nil, map[string]any{
+			"action":             "rou_depreciation",
+			"period":             fmt.Sprintf("%04d-%02d", year, month),
+			"depreciation_cents": amount,
+			"accum_dep_cents":    alreadyDepreciated + amount,
+			"journal_entry_id":   entryID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	return result, err
@@ -229,11 +242,11 @@ func (service *Service) ListDepreciationLog(writer http.ResponseWriter, request 
 	defer rows.Close()
 
 	type depLogEntry struct {
-		PeriodYear         int    `json:"period_year"`
-		PeriodMonth        int    `json:"period_month"`
-		DepreciationCents  int64  `json:"depreciation_cents"`
-		JournalEntryID     int64  `json:"journal_entry_id,omitempty"`
-		PostedAt           string `json:"posted_at"`
+		PeriodYear        int    `json:"period_year"`
+		PeriodMonth       int    `json:"period_month"`
+		DepreciationCents int64  `json:"depreciation_cents"`
+		JournalEntryID    int64  `json:"journal_entry_id,omitempty"`
+		PostedAt          string `json:"posted_at"`
 	}
 	var log []depLogEntry
 	for rows.Next() {

@@ -14,10 +14,16 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+<<<<<<< HEAD
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/accounting"
+=======
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"finance-accounting-app/backend/internal/audit"
+>>>>>>> fix-backend-audit-idem
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/db"
 )
@@ -78,16 +84,27 @@ func (service *Service) Create(writer http.ResponseWriter, request *http.Request
 	}
 
 	var id int64
-	err := service.pool.QueryRow(request.Context(), `
-		INSERT INTO recurring_transactions
-		    (tenant_id, code, name, description, intent_type, frequency, next_date, end_date,
-		     amount_cents, from_account_id, to_account_id, payment_description, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-		RETURNING id
-	`, tenantID, req.Code, req.Name, req.Description, req.IntentType, req.Frequency,
-		req.NextDate, nullIfEmpty(req.EndDate), req.AmountCents,
-		nullIfZero(req.FromAccountID), nullIfZero(req.ToAccountID),
-		req.PaymentDescription, userID).Scan(&id)
+	err := db.WithTransaction(request.Context(), service.pool, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(request.Context(), `
+			INSERT INTO recurring_transactions
+			    (tenant_id, code, name, description, intent_type, frequency, next_date, end_date,
+			     amount_cents, from_account_id, to_account_id, payment_description, created_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			RETURNING id
+		`, tenantID, req.Code, req.Name, req.Description, req.IntentType, req.Frequency,
+			req.NextDate, nullIfEmpty(req.EndDate), req.AmountCents,
+			nullIfZero(req.FromAccountID), nullIfZero(req.ToAccountID),
+			req.PaymentDescription, userID).Scan(&id); err != nil {
+			return err
+		}
+		return audit.Log(request.Context(), tx, tenantID, userID, "recurring_transaction", id, audit.ActionCreate, nil, map[string]any{
+			"code":         req.Code,
+			"name":         req.Name,
+			"intent_type":  req.IntentType,
+			"frequency":    req.Frequency,
+			"amount_cents": req.AmountCents,
+		})
+	})
 	if err != nil {
 		writeJSON(writer, http.StatusConflict, errBody{"CREATE_FAILED", err.Error()})
 		return
@@ -268,14 +285,22 @@ func (service *Service) Update(writer http.ResponseWriter, request *http.Request
 
 func (service *Service) Deactivate(writer http.ResponseWriter, request *http.Request) {
 	tenantID, _ := auth.TenantIDFromContext(request.Context())
+	userID, _ := auth.UserIDFromContext(request.Context())
 	id := pathID(chi.URLParam(request, "id"))
 	if id <= 0 {
 		writeJSON(writer, http.StatusBadRequest, errBody{"INVALID_REQUEST", "id required"})
 		return
 	}
-	_, err := service.pool.Exec(request.Context(),
-		`UPDATE recurring_transactions SET is_active = false, updated_at = now() WHERE tenant_id = $1 AND id = $2`,
-		tenantID, id)
+	err := db.WithTransaction(request.Context(), service.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(request.Context(),
+			`UPDATE recurring_transactions SET is_active = false, updated_at = now() WHERE tenant_id = $1 AND id = $2`,
+			tenantID, id); err != nil {
+			return err
+		}
+		return audit.Log(request.Context(), tx, tenantID, userID, "recurring_transaction", id, audit.ActionClose, nil, map[string]any{
+			"is_active": false,
+		})
+	})
 	if err != nil {
 		writeJSON(writer, http.StatusInternalServerError, errBody{"UPDATE_FAILED", err.Error()})
 		return
@@ -317,6 +342,7 @@ func (service *Service) PostNow(writer http.ResponseWriter, request *http.Reques
 			return err
 		}
 
+<<<<<<< HEAD
 		// Lock the recurring row so concurrent PostNow calls serialize and
 		// cannot both post the same period (FOR UPDATE).
 		var code, name, intentType, frequency, description string
@@ -341,6 +367,33 @@ func (service *Service) PostNow(writer http.ResponseWriter, request *http.Reques
 		if fromAcct <= 0 || toAcct <= 0 {
 			return errMissingAccounts
 		}
+=======
+	// Update next_date based on frequency
+	nextNext := computeNextDate(nextDate, frequency)
+	err = db.WithTransaction(request.Context(), service.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(request.Context(), `
+			UPDATE recurring_transactions
+			SET last_posted_date = now()::date, next_date = $3, updated_at = now()
+			WHERE tenant_id = $1 AND id = $2
+		`, tenantID, id, nextNext); err != nil {
+			return err
+		}
+		return audit.Log(request.Context(), tx, tenantID, userID, "recurring_transaction", id, audit.ActionPost, map[string]any{
+			"next_date": nextDate.Format("2006-01-02"),
+		}, map[string]any{
+			"code":           code,
+			"intent_type":    intentType,
+			"amount_cents":   amountCents,
+			"last_posted_at": time.Now().Format("2006-01-02"),
+			"next_date":      nextNext.Format("2006-01-02"),
+			"posted_by":      userID,
+		})
+	})
+	if err != nil {
+		writeJSON(writer, http.StatusInternalServerError, errBody{"UPDATE_FAILED", err.Error()})
+		return
+	}
+>>>>>>> fix-backend-audit-idem
 
 		// Post the journal: Dr from_account / Cr to_account.
 		entryDate := nextDate.Format("2006-01-02")

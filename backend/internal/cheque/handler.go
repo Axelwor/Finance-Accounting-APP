@@ -17,7 +17,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+<<<<<<< HEAD
 	"finance-accounting-app/backend/internal/accounting"
+=======
+	"finance-accounting-app/backend/internal/audit"
+>>>>>>> fix-backend-audit-idem
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/db"
 )
@@ -188,6 +192,7 @@ func (s *Service) Create(w http.ResponseWriter, r *http.Request) {
 		dueDate = pgtype.Date{Time: d, Valid: true}
 	}
 	var resp ChequeResponse
+<<<<<<< HEAD
 	err = s.pool.QueryRow(r.Context(), `
 		INSERT INTO cheques (
 			tenant_id, cheque_number, cheque_type, direction, bank_name,
@@ -209,6 +214,45 @@ func (s *Service) Create(w http.ResponseWriter, r *http.Request) {
 		&resp.Status, &resp.BouncedReason, &resp.JournalEntryID, &resp.PaymentID,
 		&resp.Description, &resp.CreatedAt, &resp.UpdatedAt,
 	)
+=======
+	uid, _ := auth.UserIDFromContext(r.Context())
+	err = db.WithTransaction(r.Context(), s.pool, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(r.Context(), `
+			INSERT INTO cheques (
+				tenant_id, cheque_number, cheque_type, direction, bank_name,
+				bank_account_number, payee, drawer, amount_cents, issue_date,
+				due_date, status, journal_entry_id, payment_id, description
+			)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'REGISTERED',$12,$13,$14)
+			RETURNING id, cheque_number, cheque_type, direction, bank_name,
+				bank_account_number, payee, drawer, amount_cents, issue_date,
+				due_date, clearing_date, status, bounced_reason, journal_entry_id,
+				payment_id, description, created_at, updated_at
+		`,
+			tid, strings.TrimSpace(req.ChequeNumber),
+			strings.ToUpper(strings.TrimSpace(req.ChequeType)),
+			strings.ToUpper(strings.TrimSpace(req.Direction)),
+			req.BankName, req.BankAccountNumber, req.Payee, req.Drawer,
+			req.AmountCents, issueDate, dueDate, req.JournalEntryID, req.PaymentID,
+			req.Description,
+		).Scan(
+			&resp.ID, &resp.ChequeNumber, &resp.ChequeType, &resp.Direction,
+			&resp.BankName, &resp.BankAccountNumber, &resp.Payee, &resp.Drawer,
+			&resp.AmountCents, &resp.IssueDate, &resp.DueDate, &resp.ClearingDate,
+			&resp.Status, &resp.BouncedReason, &resp.JournalEntryID, &resp.PaymentID,
+			&resp.Description, &resp.CreatedAt, &resp.UpdatedAt,
+		); err != nil {
+			return err
+		}
+		return audit.Log(r.Context(), tx, tid, uid, "cheque", resp.ID, audit.ActionCreate, nil, map[string]any{
+			"cheque_number": resp.ChequeNumber,
+			"cheque_type":   resp.ChequeType,
+			"direction":     resp.Direction,
+			"amount_cents":  resp.AmountCents,
+			"status":        "REGISTERED",
+		})
+	})
+>>>>>>> fix-backend-audit-idem
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "failed to create cheque")
 		return
@@ -411,6 +455,7 @@ func (s *Service) Deposit(w http.ResponseWriter, r *http.Request) {
 	idem := idempotencyKeyOrGenerate(r)
 
 	var resp ChequeResponse
+<<<<<<< HEAD
 	err := db.WithTransaction(r.Context(), s.pool, func(tx pgx.Tx) error {
 		if err := withTenant(r.Context(), tx, tid); err != nil {
 			return err
@@ -459,6 +504,18 @@ func (s *Service) Deposit(w http.ResponseWriter, r *http.Request) {
 		resp, err = updateChequeStatus(r.Context(), tx, tid, id, "DEPOSITED", "", posted.ID, false)
 		return err
 	})
+=======
+	uid, _ := auth.UserIDFromContext(r.Context())
+	err := s.chequeStatusUpdate(r, tid, uid, id, audit.ActionUpdate, "DEPOSITED", `
+		UPDATE cheques
+		SET status = 'DEPOSITED', clearing_date = NULL, updated_at = now()
+		WHERE tenant_id = $1 AND id = $2 AND status = 'REGISTERED'
+		RETURNING id, cheque_number, cheque_type, direction, bank_name,
+			bank_account_number, payee, drawer, amount_cents, issue_date,
+			due_date, clearing_date, status, bounced_reason, journal_entry_id,
+			payment_id, description, created_at, updated_at
+	`, &resp, nil, tid, id)
+>>>>>>> fix-backend-audit-idem
 	if err != nil {
 		writePostingErr(w, err, "deposit", tid, id)
 		return
@@ -491,6 +548,7 @@ func (s *Service) Clear(w http.ResponseWriter, r *http.Request) {
 	bankCodeResolved := resolveBankCode(body.BankAccountCode)
 
 	var resp ChequeResponse
+<<<<<<< HEAD
 	err := db.WithTransaction(r.Context(), s.pool, func(tx pgx.Tx) error {
 		if err := withTenant(r.Context(), tx, tid); err != nil {
 			return err
@@ -540,6 +598,18 @@ func (s *Service) Clear(w http.ResponseWriter, r *http.Request) {
 		resp, err = updateChequeStatus(r.Context(), tx, tid, id, "CLEARED", "", posted.ID, true)
 		return err
 	})
+=======
+	uid, _ := auth.UserIDFromContext(r.Context())
+	err := s.chequeStatusUpdate(r, tid, uid, id, audit.ActionUpdate, "CLEARED", `
+		UPDATE cheques
+		SET status = 'CLEARED', clearing_date = CURRENT_DATE, updated_at = now()
+		WHERE tenant_id = $1 AND id = $2 AND status IN ('REGISTERED', 'DEPOSITED')
+		RETURNING id, cheque_number, cheque_type, direction, bank_name,
+			bank_account_number, payee, drawer, amount_cents, issue_date,
+			due_date, clearing_date, status, bounced_reason, journal_entry_id,
+			payment_id, description, created_at, updated_at
+	`, &resp, nil, tid, id)
+>>>>>>> fix-backend-audit-idem
 	if err != nil {
 		writePostingErr(w, err, "clear", tid, id)
 		return
@@ -578,6 +648,7 @@ func (s *Service) Bounce(w http.ResponseWriter, r *http.Request) {
 	reason := strings.TrimSpace(req.Reason)
 
 	var resp ChequeResponse
+<<<<<<< HEAD
 	err := db.WithTransaction(r.Context(), s.pool, func(tx pgx.Tx) error {
 		if err := withTenant(r.Context(), tx, tid); err != nil {
 			return err
@@ -677,6 +748,18 @@ func (s *Service) Bounce(w http.ResponseWriter, r *http.Request) {
 		resp, err = updateChequeStatus(r.Context(), tx, tid, id, "BOUNCED", reason, reversalID, false)
 		return err
 	})
+=======
+	uid, _ := auth.UserIDFromContext(r.Context())
+	err := s.chequeStatusUpdate(r, tid, uid, id, audit.ActionUpdate, "BOUNCED", `
+		UPDATE cheques
+		SET status = 'BOUNCED', bounced_reason = $3, updated_at = now()
+		WHERE tenant_id = $1 AND id = $2 AND status IN ('REGISTERED', 'DEPOSITED')
+		RETURNING id, cheque_number, cheque_type, direction, bank_name,
+			bank_account_number, payee, drawer, amount_cents, issue_date,
+			due_date, clearing_date, status, bounced_reason, journal_entry_id,
+			payment_id, description, created_at, updated_at
+	`, &resp, map[string]any{"bounced_reason": strings.TrimSpace(req.Reason)}, tid, id, strings.TrimSpace(req.Reason))
+>>>>>>> fix-backend-audit-idem
 	if err != nil {
 		writePostingErr(w, err, "bounce", tid, id)
 		return
@@ -1140,6 +1223,41 @@ func mustJSON(value any) []byte {
 // ---------------------------------------------------------------------------
 // Validation & Helpers (unchanged — covered by existing unit tests)
 // ---------------------------------------------------------------------------
+
+// chequeStatusUpdate runs a cheque status-transition UPDATE inside a
+// transaction and writes an audit_logs entry (before/after status snapshot)
+// atomically with the mutation.
+func (s *Service) chequeStatusUpdate(r *http.Request, tid, uid, chequeID int64, action audit.Action, newStatus, query string, resp *ChequeResponse, extraAfter map[string]any, args ...any) error {
+	return db.WithTransaction(r.Context(), s.pool, func(tx pgx.Tx) error {
+		var chequeNumber string
+		var oldStatus string
+		if err := tx.QueryRow(r.Context(), `
+			SELECT cheque_number, status FROM cheques WHERE tenant_id = $1 AND id = $2 FOR UPDATE
+		`, tid, chequeID).Scan(&chequeNumber, &oldStatus); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(r.Context(), query, args...).Scan(
+			&resp.ID, &resp.ChequeNumber, &resp.ChequeType, &resp.Direction,
+			&resp.BankName, &resp.BankAccountNumber, &resp.Payee, &resp.Drawer,
+			&resp.AmountCents, &resp.IssueDate, &resp.DueDate, &resp.ClearingDate,
+			&resp.Status, &resp.BouncedReason, &resp.JournalEntryID, &resp.PaymentID,
+			&resp.Description, &resp.CreatedAt, &resp.UpdatedAt,
+		); err != nil {
+			return err
+		}
+		after := map[string]any{
+			"cheque_number": chequeNumber,
+			"status":        newStatus,
+		}
+		for k, v := range extraAfter {
+			after[k] = v
+		}
+		return audit.Log(r.Context(), tx, tid, uid, "cheque", resp.ID, action, map[string]any{
+			"cheque_number": chequeNumber,
+			"status":        oldStatus,
+		}, after)
+	})
+}
 
 func validateCheque(req CreateChequeRequest) (string, string) {
 	if strings.TrimSpace(req.ChequeNumber) == "" {

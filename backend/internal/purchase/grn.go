@@ -3,6 +3,7 @@ package purchase
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -12,8 +13,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/costing"
 	"finance-accounting-app/backend/internal/db"
+	"finance-accounting-app/backend/internal/httperr"
 )
 
 // GRN posts: Dr 1301 Inventory / Cr 2105 Uninvoiced Payables.
@@ -81,6 +84,7 @@ func (service *Service) CreateGRN(writer http.ResponseWriter, request *http.Requ
 		return
 	}
 	uid := userID(request)
+	requestHash := httperr.ComputeRequestHash(request)
 
 	var result grnResponse
 	err = db.WithTransaction(request.Context(), service.pool, func(tx pgx.Tx) error {
@@ -93,6 +97,12 @@ func (service *Service) CreateGRN(writer http.ResponseWriter, request *http.Requ
 			IdempotencyKey: uuidValue(idem),
 		})
 		if err == nil {
+			// M-023: verify payload match by comparing request hashes.
+			var storedHash string
+			_ = tx.QueryRow(request.Context(), `SELECT COALESCE(request_hash, '') FROM journal_entries WHERE id = $1`, existing.ID).Scan(&storedHash)
+			if err := httperr.CheckIdempotencyHash(storedHash, requestHash); err != nil {
+				return httperr.ErrIdempotencyKeyReuse
+			}
 			// Find GRN by journal id.
 			grn, err := fetchGRNByJournal(request.Context(), tx, tenant, existing.ID)
 			if err != nil {
@@ -205,12 +215,12 @@ func (service *Service) CreateGRN(writer http.ResponseWriter, request *http.Requ
 		// Insert journal entry.
 		var entryID int64
 		err = tx.QueryRow(request.Context(), `
-			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, request_hash)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 			RETURNING id
 		`, tenant, jrnNumber, journal.EntryDate, periodID, journal.Description,
 			journal.SourceRef, string(journal.IntentType), idem,
-			journal.Hash, journal.PreviousHash, int8Value(uid)).Scan(&entryID)
+			journal.Hash, journal.PreviousHash, int8Value(uid), textValueOptional(requestHash)).Scan(&entryID)
 		if err != nil {
 			return err
 		}
@@ -320,10 +330,26 @@ func (service *Service) CreateGRN(writer http.ResponseWriter, request *http.Requ
 		result.Status = "RECEIVED"
 		result.JournalEntryID = entryID
 		result.TotalCents = totalGRN
+
+		if err := audit.Log(request.Context(), tx, tenant, uid, "grn", grnID, audit.ActionPost, nil, map[string]any{
+			"number":            grnNumber,
+			"purchase_order_id": req.PurchaseOrderID,
+			"supplier_id":       supplierID,
+			"total_cents":       totalGRN,
+			"journal_entry_id":  entryID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {
-		writeError(writer, http.StatusBadRequest, "GRN_CREATE_FAILED", err.Error())
+		if errors.Is(err, httperr.ErrIdempotencyKeyReuse) {
+			writeError(writer, http.StatusConflict, "IDEMPOTENCY_KEY_REUSE", err.Error())
+			return
+		}
+		status, code := httperr.Classify(err)
+		writeError(writer, status, code, err.Error())
 		return
 	}
 	writeJSON(writer, http.StatusCreated, result)

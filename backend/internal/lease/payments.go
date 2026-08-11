@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -177,6 +178,17 @@ func (service *Service) PostLeasePayment(writer http.ResponseWriter, request *ht
 		p.JournalEntryID = entryID
 		p.Posted = true
 		result = p
+
+		if err := audit.Log(request.Context(), tx, tenant, uid, "lease_contract", leaseID, audit.ActionPost, nil, map[string]any{
+			"payment_no":           paymentNo,
+			"payment_amount_cents": p.PaymentAmountCents,
+			"principal_cents":      p.PrincipalCents,
+			"interest_cents":       p.InterestCents,
+			"journal_entry_id":     entryID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {

@@ -12,7 +12,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/db"
+	"finance-accounting-app/backend/internal/httperr"
 )
 
 // overpaymentAccountCode is the seeded "Customer Overpayment" account (2402).
@@ -70,6 +72,7 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 		return
 	}
 	userID := userID(request)
+	requestHash := httperr.ComputeRequestHash(request)
 
 	var result paymentResponse
 	err = db.WithTransaction(request.Context(), service.pool, func(tx pgx.Tx) error {
@@ -82,6 +85,12 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 			IdempotencyKey: uuidValue(idem),
 		})
 		if err == nil {
+			// M-023: verify payload match by comparing request hashes.
+			var storedHash string
+			_ = tx.QueryRow(request.Context(), `SELECT COALESCE(request_hash, '') FROM journal_entries WHERE id = $1`, existing.ID).Scan(&storedHash)
+			if err := httperr.CheckIdempotencyHash(storedHash, requestHash); err != nil {
+				return httperr.ErrIdempotencyKeyReuse
+			}
 			pmt, err := service.findPaymentByJournalID(request.Context(), tx, tenant, existing.ID)
 			if err != nil {
 				return err
@@ -173,12 +182,12 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 		}
 		var entryID int64
 		err = tx.QueryRow(request.Context(), `
-			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-			RETURNING id
-		`, tenant, jrnNumber, journal.EntryDate, periodID, journal.Description,
+			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, request_hash)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+				RETURNING id
+			`, tenant, jrnNumber, journal.EntryDate, periodID, journal.Description,
 			journal.SourceRef, string(journal.IntentType), idem,
-			journal.Hash, journal.PreviousHash, int8Value(userID)).Scan(&entryID)
+			journal.Hash, journal.PreviousHash, int8Value(userID), textValueOptional(requestHash)).Scan(&entryID)
 		if err != nil {
 			return err
 		}
@@ -262,6 +271,17 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 			Description:      req.Description,
 			Status:           "RECEIVED",
 		}
+
+		if err := audit.Log(request.Context(), tx, tenant, userID, "invoice_payment", pmtID, audit.ActionPost, nil, map[string]any{
+			"number":            pmtNumber,
+			"amount_cents":      req.AmountCents,
+			"ar_applied_cents":  arApplied,
+			"overpayment_cents": overpayment,
+			"journal_entry_id":  entryID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -346,6 +366,9 @@ func validatePaymentRequest(req CreatePaymentRequest) (string, string) {
 }
 
 func paymentErrorFor(err error) (int, string, string) {
+	if errors.Is(err, httperr.ErrIdempotencyKeyReuse) {
+		return http.StatusConflict, "IDEMPOTENCY_KEY_REUSE", err.Error()
+	}
 	if isNoRows(err) {
 		return http.StatusNotFound, "INVOICE_NOT_FOUND", "invoice not found"
 	}
@@ -353,7 +376,8 @@ func paymentErrorFor(err error) (int, string, string) {
 	if errors.As(err, &overflow) {
 		return http.StatusConflict, "DP_EXCEEDS_ORDER", overflow.Error()
 	}
-	return http.StatusInternalServerError, "PAYMENT_CREATE_FAILED", err.Error()
+	status, code := httperr.Classify(err)
+	return status, code, err.Error()
 }
 
 func (service *Service) findPaymentByJournalID(ctx context.Context, tx pgx.Tx, tenant, journalID int64) (paymentResponse, error) {

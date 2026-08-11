@@ -11,7 +11,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+<<<<<<< HEAD
 	"finance-accounting-app/backend/internal/costing"
+=======
+	"finance-accounting-app/backend/internal/audit"
+>>>>>>> fix-backend-audit-idem
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -504,6 +508,17 @@ func (service *Service) ApproveStockOpname(writer http.ResponseWriter, request *
 			opn.JournalEntryID = entryID
 		}
 		result = &opn
+
+		if err := audit.Log(request.Context(), tx, tenant, uid, "stock_opname", opn.ID, audit.ActionPost, map[string]any{
+			"status": opnameStatusCounted,
+		}, map[string]any{
+			"status":           opnameStatusApproved,
+			"journal_entry_id": entryID,
+			"total_adjustment": opn.TotalAdjustmentCents,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -267,6 +268,18 @@ func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, reques
 			Description:      req.Description,
 			Status:           "PAID",
 		}
+
+		if err := audit.Log(request.Context(), tx, tenant, uid, "supplier_payment", pmtID, audit.ActionPost, nil, map[string]any{
+			"number":            pmtNumber,
+			"amount_cents":      req.AmountCents,
+			"ap_applied_cents":  apApplied,
+			"overpayment_cents": overpayment,
+			"invoice_id":        invoiceID,
+			"journal_entry_id":  entryID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {
