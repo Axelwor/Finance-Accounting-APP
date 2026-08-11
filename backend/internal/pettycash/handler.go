@@ -1,6 +1,7 @@
 package pettycash
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/auth"
@@ -64,11 +66,16 @@ func (service *Service) CreateFund(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var id int64
-	err := service.pool.QueryRow(r.Context(), `
-		INSERT INTO petty_cash_funds (tenant_id, code, name, cash_account_id, imprest_amount_cents, custodian_user_id)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id
-	`, tenantID, req.Code, req.Name, req.CashAccountID, req.ImprestAmountCents, userID).Scan(&id)
+	err := pgx.BeginFunc(r.Context(), service.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(r.Context(), `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tenantID, 10)); err != nil {
+			return err
+		}
+		return tx.QueryRow(r.Context(), `
+			INSERT INTO petty_cash_funds (tenant_id, code, name, cash_account_id, imprest_amount_cents, custodian_user_id)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			RETURNING id
+		`, tenantID, req.Code, req.Name, req.CashAccountID, req.ImprestAmountCents, userID).Scan(&id)
+	})
 	if err != nil {
 		writeErr(w, http.StatusConflict, "CREATE_FAILED", err.Error())
 		return
@@ -77,11 +84,11 @@ func (service *Service) CreateFund(w http.ResponseWriter, r *http.Request) {
 	// Post the initial funding: Dr Petty Cash / Cr Cash/Bank
 	// This would call the journal posting layer — for now, return the fund.
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"id":                  id,
-		"code":                req.Code,
-		"name":                req.Name,
+		"id":                   id,
+		"code":                 req.Code,
+		"name":                 req.Name,
 		"imprest_amount_cents": req.ImprestAmountCents,
-		"message":             "fund created — post initial funding via cash-out endpoint",
+		"message":              "fund created — post initial funding via cash-out endpoint",
 	})
 }
 
@@ -92,18 +99,6 @@ func (service *Service) ListFunds(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := service.pool.Query(r.Context(), `
-		SELECT id, code, name, cash_account_id, imprest_amount_cents, is_active
-		FROM petty_cash_funds
-		WHERE tenant_id = $1
-		ORDER BY code
-	`, tenantID)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
 	type fund struct {
 		ID                 int64  `json:"id"`
 		Code               string `json:"code"`
@@ -113,13 +108,29 @@ func (service *Service) ListFunds(w http.ResponseWriter, r *http.Request) {
 		IsActive           bool   `json:"is_active"`
 	}
 	var funds []fund
-	for rows.Next() {
-		var f fund
-		if err := rows.Scan(&f.ID, &f.Code, &f.Name, &f.CashAccountID, &f.ImprestAmountCents, &f.IsActive); err != nil {
-			writeErr(w, http.StatusInternalServerError, "SCAN_FAILED", err.Error())
-			return
+	err := withTenant(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT id, code, name, cash_account_id, imprest_amount_cents, is_active
+			FROM petty_cash_funds
+			WHERE tenant_id = $1
+			ORDER BY code
+		`, tenantID)
+		if err != nil {
+			return err
 		}
-		funds = append(funds, f)
+		defer rows.Close()
+		for rows.Next() {
+			var f fund
+			if err := rows.Scan(&f.ID, &f.Code, &f.Name, &f.CashAccountID, &f.ImprestAmountCents, &f.IsActive); err != nil {
+				return err
+			}
+			funds = append(funds, f)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
+		return
 	}
 	if funds == nil {
 		funds = []fund{}
@@ -160,21 +171,28 @@ func (service *Service) CreateVoucher(w http.ResponseWriter, r *http.Request) {
 	// Generate voucher number
 	year := time.Now().Year()
 	var seq int64
-	_ = service.pool.QueryRow(r.Context(), `
-		INSERT INTO document_numbering (tenant_id, doc_type, prefix, fiscal_year, last_seq)
-		VALUES ($1, 'PCV', 'PCV', $2, 1)
-		ON CONFLICT (tenant_id, doc_type, prefix, fiscal_year) DO UPDATE
-		SET last_seq = document_numbering.last_seq + 1
-		RETURNING last_seq
-	`, tenantID, year).Scan(&seq)
-	number := fmt.Sprintf("PCV-%d-%06d", year, seq)
-
 	var id int64
-	err := service.pool.QueryRow(r.Context(), `
-		INSERT INTO petty_cash_vouchers (tenant_id, fund_id, number, voucher_date, amount_cents, expense_account_id, description, recipient, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING id
-	`, tenantID, req.FundID, number, req.VoucherDate, req.AmountCents, req.ExpenseAccountID, req.Description, req.Recipient, userID).Scan(&id)
+	err := pgx.BeginFunc(r.Context(), service.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(r.Context(), `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tenantID, 10)); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(r.Context(), `
+			INSERT INTO document_numbering (tenant_id, doc_type, prefix, fiscal_year, last_seq)
+			VALUES ($1, 'PCV', 'PCV', $2, 1)
+			ON CONFLICT (tenant_id, doc_type, prefix, fiscal_year) DO UPDATE
+			SET last_seq = document_numbering.last_seq + 1
+			RETURNING last_seq
+		`, tenantID, year).Scan(&seq); err != nil {
+			return err
+		}
+		number := fmt.Sprintf("PCV-%d-%06d", year, seq)
+
+		return tx.QueryRow(r.Context(), `
+			INSERT INTO petty_cash_vouchers (tenant_id, fund_id, number, voucher_date, amount_cents, expense_account_id, description, recipient, created_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			RETURNING id
+		`, tenantID, req.FundID, number, req.VoucherDate, req.AmountCents, req.ExpenseAccountID, req.Description, req.Recipient, userID).Scan(&id)
+	})
 	if err != nil {
 		writeErr(w, http.StatusConflict, "CREATE_FAILED", err.Error())
 		return
@@ -182,11 +200,11 @@ func (service *Service) CreateVoucher(w http.ResponseWriter, r *http.Request) {
 
 	// Note: Journal posting (Dr Expense / Cr Petty Cash) would happen here.
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"id":          id,
-		"number":      number,
-		"fund_id":     req.FundID,
+		"id":           id,
+		"number":       fmt.Sprintf("PCV-%d-%06d", year, seq),
+		"fund_id":      req.FundID,
 		"amount_cents": req.AmountCents,
-		"message":     "voucher created — post journal via cash-out endpoint",
+		"message":      "voucher created — post journal via cash-out endpoint",
 	})
 }
 
@@ -229,13 +247,24 @@ func (service *Service) ListVouchers(w http.ResponseWriter, r *http.Request) {
 		Status      string `json:"status"`
 	}
 	var vouchers []voucher
-	for rows.Next() {
-		var v voucher
-		if err := rows.Scan(&v.ID, &v.FundID, &v.Number, &v.VoucherDate, &v.AmountCents, &v.Description, &v.Recipient, &v.Status); err != nil {
-			writeErr(w, http.StatusInternalServerError, "SCAN_FAILED", err.Error())
-			return
+	err = withTenant(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		rows, queryErr := tx.Query(r.Context(), query, args...)
+		if queryErr != nil {
+			return queryErr
 		}
-		vouchers = append(vouchers, v)
+		defer rows.Close()
+		for rows.Next() {
+			var v voucher
+			if scanErr := rows.Scan(&v.ID, &v.FundID, &v.Number, &v.VoucherDate, &v.AmountCents, &v.Description, &v.Recipient, &v.Status); scanErr != nil {
+				return scanErr
+			}
+			vouchers = append(vouchers, v)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
+		return
 	}
 	if vouchers == nil {
 		vouchers = []voucher{}
@@ -254,26 +283,33 @@ func (service *Service) Replenish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load fund
 	var imprestCents, cashAcctID int64
 	var fundName string
-	err := service.pool.QueryRow(r.Context(), `
-		SELECT imprest_amount_cents, cash_account_id, name
-		FROM petty_cash_funds
-		WHERE tenant_id = $1 AND id = $2
-	`, tenantID, fundID).Scan(&imprestCents, &cashAcctID, &fundName)
+	var spentCents int64
+	err := withTenant(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT imprest_amount_cents, cash_account_id, name
+			FROM petty_cash_funds
+			WHERE tenant_id = $1 AND id = $2
+		`, tenantID, fundID).Scan(&imprestCents, &cashAcctID, &fundName)
+	})
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "FUND_NOT_FOUND", "petty cash fund not found")
 		return
 	}
 
 	// Sum all vouchers (posted, not replenished)
-	var spentCents int64
-	_ = service.pool.QueryRow(r.Context(), `
-		SELECT COALESCE(SUM(amount_cents), 0)
-		FROM petty_cash_vouchers
-		WHERE tenant_id = $1 AND fund_id = $2 AND status = 'POSTED'
-	`, tenantID, fundID).Scan(&spentCents)
+	err = withTenant(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT COALESCE(SUM(amount_cents), 0)
+			FROM petty_cash_vouchers
+			WHERE tenant_id = $1 AND fund_id = $2 AND status = 'POSTED'
+		`, tenantID, fundID).Scan(&spentCents)
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
+		return
+	}
 
 	replenishAmount, ok := computeReplenishAmount(imprestCents, spentCents)
 	if !ok {
@@ -282,10 +318,17 @@ func (service *Service) Replenish(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Mark vouchers as replenished (status stays POSTED but they're accounted for)
-	_, _ = service.pool.Exec(r.Context(), `
-		UPDATE petty_cash_vouchers SET status = 'POSTED'
-		WHERE tenant_id = $1 AND fund_id = $2 AND status = 'POSTED'
-	`, tenantID, fundID)
+	err = withTenant(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		_, execErr := tx.Exec(r.Context(), `
+			UPDATE petty_cash_vouchers SET status = 'POSTED'
+			WHERE tenant_id = $1 AND fund_id = $2 AND status = 'POSTED'
+		`, tenantID, fundID)
+		return execErr
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "REPLENISH_FAILED", err.Error())
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"fund_id":            fundID,
@@ -333,4 +376,16 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 
 func writeErr(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, map[string]string{"code": code, "message": message})
+}
+
+// withTenant runs fn inside a transaction with the RLS tenant scope set, so
+// row-level security acts as a second layer of defense alongside the explicit
+// WHERE tenant_id filters.
+func withTenant(ctx context.Context, pool *pgxpool.Pool, tenantID int64, fn func(tx pgx.Tx) error) error {
+	return pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tenantID, 10)); err != nil {
+			return err
+		}
+		return fn(tx)
+	})
 }

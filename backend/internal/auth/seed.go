@@ -38,6 +38,7 @@ func SeedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		{"1401", "Fixed Assets", "asset", "FIXED_ASSET"},
 		{"1402", "Accumulated Depreciation", "asset", "CONTRA_ASSET"},
 		{"1701", "Right-of-Use Asset", "asset", "ROU_ASSET"},
+		{"1702", "Accumulated RoU Depreciation", "asset", "CONTRA_ASSET"},
 		{"2101", "Accounts Payable", "liability", "AP"},
 		{"2105", "Uninvoiced Payables", "liability", "ACCRUED_LIABILITY"},
 		{"2201", "Customer Deposit", "liability", "CUSTOMER_DEPOSIT"},
@@ -51,9 +52,11 @@ func SeedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		{"3401", "Revaluation Surplus (OCI)", "equity", "OCI"},
 		{"4101", "Sales Revenue", "revenue", "REVENUE"},
 		{"4201", "Sales Returns", "revenue", "CONTRA_REVENUE"},
+		{"4902", "Applied Overhead", "expense", "EXPENSE"},
 		{"4903", "Gain on Asset Disposal", "revenue", "OTHER_INCOME"},
 		{"4906", "Bad Debt Recovery", "revenue", "OTHER_INCOME"},
 		{"4907", "Inventory Adjustment Gain", "revenue", "OTHER_INCOME"},
+		{"4908", "Production Variance Gain", "revenue", "OTHER_INCOME"},
 		{"5101", "COGS", "expense", "COGS"},
 		{"5201", "Salary Expense", "expense", "EXPENSE"},
 		{"5202", "Rent Expense", "expense", "EXPENSE"},
@@ -68,6 +71,7 @@ func SeedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		{"5904", "Deferred Tax Expense", "expense", "DEFERRED_TAX"},
 		{"5906", "Interest Expense", "expense", "INTEREST_EXPENSE"},
 		{"5907", "Inventory Adjustment Loss", "expense", "OTHER_EXPENSE"},
+		{"5908", "Production Variance Loss", "expense", "OTHER_EXPENSE"},
 	}
 	accountIDs := make(map[string]int64, len(accounts))
 	for _, account := range accounts {

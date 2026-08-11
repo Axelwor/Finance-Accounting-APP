@@ -209,10 +209,10 @@ func nextDocNumber(ctx context.Context, tx pgx.Tx, tenantID int64, docType, pref
 	var p string
 	var seq int64
 	err := tx.QueryRow(ctx, `
-		INSERT INTO doc_numbering (tenant_id, doc_type, prefix, year, last_seq)
+		INSERT INTO document_numbering (tenant_id, doc_type, prefix, fiscal_year, last_seq)
 		VALUES ($1, $2, $3, $4, 1)
-		ON CONFLICT (tenant_id, doc_type, year)
-		DO UPDATE SET last_seq = doc_numbering.last_seq + 1
+		ON CONFLICT (tenant_id, doc_type, prefix, fiscal_year)
+		DO UPDATE SET last_seq = document_numbering.last_seq + 1
 		RETURNING prefix, last_seq
 	`, tenantID, docType, prefix, year).Scan(&p, &seq)
 	if err != nil {
