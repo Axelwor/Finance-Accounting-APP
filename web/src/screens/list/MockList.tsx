@@ -82,7 +82,7 @@ export function MockList<T>({
 
   // The base CSS for `.ledger-table__row` is hard-coded to 5 columns.
   // When we have more (or fewer) we override grid-template-columns
-  // inline so the cells line up without touching styles.css.
+  // inline so the cells line up without touching styles/components.css.
   const totalColumns = (primaryColumn ? 1 : 0) + regularColumns.length + 1; // +1 chevron
   const gridTemplateColumns = buildGridTemplateColumns(
     totalColumns,

@@ -1,0 +1,188 @@
+/* ============================================================
+   Ledgerly — Wave-inspired corporate system
+   White workspace, cool slate panels, deep navy ink, single blue
+   primary, green for positive only. Inter sans body + display,
+   IBM Plex Mono for numeric data. Soft hairlines, controlled shadow
+   only on elevated proofs.
+
+   Tokens live in :root. Components only consume tokens.
+   ============================================================ */
+
+:root {
+  /* Wave-inspired surface scale: white workspace, cool slate panels */
+  --canvas: #f5f7fa;
+  --paper: #ffffff;
+  --paper-elev: #ffffff;
+  --panel: #eef2f6;
+  --panel-hover: #e6edf5;
+  --rule: #d8e0e8;
+  --rule-soft: #e9eef3;
+  --rule-strong: #b8c5d2;
+
+  /* Cool navy ink scale */
+  --ink-deep: #18324b;
+  --ink: #263d55;
+  --ink-secondary: #5c6f82;
+  --ink-muted: #8191a0;
+  --ink-faint: #aebbc7;
+
+  /* Wave-style primary: blue. Green remains semantic only. */
+  --accent: #2f80ed;
+  --accent-hover: #236dcc;
+  --accent-soft: rgba(47, 128, 237, 0.1);
+  --accent-rule: rgba(47, 128, 237, 0.25);
+
+  --positive: #27966f;
+  --positive-soft: rgba(39, 150, 111, 0.1);
+  --negative: #c64b4b;
+  --negative-soft: rgba(198, 75, 75, 0.1);
+  --warning: #d18b2c;
+  --warning-soft: rgba(209, 139, 44, 0.1);
+
+  /* Type */
+  --font-display: "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 0.9375rem;
+
+  --u-1: 4px;
+  --u-2: 8px;
+  --u-3: 12px;
+  --u-4: 16px;
+  --u-5: 24px;
+  --u-6: 32px;
+  --u-7: 48px;
+  --u-8: 64px;
+
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1px 2px rgba(20, 32, 54, 0.04), 0 8px 24px -12px rgba(20, 32, 54, 0.08);
+  --shadow-pop: 0 12px 28px -10px rgba(20, 32, 54, 0.18);
+
+  /* Compatibility aliases used by the workbench layer. Every alias maps
+     back to the corporate palette above, so no legacy tech token can
+     silently fall back to transparent or black. */
+  --surface-canvas: var(--canvas);
+  --surface-panel: var(--paper);
+  --surface-well: var(--panel);
+  --surface-elev: var(--paper-elev);
+  --surface-hover: var(--panel-hover);
+  --ink-primary: var(--ink-deep);
+  --ink-tertiary: var(--ink-muted);
+  --ink-dim: var(--ink-faint);
+  --rule-bright: var(--rule-strong);
+  --pos: var(--positive);
+  --pos-soft: var(--positive-soft);
+  --neg: var(--negative);
+  --neg-soft: var(--negative-soft);
+  --acc: var(--accent);
+  --acc-soft: var(--accent-soft);
+  --warn: var(--warning);
+  --warn-soft: var(--warning-soft);
+  --space-1: var(--u-1);
+  --space-2: var(--u-2);
+  --space-3: var(--u-3);
+  --space-4: var(--u-4);
+  --space-5: var(--u-5);
+  --space-6: var(--u-6);
+  --space-7: var(--u-7);
+  --space-8: var(--u-8);
+
+  font-family: var(--font-sans);
+  color: var(--ink);
+  background: var(--canvas);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--canvas);
+  color: var(--ink);
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4, p, ul, ol, figure { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+a { color: inherit; text-decoration: none; }
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+}
+button { cursor: pointer; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+::selection { background: var(--accent-soft); color: var(--ink-deep); }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+
+/* ------------------------------------------------------------
+   Buttons — square 4px, uppercase mono labels, ink + accent
+   ------------------------------------------------------------ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--u-2);
+  min-height: 36px;
+  padding: 0 var(--u-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--rule-strong);
+  background: var(--paper-elev);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: var(--ink);
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, transform 80ms ease;
+}
+.btn:active { transform: translateY(1px); }
+.btn:disabled, .btn.is-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+
+.btn--primary { background: var(--ink-deep); color: var(--paper); border-color: var(--ink-deep); }
+.btn--primary:hover:not(:disabled) { background: var(--ink); border-color: var(--ink); }
+
+.btn--secondary { background: var(--paper-elev); color: var(--ink-deep); border-color: var(--rule-strong); }
+.btn--secondary:hover:not(:disabled) { background: var(--paper); border-color: var(--ink); }
+
+.btn--ghost { background: transparent; color: var(--ink-secondary); border-color: transparent; font-weight: 500; }
+.btn--ghost:hover:not(:disabled) { color: var(--ink-deep); background: var(--panel); }
+
+.btn--danger { background: var(--paper-elev); color: var(--negative); border-color: var(--negative); }
+.btn--danger:hover:not(:disabled) { background: var(--negative-soft); }
+
+.btn--ink { background: var(--accent); color: var(--paper); border-color: var(--accent); }
+.btn--ink:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+.btn--full { width: 100%; }
+.btn--sm { min-height: 28px; padding: 0 var(--u-3); font-size: var(--text-xs); }
+
