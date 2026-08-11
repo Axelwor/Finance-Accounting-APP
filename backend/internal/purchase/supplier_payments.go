@@ -104,6 +104,7 @@ func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, reques
 		err = tx.QueryRow(request.Context(), `
 			SELECT number, supplier_id, status, payable_cents
 			FROM supplier_invoices WHERE tenant_id = $1 AND id = $2
+			FOR UPDATE
 		`, tenant, invoiceID).Scan(&invNumber, &supplierID, &invStatus, &payable)
 		if err != nil {
 			return err
@@ -206,6 +207,12 @@ func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, reques
 		if err := insertOutbox(request.Context(), tx, tenant, "supplier.payment", mustJSON(map[string]any{
 			"journal_id": entryID, "number": jrnNumber, "invoice_id": invoiceID,
 		})); err != nil {
+			return err
+		}
+
+		// A-20: Update the AP sub-ledger — decrease AP by the amount applied
+		// and record any overpayment in the overpayment column.
+		if err := upsertSupplierBalance(request.Context(), tx, tenant, supplierID, -apApplied, overpayment); err != nil {
 			return err
 		}
 

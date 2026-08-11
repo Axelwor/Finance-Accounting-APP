@@ -222,3 +222,18 @@ func uuidValue(raw string) pgtype.UUID {
 func int8Value(value int64) pgtype.Int8 {
 	return pgtype.Int8{Int64: value, Valid: value != 0}
 }
+
+// upsertSupplierBalance adjusts the AP sub-ledger balance for a supplier.
+// apDelta and overpaymentDelta are added to the existing balance (use
+// negative values to decrease). The row is created if it does not exist.
+func upsertSupplierBalance(ctx context.Context, tx pgx.Tx, tenantID, supplierID int64, apDelta, overpaymentDelta int64) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO supplier_balances (tenant_id, supplier_id, ap_cents, overpayment_cents, updated_at)
+		VALUES ($1, $2, $3, $4, now())
+		ON CONFLICT (tenant_id, supplier_id) DO UPDATE
+		SET ap_cents = supplier_balances.ap_cents + EXCLUDED.ap_cents,
+		    overpayment_cents = supplier_balances.overpayment_cents + EXCLUDED.overpayment_cents,
+		    updated_at = now()
+	`, tenantID, supplierID, apDelta, overpaymentDelta)
+	return err
+}

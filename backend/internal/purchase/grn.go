@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -284,10 +285,24 @@ func (service *Service) CreateGRN(writer http.ResponseWriter, request *http.Requ
 				p.line.Qty, p.line.UnitCostCents, p.costingMethod); err != nil {
 				return err
 			}
+			// Update the PO line's cumulative received_qty so the PO
+			// status check can determine whether all lines are fulfilled.
+			if p.line.POLineID > 0 {
+				if _, err := tx.Exec(request.Context(), `
+					UPDATE purchase_orders_lines
+					SET received_qty = received_qty + $3
+					WHERE tenant_id = $1 AND id = $2
+				`, tenant, p.line.POLineID, pgtypeFloat(p.line.Qty)); err != nil {
+					return err
+				}
+			}
 		}
 
 		// Update PO status to PARTIALLY_RECEIVED or RECEIVED.
-		newStatus := poStatusAfterGRN(poStatus)
+		newStatus, err := poStatusAfterGRN(request.Context(), tx, tenant, req.PurchaseOrderID, poStatus)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(request.Context(), `
 			UPDATE purchase_orders SET status = $1, received_cents = received_cents + $2, updated_at = now()
 			WHERE tenant_id = $3 AND id = $4
@@ -473,16 +488,39 @@ func fetchGRNByJournal(ctx context.Context, tx pgx.Tx, tenant, journalID int64) 
 }
 
 func grnLineTotal(qty float64, unitCostCents int64) int64 {
-	return int64(qty * float64(unitCostCents))
+	return int64(math.Round(qty * float64(unitCostCents)))
 }
 
-// poStatusAfterGRN keeps a RECEIVED PO at RECEIVED and moves any other
-// non-cancelled status to PARTIALLY_RECEIVED (cancelled POs are rejected earlier).
-func poStatusAfterGRN(current string) string {
-	if current == poStatusReceived {
+// poStatusFromReceivedCheck returns RECEIVED when allReceived is true and
+// PARTIALLY_RECEIVED otherwise. Extracted from poStatusAfterGRN so the
+// pure-logic branch can be unit-tested without a live database.
+func poStatusFromReceivedCheck(allReceived bool) string {
+	if allReceived {
 		return poStatusReceived
 	}
 	return poStatusPartiallyReceived
+}
+
+// poStatusAfterGRN determines the new PO status after a GRN is created.
+// If the PO was already RECEIVED, it stays RECEIVED. Otherwise it queries
+// purchase_orders_lines to check whether every line is now fully received
+// (received_qty >= qty). Returns RECEIVED if so, PARTIALLY_RECEIVED
+// otherwise. Cancelled POs are rejected earlier in the GRN handler.
+func poStatusAfterGRN(ctx context.Context, tx pgx.Tx, tenantID, poID int64, current string) (string, error) {
+	if current == poStatusReceived {
+		return poStatusReceived, nil
+	}
+	var allReceived bool
+	err := tx.QueryRow(ctx, `
+		SELECT NOT EXISTS(
+			SELECT 1 FROM purchase_orders_lines
+			WHERE tenant_id = $1 AND order_id = $2 AND received_qty < qty
+		)
+	`, tenantID, poID).Scan(&allReceived)
+	if err != nil {
+		return "", err
+	}
+	return poStatusFromReceivedCheck(allReceived), nil
 }
 
 func validateGRNRequest(req CreateGRNRequest) (string, string) {
@@ -498,6 +536,9 @@ func validateGRNRequest(req CreateGRNRequest) (string, string) {
 	for _, line := range req.Lines {
 		if line.ItemID <= 0 {
 			return "INVALID_REQUEST", "lines: item_id is required"
+		}
+		if line.POLineID <= 0 {
+			return "INVALID_REQUEST", "lines: po_line_id is required when receiving against a purchase order"
 		}
 		if line.Qty <= 0 {
 			return "INVALID_REQUEST", "lines: qty must be > 0"

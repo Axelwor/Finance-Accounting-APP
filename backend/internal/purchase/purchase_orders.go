@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 
@@ -384,7 +385,7 @@ func preparePOLines(lines []PurchaseOrderLineRequest) ([]preparedPOLine, int64, 
 	var total int64
 	for _, line := range lines {
 		gross := line.Qty * float64(line.UnitPriceCents)
-		lineTotal := int64(gross) - line.DiscountCents
+		lineTotal := int64(math.Round(gross)) - line.DiscountCents
 		if lineTotal < 0 {
 			return nil, 0, fmt.Errorf("lines: discount exceeds gross")
 		}

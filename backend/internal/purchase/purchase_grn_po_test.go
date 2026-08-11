@@ -42,22 +42,23 @@ func TestGRNLineTotal(t *testing.T) {
 // PO status transitions after GRN
 // ---------------------------------------------------------------------------
 
-func TestPOStatusAfterGRN(t *testing.T) {
+func TestPOStatusFromReceivedCheck(t *testing.T) {
+	// poStatusFromReceivedCheck is the pure-logic helper extracted from
+	// poStatusAfterGRN. The full function requires a live database to
+	// query purchase_orders_lines; only this pure branch is unit-tested.
 	tests := []struct {
-		name    string
-		current string
-		want    string
+		name        string
+		allReceived bool
+		want        string
 	}{
-		{name: "CONFIRMED becomes PARTIALLY_RECEIVED", current: poStatusConfirmed, want: poStatusPartiallyReceived},
-		{name: "PARTIALLY_RECEIVED stays PARTIALLY_RECEIVED", current: poStatusPartiallyReceived, want: poStatusPartiallyReceived},
-		{name: "RECEIVED stays RECEIVED", current: poStatusReceived, want: poStatusReceived},
-		{name: "unknown status falls back to PARTIALLY_RECEIVED", current: "SOMETHING_ELSE", want: poStatusPartiallyReceived},
+		{name: "all received → RECEIVED", allReceived: true, want: poStatusReceived},
+		{name: "not all received → PARTIALLY_RECEIVED", allReceived: false, want: poStatusPartiallyReceived},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := poStatusAfterGRN(tc.current)
+			got := poStatusFromReceivedCheck(tc.allReceived)
 			if got != tc.want {
-				t.Errorf("poStatusAfterGRN(%q) = %q, want %q", tc.current, got, tc.want)
+				t.Errorf("poStatusFromReceivedCheck(%v) = %q, want %q", tc.allReceived, got, tc.want)
 			}
 		})
 	}
@@ -111,6 +112,7 @@ func TestValidateGRNRequest(t *testing.T) {
 		{name: "wrong date format", mutate: func(r *CreateGRNRequest) { r.GRNDate = "08-09-2026" }, wantError: true},
 		{name: "empty lines", mutate: func(r *CreateGRNRequest) { r.Lines = nil }, wantError: true},
 		{name: "missing item", mutate: func(r *CreateGRNRequest) { r.Lines[0].ItemID = 0 }, wantError: true},
+		{name: "missing po_line_id", mutate: func(r *CreateGRNRequest) { r.Lines[0].POLineID = 0 }, wantError: true},
 		{name: "zero qty", mutate: func(r *CreateGRNRequest) { r.Lines[0].Qty = 0 }, wantError: true},
 		{name: "negative qty", mutate: func(r *CreateGRNRequest) { r.Lines[0].Qty = -1 }, wantError: true},
 		{name: "negative cost", mutate: func(r *CreateGRNRequest) { r.Lines[0].UnitCostCents = -1 }, wantError: true},

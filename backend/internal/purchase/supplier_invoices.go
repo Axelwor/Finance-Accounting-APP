@@ -3,6 +3,7 @@ package purchase
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 
@@ -39,6 +40,7 @@ type CreateSupplierInvoiceRequest struct {
 	InvoiceDate           string                       `json:"invoice_date"`
 	DueDate               string                       `json:"due_date"`
 	SupplierInvoiceNumber string                       `json:"supplier_invoice_number"`
+	DPAppliedCents        int64                        `json:"dp_applied_cents"`
 	Notes                 string                       `json:"notes"`
 	Lines                 []SupplierInvoiceLineRequest `json:"lines"`
 }
@@ -232,6 +234,11 @@ func (service *Service) CreateSupplierInvoice(writer http.ResponseWriter, reques
 			return err
 		}
 
+		// A-20: Update the AP sub-ledger — increase AP by the invoice total.
+		if err := upsertSupplierBalance(request.Context(), tx, tenant, req.SupplierID, totalCents, 0); err != nil {
+			return err
+		}
+
 		// Allocate BIL number.
 		bilNumber, err := nextDocNumber(request.Context(), tx, tenant, "BIL", "BIL")
 		if err != nil {
@@ -249,8 +256,21 @@ func (service *Service) CreateSupplierInvoice(writer http.ResponseWriter, reques
 		if req.GRNID > 0 {
 			grnID = pgtype.Int8{Int64: req.GRNID, Valid: true}
 		}
-		// No DP realization yet.
-		dpApplied := int64(0)
+		// A-21: DP realization — the caller may pass dp_applied_cents to
+		// reduce the payable by the amount of supplier prepayment (account
+		// 1205) to realize against this invoice. The full DP realization
+		// journal (Dr 1205 Purchase Prepayment / Cr 2101 Accounts Payable)
+		// is NOT yet posted here — only the field is accepted so the
+		// payable is reduced correctly.
+		// TODO(A-21): implement the DP realization journal when the
+		// purchase DP table and prepayment balance lookup exist.
+		dpApplied := req.DPAppliedCents
+		if dpApplied < 0 {
+			dpApplied = 0
+		}
+		if dpApplied > totalCents {
+			dpApplied = totalCents
+		}
 		payable := totalCents - dpApplied
 
 		// Insert supplier invoice header.
@@ -444,6 +464,9 @@ func validateSupplierInvoiceRequest(req CreateSupplierInvoiceRequest) (string, s
 	if req.DueDate != "" && !validDate(req.DueDate) {
 		return "INVALID_REQUEST", "due_date must be a valid date in YYYY-MM-DD format"
 	}
+	if req.DPAppliedCents < 0 {
+		return "INVALID_REQUEST", "dp_applied_cents must be >= 0"
+	}
 	if len(req.Lines) == 0 {
 		return "INVALID_REQUEST", "at least one line is required"
 	}
@@ -519,12 +542,10 @@ func supplierVATCents(lineTotalCents int64, taxRate float64) int64 {
 	return roundCents(float64(lineTotalCents) * taxRate / 100.0)
 }
 
-// roundCents rounds a float to the nearest whole cent using round-half-away-from-zero.
+// roundCents rounds a float to the nearest whole cent using math.Round
+// (round-half-away-from-zero).
 func roundCents(value float64) int64 {
-	if value >= 0 {
-		return int64(value + 0.5)
-	}
-	return -int64(-value + 0.5)
+	return int64(math.Round(value))
 }
 
 // fetchSupplierInvoice loads a supplier invoice (with lines) by id.
