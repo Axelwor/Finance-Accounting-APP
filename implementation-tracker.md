@@ -782,4 +782,47 @@ All Critical (4) and Major (28) issues resolved. 15 Minor fixes completed (~68%)
 
 ---
 
+## Sprint 6 — F-03 Approval Enforcement + M-007 AR Reporting (SELESAI) — 2026-08-11
+
+| # | Task | Status | Commits |
+|---|---|---|---|
+| N-07/N-08 | Report Template Editor + live preview UI | ✅ | `441b4cd` |
+| F-03 | Approval workflow enforcement in invoice posting | ✅ | `21c5b4c` |
+| M-007 | AR balance endpoints + GL reconciliation | ✅ | `21c5b4c` |
+| Bugfix | qty/tax_rate Numeric conversion (6 call sites) | ✅ | `686aefb` |
+| F-03 fix | Partial unique index for amount-based approvals | ✅ | `294629d`, `27c3bb8` |
+
+### F-03 Approval Workflow Enforcement (Verified E2E Live)
+- `approval/gate.go`: `RequiresApproval`, `CheckAmount`, `ConsumeApprovalByAmount`, `HasValidApprovalByAmount`
+- `CreateInvoice`: gate sebelum posting → **409 APPROVAL_REQUIRED** tanpa approval valid; consume approval setelah posting berhasil
+- Backward compatible: tanpa workflow rule, posting berjalan normal
+- Migration 000041: `amount_cents` + `consumed_at` di `approval_requests`
+- Migration 000042+000043: partial unique index (bound vs amount-based) agar multiple amount-based approval bisa ada
+- **E2E test live:** submit approval 7M → invoice 7M ditolak (409) → approve → invoice lolos (201) → retry ditolak (approval consumed) → submit approval baru lolos (201)
+
+### M-007 AR Sub-ledger Reporting (Verified Live)
+- `GET /customers/ar-balances`: per-customer AR + overdue + **GL reconciliation (1201)** dengan `diff_cents` + `reconciled` flag
+- `GET /customers/{id}/ar-balance`: outstanding AR single customer
+- Live verified: invoice 7M ter-track di sub-ledger; diff ter-flag (legacy opening-balance GL balance) — reconciliation endpoint berfungsi mendeteksi drift
+
+### Critical Bugfix (686aefb)
+- `qty.Scan(float64)` silent-fail → NULL insert → NOT NULL violation. Fixed 6 call sites di sales (invoices, credit_notes, delivery, orders, sales) dengan pattern `pgtypeFloat` (string conversion)
+- `pgtypeFloat` helper ditambahkan ke sales/helpers.go
+
+### N-07/N-08 Report Template Editor (Verified tsc pass)
+- `ReportTemplateEditor.tsx`: split-pane editor (YAML monospace kiri, live HTML preview kanan via iframe sandbox)
+- Auto-render on load + refresh after save, Save/Save-As/Download PDF
+- Wired: types.ts EntrySubKind, modules.ts, WorkArea.tsx, MockEntryForm Record maps
+- "Editor" button per row di ReportTemplateList
+
+**Build:** `go build ./...` SUCCESS, **Tests:** 35 packages pass / 0 FAIL
+
+---
+
+**Audit Session Completed: 2026-08-11 10:05 UTC**
+
+All Critical (4) and Major (28) issues resolved. F-03 approval enforcement, M-007 AR reconciliation, and N-07/N-08 report editor operational and verified end-to-end live. Production healthy at `https://accounting.tikuma.net/` (DB up, NextReport up, overall ok).
+
+---
+
 *Update file ini setiap kali task selesai atau status berubah.*
