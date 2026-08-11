@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppStateProvider, useAppState } from "./state";
 import { WorkbenchProvider } from "./workbench/state";
+import { ToastProvider } from "./components/Toast";
 import { AppShell } from "./workbench/AppShell";
 import { AuthScreen } from "./screens/AuthScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
@@ -119,6 +120,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AppStateProvider>
+        <ToastProvider>
         <WorkbenchProvider>
           <BrowserRouter>
             <Routes>
@@ -138,6 +140,7 @@ export default function App() {
             </Routes>
           </BrowserRouter>
         </WorkbenchProvider>
+        </ToastProvider>
       </AppStateProvider>
     </ErrorBoundary>
   );
