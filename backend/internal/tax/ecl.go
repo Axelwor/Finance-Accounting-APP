@@ -230,9 +230,11 @@ func computeECLBuckets(ctx context.Context, tx pgx.Tx, tenantID int64, asOf stri
 
 	// Load open invoices (issued, not fully paid) with their outstanding amount.
 	// The invoices table stores the open receivable as receivable_cents; status
-	// is one of DRAFT, ISSUED, PARTIALLY_PAID, PAID, VOID (see migration 000008).
+	// is one of DRAFT, ISSUED, PARTIALLY_PAID, PAID, VOID, WRITTEN_OFF (see
+	// migration 000008 + 000045). Aging is measured from due_date (not
+	// invoice_date) so in-term invoices have 0 aging days (A-08).
 	rows, err := tx.Query(ctx, `
-		SELECT invoice_date, receivable_cents
+		SELECT COALESCE(due_date, invoice_date), receivable_cents
 		FROM invoices
 		WHERE tenant_id = $1 AND status IN ('ISSUED','PARTIALLY_PAID')
 		  AND receivable_cents > 0
@@ -254,12 +256,12 @@ func computeECLBuckets(ctx context.Context, tx pgx.Tx, tenantID int64, asOf stri
 	}
 
 	for rows.Next() {
-		var invoiceDate time.Time
+		var dueDate time.Time
 		var payable int64
-		if err := rows.Scan(&invoiceDate, &payable); err != nil {
+		if err := rows.Scan(&dueDate, &payable); err != nil {
 			return nil, 0, err
 		}
-		ageDays := int(asOfDate.Sub(invoiceDate).Hours() / 24)
+		ageDays := int(asOfDate.Sub(dueDate).Hours() / 24)
 		if ageDays < 0 {
 			ageDays = 0
 		}
@@ -388,13 +390,62 @@ func (service *Service) postWriteOff(ctx context.Context, tenant int64, idem str
 		if err != nil {
 			return err
 		}
-		// Verify the invoice exists and belongs to the tenant (if invoice_id given).
+		badDebtID, err := resolveAccountByCode(ctx, tx, tenant, badDebtExpenseCode) // 5209
+		if err != nil {
+			return err
+		}
+
+		// Load the invoice (if invoice_id given) and its customer_id so we can
+		// update the receivable and the AR sub-ledger after posting.
+		var customerID int64
 		if req.InvoiceID > 0 {
-			var exists int64
-			err = tx.QueryRow(ctx, `SELECT id FROM invoices WHERE tenant_id = $1 AND id = $2`, tenant, req.InvoiceID).Scan(&exists)
+			err = tx.QueryRow(ctx, `
+				SELECT customer_id FROM invoices WHERE tenant_id = $1 AND id = $2
+			`, tenant, req.InvoiceID).Scan(&customerID)
 			if err != nil {
 				return fmt.Errorf("invoice %d not found: %w", req.InvoiceID, err)
 			}
+		}
+
+		// Check allowance sufficiency BEFORE posting. accountBalance returns
+		// debit - credit; the allowance is credit-normal so the available
+		// credit balance is -accountBalance. If the allowance does not cover
+		// the full write-off, the excess is routed to 5209 (bad debt expense)
+		// so the write-off still balances (A-07).
+		allowanceBal, err := accountBalance(ctx, tx, tenant, allowanceID)
+		if err != nil {
+			return err
+		}
+		availableAllowance := -allowanceBal // flip to credit-normal (>= 0 when provisioned)
+		if availableAllowance < 0 {
+			availableAllowance = 0
+		}
+
+		var lines []accounting.Line
+		if availableAllowance >= req.AmountCents {
+			// Sufficient allowance: full amount against 1202.
+			lines = []accounting.Line{
+				{AccountID: allowanceID, DebitCents: req.AmountCents, SourceLineRef: "writeoff-allowance"},
+				{AccountID: arID, CreditCents: req.AmountCents, SourceLineRef: "writeoff-ar"},
+			}
+		} else {
+			// Insufficient allowance: consume what's available from 1202 and
+			// route the excess to 5209 (bad debt expense).
+			covered := availableAllowance
+			excess := req.AmountCents - covered
+			if covered > 0 {
+				lines = append(lines,
+					accounting.Line{AccountID: allowanceID, DebitCents: covered, SourceLineRef: "writeoff-allowance"},
+				)
+			}
+			if excess > 0 {
+				lines = append(lines,
+					accounting.Line{AccountID: badDebtID, DebitCents: excess, SourceLineRef: "writeoff-baddebt-excess"},
+				)
+			}
+			lines = append(lines,
+				accounting.Line{AccountID: arID, CreditCents: req.AmountCents, SourceLineRef: "writeoff-ar"},
+			)
 		}
 
 		journal := accounting.Journal{
@@ -403,15 +454,62 @@ func (service *Service) postWriteOff(ctx context.Context, tenant int64, idem str
 			IntentType:  accounting.IntentType("ECL_WRITEOFF"),
 			EntryDate:   req.EntryDate,
 			Description: fmt.Sprintf("Write-off of uncollectible receivable%s", optionalNote(req.Notes)),
-			Lines: []accounting.Line{
-				{AccountID: allowanceID, DebitCents: req.AmountCents, SourceLineRef: "writeoff-allowance"},
-				{AccountID: arID, CreditCents: req.AmountCents, SourceLineRef: "writeoff-ar"},
-			},
+			Lines:       lines,
 		}
 		posted, err := postJournal(ctx, tx, tenant, idem, journal, userIDFromCtx(ctx))
 		if err != nil {
 			return err
 		}
+
+		// Update the invoice receivable and status, and the customer AR
+		// sub-ledger, so the write-off is reflected in the AR balance and not
+		// just the GL (A-07). 'WRITTEN_OFF' status is added by migration
+		// 000045 — if it has not been applied, fall back to 'VOID' so the
+		// CHECK constraint is not violated on un-migrated databases.
+		if req.InvoiceID > 0 {
+			writeOffStatus := "WRITTEN_OFF"
+			if _, err := tx.Exec(ctx, `
+				UPDATE invoices
+				SET receivable_cents = GREATEST(receivable_cents - $1, 0),
+				    status = CASE
+				        WHEN receivable_cents - $1 <= 0 THEN $2
+				        ELSE status
+				    END,
+				    updated_at = now()
+				WHERE tenant_id = $3 AND id = $4
+			`, req.AmountCents, writeOffStatus, tenant, req.InvoiceID); err != nil {
+				// Retry with 'VOID' if the 'WRITTEN_OFF' status is not yet in
+				// the CHECK constraint (migration 000045 not applied).
+				if isCheckViolation(err) {
+					if _, err := tx.Exec(ctx, `
+						UPDATE invoices
+						SET receivable_cents = GREATEST(receivable_cents - $1, 0),
+						    status = CASE
+						        WHEN receivable_cents - $1 <= 0 THEN 'VOID'
+						        ELSE status
+						    END,
+						    updated_at = now()
+						WHERE tenant_id = $2 AND id = $3
+					`, req.AmountCents, tenant, req.InvoiceID); err != nil {
+						return fmt.Errorf("update invoice receivable: %w", err)
+					}
+				} else {
+					return fmt.Errorf("update invoice receivable: %w", err)
+				}
+			}
+
+			// Update the AR sub-ledger (customer_balances).
+			if customerID > 0 {
+				if _, err := tx.Exec(ctx, `
+					UPDATE customer_balances
+					SET ar_cents = GREATEST(ar_cents - $1, 0), updated_at = now()
+					WHERE tenant_id = $2 AND customer_id = $3
+				`, req.AmountCents, tenant, customerID); err != nil {
+					return fmt.Errorf("update customer_balances: %w", err)
+				}
+			}
+		}
+
 		result = WriteOffResult{
 			JournalEntryID: posted.ID,
 			Number:         posted.Number,

@@ -1,7 +1,9 @@
 package pph
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -9,9 +11,13 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"finance-accounting-app/backend/internal/accounting"
 	"finance-accounting-app/backend/internal/auth"
+	"finance-accounting-app/backend/internal/db"
 )
 
 // ---------------------------------------------------------------------------
@@ -31,13 +37,13 @@ func NewHandler(pool *pgxpool.Pool) *Service {
 
 // PPh rates (per Indonesian tax law as of 2026)
 const (
-	RatePPh21NonNPWP   = 0.20  // 20% for non-NPWP
-	RatePPh22Import    = 0.025 // 2.5%
-	RatePPh23Service   = 0.02  // 2%
-	RatePPh23Rent      = 0.10  // 10%
-	RatePPh23Royalty   = 0.15  // 15%
-	RatePPh26NonRes    = 0.20  // 20%
-	RatePPhFinalUMKM   = 0.005 // 0.5%
+	RatePPh21NonNPWP    = 0.20   // 20% for non-NPWP
+	RatePPh22Import     = 0.025  // 2.5%
+	RatePPh23Service    = 0.02   // 2%
+	RatePPh23Rent       = 0.10   // 10%
+	RatePPh23Royalty    = 0.15   // 15%
+	RatePPh26NonRes     = 0.20   // 20%
+	RatePPhFinalUMKM    = 0.005  // 0.5%
 	RatePPhFinalUMKM075 = 0.0075 // 0.75%
 )
 
@@ -62,16 +68,16 @@ type CreatePPhRequest struct {
 }
 
 type PPhResponse struct {
-	ID             int64  `json:"id"`
-	PphType        string `json:"pph_type"`
-	CalculationDate string `json:"calculation_date"`
-	DppCents       int64  `json:"dpp_cents"`
-	RatePercent    float64 `json:"rate_percent"`
-	PphCents       int64  `json:"pph_cents"`
-	EntityName     string `json:"entity_name"`
-	EntityNPWP     string `json:"entity_npwp"`
-	Description    string `json:"description"`
-	Status         string `json:"status"`
+	ID              int64   `json:"id"`
+	PphType         string  `json:"pph_type"`
+	CalculationDate string  `json:"calculation_date"`
+	DppCents        int64   `json:"dpp_cents"`
+	RatePercent     float64 `json:"rate_percent"`
+	PphCents        int64   `json:"pph_cents"`
+	EntityName      string  `json:"entity_name"`
+	EntityNPWP      string  `json:"entity_npwp"`
+	Description     string  `json:"description"`
+	Status          string  `json:"status"`
 }
 
 func (s *Service) Routes(r chi.Router) {
@@ -205,18 +211,120 @@ func (s *Service) Post(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "TENANT_REQUIRED", "tenant context is required")
 		return
 	}
+	idem, err := idempotencyKey(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
 	id := pathID(chi.URLParam(r, "id"))
-	_, err := s.pool.Exec(r.Context(), `
-		UPDATE pph_calculations SET status = 'POSTED' WHERE tenant_id = $1 AND id = $2 AND status = 'DRAFT'
-	`, tid, id)
+	if id <= 0 {
+		writeErr(w, http.StatusBadRequest, "INVALID_REQUEST", "id must be a positive integer")
+		return
+	}
+	uid, _ := auth.UserIDFromContext(r.Context())
+
+	var resp PPhResponse
+	var journalID int64
+	err = db.WithTransaction(r.Context(), s.pool, func(tx pgx.Tx) error {
+		if err := withTenant(r.Context(), tx, tid); err != nil {
+			return err
+		}
+
+		// Load the PPh calculation (type, dpp, rate, pph_cents, status,
+		// description, and any existing journal_entry_id for idempotent
+		// replay).
+		var pphType, calcDate, entityName, entityNPWP, description, status string
+		var dppCents, pphCents int64
+		var ratePercent float64
+		var existingJournalID pgtype.Int8
+		err := tx.QueryRow(r.Context(), `
+			SELECT pph_type, calculation_date::text, dpp_cents, rate_percent, pph_cents,
+			       COALESCE(entity_name,''), COALESCE(entity_npwp,''), COALESCE(description,''),
+			       status, journal_entry_id
+			FROM pph_calculations WHERE tenant_id = $1 AND id = $2
+		`, tid, id).Scan(&pphType, &calcDate, &dppCents, &ratePercent, &pphCents,
+			&entityName, &entityNPWP, &description, &status, &existingJournalID)
+		if err != nil {
+			return fmt.Errorf("PPh calculation not found: %w", err)
+		}
+
+		// Idempotent: already posted — return the stored state.
+		if status == "POSTED" {
+			resp = PPhResponse{
+				ID: id, PphType: pphType, CalculationDate: calcDate, DppCents: dppCents,
+				RatePercent: ratePercent, PphCents: pphCents, EntityName: entityName,
+				EntityNPWP: entityNPWP, Description: description, Status: "POSTED",
+			}
+			if existingJournalID.Valid {
+				journalID = existingJournalID.Int64
+			}
+			return nil
+		}
+		if status == "FILED" {
+			return errors.New("cannot post a FILED PPh calculation")
+		}
+		if pphCents <= 0 {
+			return errors.New("PPh calculation has zero pph_cents — nothing to post")
+		}
+
+		// Resolve the payable account by pph_type and the income tax expense
+		// account (5203).
+		payableCode := pphAccountForType(pphType)
+		if payableCode == "" {
+			return fmt.Errorf("no payable account mapped for pph_type %s", pphType)
+		}
+		payableAcctID, err := resolveAccountByCode(r.Context(), tx, tid, payableCode)
+		if err != nil {
+			return err
+		}
+		expenseAcctID, err := resolveAccountByCode(r.Context(), tx, tid, AccountIncomeTax)
+		if err != nil {
+			return err
+		}
+
+		// Build the journal: Dr 5203 Income Tax Expense / Cr 210x PPh Payable.
+		journal := accounting.Journal{
+			TenantID:    tid,
+			SourceRef:   fmt.Sprintf("PPH-%d", id),
+			IntentType:  accounting.IntentType("PPH_POST"),
+			EntryDate:   calcDate,
+			Description: fmt.Sprintf("PPh %s withholding%s", pphType, optionalNote(description)),
+			Lines: []accounting.Line{
+				{AccountID: expenseAcctID, DebitCents: pphCents, SourceLineRef: "pph-expense"},
+				{AccountID: payableAcctID, CreditCents: pphCents, SourceLineRef: "pph-payable"},
+			},
+		}
+		posted, err := postPPhJournal(r.Context(), tx, tid, idem, journal, uid)
+		if err != nil {
+			return err
+		}
+		journalID = posted.ID
+
+		// Mark the PPh calculation as POSTED with the journal_entry_id.
+		if _, err := tx.Exec(r.Context(), `
+			UPDATE pph_calculations
+			SET status = 'POSTED', journal_entry_id = $1, updated_at = now()
+			WHERE tenant_id = $2 AND id = $3 AND status = 'DRAFT'
+		`, journalID, tid, id); err != nil {
+			return err
+		}
+
+		resp = PPhResponse{
+			ID: id, PphType: pphType, CalculationDate: calcDate, DppCents: dppCents,
+			RatePercent: ratePercent, PphCents: pphCents, EntityName: entityName,
+			EntityNPWP: entityNPWP, Description: description, Status: "POSTED",
+		}
+		return nil
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "POST_FAILED", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":      id,
-		"status":  "POSTED",
-		"message": "PPh posted — post the journal: Dr 5203 Income Tax / Cr 210x PPh Payable",
+		"id":               id,
+		"status":           "POSTED",
+		"journal_entry_id": journalID,
+		"pph":              resp,
 	})
 }
 
@@ -301,4 +409,234 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 
 func writeErr(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, map[string]string{"code": code, "message": message})
+}
+
+// =====================================================================
+// JOURNAL POSTING HELPERS (mirror tax/helpers.go and cash/journal.go)
+// =====================================================================
+
+// postedEntry carries the inserted journal entry id and its human number.
+type postedEntry struct {
+	ID     int64
+	Number string
+}
+
+// postPPhJournal inserts a journal entry + its lines inside an existing
+// transaction. It performs the idempotency check, head lock, journal insert,
+// chain-head advance, and outbox write — mirroring the pattern used by
+// cash/journal.go and tax/helpers.go.
+func postPPhJournal(ctx context.Context, tx pgx.Tx, tenant int64, idem string, journal accounting.Journal, uid int64) (postedEntry, error) {
+	// Idempotent replay: an identical retry returns the stored journal.
+	existing, err := db.New(tx).GetJournalByIdempotencyKey(ctx, db.GetJournalByIdempotencyKeyParams{
+		TenantID:       tenant,
+		IdempotencyKey: uuidValue(idem),
+	})
+	if err == nil {
+		return postedEntry{ID: existing.ID, Number: existing.Number}, nil
+	} else if !isNoRows(err) {
+		return postedEntry{}, err
+	}
+
+	// Lock the chain head so concurrent postings serialize on one row.
+	head, err := lockOrSeedHead(ctx, tx, tenant)
+	if err != nil {
+		return postedEntry{}, err
+	}
+	journal.TenantID = tenant
+	journal.PreviousHash = head.LastHash
+	journal.Hash = accounting.HashJournal(journal)
+
+	periodID, err := resolvePeriod(ctx, tx, tenant, journal.EntryDate)
+	if err != nil {
+		return postedEntry{}, err
+	}
+	number, err := nextJournalNumber(ctx, tx, tenant)
+	if err != nil {
+		return postedEntry{}, err
+	}
+
+	entry, err := db.New(tx).InsertJournalEntry(ctx, db.InsertJournalEntryParams{
+		TenantID:       tenant,
+		Number:         number,
+		EntryDate:      parseDatePG(journal.EntryDate),
+		PeriodID:       periodID,
+		Description:    textValuePG(journal.Description),
+		SourceRef:      textValuePG(journal.SourceRef),
+		IntentType:     textValuePG(string(journal.IntentType)),
+		IdempotencyKey: uuidValue(idem),
+		Hash:           journal.Hash,
+		PrevHash:       journal.PreviousHash,
+		CreatedBy:      int8Value(uid),
+	})
+	if err != nil {
+		return postedEntry{}, err
+	}
+	for _, line := range journal.Lines {
+		if err := db.New(tx).InsertJournalLine(ctx, db.InsertJournalLineParams{
+			TenantID:      tenant,
+			EntryID:       entry.ID,
+			AccountID:     line.AccountID,
+			DebitCents:    line.DebitCents,
+			CreditCents:   line.CreditCents,
+			Description:   textValuePG(line.SourceLineRef),
+			SourceLineRef: textValuePG(line.SourceLineRef),
+			DimensionIds:  []byte("[]"),
+		}); err != nil {
+			return postedEntry{}, err
+		}
+	}
+	if err := upsertHead(ctx, tx, tenant, entry.ID, journal.Hash); err != nil {
+		return postedEntry{}, err
+	}
+	if err := insertOutbox(ctx, tx, tenant, "pph.posted", mustJSON(map[string]any{
+		"journal_id": entry.ID, "number": number, "intent": string(journal.IntentType),
+	})); err != nil {
+		return postedEntry{}, err
+	}
+	return postedEntry{ID: entry.ID, Number: number}, nil
+}
+
+// idempotencyKey validates the required Idempotency-Key header (must be a UUID).
+func idempotencyKey(request *http.Request) (string, error) {
+	key := strings.TrimSpace(request.Header.Get("Idempotency-Key"))
+	if key == "" {
+		return "", errors.New("Idempotency-Key header is required")
+	}
+	var parsed pgtype.UUID
+	if err := parsed.Scan(key); err != nil {
+		return "", errors.New("Idempotency-Key must be a UUID")
+	}
+	return key, nil
+}
+
+func withTenant(ctx context.Context, tx pgx.Tx, tenantID int64) error {
+	_, err := tx.Exec(ctx, `SELECT set_config('app.tenant_id', $1, true)`, strconv.FormatInt(tenantID, 10))
+	return err
+}
+
+func isNoRows(err error) bool {
+	return errors.Is(err, pgx.ErrNoRows)
+}
+
+func uuidValue(raw string) pgtype.UUID {
+	var value pgtype.UUID
+	_ = value.Scan(raw)
+	return value
+}
+
+func int8Value(value int64) pgtype.Int8 {
+	return pgtype.Int8{Int64: value, Valid: value != 0}
+}
+
+func textValuePG(value string) pgtype.Text {
+	return pgtype.Text{String: value, Valid: value != ""}
+}
+
+func parseDatePG(raw string) pgtype.Date {
+	parsed, err := time.Parse("2006-01-02", raw)
+	if err != nil {
+		return pgtype.Date{}
+	}
+	return pgtype.Date{Time: parsed, Valid: true}
+}
+
+func optionalNote(note string) string {
+	note = strings.TrimSpace(note)
+	if note == "" {
+		return ""
+	}
+	return " — " + note
+}
+
+func resolveAccountByCode(ctx context.Context, tx pgx.Tx, tenantID int64, code string) (int64, error) {
+	var accountID int64
+	err := tx.QueryRow(ctx, `SELECT id FROM accounts WHERE tenant_id = $1 AND code = $2`,
+		tenantID, code).Scan(&accountID)
+	if err != nil {
+		return 0, fmt.Errorf("account %s not found: %w", code, err)
+	}
+	return accountID, nil
+}
+
+func lockOrSeedHead(ctx context.Context, tx pgx.Tx, tenantID int64) (db.LedgerChainHead, error) {
+	head, err := db.New(tx).LockLedgerChainHead(ctx, tenantID)
+	if err == nil {
+		return head, nil
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO ledger_chain_heads (tenant_id, last_journal_id, last_hash)
+		VALUES ($1, NULL, 'genesis') ON CONFLICT (tenant_id) DO NOTHING
+	`, tenantID); err != nil {
+		return db.LedgerChainHead{}, err
+	}
+	return db.New(tx).LockLedgerChainHead(ctx, tenantID)
+}
+
+func resolvePeriod(ctx context.Context, tx pgx.Tx, tenantID int64, date string) (int64, error) {
+	var periodID int64
+	err := tx.QueryRow(ctx, `
+		SELECT id FROM accounting_periods
+		WHERE tenant_id = $1 AND $2::date BETWEEN period_start AND period_end
+		  AND status IN ('OPEN', 'REOPENED')
+		ORDER BY period_start DESC LIMIT 1
+	`, tenantID, date).Scan(&periodID)
+	if err != nil {
+		return 0, fmt.Errorf("entry date is outside an open period: %w", err)
+	}
+	return periodID, nil
+}
+
+func nextJournalNumber(ctx context.Context, tx pgx.Tx, tenantID int64) (string, error) {
+	return nextDocNumber(ctx, tx, tenantID, "JRN", "JRN")
+}
+
+func nextDocNumber(ctx context.Context, tx pgx.Tx, tenantID int64, docType, prefix string) (string, error) {
+	year := time.Now().Year()
+	var p string
+	var seq int64
+	err := tx.QueryRow(ctx, `
+		INSERT INTO document_numbering (tenant_id, doc_type, prefix, fiscal_year, last_seq)
+		VALUES ($1, $2, $3, $4, 1)
+		ON CONFLICT (tenant_id, doc_type, prefix, fiscal_year) DO UPDATE
+		SET last_seq = document_numbering.last_seq + 1
+		RETURNING prefix, last_seq
+	`, tenantID, docType, prefix, year).Scan(&p, &seq)
+	if err != nil {
+		return "", err
+	}
+	return p + "-" + strconv.FormatInt(int64(year), 10) + "-" + leftPad6(seq), nil
+}
+
+func leftPad6(seq int64) string {
+	s := strconv.FormatInt(seq, 10)
+	for len(s) < 6 {
+		s = "0" + s
+	}
+	return s
+}
+
+func upsertHead(ctx context.Context, tx pgx.Tx, tenantID, lastJournalID int64, lastHash string) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO ledger_chain_heads (tenant_id, last_journal_id, last_hash)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (tenant_id) DO UPDATE
+		SET last_journal_id = EXCLUDED.last_journal_id, last_hash = EXCLUDED.last_hash, updated_at = now()
+	`, tenantID, lastJournalID, lastHash)
+	return err
+}
+
+func insertOutbox(ctx context.Context, tx pgx.Tx, tenantID int64, topic string, payload []byte) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO outbox_events (tenant_id, topic, payload)
+		VALUES ($1, $2, $3::jsonb)
+	`, tenantID, topic, payload)
+	return err
+}
+
+func mustJSON(value any) []byte {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return []byte("{}")
+	}
+	return data
 }

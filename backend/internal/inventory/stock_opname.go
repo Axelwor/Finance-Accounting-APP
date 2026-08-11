@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/costing"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -449,7 +450,11 @@ func (service *Service) ApproveStockOpname(writer http.ResponseWriter, request *
 			}
 		}
 
-		// Record inventory movements (OPNAME_IN for surplus, OPNAME_OUT for shortage).
+		// Record inventory movements (OPNAME_IN for surplus, OPNAME_OUT for shortage)
+		// and update stock_balances via the costing engine so the persisted on-hand
+		// balance stays in sync with the physical count. Without these calls the
+		// movement rows were inserted but stock_balances.qty_on_hand diverged after
+		// every opname (A-05).
 		for _, line := range opn.Lines {
 			if line.DiffQty == 0 {
 				continue
@@ -460,10 +465,29 @@ func (service *Service) ApproveStockOpname(writer http.ResponseWriter, request *
 				movementType = "OPNAME_OUT"
 			}
 			if _, err := tx.Exec(request.Context(), `
-				INSERT INTO inventory_movements (tenant_id, item_id, movement_type, qty, unit_cost_cents, source_ref, source_id)
-				VALUES ($1, $2, $3, $4, $5, $6, $7)
-			`, tenant, line.ItemID, movementType, pgtypeFloat(qty), line.UnitCostCents, opn.Number, opn.ID); err != nil {
+			INSERT INTO inventory_movements (tenant_id, item_id, movement_type, qty, unit_cost_cents, source_ref, source_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`, tenant, line.ItemID, movementType, pgtypeFloat(qty), line.UnitCostCents, opn.Number, opn.ID); err != nil {
 				return err
+			}
+
+			// Drive the costing engine so stock_balances (and FIFO layers) move.
+			// Opname does not track a warehouse (it is a physical count of total
+			// stock), so warehouse_id = 0 (the legacy/unspecified bucket).
+			if line.DiffQty > 0 {
+				// Surplus: stock-in at the line's unit cost.
+				if err := costing.PostGRN(request.Context(), tx, tenant, line.ItemID, 0,
+					line.DiffQty, line.UnitCostCents, line.costingMethod); err != nil {
+					return fmt.Errorf("opname surplus costing for item %d: %w", line.ItemID, err)
+				}
+			} else {
+				// Shortage: stock-out — resolve COGS (consumes FIFO layers or
+				// adjusts moving average) and reduce qty_on_hand.
+				shortQty := -line.DiffQty
+				if _, err := costing.ResolveCOGS(request.Context(), tx, tenant, line.ItemID, 0,
+					shortQty, line.costingMethod); err != nil {
+					return fmt.Errorf("opname shortage costing for item %d: %w", line.ItemID, err)
+				}
 			}
 		}
 
