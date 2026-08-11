@@ -168,6 +168,14 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 			return err
 		}
 
+		// A-11: shipping, other charges, and rounding are part of what the
+		// customer owes; include them in the invoice total (AR debit).
+		chargesCents := req.ShippingFeeCents + req.OtherChargesCents + req.RoundingCents
+		totalCents += chargesCents
+		if totalCents <= 0 {
+			return fmt.Errorf("invoice total must be greater than zero")
+		}
+
 		// F-03: Approval gate. If the tenant has an active "invoice" workflow
 		// whose min_amount_cents <= totalCents, an APPROVED unconsumed approval
 		// with a covering amount must exist before the invoice can post.
@@ -175,11 +183,12 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 			return err
 		}
 
-		// Compute total DPP (revenue) and total PPN across all lines.
-		var totalDPPCents, totalPPNCents int64
+		// Compute total DPP (revenue), total PPN, and total line discounts.
+		var totalDPPCents, totalPPNCents, discountTotalCents int64
 		for _, pl := range lines {
 			totalDPPCents += pl.LineTotalCents
 			totalPPNCents += pl.PPNCents
+			discountTotalCents += pl.Line.DiscountCents
 		}
 
 		// Resolve accounts.
@@ -192,13 +201,14 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 			return err
 		}
 
-		// Load SO to check for DP.
-		var dpReceived int64
+		// Load SO to check for DP and consumption tracking.
+		var dpReceived, dpConsumed int64
 		var soStatus string
 		if req.SalesOrderID > 0 {
 			if err := tx.QueryRow(request.Context(), `
-				SELECT dp_received_cents, status FROM sales_orders WHERE tenant_id = $1 AND id = $2
-			`, tenant, req.SalesOrderID).Scan(&dpReceived, &soStatus); err != nil {
+				SELECT dp_received_cents, dp_consumed_cents, status FROM sales_orders WHERE tenant_id = $1 AND id = $2
+				FOR UPDATE
+			`, tenant, req.SalesOrderID).Scan(&dpReceived, &dpConsumed, &soStatus); err != nil {
 				return err
 			}
 		}
@@ -218,6 +228,18 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 				AccountID:     vatAccountID,
 				CreditCents:   totalPPNCents,
 				SourceLineRef: "output-vat",
+			})
+		}
+		// A-11: shipping/other charges/rounding are included in the AR debit;
+		// post them to revenue so the journal balances (charges may be negative
+		// for rounding down).
+		if chargesCents > 0 {
+			revenueLines = append(revenueLines, accounting.Line{
+				AccountID: revenueAccountID, CreditCents: chargesCents, SourceLineRef: "charges",
+			})
+		} else if chargesCents < 0 {
+			revenueLines = append(revenueLines, accounting.Line{
+				AccountID: revenueAccountID, DebitCents: -chargesCents, SourceLineRef: "charges",
 			})
 		}
 		if err := accounting.BalanceCheck(revenueLines); err != nil {
@@ -279,7 +301,12 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 		dpApplied := int64(0)
 		var dpEntryID int64
 		if dpReceived > 0 {
-			dpApplied = dpReceived
+			// Compute available DP remaining after prior invoices' consumption.
+			dpAvailable := dpReceived - dpConsumed
+			if dpAvailable < 0 {
+				dpAvailable = 0
+			}
+			dpApplied = dpAvailable
 			if dpApplied > totalCents {
 				dpApplied = totalCents
 			}
@@ -341,6 +368,17 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 			}
 		}
 
+		// A-01: consume the realized DP on the SO so later invoices for the
+		// same SO cannot realize it again.
+		if dpApplied > 0 {
+			if _, err := tx.Exec(request.Context(), `
+				UPDATE sales_orders SET dp_consumed_cents = dp_consumed_cents + $1, updated_at = now()
+				WHERE tenant_id = $2 AND id = $3
+			`, dpApplied, tenant, req.SalesOrderID); err != nil {
+				return err
+			}
+		}
+
 		// Insert invoice header + lines.
 		invNumber, err := nextINVNumber(request.Context(), tx, tenant)
 		if err != nil {
@@ -373,8 +411,8 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 		`, tenant, invNumber, soID, req.CustomerID, invoiceDate, dueDate,
 			optionalInt8(req.PaymentTermID), textValueOptional(req.Notes), totalCents, dpApplied,
 			receivable, int8Value(revenueEntryID), int8Value(dpEntryID), int8Value(userID),
-			textValueOptional(req.TaxInvoiceNumber), req.SubTotalCents, req.DiscountTotalCents,
-			req.TaxTotalCents, req.ShippingFeeCents, req.OtherChargesCents, req.RoundingCents,
+			textValueOptional(req.TaxInvoiceNumber), totalDPPCents, discountTotalCents,
+			totalPPNCents, req.ShippingFeeCents, req.OtherChargesCents, req.RoundingCents,
 			optionalInt8(req.SalespersonID)).Scan(&invID)
 		if err != nil {
 			return err
@@ -592,7 +630,8 @@ func prepareInvoiceLines(lines []InvoiceLineRequest) ([]preparedInvoiceLine, int
 		if taxRateMilli < 0 {
 			taxRateMilli = 0
 		}
-		ppnCents := lineTotal * taxRateMilli / 100000
+		// A-09: round half up instead of truncating the integer division.
+		ppnCents := (lineTotal*taxRateMilli + 50000) / 100000
 		total += lineTotal + ppnCents
 		prepared = append(prepared, preparedInvoiceLine{Line: line, LineTotalCents: lineTotal, PPNCents: ppnCents})
 	}
