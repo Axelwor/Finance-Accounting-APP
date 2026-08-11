@@ -519,9 +519,14 @@ func (service *Service) fetchARAgingData(w http.ResponseWriter, r *http.Request,
 		var bucket string
 		var total int64
 		if err := rows.Scan(&bucket, &total); err != nil {
-			continue
+			writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
+			return
 		}
 		buckets = append(buckets, map[string]any{"bucket": bucket, "total_cents": total})
+	}
+	if err := rows.Err(); err != nil {
+		writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -570,7 +575,8 @@ func (service *Service) fetchLowStockData(w http.ResponseWriter, r *http.Request
 		var code, name string
 		var onHand, minStock float64
 		if err := rows.Scan(&code, &name, &onHand, &minStock); err != nil {
-			continue
+			writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
+			return
 		}
 		items = append(items, map[string]any{
 			"code":          code,
@@ -578,6 +584,10 @@ func (service *Service) fetchLowStockData(w http.ResponseWriter, r *http.Request
 			"qty_on_hand":   onHand,
 			"min_stock_qty": minStock,
 		})
+	}
+	if err := rows.Err(); err != nil {
+		writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -607,7 +617,8 @@ func (service *Service) fetchRecentTxnsData(w http.ResponseWriter, r *http.Reque
 	for rows.Next() {
 		var number, entryDate, description, intentType, status string
 		if err := rows.Scan(&number, &entryDate, &description, &intentType, &status); err != nil {
-			continue
+			writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
+			return
 		}
 		txns = append(txns, map[string]any{
 			"number":      number,
@@ -616,6 +627,10 @@ func (service *Service) fetchRecentTxnsData(w http.ResponseWriter, r *http.Reque
 			"intent_type": intentType,
 			"status":      status,
 		})
+	}
+	if err := rows.Err(); err != nil {
+		writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -668,7 +683,8 @@ func (service *Service) fetchOutstandingInvoicesData(w http.ResponseWriter, r *h
 		var number, customerName, invoiceDate, dueDate, status string
 		var receivableCents int64
 		if err := rows.Scan(&number, &customerName, &invoiceDate, &dueDate, &receivableCents, &status); err != nil {
-			continue
+			writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
+			return
 		}
 		invoices = append(invoices, map[string]any{
 			"number":            number,
@@ -678,6 +694,10 @@ func (service *Service) fetchOutstandingInvoicesData(w http.ResponseWriter, r *h
 			"receivable_cents":  receivableCents,
 			"status":            status,
 		})
+	}
+	if err := rows.Err(); err != nil {
+		writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{

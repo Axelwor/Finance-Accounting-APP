@@ -2,6 +2,7 @@ package reconciliation
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"finance-accounting-app/backend/internal/accounting"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -325,6 +327,13 @@ func (service *Service) UnmatchLine(writer http.ResponseWriter, request *http.Re
 // CompleteReconciliation handles POST /bank-reconciliations/{id}/complete.
 // Validates diff_cents == 0 (adjusted book = adjusted statement), then marks
 // the reconciliation + statement RECONCILED.
+//
+// When diff_cents != 0, the endpoint rejects the request unless the caller
+// passes force=true. With force=true, an adjustment journal is posted to
+// clear the residual: Dr/Cr Bank against a reconciliation adjustment account
+// (4999 if it exists, otherwise 4907 for a gain or 5907 for a loss). The
+// journal uses the same hash-chain, idempotency, and outbox pattern as all
+// other postings.
 func (service *Service) CompleteReconciliation(writer http.ResponseWriter, request *http.Request) {
 	tenant, err := tenantID(request)
 	if err != nil {
@@ -336,10 +345,13 @@ func (service *Service) CompleteReconciliation(writer http.ResponseWriter, reque
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	if _, err := idempotencyKey(request); err != nil {
+	idem, err := idempotencyKey(request)
+	if err != nil {
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
+	uid := userID(request)
+	force := request.URL.Query().Get("force") == "true"
 
 	var result *reconciliationResponse
 	err = db.WithTransaction(request.Context(), service.pool, func(tx pgx.Tx) error {
@@ -366,7 +378,63 @@ func (service *Service) CompleteReconciliation(writer http.ResponseWriter, reque
 			return err
 		}
 		if diff != 0 {
-			return validationError("cannot complete: adjusted book does not equal adjusted statement")
+			if !force {
+				return validationError("cannot complete: adjusted book does not equal adjusted statement (diff_cents != 0); pass force=true to post an adjustment journal")
+			}
+			// Post an adjustment journal for the residual diff.
+			absDiff := diff
+			if absDiff < 0 {
+				absDiff = -absDiff
+			}
+			// Determine the adjustment account: prefer 4999 (reconciliation
+			// adjustment), fall back to 4907 (gain) / 5907 (loss).
+			var adjAccountID int64
+			if acctID, acctErr := resolveAccountByCode(request.Context(), tx, tenant, "4999"); acctErr == nil {
+				adjAccountID = acctID
+			}
+			var lines []accounting.Line
+			if diff > 0 {
+				// Book > statement: bank is overstated.
+				// Cr Bank (decrease) / Dr adjustment (loss).
+				if adjAccountID == 0 {
+					adjAccountID, err = resolveAccountByCode(request.Context(), tx, tenant, "5907")
+					if err != nil {
+						return fmt.Errorf("loss account 5907 not found: %w", err)
+					}
+				}
+				lines = []accounting.Line{
+					{AccountID: adjAccountID, DebitCents: absDiff, SourceLineRef: "recon-adj-loss"},
+					{AccountID: bankAccountID, CreditCents: absDiff, SourceLineRef: "recon-adj-bank"},
+				}
+			} else {
+				// Book < statement: bank is understated.
+				// Dr Bank (increase) / Cr adjustment (gain).
+				if adjAccountID == 0 {
+					adjAccountID, err = resolveAccountByCode(request.Context(), tx, tenant, "4907")
+					if err != nil {
+						return fmt.Errorf("gain account 4907 not found: %w", err)
+					}
+				}
+				lines = []accounting.Line{
+					{AccountID: bankAccountID, DebitCents: absDiff, SourceLineRef: "recon-adj-bank"},
+					{AccountID: adjAccountID, CreditCents: absDiff, SourceLineRef: "recon-adj-gain"},
+				}
+			}
+			if err := accounting.BalanceCheck(lines); err != nil {
+				return fmt.Errorf("adjustment journal not balanced: %w", err)
+			}
+			entryDate := time.Now().Format("2006-01-02")
+			journal := accounting.Journal{
+				TenantID:    tenant,
+				SourceRef:   fmt.Sprintf("RECON-ADJ-%d", reconID),
+				IntentType:  accounting.IntentType("RECONCILIATION_ADJUSTMENT"),
+				EntryDate:   entryDate,
+				Description: fmt.Sprintf("Reconciliation adjustment for recon #%d", reconID),
+				Lines:       lines,
+			}
+			if _, _, err := postReconJournal(request.Context(), tx, tenant, uid, idem, journal); err != nil {
+				return fmt.Errorf("failed to post adjustment journal: %w", err)
+			}
 		}
 
 		_, err = tx.Exec(request.Context(), `
@@ -441,84 +509,72 @@ func (service *Service) GetReconciliation(writer http.ResponseWriter, request *h
 // account is an asset, so a statement credit (deposit, amount_cents > 0)
 // matches a journal debit on the bank line, and a statement debit
 // (withdrawal, amount_cents < 0) matches a journal credit.
+//
+// The entire match+update is done in a single SQL statement (CTE + UPDATE)
+// to avoid the N+1 round-trips of the former per-line SELECT+UPDATE loop.
 func autoMatch(ctx context.Context, tx pgx.Tx, tenantID, bankAccountID int64) error {
-	rows, err := tx.Query(ctx, `
-		SELECT id, tx_date, amount_cents
-		FROM bank_statement_lines
-		WHERE tenant_id = $1 AND match_status = 'UNMATCHED'
-		ORDER BY line_no
-	`, tenantID)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	type pending struct {
-		id     int64
-		txDate time.Time
-		amount int64
-	}
-	var lines []pending
-	for rows.Next() {
-		var p pending
-		var d pgtype.Date
-		if err := rows.Scan(&p.id, &d, &p.amount); err != nil {
-			return err
-		}
-		if d.Valid {
-			p.txDate = d.Time
-		}
-		lines = append(lines, p)
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-
-	for _, line := range lines {
-		// A statement line with amount_cents > 0 is a deposit -> bank debit.
-		// A statement line with amount_cents < 0 is a withdrawal -> bank credit.
-		wantDebit := line.amount > 0
-		absAmount := line.amount
-		if absAmount < 0 {
-			absAmount = -absAmount
-		}
-		var journalLineID int64
-		err := tx.QueryRow(ctx, `
-			SELECT jl.id
-			FROM journal_lines jl
-			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-			WHERE jl.tenant_id = $1
-			  AND jl.account_id = $2
-			  AND je.status = 'POSTED'
-			  AND (
-			        ( $3 AND jl.debit_cents = $4 )
-			     OR ( NOT $3 AND jl.credit_cents = $4 )
-			  )
+	// Two-level deduplication ensures a strict 1:1 match:
+	//   candidates: each statement line's ranked journal-line candidates
+	//   preferred:  each statement line's single best candidate (stmt_rn = 1),
+	//               then re-ranked per journal line so a journal line is
+	//               claimed by at most one statement line (journal_rn = 1).
+	// The NOT EXISTS check reads pre-UPDATE state, so the per-journal-line
+	// ranking is required to stop two same-amount statement lines from both
+	// claiming the same journal line.
+	_, err := tx.Exec(ctx, `
+		WITH candidates AS (
+			SELECT
+				bsl.id AS statement_line_id,
+				jl.id AS journal_line_id,
+				ROW_NUMBER() OVER (
+					PARTITION BY bsl.id
+					ORDER BY ABS(je.entry_date - bsl.tx_date), jl.id
+				) AS stmt_rn
+			FROM bank_statement_lines bsl
+			JOIN journal_lines jl
+				ON jl.tenant_id = bsl.tenant_id
+				AND jl.account_id = $2
+				AND (
+					(bsl.amount_cents > 0 AND jl.debit_cents  = ABS(bsl.amount_cents))
+					OR
+					(bsl.amount_cents < 0 AND jl.credit_cents = ABS(bsl.amount_cents))
+				)
+			JOIN journal_entries je
+				ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
+				AND je.status = 'POSTED'
+				AND ABS(je.entry_date - bsl.tx_date) <= 3
+			WHERE bsl.tenant_id = $1
+			  AND bsl.match_status = 'UNMATCHED'
 			  AND NOT EXISTS (
-			        SELECT 1 FROM bank_statement_lines bsl
-			        WHERE bsl.tenant_id = jl.tenant_id
-			          AND bsl.matched_journal_line_id = jl.id
+				SELECT 1 FROM bank_statement_lines bsl2
+				WHERE bsl2.tenant_id = jl.tenant_id
+				  AND bsl2.matched_journal_line_id = jl.id
 			  )
-			  AND ABS(je.entry_date - $5::date) <= 3
-			ORDER BY ABS(je.entry_date - $5::date), jl.id
-			LIMIT 1
-		`, tenantID, bankAccountID, wantDebit, absAmount, line.txDate).Scan(&journalLineID)
-		if err != nil {
-			if isNoRows(err) {
-				continue // no candidate for this line
-			}
-			return err
-		}
-		_, err = tx.Exec(ctx, `
-			UPDATE bank_statement_lines
-			SET matched_journal_line_id = $1, match_status = 'MATCHED'
-			WHERE tenant_id = $2 AND id = $3
-		`, journalLineID, tenantID, line.id)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+		),
+		preferred AS (
+			SELECT
+				statement_line_id,
+				journal_line_id,
+				ROW_NUMBER() OVER (
+					PARTITION BY journal_line_id
+					ORDER BY statement_line_id
+				) AS journal_rn
+			FROM candidates
+			WHERE stmt_rn = 1
+		),
+		best_matches AS (
+			SELECT statement_line_id, journal_line_id
+			FROM preferred
+			WHERE journal_rn = 1
+		)
+		UPDATE bank_statement_lines
+		SET matched_journal_line_id = bm.journal_line_id,
+		    match_status = 'MATCHED'
+		FROM best_matches bm
+		WHERE bank_statement_lines.tenant_id = $1
+		  AND bank_statement_lines.id = bm.statement_line_id
+	`, tenantID, bankAccountID)
+	return err
 }
 
 // recomputeBalances recomputes the reconciliation's book/statement/adjusted

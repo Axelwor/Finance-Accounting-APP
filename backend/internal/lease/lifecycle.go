@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -252,6 +253,60 @@ func (service *Service) ModifyLeaseContract(writer http.ResponseWriter, request 
 			WHERE tenant_id = $1 AND id = $2
 		`, tenant, leaseID, req.NewPaymentAmountCents, req.NewTotalPayments); err != nil {
 			return err
+		}
+
+		// Regenerate the payment schedule: delete old unposted lease_payments
+		// and rebuild with the new payment amount, term, and present value so
+		// principal/interest splits reflect the modified contract. Posted
+		// payments are immutable: the regenerated rows continue their
+		// payment_no sequence so UNIQUE(tenant_id, lease_id, payment_no) is
+		// not violated, and amortization starts from the remaining liability
+		// left by the last posted payment.
+		if _, err := tx.Exec(request.Context(), `
+			DELETE FROM lease_payments
+			WHERE tenant_id = $1 AND lease_id = $2 AND posted = false
+		`, tenant, leaseID); err != nil {
+			return err
+		}
+		var postedCount int
+		if err := tx.QueryRow(request.Context(), `
+			SELECT COALESCE(MAX(payment_no), 0)
+			FROM lease_payments
+			WHERE tenant_id = $1 AND lease_id = $2 AND posted = true
+		`, tenant, leaseID).Scan(&postedCount); err != nil {
+			return err
+		}
+		remainingPayments := req.NewTotalPayments - postedCount
+		if remainingPayments <= 0 {
+			return fmt.Errorf("new_total_payments (%d) must exceed the %d already-posted payments",
+				req.NewTotalPayments, postedCount)
+		}
+		// Amortization starting balance: the modification journal already
+		// moved the liability from currentLiability to newPV, so the
+		// remaining schedule amortizes from newPV.
+		scheduleBalance := newPV
+		// Schedule start: the modification's effective date when posted
+		// payments exist, otherwise the lease start date.
+		startDate, _ := parseDate(lease.StartDate)
+		scheduleStart := startDate.Time
+		if postedCount > 0 {
+			if effDate, err := parseDate(req.EffectiveDate); err == nil && effDate.Valid {
+				scheduleStart = effDate.Time
+			}
+		}
+		if scheduleStart.IsZero() {
+			scheduleStart = time.Now()
+		}
+		schedule := buildPaymentSchedule(scheduleStart, lease.PaymentFrequency,
+			remainingPayments, req.NewPaymentAmountCents, rateF, scheduleBalance)
+		for _, p := range schedule {
+			if _, err := tx.Exec(request.Context(), `
+				INSERT INTO lease_payments (tenant_id, lease_id, payment_no, payment_date, payment_amount_cents, principal_cents, interest_cents, remaining_liability_cents, posted)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false)
+			`, tenant, leaseID, p.PaymentNo+postedCount, p.PaymentDate, p.PaymentAmountCents,
+				p.PrincipalCents, p.InterestCents, p.RemainingLiabilityCents); err != nil {
+				return err
+			}
 		}
 		result = map[string]any{
 			"lease_id":           leaseID,

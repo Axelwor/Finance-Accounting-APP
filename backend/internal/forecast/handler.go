@@ -107,9 +107,14 @@ func (s *Service) GetCashFlowForecast(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var f arFlow
 		if err := rows.Scan(&f.dueDate, &f.amount); err != nil {
-			continue
+			writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
+			return
 		}
 		arFlows = append(arFlows, f)
+	}
+	if err := rows.Err(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
+		return
 	}
 
 	// 3. Get expected AP outflows (unpaid supplier invoices by due_date)
@@ -133,9 +138,14 @@ func (s *Service) GetCashFlowForecast(w http.ResponseWriter, r *http.Request) {
 	for rows2.Next() {
 		var f apFlow
 		if err := rows2.Scan(&f.dueDate, &f.amount); err != nil {
-			continue
+			writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
+			return
 		}
 		apFlows = append(apFlows, f)
+	}
+	if err := rows2.Err(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
+		return
 	}
 
 	// 4. Get recurring transaction flows
@@ -159,9 +169,14 @@ func (s *Service) GetCashFlowForecast(w http.ResponseWriter, r *http.Request) {
 	for rows3.Next() {
 		var f recFlow
 		if err := rows3.Scan(&f.nextDate, &f.amount, &f.isInflow); err != nil {
-			continue
+			writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
+			return
 		}
 		recFlows = append(recFlows, f)
+	}
+	if err := rows3.Err(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
+		return
 	}
 
 	// 5. Build daily buckets

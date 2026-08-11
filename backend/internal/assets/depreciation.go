@@ -3,6 +3,7 @@ package assets
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 
@@ -892,10 +893,28 @@ func computeDepreciation(a assetRow) int64 {
 		if depreciableBase <= 0 || a.UsefulLifeMonths <= 0 {
 			return 0
 		}
-		return depreciableBase / int64(a.UsefulLifeMonths)
+		remainingDepreciable := a.BookValueCents - a.SalvageValueCents
+		if remainingDepreciable <= 0 {
+			return 0
+		}
+		monthlyDep := int64(math.Round(float64(depreciableBase) / float64(a.UsefulLifeMonths)))
+		// Final period absorbs residual: when the current period is the last
+		// one of the useful life, charge the full remaining amount so the
+		// asset reaches salvage exactly — no truncation remainder lasting an
+		// extra period, and no overshoot from a rounded-up monthly charge.
+		// All prior periods charged exactly monthlyDep, so the elapsed period
+		// count is recoverable from the accumulated depreciation.
+		periodsElapsed := int64(0)
+		if monthlyDep > 0 {
+			periodsElapsed = a.AccumDepCents / monthlyDep
+		}
+		if periodsElapsed+1 >= int64(a.UsefulLifeMonths) {
+			return remainingDepreciable
+		}
+		return monthlyDep
 	case methodDecliningBalance:
 		// book_value * rate
-		return int64(float64(a.BookValueCents) * a.Rate)
+		return int64(math.Round(float64(a.BookValueCents) * a.Rate))
 	case methodUnitsOfProduction:
 		// (cost - salvage) / units_total * units_used this period.
 		// For simplicity, units_used is treated as the period consumption.
@@ -903,7 +922,7 @@ func computeDepreciation(a assetRow) int64 {
 			return 0
 		}
 		depreciableBase := a.AcquisitionCostCents - a.SalvageValueCents
-		return (depreciableBase * a.UnitsUsed) / a.UnitsTotal
+		return int64(math.Round(float64(depreciableBase) * float64(a.UnitsUsed) / float64(a.UnitsTotal)))
 	default:
 		return 0
 	}
