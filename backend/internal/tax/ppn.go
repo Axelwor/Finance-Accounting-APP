@@ -1,7 +1,6 @@
 package tax
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -303,5 +302,4 @@ func monthBounds(year, month int64) (string, string) {
 }
 
 // ensure ctx/tx imports stay referenced as this file grows.
-var _ = context.Background
 var _ = (*pgx.Tx)(nil)

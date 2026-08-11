@@ -1,7 +1,6 @@
 package forecast
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -266,4 +265,3 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-var _ = context.Background // silence unused import

@@ -2,8 +2,6 @@ package production
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"math"
 	"net/http"
@@ -985,17 +983,10 @@ func validateJobCostRequest(req *ProductionJobCostRequest) (string, string) {
 	return "", ""
 }
 
-// hashJobJournal computes the SHA-256 hash of an accounting.Journal using
-// the same formula as accounting.hashJournal (which is private). Keeping the
-// formula in sync ensures the ledger chain stays consistent across packages.
+// hashJobJournal computes the SHA-256 hash of an accounting.Journal by
+// delegating to the single source of truth in the accounting package (C-003).
 func hashJobJournal(journal accounting.Journal) string {
-	lines := append([]accounting.Line(nil), journal.Lines...)
-	sortByRef(lines)
-	payload := fmt.Sprintf("v1|%d|%s|%s|%s|%s|%v",
-		journal.TenantID, journal.SourceRef, string(journal.IntentType),
-		journal.EntryDate, journal.PreviousHash, lines)
-	sum := sha256.Sum256([]byte(payload))
-	return hex.EncodeToString(sum[:])
+	return accounting.HashJournal(journal)
 }
 
 func sortByRef(lines []accounting.Line) {

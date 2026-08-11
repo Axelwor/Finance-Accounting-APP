@@ -15,7 +15,7 @@ import (
 )
 
 // Service exposes the cash journaling endpoints. Tenant id comes from the
-// X-Tenant-ID header (temporary until JWT auth carries it).
+// JWT auth context (via auth.TenantIDFromContext).
 type Service struct {
 	pool *pgxpool.Pool
 }

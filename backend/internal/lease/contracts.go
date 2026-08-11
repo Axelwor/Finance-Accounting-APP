@@ -446,9 +446,14 @@ func parseDiscountRate(raw string) float64 {
 }
 
 // presentValueCents computes PV = payment * [1 - (1+r)^-n] / r, rounded to cents.
+// m-013: when the discount rate is zero the formula divides by zero; the PV
+// of undiscounted payments is simply payment * n.
 func presentValueCents(paymentCents int64, rate float64, n int) int64 {
-	if rate <= 0 || n <= 0 {
+	if n <= 0 || paymentCents < 0 {
 		return 0
+	}
+	if rate <= 0 {
+		return paymentCents * int64(n)
 	}
 	pv := float64(paymentCents) * (1 - math.Pow(1+rate, -float64(n))) / rate
 	return int64(pv + 0.5)

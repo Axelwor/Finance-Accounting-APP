@@ -3,13 +3,16 @@ package period
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/accounting"
@@ -17,6 +20,20 @@ import (
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/db"
 )
+
+// idempotencyKey validates the required Idempotency-Key header (must be a
+// UUID). m-021: period close/unlock post journals and therefore require it.
+func idempotencyKey(request *http.Request) (string, error) {
+	key := strings.TrimSpace(request.Header.Get("Idempotency-Key"))
+	if key == "" {
+		return "", errors.New("Idempotency-Key header is required")
+	}
+	var parsed pgtype.UUID
+	if err := parsed.Scan(key); err != nil {
+		return "", errors.New("Idempotency-Key must be a UUID")
+	}
+	return key, nil
+}
 
 type Service struct {
 	pool *pgxpool.Pool
@@ -40,7 +57,13 @@ func (service *Service) Unlock(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	userID, _ := auth.UserIDFromContext(request.Context())
-	idem := request.Header.Get("Idempotency-Key")
+	// m-021: unlock posts a reversal journal, so it requires a valid
+	// Idempotency-Key just like close does.
+	idem, err := idempotencyKey(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
 
 	result, err := service.unlockPeriod(request.Context(), tenantID, userID, idem)
 	if err != nil {

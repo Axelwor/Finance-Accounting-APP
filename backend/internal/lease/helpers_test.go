@@ -28,11 +28,11 @@ func TestPresentValueCents(t *testing.T) {
 			wantApprox: 11_151_295,
 		},
 		{
-			name:       "zero rate returns zero",
+			name:       "zero rate returns undiscounted sum (m-013 fix)",
 			payment:    1_000_000,
 			rate:       0,
 			n:          12,
-			wantApprox: 0,
+			wantApprox: 12_000_000, // payment * n
 		},
 		{
 			name:       "zero payments returns zero",

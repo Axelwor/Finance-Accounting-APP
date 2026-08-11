@@ -1,7 +1,6 @@
 package accounting
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -174,4 +173,3 @@ func dateValue(raw string) pgtype.Date {
 }
 
 // ensure ctx import is used when this file grows.
-var _ = context.Background
