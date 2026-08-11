@@ -170,6 +170,192 @@ Response:
 }
 ```
 
+## Extended Endpoints (Sprint 5–7)
+
+These endpoints were implemented after the MVP contract and are documented here
+to keep the contract in sync with the code (m-019). All are under `/api/v1`,
+tenant-scoped via the authenticated context, and follow the rules above.
+Financial commands require `Idempotency-Key`.
+
+### Auth — Multi-Tenant & 2FA
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/auth/switch-tenant` | Rotate tokens to another tenant the user belongs to |
+| POST | `/auth/2fa/setup` | Generate TOTP secret + provisioning URI (authenticated) |
+| POST | `/auth/2fa/verify` | Enable 2FA after proving possession of the secret |
+| POST | `/auth/2fa/disable` | Disable 2FA (requires a valid code) |
+| GET | `/tenants` | List tenants the user belongs to |
+| POST | `/tenants/new` | Create an additional tenant for the user |
+| GET | `/tenants/me` | Current active tenant (404 when onboarding pending) |
+
+### Customers & AR Sub-Ledger
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/customers/ar-balances` | Per-customer outstanding AR + GL reconciliation (1201) |
+| GET | `/customers/{id}/ar-balance` | Single customer outstanding AR |
+| GET | `/customers/{id}/statement` | Customer AR statement over a date range |
+| GET | `/aging/ar` | AR aging buckets (current / 1-30 / 31-60 / 61-90 / 90+) |
+| GET | `/aging/ap` | AP aging buckets |
+| GET | `/accounts/export` | COA export as CSV |
+
+### Purchase (full flow)
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET/POST | `/suppliers` | List/create supplier master data |
+| GET | `/suppliers/{id}` | Get one supplier |
+| POST | `/suppliers/{id}/deactivate` | Deactivate supplier |
+| GET/POST | `/purchase-orders` | List/create purchase order (PO) |
+| GET | `/purchase-orders/{id}` | Get PO with lines |
+| GET/POST | `/goods-received-notes` | List/create GRN — posts inventory + accrual journal |
+| GET | `/goods-received-notes/{id}` | Get GRN with lines |
+| GET/POST | `/purchase-returns` | List/create purchase return — reversal journal |
+| GET | `/purchase-returns/{id}` | Get purchase return |
+
+### Inventory
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET/POST | `/stock-opnames` | List/create stock opname |
+| GET | `/stock-opnames/{id}` | Get stock opname |
+| POST | `/stock-opnames/{id}/approve` | Approve opname — posts adjustment journal |
+| GET/POST | `/stock-transfers` | List/create stock transfer (multi-warehouse) |
+| GET | `/stock-transfers/{id}` | Get stock transfer |
+| GET/POST | `/bill-of-materials` | List/create BOM |
+| GET | `/bill-of-materials/{id}` | Get BOM with lines |
+| GET/POST | `/production-jobs` | List/create production job |
+| GET | `/production-jobs/{id}` | Get production job |
+| POST | `/production-jobs/{id}/costs` | Add job cost (material/labor/overhead) |
+| POST | `/production-jobs/{id}/complete` | Complete job — posts finished goods + variance |
+| POST | `/overhead-variance` | Reconcile applied overhead (4902) at period close |
+
+### Tax
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/ppn/summary` | PPN output vs input summary |
+| GET | `/ppn/reconciliation` | PPN reconciliation detail |
+| POST | `/ppn/reconcile` | Mark PPN reconciled |
+| POST | `/pph-final/calculate` | Calculate PPh Final UMKM |
+| POST | `/pph-final/pay` | Pay PPh Final |
+| POST | `/ecl/calculate` | Calculate ECL provisioning — posts journal |
+| POST | `/ecl/write-off` | Write off a receivable |
+| POST | `/deferred-tax/calculate` | Calculate deferred tax |
+| POST | `/tax/withholding/*` | PPh 21/22/23/26 withholding (via pph module) |
+
+### Fixed Assets & Maintenance
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET/POST | `/fixed-assets` | List/register fixed asset |
+| GET | `/fixed-assets/{id}` | Get asset |
+| GET | `/assets/register` | Asset register with NBV + totals |
+| POST | `/fixed-assets/{id}/depreciate` | Post depreciation |
+| POST | `/fixed-assets/{id}/revalue` | Revalue asset |
+| POST | `/fixed-assets/{id}/dispose` | Dispose asset (gain/loss) |
+| POST | `/fixed-assets/{id}/impair` | Impair asset |
+| GET/POST | `/asset-maintenance` | List/create maintenance record |
+| GET | `/asset-maintenance/upcoming` | Upcoming maintenance (horizon days) |
+
+### Lease (PSAK 73)
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET/POST | `/lease-contracts` | List/create lease contract — posts commencement |
+| GET | `/lease-contracts/{id}` | Get lease with schedule |
+| POST | `/lease-contracts/{id}/payments/{payment_no}/post` | Post lease payment |
+| POST | `/lease-contracts/{id}/depreciate` | Post RoU depreciation |
+| GET | `/lease-contracts/{id}/depreciation-log` | Depreciation history |
+| POST | `/lease-contracts/{id}/modify` | Re-measure lease to new PV (m-014) |
+| POST | `/lease-contracts/{id}/terminate` | Derecognise lease (m-014) |
+| GET/POST | `/entity-hierarchy` | List/create consolidation hierarchy |
+| GET | `/consolidated-reports/trial-balance` | Consolidated trial balance |
+| GET | `/consolidated-reports/profit-loss` | Consolidated P&L |
+
+### Banking, Recurring, Budget, Notes
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET/POST | `/bank-statements` | List/upload bank statement |
+| GET | `/bank-statements/{id}` | Get statement |
+| POST | `/bank-statements/{id}/reconcile` | Reconcile statement |
+| GET | `/bank-reconciliations/{id}` | Get reconciliation |
+| POST | `/bank-reconciliations/{id}/match` | Match a line |
+| POST | `/bank-reconciliations/{id}/unmatch` | Unmatch a line |
+| POST | `/bank-reconciliations/{id}/complete` | Complete reconciliation |
+| GET/POST | `/recurring` | List/create recurring transaction |
+| GET | `/recurring/{id}` | Get recurring |
+| PUT | `/recurring/{id}` | Update recurring |
+| DELETE | `/recurring/{id}` | Deactivate recurring |
+| POST | `/recurring/{id}/post` | Post a recurring occurrence |
+| GET/POST | `/budgets` | List/create budget |
+| GET | `/budgets/{id}` | Get budget |
+| GET | `/budgets/{id}/vs-actual` | Budget vs actual variance |
+| GET/POST | `/dimensions` | List/create dimension |
+| POST | `/journal-lines/{id}/dimensions` | Tag a journal line with dimensions |
+| GET/POST | `/report-frameworks` | List/create report framework |
+| GET/POST | `/financial-notes` | List/create financial note |
+| GET | `/financial-notes/{id}` | Get note |
+| PUT | `/financial-notes/{id}` | Update note |
+| DELETE | `/financial-notes/{id}` | Delete note |
+| GET | `/reminders/due-dates` | Due-date reminders |
+
+### Petty Cash, Cheques, Approval, Cost Center, Email
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET/POST | `/petty-cash/funds` | List/create petty cash fund |
+| POST | `/petty-cash/funds/{id}/replenish` | Replenish fund to imprest amount |
+| GET/POST | `/petty-cash/vouchers` | List/create petty cash voucher |
+| GET/POST | `/cheques` | List/create cheque/GIRO |
+| GET | `/cheques/{id}` | Get cheque |
+| POST | `/cheques/{id}/deposit` | Deposit a received cheque |
+| POST | `/cheques/{id}/clear` | Mark cheque cleared |
+| POST | `/cheques/{id}/bounce` | Mark cheque bounced |
+| GET/POST | `/approval-workflows` | List/create approval workflow rule |
+| DELETE | `/approval-workflows/{id}` | Deactivate workflow rule |
+| GET/POST | `/approval-requests` | List/submit approval request |
+| GET | `/approval-requests/{id}` | Get approval request |
+| POST | `/approval-requests/{id}/approve` | Approve |
+| POST | `/approval-requests/{id}/reject` | Reject |
+| GET/POST | `/cost-centers` | List/create cost center |
+| GET | `/cost-centers/{id}` | Get cost center |
+| POST | `/cost-centers/{id}/allocations` | Create allocation rule |
+| GET | `/cost-centers/{id}/allocations` | List allocations |
+| GET/POST | `/email-templates` | List/create email template |
+| GET/POST | `/email-queue` | List/queue email |
+| POST | `/email-queue/{id}/send` | Send a queued email |
+
+### Cash Flow Forecast
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/forecast/cash-flow` | Daily cash flow forecast (horizon) |
+
+### Reporting & Dashboard
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/reports/quotation-stats` | Quotation funnel / conversion rate |
+| GET/POST | `/reports/templates` | List/create report template |
+| GET | `/reports/templates/{id}` | Get template |
+| PUT | `/reports/templates/{id}` | Update template |
+| DELETE | `/reports/templates/{id}` | Delete template |
+| POST | `/reports/templates/{id}/render` | Render template (`?format=html\|pdf`) |
+| GET | `/reports/trial-balance/export` | Export report (`?format=pdf\|xlsx`) |
+| GET | `/reports/profit-loss/export` | Export report |
+| GET | `/reports/balance-sheet/export` | Export report |
+| GET | `/reports/cash-flow/export` | Export report |
+| GET/PUT | `/dashboard/layout` | Get/save per-user dashboard layout |
+| GET/POST | `/dashboard/widgets` | List available widgets / add widget |
+| PUT/DELETE | `/dashboard/widgets/{id}` | Update/remove widget |
+| GET | `/dashboard/widgets/{id}/data` | Fetch widget data |
+| GET | `/healthz/detail` | Component health (DB + NextReport) |
+
 ## Non-MVP Endpoint Rules
 
-Sales, purchasing, inventory, tax, fixed assets, recurring, approval, attachment, and integration endpoints are not part of this contract until their feature task is claimed and its contract is approved.
+All feature endpoints are now implemented and documented above. Any new
+endpoint must be added to this contract before or alongside its implementation
+per AGENTS.md (shared API contract requires a coordination task).
