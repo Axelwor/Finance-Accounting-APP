@@ -141,6 +141,7 @@ func (service *Service) CreatePurchaseReturn(writer http.ResponseWriter, request
 		err = tx.QueryRow(request.Context(), `
 			SELECT number, supplier_id, status, payable_cents, dpp_cents, vat_cents
 			FROM supplier_invoices WHERE tenant_id = $1 AND id = $2
+			FOR UPDATE
 		`, tenant, req.InvoiceID).Scan(&invNumber, &invSupplierID, &invStatus, &payable, &dppCents, &vatCents)
 		if err != nil {
 			return err
@@ -200,6 +201,25 @@ func (service *Service) CreatePurchaseReturn(writer http.ResponseWriter, request
 			return &returnExceedsError{
 				returnCents:  totalReturn + totalVATReversed,
 				invoiceCents: invoiceTotal,
+			}
+		}
+
+		// Pre-check stock availability so the user gets a clear error
+		// before the journal is posted. ResolveCOGS would reject negative
+		// stock later in the transaction, but only after the journal and
+		// sub-ledger have already been written (the tx rolls back, but the
+		// error is opaque).
+		for _, p := range prepared {
+			qoh, _, err := costing.GetStockBalance(request.Context(), tx, tenant, p.line.ItemID, 0)
+			if err != nil {
+				return err
+			}
+			if qoh < p.line.Qty {
+				return &insufficientStockError{
+					itemID: p.line.ItemID,
+					qoh:    qoh,
+					need:   p.line.Qty,
+				}
 			}
 		}
 
@@ -290,6 +310,13 @@ func (service *Service) CreatePurchaseReturn(writer http.ResponseWriter, request
 			return err
 		}
 
+		// A-20: Update the AP sub-ledger — AP goes back up by the return
+		// total plus reversed VAT (the supplier owes us more).
+		if err := upsertSupplierBalance(request.Context(), tx, tenant, req.SupplierID,
+			totalReturn+totalVATReversed, 0); err != nil {
+			return err
+		}
+
 		// Record inventory movements (qty negative = stock out).
 		for _, p := range prepared {
 			var negQty pgtype.Numeric
@@ -301,11 +328,13 @@ func (service *Service) CreatePurchaseReturn(writer http.ResponseWriter, request
 				fmt.Sprintf("PRET-%d", req.InvoiceID), 0); err != nil {
 				return err
 			}
-			// Reverse the cost layers / average cost to reflect inventory
-			// leaving the warehouse (PSAK 14). Uses the line's unit price as
-			// the cost basis when the item's costing method is specific.
-			if err := costing.ReverseCOGS(request.Context(), tx, tenant, p.line.ItemID, 0,
-				p.line.Qty, p.line.UnitPriceCents, p.costingMethod); err != nil {
+			// Reduce the cost layers / average cost to reflect inventory
+			// leaving the warehouse (stock out to supplier, PSAK 14).
+			// ResolveCOGS decreases qty_on_hand — correct for purchase
+			// returns where stock goes back to the supplier. The GL side
+			// (Cr 1301 Inventory) is already handled by the journal above.
+			if _, err := costing.ResolveCOGS(request.Context(), tx, tenant, p.line.ItemID, 0,
+				p.line.Qty, p.costingMethod); err != nil {
 				return err
 			}
 		}
@@ -488,6 +517,18 @@ func (e *returnExceedsError) Error() string {
 	return fmt.Sprintf("return total %d cents exceeds invoice total %d cents", e.returnCents, e.invoiceCents)
 }
 
+// insufficientStockError signals that the on-hand quantity is below the
+// requested return quantity for an item.
+type insufficientStockError struct {
+	itemID int64
+	qoh    float64
+	need   float64
+}
+
+func (e *insufficientStockError) Error() string {
+	return fmt.Sprintf("insufficient stock for item %d: on_hand=%.3f, return_qty=%.3f", e.itemID, e.qoh, e.need)
+}
+
 // validateReturnRequest validates the create body. Returns "" code on success.
 func validateReturnRequest(req CreatePurchaseReturnRequest) (string, string) {
 	if req.InvoiceID <= 0 {
@@ -523,6 +564,10 @@ func prErrorFor(err error) (int, string, string) {
 	var overflow *returnExceedsError
 	if errors.As(err, &overflow) {
 		return http.StatusConflict, "RETUR_EXCEEDS_INVOICE", overflow.Error()
+	}
+	var stockErr *insufficientStockError
+	if errors.As(err, &stockErr) {
+		return http.StatusConflict, "INSUFFICIENT_STOCK", stockErr.Error()
 	}
 	return http.StatusInternalServerError, "PR_CREATE_FAILED", err.Error()
 }
