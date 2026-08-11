@@ -206,12 +206,20 @@ func (s *Service) SubmitRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create approval request
+	// Create approval request. Dedup targets the right partial unique index:
+	// entity-bound requests dedupe on (type, entity_id); amount-based
+	// (entity_id=0) requests dedupe on (type, entity_number).
+	conflictClause := "ON CONFLICT DO NOTHING"
+	if req.EntityID > 0 {
+		conflictClause = "ON CONFLICT (tenant_id, entity_type, entity_id) WHERE entity_id > 0 AND status IN ('PENDING','APPROVED') AND consumed_at IS NULL DO NOTHING"
+	} else {
+		conflictClause = "ON CONFLICT (tenant_id, entity_type, entity_number) WHERE entity_id = 0 AND status IN ('PENDING','APPROVED') AND consumed_at IS NULL DO NOTHING"
+	}
 	var resp ApprovalRequestResponse
 	err := s.pool.QueryRow(r.Context(), `
 		INSERT INTO approval_requests (tenant_id, entity_type, entity_id, entity_number, requested_by, amount_cents)
 		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (tenant_id, entity_type, entity_id) DO NOTHING
+		`+conflictClause+`
 		RETURNING id, entity_type, entity_id, entity_number, requested_by, requested_at, status
 	`, tid, strings.ToLower(req.EntityType), req.EntityID, req.EntityNumber, uid, req.AmountCents).Scan(
 		&resp.ID, &resp.EntityType, &resp.EntityID, &resp.EntityNumber,
