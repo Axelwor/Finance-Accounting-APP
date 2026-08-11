@@ -97,9 +97,12 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 		var customerID int64
 		var invStatus string
 		var receivable int64
+		// Load the invoice. FOR UPDATE serializes concurrent payments against
+		// the same invoice's receivable_cents (A-18).
 		err = tx.QueryRow(request.Context(), `
 			SELECT number, customer_id, status, receivable_cents
 			FROM invoices WHERE tenant_id = $1 AND id = $2
+			FOR UPDATE
 		`, tenant, invoiceID).Scan(&invNumber, &customerID, &invStatus, &receivable)
 		if err != nil {
 			return err
