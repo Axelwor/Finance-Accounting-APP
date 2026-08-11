@@ -308,6 +308,8 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Lease Contract";
     case "lease-payment-schedule":
       return "Lease Schedule";
+    case "rp-editor":
+      return "Report Template";
     default:
       return "Entry";
   }
@@ -348,6 +350,7 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "budget-entry": return "BUD-DRAFT";
     case "lease-contract-entry": return "LS-DRAFT";
     case "lease-payment-schedule": return "LS-SCH";
+    case "rp-editor": return "TPL-DRAFT";
     default: return "DRAFT";
   }
 }

@@ -53,6 +53,7 @@ const PARTY_LABEL: Record<EntrySubKind, string> = {
   "budget-entry": "Budget Name",
   "lease-contract-entry": "Lessee Name",
   "lease-payment-schedule": "Lease Number",
+  "rp-editor": "Template Code",
   "customer-entry": "Customer",
 };
 
@@ -88,6 +89,7 @@ const HEADER_TITLE: Record<EntrySubKind, string> = {
   "budget-entry": "Budget",
   "lease-contract-entry": "Lease Contract",
   "lease-payment-schedule": "Lease Payment Schedule",
+  "rp-editor": "Report Template",
   "customer-entry": "Customer",
 };
 
@@ -124,6 +126,7 @@ const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
   "budget-entry": { label: "Budget lines" },
   "lease-contract-entry": { label: "Lease details" },
   "lease-payment-schedule": { label: "Schedule" },
+  "rp-editor": { label: "Template YAML" },
 };
 
 /**

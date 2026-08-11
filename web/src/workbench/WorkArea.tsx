@@ -82,6 +82,7 @@ import { ConsolidatedReport } from "../screens/list/ConsolidatedReport";
 import { LeaseContractForm } from "../screens/entry/LeaseContractForm";
 import { LeasePaymentSchedule } from "../screens/entry/LeasePaymentSchedule";
 import { FinancialNoteForm } from "../screens/entry/FinancialNoteForm";
+import { ReportTemplateEditor } from "../screens/entry/ReportTemplateEditor";
 import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
@@ -372,6 +373,8 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
       return <LeasePaymentSchedule tabId={tab.id} leaseId={tab.entryId} initialTitle={tab.title} />;
     case "financial-notes-entry":
       return <FinancialNoteForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "rp-editor":
+      return <ReportTemplateEditor tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     default:
       return <PlaceholderTab title={tab.title} sub={`entry · ${subKind}`} />;
   }

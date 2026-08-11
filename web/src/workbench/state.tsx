@@ -375,6 +375,8 @@ function entryKindToListKind(kind: EntrySubKind): ListSubKind | null {
       return "financial-notes";
     case "budget-entry":
       return "budgets";
+    case "rp-editor":
+      return "report-templates";
     default:
       return null;
   }

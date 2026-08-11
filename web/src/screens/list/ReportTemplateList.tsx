@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
+import { useWorkbench } from "../../workbench/state";
 import { REPORT_TEMPLATE_TYPES } from "../../types";
 import type { ReportTemplate, CreateReportTemplateInput, ReportTemplateDocumentType } from "../../types";
 
 const DT_LABELS = REPORT_TEMPLATE_TYPES;
 
 export function ReportTemplateList() {
+  const workbench = useWorkbench();
   const [items, setItems] = useState<ReportTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -163,6 +165,10 @@ export function ReportTemplateList() {
     }
   };
 
+  const openEditor = (item: ReportTemplate) => {
+    workbench.openEntryExisting("rp-editor", item.id, `Template · ${item.code}`, item.is_active ? "ACTIVE" : "INACTIVE");
+  };
+
   const dtOptions = (Object.keys(DT_LABELS) as ReportTemplateDocumentType[]).map((dt) => (
     <option key={dt} value={dt}>{DT_LABELS[dt]}</option>
   ));
@@ -287,6 +293,9 @@ export function ReportTemplateList() {
                   <td>
                     <button type="button" className="btn btn--secondary btn--xs" onClick={() => openEdit(item)}>
                       Edit
+                    </button>{" "}
+                    <button type="button" className="btn btn--secondary btn--xs" onClick={() => openEditor(item)}>
+                      Editor
                     </button>{" "}
                     <button type="button" className="btn btn--secondary btn--xs" onClick={() => renderPDF(item)}>
                       PDF

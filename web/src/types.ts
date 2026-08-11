@@ -91,7 +91,8 @@ export type EntrySubKind =
   | "production-job-entry"
   | "budget-entry"
   | "lease-contract-entry"
-  | "lease-payment-schedule";
+  | "lease-payment-schedule"
+  | "rp-editor";
 
 export type CurrencyCode = "IDR";
 
