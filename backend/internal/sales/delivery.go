@@ -298,11 +298,66 @@ func (service *Service) CreateDelivery(writer http.ResponseWriter, request *http
 			}
 		}
 
-		// Update SO status to reflect delivery.
+		// Update sales_orders_lines.delivered_qty for each line.
+		type lineSummary struct {
+			lineNo       int
+			itemID       int64
+			deliveredQty float64
+		}
+		var summaries []lineSummary
+		rows, err := tx.Query(request.Context(), `
+			SELECT dol.line_no, dol.item_id, SUM(dol.qty::float) AS total_delivered
+			FROM delivery_orders_lines dol
+			WHERE dol.tenant_id = $1 AND dol.delivery_id IN (
+				SELECT id FROM delivery_orders WHERE tenant_id = $2 AND sales_order_id = $3
+			)
+			GROUP BY dol.line_no, dol.item_id
+		`, tenant, req.SalesOrderID, req.SalesOrderID)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var ls lineSummary
+			if err := rows.Scan(&ls.lineNo, &ls.itemID, &ls.deliveredQty); err != nil {
+				return err
+			}
+			summaries = append(summaries, ls)
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		for _, s := range summaries {
+			_, err = tx.Exec(request.Context(), `
+				UPDATE sales_orders_lines
+				SET delivered_qty = COALESCE(delivered_qty::NUMERIC, 0)::NUMERIC + $1
+				WHERE order_id = $2 AND line_no = $3 AND item_id = $4 AND tenant_id = $5
+			`, pgtypeFloat(s.deliveredQty), req.SalesOrderID, s.lineNo, s.itemID, tenant)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Check if all SO lines are fully delivered before closing.
+		var allLinesDelivered bool
+		err = tx.QueryRow(request.Context(), `
+			SELECT COUNT(*) = (SELECT COUNT(*) FROM sales_orders_lines WHERE tenant_id = $1 AND order_id = $2
+			  AND qty <= COALESCE(delivered_qty::float, 0))
+			FROM sales_orders_lines
+			WHERE tenant_id = $1 AND order_id = $2
+		`, tenant, req.SalesOrderID).Scan(&allLinesDelivered)
+		if err != nil {
+			return err
+		}
+
+		// Update SO status to reflect delivery completion.
+		newStatus := soConfirmed
+		if allLinesDelivered {
+			newStatus = soClosed
+		}
 		if _, err := tx.Exec(request.Context(), `
-			UPDATE sales_orders SET status = 'CLOSED', updated_at = now()
-			WHERE tenant_id = $1 AND id = $2
-		`, tenant, req.SalesOrderID); err != nil {
+			UPDATE sales_orders SET status = $1, updated_at = now()
+			WHERE tenant_id = $2 AND id = $3
+		`, newStatus, tenant, req.SalesOrderID); err != nil {
 			return err
 		}
 
