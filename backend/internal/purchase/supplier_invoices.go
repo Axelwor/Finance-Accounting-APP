@@ -2,6 +2,7 @@ package purchase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -11,7 +12,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/db"
+	"finance-accounting-app/backend/internal/httperr"
 )
 
 // Supplier invoice statuses.
@@ -108,6 +111,7 @@ func (service *Service) CreateSupplierInvoice(writer http.ResponseWriter, reques
 		return
 	}
 	uid := userID(request)
+	requestHash := httperr.ComputeRequestHash(request)
 
 	var result supplierInvoiceResponse
 	err = db.WithTransaction(request.Context(), service.pool, func(tx pgx.Tx) error {
@@ -120,6 +124,12 @@ func (service *Service) CreateSupplierInvoice(writer http.ResponseWriter, reques
 			IdempotencyKey: uuidValue(idem),
 		})
 		if err == nil {
+			// M-023: verify payload match by comparing request hashes.
+			var storedHash string
+			_ = tx.QueryRow(request.Context(), `SELECT COALESCE(request_hash, '') FROM journal_entries WHERE id = $1`, existing.ID).Scan(&storedHash)
+			if err := httperr.CheckIdempotencyHash(storedHash, requestHash); err != nil {
+				return httperr.ErrIdempotencyKeyReuse
+			}
 			inv, err := fetchSupplierInvoiceByJournal(request.Context(), tx, tenant, existing.ID)
 			if err != nil {
 				return err
@@ -206,12 +216,12 @@ func (service *Service) CreateSupplierInvoice(writer http.ResponseWriter, reques
 		// Insert journal entry.
 		var entryID int64
 		err = tx.QueryRow(request.Context(), `
-			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, request_hash)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 			RETURNING id
 		`, tenant, jrnNumber, journal.EntryDate, periodID, journal.Description,
 			journal.SourceRef, string(journal.IntentType), idem,
-			journal.Hash, journal.PreviousHash, int8Value(uid)).Scan(&entryID)
+			journal.Hash, journal.PreviousHash, int8Value(uid), textValueOptional(requestHash)).Scan(&entryID)
 		if err != nil {
 			return err
 		}
@@ -321,14 +331,32 @@ func (service *Service) CreateSupplierInvoice(writer http.ResponseWriter, reques
 		result.Notes = strings.TrimSpace(req.Notes)
 		result.Status = siIssued
 		result.JournalEntryID = entryID
+
+		if err := audit.Log(request.Context(), tx, tenant, uid, "supplier_invoice", invID, audit.ActionPost, nil, map[string]any{
+			"number":           bilNumber,
+			"supplier_id":      req.SupplierID,
+			"total_cents":      totalCents,
+			"dpp_cents":        dppCents,
+			"vat_cents":        vatCents,
+			"payable_cents":    payable,
+			"journal_entry_id": entryID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, httperr.ErrIdempotencyKeyReuse) {
+			writeError(writer, http.StatusConflict, "IDEMPOTENCY_KEY_REUSE", err.Error())
+			return
+		}
 		if isNoRows(err) {
 			writeError(writer, http.StatusNotFound, "SUPPLIER_NOT_FOUND", "supplier does not exist for this tenant")
 			return
 		}
-		writeError(writer, http.StatusInternalServerError, "SUPPLIER_INVOICE_CREATE_FAILED", err.Error())
+		status, code := httperr.Classify(err)
+		writeError(writer, status, code, err.Error())
 		return
 	}
 	writeJSON(writer, http.StatusCreated, result)

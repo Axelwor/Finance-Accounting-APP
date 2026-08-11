@@ -14,7 +14,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/db"
+	"finance-accounting-app/backend/internal/httperr"
 )
 
 // depositAccountCode is the seeded "Customer Deposit" account (2201) used as
@@ -226,6 +228,16 @@ func (service *Service) CreateDP(writer http.ResponseWriter, request *http.Reque
 			Description:    req.Description,
 			Status:         "RECEIVED",
 		}
+
+		if err := audit.Log(request.Context(), tx, tenant, userID, "down_payment", dpID, audit.ActionPost, nil, map[string]any{
+			"number":           dpNumber,
+			"amount_cents":     req.AmountCents,
+			"order_id":         orderID,
+			"journal_entry_id": entryID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -419,6 +431,20 @@ func (service *Service) RefundDP(writer http.ResponseWriter, request *http.Reque
 		if err := insertOutbox(request.Context(), tx, tenant, "dp.refunded", mustJSON(map[string]any{"dp_id": dpID, "journal_id": reversalID, "number": number})); err != nil {
 			return err
 		}
+
+		if err := audit.Log(request.Context(), tx, tenant, userID, "down_payment", dpID, audit.ActionVoid, map[string]any{
+			"status":           dpStatus,
+			"number":           dpNumber,
+			"amount_cents":     amountCents,
+			"journal_entry_id": journalEntryID,
+		}, map[string]any{
+			"status":              "REFUNDED",
+			"reversal_journal_id": reversalID,
+			"voided_entry_id":     journalEntryID,
+		}); err != nil {
+			return err
+		}
+
 		result = map[string]any{
 			"dp_id":           dpID,
 			"status":          "REFUNDED",
@@ -433,7 +459,8 @@ func (service *Service) RefundDP(writer http.ResponseWriter, request *http.Reque
 			writeError(writer, http.StatusNotFound, "DP_NOT_FOUND", "down payment not found")
 			return
 		}
-		writeError(writer, http.StatusBadRequest, "DP_REFUND_FAILED", err.Error())
+		status, code := httperr.Classify(err)
+		writeError(writer, status, code, err.Error())
 		return
 	}
 	writeJSON(writer, http.StatusOK, result)

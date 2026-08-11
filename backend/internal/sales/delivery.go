@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/costing"
 	"finance-accounting-app/backend/internal/db"
 )
@@ -311,6 +312,17 @@ func (service *Service) CreateDelivery(writer http.ResponseWriter, request *http
 			return err
 		}
 		result = *fetched
+
+		if err := audit.Log(request.Context(), tx, tenant, userID, "delivery_order", doID, audit.ActionPost, nil, map[string]any{
+			"number":           doNumber,
+			"sales_order_id":   req.SalesOrderID,
+			"customer_id":      soCustomerID,
+			"journal_entry_id": entryID,
+			"total_cogs_cents": totalCOGS,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {

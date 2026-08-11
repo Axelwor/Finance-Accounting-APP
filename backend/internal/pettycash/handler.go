@@ -9,9 +9,12 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/auth"
+	"finance-accounting-app/backend/internal/db"
 )
 
 // ---------------------------------------------------------------------------
@@ -39,10 +42,10 @@ func (service *Service) Routes(router chi.Router) {
 }
 
 type CreateFundRequest struct {
-	Code              string `json:"code"`
-	Name              string `json:"name"`
-	CashAccountID     int64  `json:"cash_account_id"`
-	ImprestAmountCents int64 `json:"imprest_amount_cents"`
+	Code               string `json:"code"`
+	Name               string `json:"name"`
+	CashAccountID      int64  `json:"cash_account_id"`
+	ImprestAmountCents int64  `json:"imprest_amount_cents"`
 }
 
 func (service *Service) CreateFund(w http.ResponseWriter, r *http.Request) {
@@ -64,11 +67,20 @@ func (service *Service) CreateFund(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var id int64
-	err := service.pool.QueryRow(r.Context(), `
-		INSERT INTO petty_cash_funds (tenant_id, code, name, cash_account_id, imprest_amount_cents, custodian_user_id)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id
-	`, tenantID, req.Code, req.Name, req.CashAccountID, req.ImprestAmountCents, userID).Scan(&id)
+	err := db.WithTransaction(r.Context(), service.pool, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(r.Context(), `
+			INSERT INTO petty_cash_funds (tenant_id, code, name, cash_account_id, imprest_amount_cents, custodian_user_id)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			RETURNING id
+		`, tenantID, req.Code, req.Name, req.CashAccountID, req.ImprestAmountCents, userID).Scan(&id); err != nil {
+			return err
+		}
+		return audit.Log(r.Context(), tx, tenantID, userID, "petty_cash_fund", id, audit.ActionCreate, nil, map[string]any{
+			"code":                 req.Code,
+			"name":                 req.Name,
+			"imprest_amount_cents": req.ImprestAmountCents,
+		})
+	})
 	if err != nil {
 		writeErr(w, http.StatusConflict, "CREATE_FAILED", err.Error())
 		return
@@ -77,11 +89,11 @@ func (service *Service) CreateFund(w http.ResponseWriter, r *http.Request) {
 	// Post the initial funding: Dr Petty Cash / Cr Cash/Bank
 	// This would call the journal posting layer — for now, return the fund.
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"id":                  id,
-		"code":                req.Code,
-		"name":                req.Name,
+		"id":                   id,
+		"code":                 req.Code,
+		"name":                 req.Name,
 		"imprest_amount_cents": req.ImprestAmountCents,
-		"message":             "fund created — post initial funding via cash-out endpoint",
+		"message":              "fund created — post initial funding via cash-out endpoint",
 	})
 }
 
@@ -131,7 +143,7 @@ type CreateVoucherRequest struct {
 	FundID           int64  `json:"fund_id"`
 	VoucherDate      string `json:"voucher_date"`
 	AmountCents      int64  `json:"amount_cents"`
-	ExpenseAccountID int64 `json:"expense_account_id"`
+	ExpenseAccountID int64  `json:"expense_account_id"`
 	Description      string `json:"description"`
 	Recipient        string `json:"recipient"`
 }
@@ -157,24 +169,36 @@ func (service *Service) CreateVoucher(w http.ResponseWriter, r *http.Request) {
 		req.VoucherDate = time.Now().Format("2006-01-02")
 	}
 
-	// Generate voucher number
+	// Generate voucher number and insert the voucher in one transaction.
 	year := time.Now().Year()
-	var seq int64
-	_ = service.pool.QueryRow(r.Context(), `
-		INSERT INTO document_numbering (tenant_id, doc_type, prefix, fiscal_year, last_seq)
-		VALUES ($1, 'PCV', 'PCV', $2, 1)
-		ON CONFLICT (tenant_id, doc_type, prefix, fiscal_year) DO UPDATE
-		SET last_seq = document_numbering.last_seq + 1
-		RETURNING last_seq
-	`, tenantID, year).Scan(&seq)
-	number := fmt.Sprintf("PCV-%d-%06d", year, seq)
-
 	var id int64
-	err := service.pool.QueryRow(r.Context(), `
-		INSERT INTO petty_cash_vouchers (tenant_id, fund_id, number, voucher_date, amount_cents, expense_account_id, description, recipient, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING id
-	`, tenantID, req.FundID, number, req.VoucherDate, req.AmountCents, req.ExpenseAccountID, req.Description, req.Recipient, userID).Scan(&id)
+	var number string
+	err := db.WithTransaction(r.Context(), service.pool, func(tx pgx.Tx) error {
+		var seq int64
+		if err := tx.QueryRow(r.Context(), `
+			INSERT INTO document_numbering (tenant_id, doc_type, prefix, fiscal_year, last_seq)
+			VALUES ($1, 'PCV', 'PCV', $2, 1)
+			ON CONFLICT (tenant_id, doc_type, prefix, fiscal_year) DO UPDATE
+			SET last_seq = document_numbering.last_seq + 1
+			RETURNING last_seq
+		`, tenantID, year).Scan(&seq); err != nil {
+			return err
+		}
+		number = fmt.Sprintf("PCV-%d-%06d", year, seq)
+		if err := tx.QueryRow(r.Context(), `
+			INSERT INTO petty_cash_vouchers (tenant_id, fund_id, number, voucher_date, amount_cents, expense_account_id, description, recipient, created_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			RETURNING id
+		`, tenantID, req.FundID, number, req.VoucherDate, req.AmountCents, req.ExpenseAccountID, req.Description, req.Recipient, userID).Scan(&id); err != nil {
+			return err
+		}
+		return audit.Log(r.Context(), tx, tenantID, userID, "petty_cash_voucher", id, audit.ActionCreate, nil, map[string]any{
+			"number":             number,
+			"fund_id":            req.FundID,
+			"amount_cents":       req.AmountCents,
+			"expense_account_id": req.ExpenseAccountID,
+		})
+	})
 	if err != nil {
 		writeErr(w, http.StatusConflict, "CREATE_FAILED", err.Error())
 		return
@@ -182,11 +206,11 @@ func (service *Service) CreateVoucher(w http.ResponseWriter, r *http.Request) {
 
 	// Note: Journal posting (Dr Expense / Cr Petty Cash) would happen here.
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"id":          id,
-		"number":      number,
-		"fund_id":     req.FundID,
+		"id":           id,
+		"number":       number,
+		"fund_id":      req.FundID,
 		"amount_cents": req.AmountCents,
-		"message":     "voucher created — post journal via cash-out endpoint",
+		"message":      "voucher created — post journal via cash-out endpoint",
 	})
 }
 
@@ -281,20 +305,37 @@ func (service *Service) Replenish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Mark vouchers as replenished (status stays POSTED but they're accounted for)
-	_, _ = service.pool.Exec(r.Context(), `
-		UPDATE petty_cash_vouchers SET status = 'POSTED'
-		WHERE tenant_id = $1 AND fund_id = $2 AND status = 'POSTED'
-	`, tenantID, fundID)
+	// Mark vouchers as replenished and record the replenishment event in the
+	// audit trail, atomically.
+	userID, _ := auth.UserIDFromContext(r.Context())
+	err = db.WithTransaction(r.Context(), service.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(r.Context(), `
+			UPDATE petty_cash_vouchers SET status = 'POSTED'
+			WHERE tenant_id = $1 AND fund_id = $2 AND status = 'POSTED'
+		`, tenantID, fundID); err != nil {
+			return err
+		}
+		return audit.Log(r.Context(), tx, tenantID, userID, "petty_cash_fund", fundID, audit.ActionPost, nil, map[string]any{
+			"action":                 "replenishment",
+			"replenish_amount_cents": replenishAmount,
+			"vouchers_total_cents":   spentCents,
+			"imprest_amount_cents":   imprestCents,
+			"cash_account_id":        cashAcctID,
+		})
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "REPLENISH_FAILED", err.Error())
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"fund_id":            fundID,
-		"fund_name":          fundName,
-		"imprest_amount_cents": imprestCents,
-		"vouchers_total_cents": spentCents,
+		"fund_id":                fundID,
+		"fund_name":              fundName,
+		"imprest_amount_cents":   imprestCents,
+		"vouchers_total_cents":   spentCents,
 		"replenish_amount_cents": replenishAmount,
-		"cash_account_id":    cashAcctID,
-		"message":             "post the replenishment journal: Dr Petty Cash / Cr Cash/Bank",
+		"cash_account_id":        cashAcctID,
+		"message":                "post the replenishment journal: Dr Petty Cash / Cr Cash/Bank",
 	})
 }
 

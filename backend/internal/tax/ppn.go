@@ -6,6 +6,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"finance-accounting-app/backend/internal/audit"
+	"finance-accounting-app/backend/internal/db"
 )
 
 // ---------------------------------------------------------------------------
@@ -217,52 +220,68 @@ func (service *Service) CreatePPNReconciliation(writer http.ResponseWriter, requ
 	}
 
 	fromDate, toDate := monthBounds(req.PeriodYear, req.PeriodMonth)
-	var keluaran, masukan int64
-	err = service.pool.QueryRow(request.Context(), `
-		SELECT
-		  COALESCE(SUM(CASE WHEN a.code = $2 THEN jl.credit_cents ELSE 0 END), 0),
-		  COALESCE(SUM(CASE WHEN a.code = $3 THEN jl.debit_cents  ELSE 0 END), 0)
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		WHERE jl.tenant_id = $1 AND (a.code = $2 OR a.code = $3)
-		  AND je.status = 'POSTED'
-		  AND je.entry_date >= $4 AND je.entry_date <= $5
-	`, tenant, ppnKeluaranCode, ppnMasukanCode, fromDate, toDate).Scan(&keluaran, &masukan)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "PPN_RECON_FAILED", err.Error())
-		return
-	}
-	net := keluaran - masukan
-
 	var rec PPNReconciliationRecord
-	rec.PeriodYear = req.PeriodYear
-	rec.PeriodMonth = req.PeriodMonth
-	rec.PPNKeluaranCents = keluaran
-	rec.PPNMasukanCents = masukan
-	rec.NetPPNCents = net
-	rec.Status = "FILED"
-	rec.Notes = req.Notes
+	err = db.WithTransaction(request.Context(), service.pool, func(tx pgx.Tx) error {
+		if err := withTenant(request.Context(), tx, tenant); err != nil {
+			return err
+		}
+		var keluaran, masukan int64
+		if err := tx.QueryRow(request.Context(), `
+			SELECT
+			  COALESCE(SUM(CASE WHEN a.code = $2 THEN jl.credit_cents ELSE 0 END), 0),
+			  COALESCE(SUM(CASE WHEN a.code = $3 THEN jl.debit_cents  ELSE 0 END), 0)
+			FROM journal_lines jl
+			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
+			JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+			WHERE jl.tenant_id = $1 AND (a.code = $2 OR a.code = $3)
+			  AND je.status = 'POSTED'
+			  AND je.entry_date >= $4 AND je.entry_date <= $5
+		`, tenant, ppnKeluaranCode, ppnMasukanCode, fromDate, toDate).Scan(&keluaran, &masukan); err != nil {
+			return err
+		}
+		net := keluaran - masukan
 
-	var createdAt time.Time
-	err = service.pool.QueryRow(request.Context(), `
-		INSERT INTO ppn_reconciliations
-		  (tenant_id, period_year, period_month, ppn_keluaran_cents, ppn_masukan_cents, net_ppn_cents, status, notes)
-		VALUES ($1, $2, $3, $4, $5, $6, 'FILED', $7)
-		ON CONFLICT (tenant_id, period_year, period_month) DO UPDATE
-		SET ppn_keluaran_cents = EXCLUDED.ppn_keluaran_cents,
-		    ppn_masukan_cents = EXCLUDED.ppn_masukan_cents,
-		    net_ppn_cents = EXCLUDED.net_ppn_cents,
-		    status = 'FILED',
-		    notes = EXCLUDED.notes,
-		    created_at = now()
-		RETURNING id, created_at
-	`, tenant, req.PeriodYear, req.PeriodMonth, keluaran, masukan, net, req.Notes).Scan(&rec.ID, &createdAt)
+		rec.PeriodYear = req.PeriodYear
+		rec.PeriodMonth = req.PeriodMonth
+		rec.PPNKeluaranCents = keluaran
+		rec.PPNMasukanCents = masukan
+		rec.NetPPNCents = net
+		rec.Status = "FILED"
+		rec.Notes = req.Notes
+
+		var createdAt time.Time
+		if err := tx.QueryRow(request.Context(), `
+			INSERT INTO ppn_reconciliations
+			  (tenant_id, period_year, period_month, ppn_keluaran_cents, ppn_masukan_cents, net_ppn_cents, status, notes)
+			VALUES ($1, $2, $3, $4, $5, $6, 'FILED', $7)
+			ON CONFLICT (tenant_id, period_year, period_month) DO UPDATE
+			SET ppn_keluaran_cents = EXCLUDED.ppn_keluaran_cents,
+			    ppn_masukan_cents = EXCLUDED.ppn_masukan_cents,
+			    net_ppn_cents = EXCLUDED.net_ppn_cents,
+			    status = 'FILED',
+			    notes = EXCLUDED.notes,
+			    created_at = now()
+			RETURNING id, created_at
+		`, tenant, req.PeriodYear, req.PeriodMonth, keluaran, masukan, net, req.Notes).Scan(&rec.ID, &createdAt); err != nil {
+			return err
+		}
+		rec.CreatedAt = createdAt.Format(time.RFC3339)
+
+		if err := audit.Log(request.Context(), tx, tenant, userIDFromCtx(request.Context()), "ppn_reconciliation", rec.ID, audit.ActionCreate, nil, map[string]any{
+			"period_year":        req.PeriodYear,
+			"period_month":       req.PeriodMonth,
+			"ppn_keluaran_cents": keluaran,
+			"ppn_masukan_cents":  masukan,
+			"net_ppn_cents":      net,
+		}); err != nil {
+			return err
+		}
+		return nil
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "PPN_RECON_FAILED", err.Error())
 		return
 	}
-	rec.CreatedAt = createdAt.Format(time.RFC3339)
 	writeJSON(writer, http.StatusCreated, rec)
 }
 

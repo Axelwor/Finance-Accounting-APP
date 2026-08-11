@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/costing"
 	"finance-accounting-app/backend/internal/db"
 )
@@ -379,6 +380,18 @@ func (service *Service) CreatePurchaseReturn(writer http.ResponseWriter, request
 			return err
 		}
 		result = *fetched
+
+		if err := audit.Log(request.Context(), tx, tenant, userID, "purchase_return", prID, audit.ActionPost, nil, map[string]any{
+			"number":             prNumber,
+			"invoice_id":         req.InvoiceID,
+			"supplier_id":        req.SupplierID,
+			"total_cents":        totalReturn,
+			"vat_reversed_cents": totalVATReversed,
+			"journal_entry_id":   entryID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {

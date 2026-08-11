@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Audit trail, idempotency & error-handling fixes (A-31, M-023, B-03):**
+  - `audit.Log` now covers all critical posting paths (previously only cash journals, period close, and attachment delete): sales invoices, customer payments, credit notes, delivery orders, down payments (receive + refund with before-state void snapshot), GRN, supplier invoices, supplier payments, purchase returns, asset depreciation/revaluation/disposal/impairment, lease payments and RoU depreciation, stock opname approval, production job completion, ECL provision/write-off, PPN reconciliation, PPh Final recognition + payment, deferred tax calculation, recurring transaction create/deactivate/postnow, petty cash fund/voucher/replenish, and cheque register/deposit/clear/bounce status transitions. All entries are written inside the posting transaction (roll back together with the journal) or state-mutation transaction.
+  - Idempotency payload matching extended beyond cash journals: invoices, payments, credit notes, GRN, and supplier invoices now store `request_hash` (sha256 of the request body, column from migration 000032) and reject replays that reuse an idempotency key with a different body with 409 `IDEMPOTENCY_KEY_REUSE`.
+  - Error classification (B-03): new `httperr.Classify` helper maps `pgx.ErrNoRows`→404, unique violation→409, FK violation→400, everything else→500; applied to invoice/payment/credit-note/GRN/supplier-invoice handlers and DP refund (which previously returned 400 for internal DB errors).
+  - Status-transition mutations (cheque, petty cash, recurring) wrapped in transactions with `audit.Log` capturing before-state snapshots where relevant (e.g., cheque status: REGISTERED→DEPOSITED/CLEARED/BOUNCED; recurring deactivate: is_active=true→false).
+
 - **Audit & Implementation Sprint 1-8 (2026-08-10/11):** Comprehensive correctness audit (`audit-report.md`, 128 findings: 4 Critical, 28 Major, 22 Minor, 16 Info) — ALL resolved or documented. Highlights:
 
   **Security (Critical):**

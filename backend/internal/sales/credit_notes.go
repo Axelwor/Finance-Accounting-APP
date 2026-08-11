@@ -13,8 +13,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/costing"
 	"finance-accounting-app/backend/internal/db"
+	"finance-accounting-app/backend/internal/httperr"
 )
 
 // returnAccountCode is the seeded "Sales Returns" contra-revenue account (4201).
@@ -109,6 +111,7 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 		return
 	}
 	userID := userID(request)
+	requestHash := httperr.ComputeRequestHash(request)
 
 	var result creditNoteResponse
 	err = db.WithTransaction(request.Context(), service.pool, func(tx pgx.Tx) error {
@@ -121,6 +124,12 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 			IdempotencyKey: uuidValue(idem),
 		})
 		if err == nil {
+			// M-023: verify payload match by comparing request hashes.
+			var storedHash string
+			_ = tx.QueryRow(request.Context(), `SELECT COALESCE(request_hash, '') FROM journal_entries WHERE id = $1`, existing.ID).Scan(&storedHash)
+			if err := httperr.CheckIdempotencyHash(storedHash, requestHash); err != nil {
+				return httperr.ErrIdempotencyKeyReuse
+			}
 			cn, err := service.findCNByJournalID(request.Context(), tx, tenant, existing.ID)
 			if err != nil {
 				return err
@@ -248,12 +257,12 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 		}
 		var revenueEntryID int64
 		err = tx.QueryRow(request.Context(), `
-			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, request_hash)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 			RETURNING id
 		`, tenant, jrnNumber, revenueJournal.EntryDate, periodID, revenueJournal.Description,
 			revenueJournal.SourceRef, string(revenueJournal.IntentType), idem,
-			revenueJournal.Hash, revenueJournal.PreviousHash, int8Value(userID)).Scan(&revenueEntryID)
+			revenueJournal.Hash, revenueJournal.PreviousHash, int8Value(userID), textValueOptional(requestHash)).Scan(&revenueEntryID)
 		if err != nil {
 			return err
 		}
@@ -308,12 +317,12 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 			}
 			cogsIdemKey := idem + "-cogs"
 			err = tx.QueryRow(request.Context(), `
-				INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+				INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, request_hash)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 				RETURNING id
 			`, tenant, cogsJrnNumber, cogsJournal.EntryDate, periodID, cogsJournal.Description,
 				cogsJournal.SourceRef, string(cogsJournal.IntentType), cogsIdemKey,
-				cogsJournal.Hash, cogsJournal.PreviousHash, int8Value(userID)).Scan(&cogsEntryID)
+				cogsJournal.Hash, cogsJournal.PreviousHash, int8Value(userID), textValueOptional(requestHash)).Scan(&cogsEntryID)
 			if err != nil {
 				return err
 			}
@@ -436,6 +445,18 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 			return err
 		}
 		result = *fetched
+
+		if err := audit.Log(request.Context(), tx, tenant, userID, "credit_note", cnID, audit.ActionPost, nil, map[string]any{
+			"number":                   cnNumber,
+			"total_cents":              totalReturn,
+			"ar_deducted_cents":        totalReturn,
+			"cogs_reversed_cents":      totalCOGSReversed,
+			"revenue_journal_entry_id": revenueEntryID,
+			"cogs_journal_entry_id":    cogsEntryID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -566,6 +587,9 @@ func validateCNRequest(req CreateCreditNoteRequest) (string, string) {
 }
 
 func cnErrorFor(err error) (int, string, string) {
+	if errors.Is(err, httperr.ErrIdempotencyKeyReuse) {
+		return http.StatusConflict, "IDEMPOTENCY_KEY_REUSE", err.Error()
+	}
 	if isNoRows(err) {
 		return http.StatusNotFound, "INVOICE_NOT_FOUND", "invoice not found"
 	}
@@ -573,7 +597,8 @@ func cnErrorFor(err error) (int, string, string) {
 	if errors.As(err, &overflow) {
 		return http.StatusConflict, "DP_EXCEEDS_ORDER", overflow.Error()
 	}
-	return http.StatusInternalServerError, "CN_CREATE_FAILED", err.Error()
+	status, code := httperr.Classify(err)
+	return status, code, err.Error()
 }
 
 func (service *Service) fetchCN(ctx context.Context, tx pgx.Tx, tenant, id int64) (*creditNoteResponse, error) {

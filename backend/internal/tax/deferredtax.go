@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -151,6 +152,17 @@ func (service *Service) postDeferredTax(ctx context.Context, tenant int64, idem 
 			DeferredTaxCents:          deferredCents,
 			Direction:                 direction,
 		}
+
+		if err := audit.Log(ctx, tx, tenant, uid, "deferred_tax", posted.ID, audit.ActionPost, nil, map[string]any{
+			"temporary_differences_cents": req.TemporaryDifferencesCents,
+			"tax_rate":                    formatPercent(req.TaxRate),
+			"deferred_tax_cents":          deferredCents,
+			"direction":                   direction,
+			"journal_entry_id":            posted.ID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {

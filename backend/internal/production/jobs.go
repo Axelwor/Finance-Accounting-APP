@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/costing"
 	"finance-accounting-app/backend/internal/db"
 )
@@ -813,6 +814,18 @@ func (service *Service) CompleteProductionJob(writer http.ResponseWriter, reques
 			    variance_cents = $4, journal_entry_id = $5, updated_at = now()
 			WHERE tenant_id = $1 AND id = $2
 		`, tenant, job.ID, pgtypeFloat(completedQty), variance, entryID); err != nil {
+			return err
+		}
+
+		if err := audit.Log(request.Context(), tx, tenant, uid, "production_job", job.ID, audit.ActionPost, map[string]any{
+			"status": job.Status,
+		}, map[string]any{
+			"status":           "COMPLETED",
+			"completed_qty":    completedQty,
+			"total_cost_cents": totalCost,
+			"variance_cents":   variance,
+			"journal_entry_id": entryID,
+		}); err != nil {
 			return err
 		}
 

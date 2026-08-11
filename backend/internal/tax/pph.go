@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -168,6 +169,18 @@ func (service *Service) postPPhFinalProvision(ctx context.Context, tenant int64,
 			TaxCents:            taxCents,
 			PayableBalanceCents: payableBalance,
 		}
+
+		if err := audit.Log(ctx, tx, tenant, uid, "pph_final", posted.ID, audit.ActionPost, nil, map[string]any{
+			"period_year":      req.PeriodYear,
+			"period_month":     req.PeriodMonth,
+			"revenue_cents":    revenueCents,
+			"tax_rate":         rateStr,
+			"tax_cents":        taxCents,
+			"journal_entry_id": posted.ID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -282,6 +295,15 @@ func (service *Service) postPPhFinalPayment(ctx context.Context, tenant int64, i
 			TaxCents:            req.AmountCents,
 			PayableBalanceCents: payableBalance,
 		}
+
+		if err := audit.Log(ctx, tx, tenant, uid, "pph_final", posted.ID, audit.ActionPost, nil, map[string]any{
+			"action":           "payment",
+			"amount_cents":     req.AmountCents,
+			"journal_entry_id": posted.ID,
+		}); err != nil {
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -176,6 +177,17 @@ func (service *Service) postECLProvision(ctx context.Context, tenant int64, idem
 		}
 		posted, err := postJournal(ctx, tx, tenant, idem, journal, userIDFromCtx(ctx))
 		if err != nil {
+			return err
+		}
+
+		if err := audit.Log(ctx, tx, tenant, userIDFromCtx(ctx), "ecl_provision", posted.ID, audit.ActionPost, map[string]any{
+			"current_allowance_cents": currentAllowance,
+		}, map[string]any{
+			"as_of_date":             req.AsOfDate,
+			"target_allowance_cents": target,
+			"adjustment_cents":       adjustment,
+			"journal_entry_id":       posted.ID,
+		}); err != nil {
 			return err
 		}
 
@@ -412,6 +424,15 @@ func (service *Service) postWriteOff(ctx context.Context, tenant int64, idem str
 		if err != nil {
 			return err
 		}
+
+		if err := audit.Log(ctx, tx, tenant, userIDFromCtx(ctx), "ecl_writeoff", posted.ID, audit.ActionPost, nil, map[string]any{
+			"invoice_id":       req.InvoiceID,
+			"amount_cents":     req.AmountCents,
+			"journal_entry_id": posted.ID,
+		}); err != nil {
+			return err
+		}
+
 		result = WriteOffResult{
 			JournalEntryID: posted.ID,
 			Number:         posted.Number,
