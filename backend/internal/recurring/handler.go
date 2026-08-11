@@ -14,16 +14,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
-<<<<<<< HEAD
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/accounting"
-=======
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"finance-accounting-app/backend/internal/audit"
->>>>>>> fix-backend-audit-idem
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/db"
 )
@@ -342,7 +337,6 @@ func (service *Service) PostNow(writer http.ResponseWriter, request *http.Reques
 			return err
 		}
 
-<<<<<<< HEAD
 		// Lock the recurring row so concurrent PostNow calls serialize and
 		// cannot both post the same period (FOR UPDATE).
 		var code, name, intentType, frequency, description string
@@ -367,33 +361,6 @@ func (service *Service) PostNow(writer http.ResponseWriter, request *http.Reques
 		if fromAcct <= 0 || toAcct <= 0 {
 			return errMissingAccounts
 		}
-=======
-	// Update next_date based on frequency
-	nextNext := computeNextDate(nextDate, frequency)
-	err = db.WithTransaction(request.Context(), service.pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(request.Context(), `
-			UPDATE recurring_transactions
-			SET last_posted_date = now()::date, next_date = $3, updated_at = now()
-			WHERE tenant_id = $1 AND id = $2
-		`, tenantID, id, nextNext); err != nil {
-			return err
-		}
-		return audit.Log(request.Context(), tx, tenantID, userID, "recurring_transaction", id, audit.ActionPost, map[string]any{
-			"next_date": nextDate.Format("2006-01-02"),
-		}, map[string]any{
-			"code":           code,
-			"intent_type":    intentType,
-			"amount_cents":   amountCents,
-			"last_posted_at": time.Now().Format("2006-01-02"),
-			"next_date":      nextNext.Format("2006-01-02"),
-			"posted_by":      userID,
-		})
-	})
-	if err != nil {
-		writeJSON(writer, http.StatusInternalServerError, errBody{"UPDATE_FAILED", err.Error()})
-		return
-	}
->>>>>>> fix-backend-audit-idem
 
 		// Post the journal: Dr from_account / Cr to_account.
 		entryDate := nextDate.Format("2006-01-02")

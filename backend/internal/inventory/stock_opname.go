@@ -11,11 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
-<<<<<<< HEAD
-	"finance-accounting-app/backend/internal/costing"
-=======
 	"finance-accounting-app/backend/internal/audit"
->>>>>>> fix-backend-audit-idem
+	"finance-accounting-app/backend/internal/costing"
 	"finance-accounting-app/backend/internal/db"
 )
 
