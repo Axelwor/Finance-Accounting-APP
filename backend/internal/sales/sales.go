@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"finance-accounting-app/backend/internal/approval"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -21,10 +22,17 @@ import (
 // app.tenant_id setting scoped so FORCE RLS rows are visible.
 type Service struct {
 	pool *pgxpool.Pool
+	gate *approval.Gate
 }
 
 func NewHandler(pool *pgxpool.Pool) *Service {
-	return &Service{pool: pool}
+	return &Service{pool: pool, gate: approval.NewGate(pool)}
+}
+
+// Gate exposes the F-03 approval gate so posting handlers can check and
+// consume approvals inside their own transactions.
+func (service *Service) Gate() *approval.Gate {
+	return service.gate
 }
 
 // Routes registers the quotation and sales order endpoints on the chi router.

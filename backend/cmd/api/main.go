@@ -256,7 +256,9 @@ func main() {
 			router.Get("/reports/cash-flow/export", reportingHandler.Export)
 
 			router.Get("/customers", customerHandler.ListCustomers)
+			router.Get("/customers/ar-balances", customerHandler.ARBalances)
 			router.Get("/customers/{id}", customerHandler.GetCustomer)
+			router.Get("/customers/{id}/ar-balance", customerHandler.ARBalance)
 			router.Get("/payment-terms", customerHandler.ListPaymentTerms)
 
 			router.Get("/items", itemHandler.List)

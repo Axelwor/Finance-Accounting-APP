@@ -175,8 +175,14 @@ func (s *Service) SubmitRequest(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	if req.EntityType == "" || req.EntityID <= 0 {
-		writeErr(w, http.StatusBadRequest, "INVALID_REQUEST", "entity_type and entity_id are required")
+	if req.EntityType == "" {
+		writeErr(w, http.StatusBadRequest, "INVALID_REQUEST", "entity_type is required")
+		return
+	}
+	// F-03: support both entity-bound approvals (entity_id set) and
+	// amount-based approvals (amount_cents set, entity not yet created).
+	if req.EntityID <= 0 && req.AmountCents <= 0 {
+		writeErr(w, http.StatusBadRequest, "INVALID_REQUEST", "entity_id or amount_cents is required")
 		return
 	}
 
@@ -203,11 +209,11 @@ func (s *Service) SubmitRequest(w http.ResponseWriter, r *http.Request) {
 	// Create approval request
 	var resp ApprovalRequestResponse
 	err := s.pool.QueryRow(r.Context(), `
-		INSERT INTO approval_requests (tenant_id, entity_type, entity_id, entity_number, requested_by)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO approval_requests (tenant_id, entity_type, entity_id, entity_number, requested_by, amount_cents)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (tenant_id, entity_type, entity_id) DO NOTHING
 		RETURNING id, entity_type, entity_id, entity_number, requested_by, requested_at, status
-	`, tid, strings.ToLower(req.EntityType), req.EntityID, req.EntityNumber, uid).Scan(
+	`, tid, strings.ToLower(req.EntityType), req.EntityID, req.EntityNumber, uid, req.AmountCents).Scan(
 		&resp.ID, &resp.EntityType, &resp.EntityID, &resp.EntityNumber,
 		&resp.RequestedBy, &resp.RequestedAt, &resp.Status)
 	if err != nil {

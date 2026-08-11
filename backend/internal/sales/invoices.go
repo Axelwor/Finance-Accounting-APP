@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/approval"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -164,6 +165,13 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 		// Prepare lines and compute total (includes PPN).
 		lines, totalCents, err := prepareInvoiceLines(req.Lines)
 		if err != nil {
+			return err
+		}
+
+		// F-03: Approval gate. If the tenant has an active "invoice" workflow
+		// whose min_amount_cents <= totalCents, an APPROVED unconsumed approval
+		// with a covering amount must exist before the invoice can post.
+		if err := service.gate.CheckAmount(request.Context(), tx, tenant, "invoice", totalCents); err != nil {
 			return err
 		}
 
@@ -405,6 +413,12 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 			}
 		}
 
+		// F-03: consume the approval that gated this invoice (no-op when no
+		// workflow matches).
+		if err := service.gate.ConsumeApprovalByAmount(request.Context(), tx, tenant, "invoice", totalCents); err != nil {
+			return err
+		}
+
 		fetched, err := service.fetchInvoice(request.Context(), tx, tenant, invID)
 		if err != nil {
 			return err
@@ -593,6 +607,9 @@ func invoiceErrorFor(err error) (int, string, string) {
 	var overflow dpOverflowError
 	if errors.As(err, &overflow) {
 		return http.StatusConflict, "DP_EXCEEDS_ORDER", overflow.Error()
+	}
+	if errors.Is(err, approval.ErrApprovalRequired) {
+		return http.StatusConflict, "APPROVAL_REQUIRED", err.Error()
 	}
 	return http.StatusInternalServerError, "INVOICE_CREATE_FAILED", err.Error()
 }

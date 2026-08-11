@@ -26,7 +26,10 @@ func NewHandler(pool *pgxpool.Pool) *Service {
 func (service *Service) Routes(router chi.Router) {
 	router.Get("/customers", service.ListCustomers)
 	router.Post("/customers", service.CreateCustomer)
+	// Static routes must precede the {id} wildcard in chi.
+	router.Get("/customers/ar-balances", service.ARBalances)
 	router.Get("/customers/{id}", service.GetCustomer)
+	router.Get("/customers/{id}/ar-balance", service.ARBalance)
 	router.Post("/customers/{id}/deactivate", service.DeactivateCustomer)
 	router.Get("/customers/{id}/statement", service.CustomerStatement)
 	router.Get("/payment-terms", service.ListPaymentTerms)
