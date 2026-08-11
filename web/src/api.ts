@@ -392,7 +392,11 @@ function buildTransferCommand(input: TransactionInput, fromAccountId: number, to
 
 /** Simple slug from a business name, e.g. "Warung Bu Sari" -> "warung-bu-sari". */
 function slugify(value: string): string {
+  // m-007: normalize Unicode (strip diacritics) before slugifying so
+  // "Ünïque Café" → "unique-cafe" instead of "n-que-caf".
   return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")

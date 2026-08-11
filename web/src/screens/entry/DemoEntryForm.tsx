@@ -135,7 +135,7 @@ const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
  * layout chrome as the cash entry form: 2-column header, search bar,
  * detail grid, right action rail, bottom total.
  */
-export function MockEntryForm({ tabId, subKind, title, initialTitle }: Props) {
+export function DemoEntryForm({ tabId, subKind, title, initialTitle }: Props) {
   const workbench = useWorkbench();
   const [date, setDate] = useState(todayISO());
   const [number, setNumber] = useState(initialTitle ?? draftNumber(subKind));

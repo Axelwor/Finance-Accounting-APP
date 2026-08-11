@@ -48,7 +48,7 @@ import { AuditLogList } from "../screens/list/AuditLogList";
 import { ReportTemplateList } from "../screens/list/ReportTemplateList";
 import { FinancialNotesList } from "../screens/list/FinancialNotesList";
 import { JournalEntryForm } from "../screens/entry/JournalEntryForm";
-import { MockEntryForm } from "../screens/entry/MockEntryForm";
+import { DemoEntryForm } from "../screens/entry/DemoEntryForm";
 import { QuotationForm } from "../screens/entry/QuotationForm";
 import { SalesOrderForm } from "../screens/entry/SalesOrderForm";
 import { DeliveryOrderForm } from "../screens/entry/DeliveryOrderForm";
@@ -319,7 +319,7 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
     case "inventory-item":
     case "asset-register":
       return (
-        <MockEntryForm
+        <DemoEntryForm
           tabId={tab.id}
           subKind={subKind}
           title={defaultEntryTitle(subKind)}
