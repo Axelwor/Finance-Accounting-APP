@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -191,6 +192,15 @@ func withTenant(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 
 func isNoRows(err error) bool {
 	return errors.Is(err, pgx.ErrNoRows)
+}
+
+// isCheckViolation reports whether err is a PostgreSQL CHECK constraint
+// violation (SQLSTATE 23514). Used by the ECL write-off to fall back to the
+// 'VOID' status when the 'WRITTEN_OFF' status has not been migrated yet.
+func isCheckViolation(err error) bool {
+	const pgErrCodeCheckViolation = "23514"
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == pgErrCodeCheckViolation
 }
 
 // normalizeDate trims and validates a YYYY-MM-DD date; returns "" when the

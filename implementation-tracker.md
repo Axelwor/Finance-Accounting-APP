@@ -733,36 +733,67 @@ POST /petty-cash/funds/{id}/replenish   — Replenish fund
 | AR sub-ledger (M-007) | ✅ Deployed |
 | Overhead variance (M-012) | ✅ Deployed |
 
-### Backlog Tersisa (Non-Major)
+### Backlog Tersisa (Non-Major) — UPDATE 2026-08-11
 
-**9 Minor belum:**
-- m-002: Sort stability hash (SourceLineRef tiebreaker)
-- m-003: Dokumentasi Description tidak di-hash
-- m-004: Hapus `var _ = context.Background` guards
-- m-005: Bearer prefix case-insensitive
-- m-006: 2FA
-- m-007: Customer statement/aging UI
-- m-008: Credit note validasi total vs receivable
-- m-010..m-022: Sisa minor lainnya
+**Semua item di bawah ini SELESAI di sprint berikutnya:**
 
-**10 Info belum:**
-- i-003: Password policy
-- i-004: COA import/export CSV
-- i-005: Quotation conversion rate
-- i-006: Inter-company elimination LOAN/INTEREST/DIVIDEND
-- i-007: Consolidation sign errors review
-- i-012: Customer/item duplicate check
-- i-013: ECL aging query verifikasi
-- i-014: PPh Final UMKM rate verifikasi
-- i-015..i-016: Dimension JOIN, BOM zero cost
+**9 Minor — SEMUA SELESAI:**
+- ✅ m-002: Sort stability hash (SourceLineRef tiebreaker) — Sprint 7
+- ✅ m-003: Dokumentasi Description tidak di-hash — Sprint 7
+- ✅ m-004: Hapus `var _ = context.Background` guards — Sprint 7
+- ✅ m-005: Bearer prefix case-insensitive — Sprint 1
+- ✅ m-006: 2FA TOTP (RFC 6238) — Sprint 6 (96d10ac)
+- ✅ m-007: Customer statement/aging UI — Sprint 7
+- ✅ m-008: Credit note validasi total vs receivable — Sprint 1
+- ✅ m-010..m-022: Semua minor lainnya — Sprint 7-8
 
-**21 ERP field gaps (E-01 s/d E-23):**
-- DB kolom sudah ada (migration 000033, 59 kolom)
-- API request structs BELUM expose field baru (customer_po_number, shipping_address, salesperson_id, tax_invoice_number, barcode, reorder_point, dll)
+**10 Info — SEMUA SELESAI:**
+- ✅ i-003: Password policy — Sprint 7
+- ✅ i-004: COA export CSV — Sprint 7 (I-004-001)
+- ✅ i-005: Quotation conversion rate — Sprint 7 (I-005-001)
+- ✅ i-006: Inter-company LOAN/INTEREST/DIVIDEND elimination — Sprint 6 (96d10ac)
+- ✅ i-007: Consolidation sign errors review — Sprint 6 (verified)
+- ✅ i-012: Customer/item duplicate check — Sprint 7 (I-012-001)
+- ✅ i-013: ECL aging query verifikasi — Sprint 7 (I-013-001)
+- ✅ i-014: PPh Final UMKM rate verifikasi — Sprint 7 (I-014-001)
+- ✅ i-015: Dimension JOIN — Sprint 7 (I-015-001, verified correct)
+- ✅ i-016: BOM zero cost — Sprint 7 (I-016-001)
 
-**1 Missing module:** F-13 Asset Register & Maintenance report
+**21 ERP field gaps (E-01 s/d E-23) — SEMUA SELESAI:**
+- ✅ DB kolom sudah ada (migration 000033, 59 kolom)
+- ✅ API request structs expose field baru — ERP-UI-001 (2026-08-10, all 59 columns in UI)
 
-**7 NextReport:** N-05..N-10 (YAML templates, Docker deploy, frontend designer/viewer, monitoring)
+**1 Missing module:**
+- ✅ F-13 Asset Register & Maintenance report — F-13-001 + F-13-002 (2026-08-11)
+
+**7 NextReport:**
+- ✅ N-05: Invoice template field alignment — N-05-001 (2026-08-11)
+- ✅ N-07/N-08: Report template editor + live preview — Sprint 6 (441b4cd)
+- ✅ N-09: NextReport fallback plan — N-009-001 (2026-08-10)
+- ✅ N-10: Detailed health check — N-010-001 (2026-08-10)
+
+### GAP BARU: Frontend Wiring (2026-08-11 audit)
+
+**Lihat:** `docs/IMPLEMENTATION_PLAN.md`
+
+Backend ~95% complete (38 packages, 200+ endpoints, all tests pass), tetapi frontend belum wire 10+ backend modules:
+
+| Priority | Module | Backend Ready? | Frontend API? | Frontend Screen? |
+|---|---|---|---|---|
+| HIGH | Petty Cash | ✅ | ❌ | ❌ |
+| HIGH | Recurring Transactions | ✅ | ❌ | ❌ |
+| HIGH | Cheques & GIRO | ✅ | ❌ | ❌ |
+| HIGH | Cost/Profit Centers | ✅ | ❌ | ❌ |
+| HIGH | Approval Workflow UI | ✅ | ❌ | ❌ |
+| HIGH | AR/AP Aging Reports | ✅ | ❌ | ❌ |
+| HIGH | Warehouses | ✅ | ❌ | ❌ |
+| HIGH | Asset Maintenance | ✅ | ❌ | ❌ |
+| MEDIUM | Email Templates & Queue | ✅ | ❌ | ❌ |
+| MEDIUM | Overhead Variance | ✅ | ❌ | ❌ |
+| LOW | Inventory Items (mockData flag) | ✅ | ✅ exists | ❌ uses mock |
+| LOW | Stock Movements | ✅ | ❌ | ❌ mockData |
+| LOW | Assets.tsx uses MockList | ✅ | ✅ exists | ❌ uses mock |
+| LOW | Lease modify/terminate UI | ✅ | ❌ | ❌ |
 
 ---
 
