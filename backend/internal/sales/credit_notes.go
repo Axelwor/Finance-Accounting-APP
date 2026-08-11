@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -37,20 +39,22 @@ const (
 type CreditNoteLineRequest struct {
 	ItemID         int64   `json:"item_id"`
 	InvoiceLineID  int64   `json:"invoice_line_id"`
+	DeliveryOrderID int64  `json:"delivery_order_id,omitempty"` // A-13: Reference to original DO for cost lookup
 	Qty            float64 `json:"qty"`
 	UnitPriceCents int64   `json:"unit_price_cents"`
-	UnitCostCents  int64   `json:"unit_cost_cents"`
+	UnitCostCents  int64   `json:"unit_cost_cents"` // A-13 fallback if DO not found; resolved from DO if delivery_order_id provided
 	Description    string  `json:"description"`
 }
 
 // CreateCreditNoteRequest is the POST /credit-notes body.
 type CreateCreditNoteRequest struct {
-	InvoiceID    int64                   `json:"invoice_id"`
-	CustomerID   int64                   `json:"customer_id"`
-	CNDate       string                  `json:"cn_date"`
-	RefundMethod string                  `json:"refund_method"`
-	Reason       string                  `json:"reason"`
-	Lines        []CreditNoteLineRequest `json:"lines"`
+	InvoiceID       int64                   `json:"invoice_id"`
+	CustomerID      int64                   `json:"customer_id"`
+	CNDate          string                  `json:"cn_date"`
+	RefundMethod    string                  `json:"refund_method"`
+	CashAccountCode string                  `json:"cash_account_code"` // refund_method=refund: cash/bank account to credit (default 1101)
+	Reason          string                  `json:"reason"`
+	Lines           []CreditNoteLineRequest `json:"lines"`
 }
 
 type cnLineResponse struct {
@@ -169,6 +173,7 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 			line          CreditNoteLineRequest
 			lineTotal     int64
 			cogsReversed  int64
+			warehouseID   int64
 			inventoryAcct int64
 			cogsAcct      int64
 			costingMethod string
@@ -190,14 +195,43 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 			if !invAcct.Valid || !cogsAcct.Valid {
 				return fmt.Errorf("item %s (%s) is missing inventory or cogs account", itemCode, itemName)
 			}
+			// A-13: Do NOT trust the client-supplied unit cost. When the line
+			// references a delivery order, use the cost recorded on the DO's
+			// inventory movement; fall back to the client cost only if no
+			// matching delivery movement exists.
+			// A-14: Also take the warehouse_id from the original DO movement so
+			// ReverseCOGS hits the correct warehouse stock (0 = unspecified).
+			warehouseID := int64(0)
+			if line.DeliveryOrderID > 0 {
+				var doWhID pgtype.Int8
+				err := tx.QueryRow(request.Context(), `
+					SELECT unit_cost_cents, warehouse_id
+					FROM inventory_movements
+					WHERE tenant_id = $1 AND movement_type = 'DO'
+						AND item_id = $2 AND source_id = $3
+					ORDER BY created_at DESC LIMIT 1
+				`, tenant, line.ItemID, line.DeliveryOrderID).Scan(&line.UnitCostCents, &doWhID)
+				if err != nil {
+					if !isNoRows(err) {
+						return err
+					}
+					slog.Warn("cn: no delivery movement found; falling back to client-supplied unit_cost_cents",
+						"tenant_id", tenant, "item_id", line.ItemID, "delivery_order_id", line.DeliveryOrderID)
+				} else if doWhID.Valid {
+					warehouseID = doWhID.Int64
+				}
+			}
 			lineTotal := lineTotalCents(line.Qty, line.UnitPriceCents, 0)
-			cogsReversed := roundQty(line.Qty) * line.UnitCostCents
+			// A-12: COGS reversal must use the true float qty — rounding the qty
+			// first (e.g. 2.5 -> 3) over/understates the reversed cost.
+			cogsReversed := cogsReversedCents(line.Qty, line.UnitCostCents)
 			totalReturn += lineTotal
 			totalCOGSReversed += cogsReversed
 			prepared = append(prepared, preparedCNLine{
 				line:          line,
 				lineTotal:     lineTotal,
 				cogsReversed:  cogsReversed,
+				warehouseID:   warehouseID,
 				inventoryAcct: invAcct.Int64,
 				cogsAcct:      cogsAcct.Int64,
 				costingMethod: textValue(costingMethod),
@@ -209,15 +243,51 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 		if err != nil {
 			return err
 		}
-		arAccountID, err := resolveAccountByCode(request.Context(), tx, tenant, arAccountCode)
-		if err != nil {
-			return err
+
+		// 1. Revenue reversal journal: Dr 4201 Sales Returns / Cr <method>.
+		// A-17: refund_method determines the credit account:
+		//   - deduct:      Cr 1201 AR  (reduce customer receivable)
+		//   - refund:      Cr 1101 Cash/Bank (cash refund to customer)
+		//   - credit_balance: Cr 2402 Customer Overpayment (credit balance for future invoices)
+		refundMethod := req.RefundMethod
+		if refundMethod == "" {
+			refundMethod = "deduct"
 		}
 
-		// 1. Revenue reversal journal: Dr 4201 Sales Returns / Cr 1201 AR.
+		var creditAccountID int64
+		switch refundMethod {
+		case "deduct":
+			creditAccountID, err = resolveAccountByCode(request.Context(), tx, tenant, arAccountCode)
+			if err != nil {
+				return err
+			}
+		case "refund":
+			if req.CashAccountCode != "" {
+				creditAccountID, err = resolveAccountByCode(request.Context(), tx, tenant, req.CashAccountCode)
+				if err != nil {
+					return fmt.Errorf("cn: cash_account_code '%s' not found", req.CashAccountCode)
+				}
+			} else {
+				creditAccountID, err = resolveAccountByCode(request.Context(), tx, tenant, "1101") // default Cash
+				if err != nil {
+					return err
+				}
+			}
+		case "credit_balance":
+			creditAccountID, err = resolveAccountByCode(request.Context(), tx, tenant, overpaymentAccountCode)
+			if err != nil {
+				return err
+			}
+		default:
+			creditAccountID, err = resolveAccountByCode(request.Context(), tx, tenant, arAccountCode)
+			if err != nil {
+				return err
+			}
+		}
+
 		revenueLines := []accounting.Line{
 			{AccountID: returnAccountID, DebitCents: totalReturn, SourceLineRef: "returns"},
-			{AccountID: arAccountID, CreditCents: totalReturn, SourceLineRef: "ar"},
+			{AccountID: creditAccountID, CreditCents: totalReturn, SourceLineRef: fmt.Sprintf("cr_%s", refundMethod)},
 		}
 		if err := accounting.BalanceCheck(revenueLines); err != nil {
 			return err
@@ -338,16 +408,16 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 				var posQty pgtype.Numeric
 				_ = posQty.Scan(fmt.Sprintf("%g", p.line.Qty))
 				if _, err := tx.Exec(request.Context(), `
-					INSERT INTO inventory_movements (tenant_id, item_id, movement_type, qty, unit_cost_cents, source_ref, source_id)
-					VALUES ($1, $2, 'SALES_RETURN', $3, $4, $5, $6)
+					INSERT INTO inventory_movements (tenant_id, item_id, movement_type, qty, unit_cost_cents, source_ref, source_id, warehouse_id)
+					VALUES ($1, $2, 'SALES_RETURN', $3, $4, $5, $6, $7)
 				`, tenant, p.line.ItemID, posQty, p.line.UnitCostCents,
-					fmt.Sprintf("CN-%d", req.InvoiceID), 0); err != nil {
+					fmt.Sprintf("CN-%d", req.InvoiceID), 0, p.warehouseID); err != nil {
 					return err
 				}
 				// Reverse the COGS posting: restore FIFO layers / adjust
-				// the moving average (PSAK 14).
+				// the moving average (PSAK 14). A-14: pass the correct warehouse.
 				if err := costing.ReverseCOGS(request.Context(), tx, tenant,
-					p.line.ItemID, 0, p.line.Qty, p.line.UnitCostCents, p.costingMethod); err != nil {
+					p.line.ItemID, p.warehouseID, p.line.Qty, p.line.UnitCostCents, p.costingMethod); err != nil {
 					return err
 				}
 			}
@@ -391,7 +461,7 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 		if err != nil {
 			return err
 		}
-		refundMethod := req.RefundMethod
+		refundMethod = req.RefundMethod
 		if refundMethod == "" {
 			refundMethod = "deduct"
 		}
@@ -545,6 +615,10 @@ func validateCNRequest(req CreateCreditNoteRequest) (string, string) {
 	if req.RefundMethod != "" && req.RefundMethod != "deduct" && req.RefundMethod != "refund" && req.RefundMethod != "credit_balance" {
 		return "INVALID_REQUEST", "refund_method must be deduct, refund, or credit_balance"
 	}
+	// A-17: When refund_method="refund", cash_account_code is optional (defaults to 1101).
+	if req.RefundMethod == "refund" && req.CashAccountCode != "" && !strings.HasPrefix(req.CashAccountCode, "1") {
+		return "INVALID_REQUEST", "cash_account_code must start with '1' for asset accounts (Cash/Bank)"
+	}
 	if len(req.Lines) == 0 {
 		return "INVALID_REQUEST", "at least one line is required"
 	}
@@ -574,6 +648,13 @@ func cnErrorFor(err error) (int, string, string) {
 		return http.StatusConflict, "DP_EXCEEDS_ORDER", overflow.Error()
 	}
 	return http.StatusInternalServerError, "CN_CREATE_FAILED", err.Error()
+}
+
+// cogsReversedCents computes the COGS reversal for a CN line. A-12: the qty
+// must stay a float through the multiplication; rounding the qty first
+// (e.g. 2.5 -> 3) over/understates the reversed cost.
+func cogsReversedCents(qty float64, unitCostCents int64) int64 {
+	return int64(math.Round(qty * float64(unitCostCents)))
 }
 
 func (service *Service) fetchCN(ctx context.Context, tx pgx.Tx, tenant, id int64) (*creditNoteResponse, error) {
