@@ -38,7 +38,7 @@ func TestPostGRN_Validation_TableDriven(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := PostGRN(context.Background(), nil, 1, 1, tc.qty, tc.unitCost, tc.method)
+			err := PostGRN(context.Background(), nil, 1, 1, 0, tc.qty, tc.unitCost, tc.method)
 			if err == nil {
 				t.Fatalf("PostGRN(qty=%v, unitCost=%d, method=%q) = nil, want error", tc.qty, tc.unitCost, tc.method)
 			}
@@ -73,7 +73,7 @@ func TestResolveCOGS_Validation_TableDriven(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := ResolveCOGS(context.Background(), nil, 1, 1, tc.qty, tc.method)
+			got, err := ResolveCOGS(context.Background(), nil, 1, 1, 0, tc.qty, tc.method)
 			if err == nil {
 				t.Fatalf("ResolveCOGS(qty=%v, method=%q) = nil error, want error", tc.qty, tc.method)
 			}
@@ -112,7 +112,7 @@ func TestReverseCOGS_Validation_TableDriven(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ReverseCOGS(context.Background(), nil, 1, 1, tc.qty, tc.unitCost, tc.method)
+			err := ReverseCOGS(context.Background(), nil, 1, 1, 0, tc.qty, tc.unitCost, tc.method)
 			if err == nil {
 				t.Fatalf("ReverseCOGS(qty=%v, unitCost=%d, method=%q) = nil, want error", tc.qty, tc.unitCost, tc.method)
 			}

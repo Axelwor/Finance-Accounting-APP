@@ -408,7 +408,7 @@ func (service *Service) AddProductionJobCost(writer http.ResponseWriter, request
 			// Resolve the actual COGS for this quantity (consumes FIFO layers
 			// / adjusts moving average). The resolved cost is authoritative.
 			method := textValue(costingMethod)
-			resolvedCOGS, err := costing.ResolveCOGS(request.Context(), tx, tenant, req.ItemID, qty, method)
+			resolvedCOGS, err := costing.ResolveCOGS(request.Context(), tx, tenant, req.ItemID, 0, qty, method)
 			if err != nil {
 				return fmt.Errorf("costing resolve for item %d: %w", req.ItemID, err)
 			}
@@ -804,7 +804,7 @@ func (service *Service) CompleteProductionJob(writer http.ResponseWriter, reques
 		if method == "" {
 			method = costing.MethodMovingAverage
 		}
-		if err := costing.PostGRN(request.Context(), tx, tenant, job.FinishedGoodItemID, completedQty, unitCost, method); err != nil {
+		if err := costing.PostGRN(request.Context(), tx, tenant, job.FinishedGoodItemID, 0, completedQty, unitCost, method); err != nil {
 			return fmt.Errorf("costing PostGRN for finished good: %w", err)
 		}
 

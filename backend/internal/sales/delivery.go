@@ -162,7 +162,7 @@ func (service *Service) CreateDelivery(writer http.ResponseWriter, request *http
 			// Resolve the actual COGS via the costing package. For FIFO and
 			// moving-average items the caller-supplied unit_cost_cents is
 			// ignored; for specific identification the caller's cost stands.
-			resolvedCOGS, err := costing.ResolveCOGS(request.Context(), tx, tenant, line.ItemID, line.Qty, method)
+			resolvedCOGS, err := costing.ResolveCOGS(request.Context(), tx, tenant, line.ItemID, 0, line.Qty, method)
 			if err != nil {
 				return err
 			}

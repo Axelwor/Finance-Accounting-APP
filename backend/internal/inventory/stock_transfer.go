@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"finance-accounting-app/backend/internal/costing"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -24,9 +25,11 @@ type StockTransferLineRequest struct {
 }
 
 type CreateStockTransferRequest struct {
-	TransferDate string                     `json:"transfer_date"`
-	Notes        string                     `json:"notes"`
-	Lines        []StockTransferLineRequest `json:"lines"`
+	TransferDate   string                     `json:"transfer_date"`
+	FromWarehouseID *int64                    `json:"from_warehouse_id"`
+	ToWarehouseID   *int64                    `json:"to_warehouse_id"`
+	Notes          string                     `json:"notes"`
+	Lines          []StockTransferLineRequest `json:"lines"`
 }
 
 type stockTransferLineResponse struct {
@@ -134,29 +137,67 @@ func (service *Service) CreateStockTransfer(writer http.ResponseWriter, request 
 			return err
 		}
 
+		// Validate warehouses when multi-warehouse fields are provided.
+		// If both are nil, this is a legacy single-warehouse transfer (no stock movement, only movements).
+		var fromWhID, toWhID int64
+		multiWarehouse := req.FromWarehouseID != nil && req.ToWarehouseID != nil
+		if multiWarehouse {
+			fromWhID = *req.FromWarehouseID
+			toWhID = *req.ToWarehouseID
+			if fromWhID <= 0 || toWhID <= 0 {
+				return fmt.Errorf("from_warehouse_id and to_warehouse_id must be positive integers")
+			}
+			if fromWhID == toWhID {
+				return fmt.Errorf("from_warehouse_id and to_warehouse_id cannot be the same")
+			}
+			var validFrom, validTo bool
+			if err := tx.QueryRow(request.Context(), `SELECT EXISTS(SELECT 1 FROM warehouses WHERE tenant_id = $1 AND id = $2 AND is_active)`, tenant, fromWhID).Scan(&validFrom); err != nil {
+				return err
+			}
+			if err := tx.QueryRow(request.Context(), `SELECT EXISTS(SELECT 1 FROM warehouses WHERE tenant_id = $1 AND id = $2 AND is_active)`, tenant, toWhID).Scan(&validTo); err != nil {
+				return err
+			}
+			if !validFrom || !validTo {
+				return fmt.Errorf("warehouse not found or inactive")
+			}
+		}
+
 		// Insert lines + record movements.
 		for _, p := range prepared {
 			if _, err := tx.Exec(request.Context(), `
 				INSERT INTO stock_transfer_lines
-				    (tenant_id, transfer_id, item_id, line_no, qty, unit_cost_cents, inventory_account_id, description)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				    (tenant_id, transfer_id, item_id, line_no, qty, unit_cost_cents, inventory_account_id, description, warehouse_id)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			`, tenant, trfID, p.req.ItemID, p.lineNo, pgtypeFloat(p.req.Qty),
-				p.req.UnitCostCents, p.invAcctID, textValueOptional(p.req.Description)); err != nil {
+				p.req.UnitCostCents, p.invAcctID, textValueOptional(p.req.Description), fromWhID); err != nil {
 				return err
 			}
+
 			// TRANSFER_OUT (qty negative) — stock leaves.
 			if _, err := tx.Exec(request.Context(), `
-				INSERT INTO inventory_movements (tenant_id, item_id, movement_type, qty, unit_cost_cents, source_ref, source_id)
-				VALUES ($1, $2, 'TRANSFER_OUT', $3, $4, $5, $6)
-			`, tenant, p.req.ItemID, pgtypeFloat(-p.req.Qty), p.req.UnitCostCents, trfNumber, trfID); err != nil {
+				INSERT INTO inventory_movements (tenant_id, item_id, movement_type, qty, unit_cost_cents, source_ref, source_id, warehouse_id)
+				VALUES ($1, $2, 'TRANSFER_OUT', $3, $4, $5, $6, $7)
+			`, tenant, p.req.ItemID, pgtypeFloat(-p.req.Qty), p.req.UnitCostCents, trfNumber, trfID, fromWhID); err != nil {
 				return err
 			}
 			// TRANSFER_IN (qty positive) — stock arrives.
 			if _, err := tx.Exec(request.Context(), `
-				INSERT INTO inventory_movements (tenant_id, item_id, movement_type, qty, unit_cost_cents, source_ref, source_id)
-				VALUES ($1, $2, 'TRANSFER_IN', $3, $4, $5, $6)
-			`, tenant, p.req.ItemID, pgtypeFloat(p.req.Qty), p.req.UnitCostCents, trfNumber, trfID); err != nil {
+				INSERT INTO inventory_movements (tenant_id, item_id, movement_type, qty, unit_cost_cents, source_ref, source_id, warehouse_id)
+				VALUES ($1, $2, 'TRANSFER_IN', $3, $4, $5, $6, $7)
+			`, tenant, p.req.ItemID, pgtypeFloat(p.req.Qty), p.req.UnitCostCents, trfNumber, trfID, toWhID); err != nil {
 				return err
+			}
+
+			// F-02: Move actual stock between warehouses via costing layer.
+			if multiWarehouse {
+				// Deduct from source warehouse.
+				if _, err := costing.ResolveCOGS(request.Context(), tx, tenant, p.req.ItemID, fromWhID, p.req.Qty, ""); err != nil {
+					return fmt.Errorf("transfer out of warehouse %d: %w", fromWhID, err)
+				}
+				// Add to destination warehouse.
+				if err := costing.PostGRN(request.Context(), tx, tenant, p.req.ItemID, toWhID, p.req.Qty, p.req.UnitCostCents, ""); err != nil {
+					return fmt.Errorf("transfer into warehouse %d: %w", toWhID, err)
+				}
 			}
 		}
 

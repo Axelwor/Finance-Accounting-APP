@@ -85,6 +85,11 @@ func (service *Service) Routes(router chi.Router) {
 	router.Post("/fixed-assets/{id}/revalue", service.RevalueAsset)
 	router.Post("/fixed-assets/{id}/dispose", service.DisposeAsset)
 	router.Post("/fixed-assets/{id}/impair", service.ImpairAsset)
+
+	// F-13: Asset maintenance tracking.
+	router.Post("/asset-maintenance", service.CreateMaintenance)
+	router.Get("/asset-maintenance", service.ListMaintenance)
+	router.Get("/asset-maintenance/upcoming", service.UpcomingMaintenance)
 }
 
 // ---------------------------------------------------------------------------

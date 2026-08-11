@@ -280,7 +280,7 @@ func (service *Service) CreateGRN(writer http.ResponseWriter, request *http.Requ
 				return err
 			}
 			// Post the costing layer / balance update (PSAK 14).
-			if err := costing.PostGRN(request.Context(), tx, tenant, p.line.ItemID,
+			if err := costing.PostGRN(request.Context(), tx, tenant, p.line.ItemID, 0,
 				p.line.Qty, p.line.UnitCostCents, p.costingMethod); err != nil {
 				return err
 			}

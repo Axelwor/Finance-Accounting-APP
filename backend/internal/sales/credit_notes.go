@@ -347,7 +347,7 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 				// Reverse the COGS posting: restore FIFO layers / adjust
 				// the moving average (PSAK 14).
 				if err := costing.ReverseCOGS(request.Context(), tx, tenant,
-					p.line.ItemID, p.line.Qty, p.line.UnitCostCents, p.costingMethod); err != nil {
+					p.line.ItemID, 0, p.line.Qty, p.line.UnitCostCents, p.costingMethod); err != nil {
 					return err
 				}
 			}

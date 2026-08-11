@@ -304,7 +304,7 @@ func (service *Service) CreatePurchaseReturn(writer http.ResponseWriter, request
 			// Reverse the cost layers / average cost to reflect inventory
 			// leaving the warehouse (PSAK 14). Uses the line's unit price as
 			// the cost basis when the item's costing method is specific.
-			if err := costing.ReverseCOGS(request.Context(), tx, tenant, p.line.ItemID,
+			if err := costing.ReverseCOGS(request.Context(), tx, tenant, p.line.ItemID, 0,
 				p.line.Qty, p.line.UnitPriceCents, p.costingMethod); err != nil {
 				return err
 			}

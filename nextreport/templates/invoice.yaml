@@ -2,24 +2,40 @@ title: Invoice
 subtitle: Tax Invoice / Sales Invoice
 header_fields:
   - number: Invoice Number
-  - date: Invoice Date
+  - invoice_date: Invoice Date
   - due_date: Due Date
+  - tax_invoice_number: Tax Invoice No.
   - customer_name: Customer
-  - customer_address: Address
-  - currency: Currency
+  - status: Status
 sections:
   - title: Line Items
-    table: rows
+    table: lines
     columns:
-      - code: Item Code
-      - description: Description
+      - item_code: Item Code
+      - item_name: Item Name
       - qty: Quantity
-      - unit: Unit
-      - unit_price: Unit Price
-      - amount: Amount
+      - unit_price_cents: Unit Price
+      - discount_cents: Discount
+      - tax_rate: Tax Rate
+      - line_total_cents: Amount
   - title: Totals
     table: totals
     columns:
       - label: Description
       - value: Amount
+    rows:
+      - label: Subtotal
+        value: sub_total_cents
+      - label: Discount
+        value: discount_total_cents
+      - label: Tax (PPN)
+        value: tax_total_cents
+      - label: Shipping Fee
+        value: shipping_fee_cents
+      - label: Other Charges
+        value: other_charges_cents
+      - label: Rounding
+        value: rounding_cents
+      - label: TOTAL
+        value: total_cents
 footer_text: Please remit payment by the due date. Thank you for your business.
