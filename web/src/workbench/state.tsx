@@ -203,6 +203,8 @@ function reducer(state: State, action: Action): State {
           (updated as EntryTab).title = action.title;
           (updated as EntryTab).status = action.status;
           (updated as EntryTab).unsaved = false;
+          // Preserve entryId if it was already known (e.g., customer-entry
+          // with created backend id), else keep undefined until loaded.
         }
         next[parentId] = [...next[parentId]];
         next[parentId][idx] = current;
@@ -278,7 +280,12 @@ function activateNestedChild(state: State, child: NestedTab): State {
   const existingIdx = (next.nested[parentId] ?? []).findIndex((c) => {
     if (c.kind !== child.kind || c.subKind !== child.subKind) return false;
     if (child.kind === "entry" && c.kind === "entry") {
-      return c.draft === child.draft;
+      // Drafts match each other (one draft per entry kind).
+      // Posted entries only match on the same entryId, so two different
+      // invoices of the same subKind open as separate tabs (E-03).
+      if (child.draft !== c.draft) return false;
+      if (!child.draft) return c.entryId === child.entryId;
+      return true;
     }
     return true;
   });
@@ -349,6 +356,8 @@ function entryKindToListKind(kind: EntrySubKind): ListSubKind | null {
       return "grn";
     case "purchase-supplier-entry":
       return "purchase-supplier";
+    case "customer-entry":
+      return "customer-list";
     case "supplier-invoice-entry":
       return "supplier-invoice";
     case "purchase-invoice":
@@ -373,6 +382,14 @@ function entryKindToListKind(kind: EntrySubKind): ListSubKind | null {
       return "journal-entry";
     case "financial-notes-entry":
       return "financial-notes";
+    case "bom-entry":
+      return "bom";
+    case "production-job-entry":
+      return "production-job";
+    case "lease-contract-entry":
+      return "lease-contract";
+    case "lease-payment-schedule":
+      return "lease-contract";
     case "budget-entry":
       return "budgets";
     case "rp-editor":

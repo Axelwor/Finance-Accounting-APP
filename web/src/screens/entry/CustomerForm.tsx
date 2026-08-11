@@ -7,7 +7,13 @@ import type { CreateCustomerInput, Customer } from "../../types";
 
 type PriceLevel = "RETAIL" | "WHOLESALE" | "DISTRIBUTOR" | "SPECIAL";
 
-export function CustomerForm() {
+interface Props {
+  tabId: string;
+  entryId?: string | number;
+  initialTitle?: string;
+}
+
+export function CustomerForm({ tabId }: Props) {
   const { replaceDraft, markUnsaved } = useWorkbench();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -61,8 +67,8 @@ export function CustomerForm() {
         opening_balance_date: openingBalanceDate || undefined,
       };
       const created = await api.createCustomer(input);
-      replaceDraft("cus-" + created.id, created.code, "saved");
-      markUnsaved("cus-" + created.id, false);
+      replaceDraft(tabId, created.code, "saved");
+      markUnsaved(tabId, false);
     } catch (err: any) {
       setError(err?.message || "Failed to save customer.");
     } finally {
