@@ -195,11 +195,11 @@ func TestValidateVoucherRequest(t *testing.T) {
 func TestComputeReplenishAmount(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name        string
-		imprest     int64
-		spent       int64
-		wantAmount  int64
-		wantReplen  bool
+		name       string
+		imprest    int64
+		spent      int64
+		wantAmount int64
+		wantReplen bool
 	}{
 		{name: "no vouchers spent returns zero and no replenish", imprest: 500000, spent: 0, wantAmount: 0, wantReplen: false},
 		{name: "single voucher spent", imprest: 500000, spent: 1500, wantAmount: 1500, wantReplen: true},
