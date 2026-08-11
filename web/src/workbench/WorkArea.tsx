@@ -1,5 +1,7 @@
+import { useEffect, useRef } from "react";
 import { useWorkbench } from "./state";
 import { EmptyState } from "../components/ui";
+import { useKeyboardShortcuts, CLOSE_TAB_EVENT } from "../hooks/useKeyboardShortcuts";
 import { NestedTabStrip } from "./NestedTabStrip";
 import type { EntryTab, ListTab, ModuleTab, NestedTab } from "./types";
 import { CashEntryList } from "../screens/list/CashEntryList";
@@ -88,6 +90,27 @@ import { defaultEntryTitle, findModule } from "./modules";
 export function WorkArea() {
   const workbench = useWorkbench();
   const activeTab = workbench.activeTab;
+
+  // App-wide keyboard shortcuts (Ctrl/Cmd+S, Esc). Active only while the
+  // work area is mounted, i.e. inside the shell.
+  useKeyboardShortcuts();
+
+  // Esc dispatches "app:close-tab": close the active nested child, or fall
+  // back to the active top-level tab. The dashboard is pinned and ignored.
+  const wbRef = useRef(workbench);
+  wbRef.current = workbench;
+  useEffect(() => {
+    function onCloseTab() {
+      const wb = wbRef.current;
+      if (wb.activeNested) {
+        wb.close(wb.activeNested.id);
+      } else if (wb.activeTab && wb.activeTab.id !== "tab-dashboard") {
+        wb.close(wb.activeTab.id);
+      }
+    }
+    document.addEventListener(CLOSE_TAB_EVENT, onCloseTab);
+    return () => document.removeEventListener(CLOSE_TAB_EVENT, onCloseTab);
+  }, []);
 
   if (!activeTab) {
     return (

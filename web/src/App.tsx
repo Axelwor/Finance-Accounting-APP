@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppStateProvider, useAppState } from "./state";
 import { WorkbenchProvider } from "./workbench/state";
+import { ToastProvider } from "./components/Toast";
 import { AppShell } from "./workbench/AppShell";
 import { AuthScreen } from "./screens/AuthScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
@@ -34,25 +35,27 @@ function OnboardingRoute() {
 export default function App() {
   return (
     <AppStateProvider>
-      <WorkbenchProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<AuthScreen />} />
-            <Route path="/onboarding" element={<OnboardingScreen />} />
-            <Route
-              path="/"
-              element={
-                <ShellRoute>
-                  <AppShell />
-                </ShellRoute>
-              }
-            >
-              <Route index element={<OnboardingRoute />} />
-              <Route path="*" element={<WorkbenchRedirect />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
-      </WorkbenchProvider>
+      <ToastProvider>
+        <WorkbenchProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<AuthScreen />} />
+              <Route path="/onboarding" element={<OnboardingScreen />} />
+              <Route
+                path="/"
+                element={
+                  <ShellRoute>
+                    <AppShell />
+                  </ShellRoute>
+                }
+              >
+                <Route index element={<OnboardingRoute />} />
+                <Route path="*" element={<WorkbenchRedirect />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </WorkbenchProvider>
+      </ToastProvider>
     </AppStateProvider>
   );
 }
