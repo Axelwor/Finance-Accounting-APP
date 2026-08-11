@@ -69,10 +69,10 @@ func TestComputeDepreciation_StraightLine_TableDriven(t *testing.T) {
 	}{
 		{"canonical_5yr", 10_000_000, 1_000_000, 60, 150_000},
 		{"zero_salvage", 12_000_000, 0, 60, 200_000},
-		{"3yr_vehicle", 36_000_000, 6_000_000, 36, 833_333}, // (30M)/36 = 833,333.33 -> 833,333 (truncation)
+		{"3yr_vehicle", 36_000_000, 6_000_000, 36, 833_333}, // (30M)/36 = 833,333.33 -> 833,333 (rounded)
 		{"1yr_short", 1_200_000, 0, 12, 100_000},
 		{"no_salvage_4yr", 48_000_000, 0, 48, 1_000_000},
-		{"truncation_loss", 100, 0, 3, 33}, // 100/3 = 33.33 -> 33
+		{"rounding_case", 100, 0, 3, 33}, // 100/3 = 33.33 -> 33 (rounded)
 	}
 
 	for _, tc := range tests {
@@ -342,51 +342,47 @@ func TestFullyDepreciatedAsset(t *testing.T) {
 	}
 }
 
-// TestFullyDepreciatedAsset_TruncationRemainder documents the real code
-// behavior when (cost - salvage) does NOT divide evenly by lifeMonths:
-// integer division truncates each month's charge, so after the full life the
-// accumulated depreciation falls a few cents short of (cost - salvage) and NBV
-// sits a few cents above salvage. The salvage-value cap inside DepreciateAsset
-// only fires when a charge would push NBV *below* salvage, so a small positive
-// remainder is never recovered. This test pins that behavior.
-func TestFullyDepreciatedAsset_TruncationRemainder(t *testing.T) {
+// TestFullyDepreciatedAsset_RoundingResidual verifies that the rounding +
+// final-period absorb logic in computeDepreciation ensures the asset reaches
+// salvage value exactly at the end of its useful life, even when
+// (cost - salvage) does not divide evenly by lifeMonths.
+func TestFullyDepreciatedAsset_RoundingResidual(t *testing.T) {
 	// cost=36,000,000, salvage=6,000,000, 36 months.
-	// monthly = 30,000,000 / 36 = 833,333 (truncated from 833,333.33).
-	// accumulated after 36 months = 833,333 * 36 = 29,999,988 (12 cents short).
-	// NBV = 36,000,000 - 29,999,988 = 6,000,012 (12 cents above salvage).
+	// monthly = round(30,000,000 / 36) = 833,333 (rounded from 833,333.33).
+	// After 35 months: accum = 29,166,655, remaining = 833,345.
+	// Month 36: remaining (833,345) < 2*monthly (1,666,666) → absorb residual.
+	// After 36 months: accum = 30,000,000, NBV = 6,000,000 (exactly salvage).
 	asset := straightLineAsset(36_000_000, 6_000_000, 36)
 	monthly := computeDepreciation(asset)
 	if monthly != 833_333 {
-		t.Fatalf("monthly = %d, want 833,333 (truncated)", monthly)
+		t.Fatalf("monthly = %d, want 833,333 (rounded)", monthly)
 	}
 
 	accum, book := accumulatedAfter(asset, 36)
-	wantAccum := monthly * 36
+	wantAccum := int64(30_000_000)
 	if accum != wantAccum {
-		t.Fatalf("accumulated = %d, want %d (monthly * life)", accum, wantAccum)
+		t.Fatalf("accumulated = %d, want %d (depreciable base fully recovered)", accum, wantAccum)
 	}
-	wantBook := asset.AcquisitionCostCents - wantAccum
+	wantBook := asset.SalvageValueCents
 	if book != wantBook {
-		t.Fatalf("book value = %d, want %d (cost - accumulated)", book, wantBook)
+		t.Fatalf("book value = %d, want %d (salvage value)", book, wantBook)
 	}
-	// NBV is above salvage by the truncation remainder (12 cents here).
-	remainder := int64(36_000_000-6_000_000) - wantAccum
-	if remainder != 12 {
-		t.Fatalf("truncation remainder = %d, want 12", remainder)
+	// No residual remains: NBV equals salvage exactly.
+	remainder := int64(36_000_000-6_000_000) - accum
+	if remainder != 0 {
+		t.Fatalf("rounding remainder = %d, want 0", remainder)
 	}
-	if book <= asset.SalvageValueCents {
-		t.Fatalf("NBV %d should be above salvage %d due to truncation", book, asset.SalvageValueCents)
+	if book != asset.SalvageValueCents {
+		t.Fatalf("NBV %d should equal salvage %d", book, asset.SalvageValueCents)
 	}
-	// An extra month does NOT close the gap, because the cap clamps the
-	// charge to (bookValue - salvage) only when the full monthly charge
-	// would overshoot salvage. Here 833,333 would take NBV to 5,166,679
-	// (below salvage), so the cap fires for exactly the remainder.
+	// An extra month does not depreciate further: the asset is already at
+	// salvage value, so computeDepreciation returns 0 and the loop breaks.
 	accum2, book2 := accumulatedAfter(asset, 37)
 	if book2 != asset.SalvageValueCents {
-		t.Fatalf("after cap month: book = %d, want salvage %d", book2, asset.SalvageValueCents)
+		t.Fatalf("after extra month: book = %d, want salvage %d", book2, asset.SalvageValueCents)
 	}
 	if accum2 != asset.AcquisitionCostCents-asset.SalvageValueCents {
-		t.Fatalf("after cap month: accum = %d, want %d", accum2, asset.AcquisitionCostCents-asset.SalvageValueCents)
+		t.Fatalf("after extra month: accum = %d, want %d", accum2, asset.AcquisitionCostCents-asset.SalvageValueCents)
 	}
 }
 

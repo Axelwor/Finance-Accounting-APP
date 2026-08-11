@@ -356,7 +356,7 @@ func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f rep
 			      OR ca.code LIKE '2105%'  -- Uninvoiced Payables
 			      OR ca.code LIKE '2202%'  -- Output VAT
 			      OR ca.code LIKE '1103%'  -- VAT Input
-				THEN CASE WHEN jl.debit_cents > 0 THEN jl.debit_cents ELSE 0 END
+				THEN CASE WHEN jl.debit_cents > 0 THEN ol.credit_cents ELSE 0 END
 			END), 0),
 			COALESCE(SUM(CASE
 				WHEN ca.account_type IN ('REVENUE','EXPENSE','COGS','DEPRECIATION_EXPENSE',
@@ -369,7 +369,7 @@ func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f rep
 			      OR ca.code LIKE '2105%'
 			      OR ca.code LIKE '2202%'
 			      OR ca.code LIKE '1103%'
-				THEN CASE WHEN jl.credit_cents > 0 THEN jl.credit_cents ELSE 0 END
+				THEN CASE WHEN jl.credit_cents > 0 THEN ol.debit_cents ELSE 0 END
 			END), 0),
 			-- Investing: fixed assets, intangible assets, RoU
 			COALESCE(SUM(CASE
@@ -379,7 +379,7 @@ func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f rep
 			      OR ca.code LIKE '1501%'  -- Fixed Assets
 			      OR ca.code LIKE '1502%'  -- Accumulated Depreciation
 			      OR ca.code LIKE '1601%'  -- Intangible
-				THEN CASE WHEN jl.debit_cents > 0 THEN jl.debit_cents ELSE 0 END
+				THEN CASE WHEN jl.debit_cents > 0 THEN ol.credit_cents ELSE 0 END
 			END), 0),
 			COALESCE(SUM(CASE
 				WHEN ca.account_type IN ('FIXED_ASSET','INTANGIBLE_ASSET','ACCUMULATED_DEPRECIATION')
@@ -388,7 +388,7 @@ func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f rep
 			      OR ca.code LIKE '1501%'
 			      OR ca.code LIKE '1502%'
 			      OR ca.code LIKE '1601%'
-				THEN CASE WHEN jl.credit_cents > 0 THEN jl.credit_cents ELSE 0 END
+				THEN CASE WHEN jl.credit_cents > 0 THEN ol.debit_cents ELSE 0 END
 			END), 0),
 			-- Financing: loans, leases, equity, dividends
 			COALESCE(SUM(CASE
@@ -399,7 +399,7 @@ func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f rep
 			      OR ca.code LIKE '3201%'  -- Retained Earnings
 			      OR ca.code LIKE '3301%'  -- Current Earnings
 			      OR ca.code LIKE '3302%'  -- Dividends Payable
-				THEN CASE WHEN jl.debit_cents > 0 THEN jl.debit_cents ELSE 0 END
+				THEN CASE WHEN jl.debit_cents > 0 THEN ol.credit_cents ELSE 0 END
 			END), 0),
 			COALESCE(SUM(CASE
 				WHEN ca.account_type IN ('EQUITY','LOAN_PAYABLE')
@@ -409,7 +409,7 @@ func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f rep
 			      OR ca.code LIKE '3201%'
 			      OR ca.code LIKE '3301%'
 			      OR ca.code LIKE '3302%'
-				THEN CASE WHEN jl.credit_cents > 0 THEN jl.credit_cents ELSE 0 END
+				THEN CASE WHEN jl.credit_cents > 0 THEN ol.debit_cents ELSE 0 END
 			END), 0)
 		FROM journal_lines jl
 		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id

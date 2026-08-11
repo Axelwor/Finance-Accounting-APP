@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"finance-accounting-app/backend/internal/accounting"
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/db"
 )
@@ -176,4 +178,135 @@ func uuidValue(raw string) pgtype.UUID {
 	var value pgtype.UUID
 	_ = value.Scan(raw)
 	return value
+}
+
+// ---------------------------------------------------------------------------
+// Journal posting helpers (hash-chain, idempotency, outbox)
+// ---------------------------------------------------------------------------
+
+func lockOrSeedHead(ctx context.Context, tx pgx.Tx, tenantID int64) (db.LedgerChainHead, error) {
+	head, err := db.New(tx).LockLedgerChainHead(ctx, tenantID)
+	if err == nil {
+		return head, nil
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO ledger_chain_heads (tenant_id, last_journal_id, last_hash)
+		VALUES ($1, NULL, 'genesis') ON CONFLICT (tenant_id) DO NOTHING
+	`, tenantID); err != nil {
+		return db.LedgerChainHead{}, err
+	}
+	return db.New(tx).LockLedgerChainHead(ctx, tenantID)
+}
+
+func resolvePeriod(ctx context.Context, tx pgx.Tx, tenantID int64, date string) (int64, error) {
+	var periodID int64
+	err := tx.QueryRow(ctx, `
+		SELECT id FROM accounting_periods
+		WHERE tenant_id = $1 AND $2::date BETWEEN period_start AND period_end
+		  AND status IN ('OPEN', 'REOPENED')
+		ORDER BY period_start DESC LIMIT 1
+	`, tenantID, date).Scan(&periodID)
+	if err != nil {
+		return 0, fmt.Errorf("entry date is outside an open period: %w", err)
+	}
+	return periodID, nil
+}
+
+func nextJournalNumber(ctx context.Context, tx pgx.Tx, tenantID int64) (string, error) {
+	year := time.Now().Year()
+	var p string
+	var seq int64
+	err := tx.QueryRow(ctx, `
+		INSERT INTO document_numbering (tenant_id, doc_type, prefix, fiscal_year, last_seq)
+		VALUES ($1, 'JRN', 'JRN', $2, 1)
+		ON CONFLICT (tenant_id, doc_type, prefix, fiscal_year) DO UPDATE
+		SET last_seq = document_numbering.last_seq + 1
+		RETURNING prefix, last_seq
+	`, tenantID, year).Scan(&p, &seq)
+	if err != nil {
+		return "", err
+	}
+	s := strconv.FormatInt(seq, 10)
+	for len(s) < 6 {
+		s = "0" + s
+	}
+	return p + "-" + strconv.FormatInt(int64(year), 10) + "-" + s, nil
+}
+
+func upsertHead(ctx context.Context, tx pgx.Tx, tenantID, lastJournalID int64, lastHash string) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO ledger_chain_heads (tenant_id, last_journal_id, last_hash)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (tenant_id) DO UPDATE
+		SET last_journal_id = EXCLUDED.last_journal_id, last_hash = EXCLUDED.last_hash, updated_at = now()
+	`, tenantID, lastJournalID, lastHash)
+	return err
+}
+
+func insertOutbox(ctx context.Context, tx pgx.Tx, tenantID int64, topic string, payload []byte) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO outbox_events (tenant_id, topic, payload)
+		VALUES ($1, $2, $3::jsonb)
+	`, tenantID, topic, payload)
+	return err
+}
+
+// postReconJournal builds, hashes, and inserts a reconciliation adjustment
+// journal entry + lines, advancing the hash chain and writing the outbox event.
+func postReconJournal(ctx context.Context, tx pgx.Tx, tenantID, uid int64, idem string, journal accounting.Journal) (int64, string, error) {
+	head, err := lockOrSeedHead(ctx, tx, tenantID)
+	if err != nil {
+		return 0, "", err
+	}
+	journal.PreviousHash = head.LastHash
+	journal.Hash = accounting.HashJournal(journal)
+
+	periodID, err := resolvePeriod(ctx, tx, tenantID, journal.EntryDate)
+	if err != nil {
+		return 0, "", err
+	}
+	number, err := nextJournalNumber(ctx, tx, tenantID)
+	if err != nil {
+		return 0, "", err
+	}
+	var entryID int64
+	err = tx.QueryRow(ctx, `
+		INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		RETURNING id
+	`, tenantID, number, journal.EntryDate, periodID, journal.Description,
+		journal.SourceRef, string(journal.IntentType), idem,
+		journal.Hash, journal.PreviousHash, int8Value(uid)).Scan(&entryID)
+	if err != nil {
+		return 0, "", err
+	}
+	for _, line := range journal.Lines {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO journal_lines (tenant_id, entry_id, account_id, debit_cents, credit_cents, source_line_ref)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, tenantID, entryID, line.AccountID, line.DebitCents, line.CreditCents, line.SourceLineRef); err != nil {
+			return 0, "", err
+		}
+	}
+	if err := upsertHead(ctx, tx, tenantID, entryID, journal.Hash); err != nil {
+		return 0, "", err
+	}
+	outboxPayload, _ := json.Marshal(map[string]any{
+		"journal_entry_id": entryID, "number": number, "intent": string(journal.IntentType),
+	})
+	if err := insertOutbox(ctx, tx, tenantID, "journal.posted", outboxPayload); err != nil {
+		return 0, "", err
+	}
+	return entryID, number, nil
+}
+
+// resolveAccountByCode loads a postable account id by its COA code.
+func resolveAccountByCode(ctx context.Context, tx pgx.Tx, tenantID int64, code string) (int64, error) {
+	var accountID int64
+	err := tx.QueryRow(ctx, `SELECT id FROM accounts WHERE tenant_id = $1 AND code = $2`,
+		tenantID, code).Scan(&accountID)
+	if err != nil {
+		return 0, fmt.Errorf("account %s not found: %w", code, err)
+	}
+	return accountID, nil
 }
