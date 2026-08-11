@@ -1,5 +1,6 @@
 import { useWorkbench } from "./state";
 import { EmptyState } from "../components/ui";
+import { TabErrorBoundary } from "../App";
 import { NestedTabStrip } from "./NestedTabStrip";
 import type { EntryTab, ListTab, ModuleTab, NestedTab } from "./types";
 import { CashEntryList } from "../screens/list/CashEntryList";
@@ -123,7 +124,17 @@ function ModuleContent({ parent }: { parent: ModuleTab }) {
   const activeChild = activeChildId ? children.find((c) => c.id === activeChildId) ?? null : null;
 
   const module = findModule(parent.moduleId);
-  const defaultAddLabel = module?.items[0]?.openEntry ? `New ${defaultEntryTitle(module.items[0].openEntry).toLowerCase()}` : "New entry";
+  // The +New button should open a draft of the entry kind that matches the
+  // currently active list, not the module's first sub-item (N-01).
+  const activeListItem = activeChild?.kind === "list"
+    ? module?.items.find((i) => i.openList === activeChild.subKind)
+    : module?.items[0];
+  const onAdd = activeListItem?.openEntry
+    ? () => workbench.openEntryDraft(activeListItem.openEntry!)
+    : undefined;
+  const addLabel = activeListItem?.openEntry
+    ? `New ${defaultEntryTitle(activeListItem.openEntry).toLowerCase()}`
+    : "New entry";
 
   // If the module has no children yet, auto-open the first list view so the
   // work area is never empty.
@@ -145,15 +156,24 @@ function ModuleContent({ parent }: { parent: ModuleTab }) {
         parentId={parent.id}
         children={children}
         activeChildId={activeChildId}
-        onAdd={
-          module?.items[0]?.openEntry
-            ? () => workbench.openEntryDraft(module.items[0].openEntry!)
-            : undefined
-        }
-        addLabel={defaultAddLabel}
+        onAdd={onAdd}
+        addLabel={addLabel}
       />
-      <div className="module-content__body" key={activeChild?.id ?? "empty"}>
-        {activeChild ? <NestedContent tab={activeChild} /> : (
+      <div className="module-content__body">
+        {children.map((child) => (
+          // Render every child tab but hide inactive ones with CSS so
+          // switching tabs preserves unsaved form state (E-02).
+          <div
+            key={child.id}
+            className="module-content__pane"
+            style={{ display: child.id === activeChildId ? "block" : "none" }}
+          >
+            <TabErrorBoundary title={child.title}>
+              <NestedContent tab={child} />
+            </TabErrorBoundary>
+          </div>
+        ))}
+        {!activeChild && (
           <div className="workarea__placeholder">
             <EmptyState
               title="No item selected"
@@ -341,9 +361,9 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
     case "purchase-return-entry":
       return <PurchaseReturnForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "purchase-supplier-entry":
-      return <PurchaseSupplierForm />;
+      return <PurchaseSupplierForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "customer-entry":
-      return <CustomerForm />;
+      return <CustomerForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "stock-opname-entry":
       return <StockOpnameForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "stock-transfer-entry":

@@ -7,7 +7,13 @@ import type { CreateSupplierInput } from "../../types";
 const SUPPLIER_TYPES = ["GOODS", "SERVICE", "MIXED"] as const;
 const CURRENCIES = ["IDR", "USD", "EUR", "SGD", "JPY", "CNY", "AUD", "GBP"] as const;
 
-export function PurchaseSupplierForm() {
+interface Props {
+  tabId: string;
+  entryId?: string | number;
+  initialTitle?: string;
+}
+
+export function PurchaseSupplierForm({ tabId }: Props) {
   const { replaceDraft, markUnsaved } = useWorkbench();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -65,8 +71,8 @@ export function PurchaseSupplierForm() {
         payload.opening_balance_date = openingBalanceDate || undefined;
       }
       const supplier = await api.createSupplier(payload);
-      replaceDraft("sup-" + supplier.id, supplier.code, "saved");
-      markUnsaved("sup-" + supplier.id, false);
+      replaceDraft(tabId, supplier.code, "saved");
+      markUnsaved(tabId, false);
     } catch (err: any) {
       setError(err?.message || "Failed to save supplier.");
     } finally {
