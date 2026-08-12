@@ -28,25 +28,30 @@ func (service *Service) fetchReportData(r *http.Request, rtype reportType, f rep
 }
 
 // dimensionJoin returns a JOIN fragment that restricts journal_lines to lines
-// tagged with f.dimension_id (cabang / proyek). The dimension id is appended
-// to args and the new base arg offset (for subsequent date args) is returned.
-// When no dimension is selected, the fragment is empty and the offset is
-// unchanged.
+// tagged with any of f.dimensionIDs (cabang / proyek). The id slice is
+// appended to args as a single array parameter and the new base arg offset
+// (for subsequent date args) is returned. When no dimension is selected, the
+// fragment is empty and the offset is unchanged.
+//
+// The join targets a DISTINCT subquery rather than journal_line_dimensions
+// directly: a journal line tagged with two of the selected dimensions would
+// otherwise match twice and double-count in the SUM aggregates.
 func dimensionJoin(f reportFilter, baseArg int, args *[]any) (string, int) {
-	if f.dimensionID == 0 {
+	if len(f.dimensionIDs) == 0 {
 		return "", baseArg
 	}
-	*args = append(*args, f.dimensionID)
+	*args = append(*args, f.dimensionIDs)
 	return fmt.Sprintf(
-		" JOIN journal_line_dimensions jld ON jld.tenant_id = jl.tenant_id AND jld.journal_line_id = jl.id AND jld.dimension_id = $%d",
+		" JOIN (SELECT DISTINCT tenant_id, journal_line_id FROM journal_line_dimensions WHERE dimension_id = ANY($%d)) jld"+
+			" ON jld.tenant_id = jl.tenant_id AND jld.journal_line_id = jl.id",
 		baseArg), baseArg + 1
 }
 
 // fetchTrialBalance returns per-account debit/credit totals across all posted
 // journals. With to_date supplied the balance is cumulative from inception to
 // to_date; from_date is ignored (a trial balance is a snapshot, not a movement).
-// When dimension_id is supplied only journal lines tagged with that dimension
-// are aggregated.
+// When dimension ids are supplied only journal lines tagged with one of those
+// dimensions are aggregated.
 func (service *Service) fetchTrialBalance(ctx context.Context, tenantID int64, f reportFilter) (TrialBalanceResult, error) {
 	args := []any{tenantID}
 	join, dateBase := dimensionJoin(f, 2, &args)

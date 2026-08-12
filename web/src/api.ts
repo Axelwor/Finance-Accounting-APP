@@ -451,10 +451,18 @@ async function buildOpeningBalance(input: OnboardingInput): Promise<OpeningBalan
 
 function buildReportQuery(fromDate?: string, toDate?: string): string {
   const params = new URLSearchParams();
-  if (fromDate) params.set("from", fromDate);
-  if (toDate) params.set("to", toDate);
+  if (fromDate) params.set("from_date", fromDate);
+  if (toDate) params.set("to_date", toDate);
   const qs = params.toString();
   return qs ? `?${qs}` : "";
+}
+
+/** Appends the optional framework / dimension_id report filters to a query string. */
+function appendReportFilters(qs: string, framework?: string, dimensionIds?: number[]): string {
+  if (framework) qs += (qs ? "&" : "?") + `framework=${encodeURIComponent(framework)}`;
+  const ids = (dimensionIds ?? []).filter((id) => Number.isFinite(id) && id > 0);
+  if (ids.length > 0) qs += (qs ? "&" : "?") + `dimension_id=${ids.join(",")}`;
+  return qs;
 }
 
 export const api = {
@@ -1016,23 +1024,31 @@ export const api = {
     fromDate?: string,
     toDate?: string,
     framework?: string,
-    dimensionId?: number,
+    dimensionIds?: number[],
   ): Promise<BackendProfitLoss> {
-    let qs = buildReportQuery(fromDate, toDate);
-    if (framework) qs += (qs ? "&" : "?") + `framework=${encodeURIComponent(framework)}`;
-    if (dimensionId && dimensionId > 0) qs += (qs ? "&" : "?") + `dimension_id=${dimensionId}`;
+    const qs = appendReportFilters(buildReportQuery(fromDate, toDate), framework, dimensionIds);
     return http<BackendProfitLoss>(`/reports/profit-loss${qs}`, { auth: true });
   },
 
   /** Balance Sheet report (GET /reports/balance-sheet). */
-  async getBalanceSheet(fromDate?: string, toDate?: string): Promise<BackendBalanceSheet> {
-    const qs = buildReportQuery(fromDate, toDate);
+  async getBalanceSheet(
+    fromDate?: string,
+    toDate?: string,
+    framework?: string,
+    dimensionIds?: number[],
+  ): Promise<BackendBalanceSheet> {
+    const qs = appendReportFilters(buildReportQuery(fromDate, toDate), framework, dimensionIds);
     return http<BackendBalanceSheet>(`/reports/balance-sheet${qs}`, { auth: true });
   },
 
   /** Cash Flow report (GET /reports/cash-flow). */
-  async getCashFlow(fromDate?: string, toDate?: string): Promise<BackendCashFlow> {
-    const qs = buildReportQuery(fromDate, toDate);
+  async getCashFlow(
+    fromDate?: string,
+    toDate?: string,
+    framework?: string,
+    dimensionIds?: number[],
+  ): Promise<BackendCashFlow> {
+    const qs = appendReportFilters(buildReportQuery(fromDate, toDate), framework, dimensionIds);
     return http<BackendCashFlow>(`/reports/cash-flow${qs}`, { auth: true });
   },
 
@@ -1040,17 +1056,42 @@ export const api = {
    * Export a report as PDF or Excel (GET /reports/{reportType}/export).
    * Returns a Blob suitable for download. Uses a raw fetch (not the shared
    * http() helper) because http() parses JSON; exports are binary.
+   *
+   * `framework` and `dimension_ids` are optional pass-throughs so the exported
+   * file matches the on-screen report; the backend export handler parses the
+   * same filter params as the report endpoints.
    */
-  async exportReport(reportType: string, format: "pdf" | "xlsx", fromDate?: string, toDate?: string): Promise<Blob> {
+  async exportReport(
+    reportType: string,
+    options: {
+      format: "pdf" | "xlsx";
+      from_date?: string;
+      to_date?: string;
+      framework?: string;
+      dimension_ids?: number[];
+    },
+  ): Promise<Blob> {
     const qs = new URLSearchParams();
-    qs.set("format", format);
-    if (fromDate) qs.set("from_date", fromDate);
-    if (toDate) qs.set("to_date", toDate);
+    qs.set("format", options.format);
+    if (options.from_date) qs.set("from_date", options.from_date);
+    if (options.to_date) qs.set("to_date", options.to_date);
+    if (options.framework) qs.set("framework", options.framework);
+    const dimensionIds = (options.dimension_ids ?? []).filter((id) => Number.isFinite(id) && id > 0);
+    if (dimensionIds.length > 0) qs.set("dimension_id", dimensionIds.join(","));
     const response = await fetch(`${API_BASE}/reports/${reportType}/export?${qs}`, {
       headers: { Authorization: `Bearer ${getAccessToken()}` },
     });
     if (!response.ok) {
-      throw makeError("EXPORT_FAILED", `Export failed (${response.status})`);
+      // The backend writes a JSON error body ({ code, message }); surface its
+      // message in the toast instead of a bare status code when available.
+      let message = `Export failed (${response.status})`;
+      try {
+        const body = (await response.json()) as { message?: string };
+        if (body?.message) message = body.message;
+      } catch {
+        // Non-JSON error body — keep the status-based message.
+      }
+      throw makeError("EXPORT_FAILED", message);
     }
     return response.blob();
   },

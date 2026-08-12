@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
@@ -364,5 +364,118 @@ export function Card({ title, description, children, className }: CardProps) {
       ) : null}
       {children}
     </section>
+  );
+}
+
+interface MultiSelectOption {
+  value: number;
+  label: string;
+}
+
+interface MultiSelectComboboxProps {
+  options: MultiSelectOption[];
+  selected: number[];
+  onChange: (next: number[]) => void;
+  /** Text shown on the trigger while nothing is selected. */
+  placeholder?: string;
+  ariaLabel: string;
+}
+
+/**
+ * Compact multi-select combobox: a trigger button that shows the current
+ * selection and opens a searchable checklist panel. Empty selection means
+ * "no filter" (callers render it as the placeholder, e.g. "All dimensions").
+ * Closes on outside click or Escape.
+ */
+export function MultiSelectCombobox({
+  options,
+  selected,
+  onChange,
+  placeholder = "All",
+  ariaLabel,
+}: MultiSelectComboboxProps) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const toggle = (value: number) => {
+    onChange(
+      selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value],
+    );
+  };
+
+  const trimmed = query.trim().toLowerCase();
+  const filtered = trimmed === "" ? options : options.filter((o) => o.label.toLowerCase().includes(trimmed));
+
+  const triggerText =
+    selected.length === 0
+      ? placeholder
+      : options.filter((o) => selected.includes(o.value)).map((o) => o.label).join(", ");
+
+  return (
+    <div className="msel" ref={rootRef}>
+      <button
+        type="button"
+        className={`msel__trigger${selected.length > 0 ? " is-filtered" : ""}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="true"
+        aria-label={ariaLabel}
+        title={triggerText}
+      >
+        <span className="msel__trigger-text">{triggerText}</span>
+        <span className="msel__caret" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open ? (
+        <div className="msel__panel">
+          <input
+            className="msel__search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search..."
+            aria-label={`Search ${ariaLabel}`}
+          />
+          <div className="msel__options">
+            {filtered.length === 0 ? (
+              <p className="msel__empty">No matches.</p>
+            ) : (
+              filtered.map((o) => (
+                <label key={o.value} className="msel__option">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(o.value)}
+                    onChange={() => toggle(o.value)}
+                  />
+                  <span>{o.label}</span>
+                </label>
+              ))
+            )}
+          </div>
+          {selected.length > 0 ? (
+            <button type="button" className="msel__clear" onClick={() => onChange([])}>
+              Clear selection
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }

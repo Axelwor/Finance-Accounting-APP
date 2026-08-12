@@ -190,7 +190,7 @@ func computeCashFlowNets(r *CashFlowResult) {
 
 func TestCashFlowResult_ActivitySumsToNet(t *testing.T) {
 	cases := []struct {
-		name                                 string
+		name                                      string
 		opIn, opOut, invIn, invOut, finIn, finOut int64
 	}{
 		{name: "all zero", opIn: 0, opOut: 0, invIn: 0, invOut: 0, finIn: 0, finOut: 0},
@@ -228,12 +228,12 @@ func TestCashFlowResult_ActivitySumsToNet(t *testing.T) {
 
 func TestBalanceSheetResult_Equation(t *testing.T) {
 	cases := []struct {
-		name             string
-		assets           int64
-		liabilities      int64
-		equity           int64
-		profit           int64
-		wantBalanced     bool
+		name         string
+		assets       int64
+		liabilities  int64
+		equity       int64
+		profit       int64
+		wantBalanced bool
 	}{
 		{name: "empty books balance", assets: 0, liabilities: 0, equity: 0, profit: 0, wantBalanced: true},
 		{name: "equity only", assets: 100_00, liabilities: 0, equity: 100_00, profit: 0, wantBalanced: true},
@@ -273,7 +273,7 @@ func TestBalanceSheetResult_Equation(t *testing.T) {
 
 func TestCashFlowResult_NetEqualsInflowMinusOutflow(t *testing.T) {
 	cases := []struct {
-		name                                     string
+		name                                      string
 		opIn, opOut, invIn, invOut, finIn, finOut int64
 	}{
 		{name: "all zero", opIn: 0, opOut: 0, invIn: 0, invOut: 0, finIn: 0, finOut: 0},
@@ -328,10 +328,10 @@ func newFilterRequest(q string) *http.Request {
 
 func TestParseDateRange(t *testing.T) {
 	cases := []struct {
-		name      string
-		query     string
-		wantFrom  string
-		wantTo    string
+		name     string
+		query    string
+		wantFrom string
+		wantTo   string
 	}{
 		{name: "empty", query: "", wantFrom: "", wantTo: ""},
 		{name: "both dates", query: "from_date=2025-01-01&to_date=2025-01-31", wantFrom: "2025-01-01", wantTo: "2025-01-31"},
@@ -359,68 +359,98 @@ func TestParseDateRange(t *testing.T) {
 
 func TestParseReportFilter(t *testing.T) {
 	cases := []struct {
-		name            string
-		query           string
-		wantFrom        string
-		wantTo          string
-		wantFramework   string
-		wantDimensionID int64
+		name             string
+		query            string
+		wantFrom         string
+		wantTo           string
+		wantFramework    string
+		wantDimensionIDs []int64
 	}{
 		{
-			name:            "all empty",
-			query:           "",
-			wantFrom:        "",
-			wantTo:          "",
-			wantFramework:   "",
-			wantDimensionID: 0,
+			name:             "all empty",
+			query:            "",
+			wantFrom:         "",
+			wantTo:           "",
+			wantFramework:    "",
+			wantDimensionIDs: nil,
 		},
 		{
-			name:            "full filter",
-			query:           "from_date=2025-01-01&to_date=2025-06-30&framework=EMKM&dimension_id=42",
-			wantFrom:        "2025-01-01",
-			wantTo:          "2025-06-30",
-			wantFramework:   "EMKM",
-			wantDimensionID: 42,
+			name:             "full filter",
+			query:            "from_date=2025-01-01&to_date=2025-06-30&framework=EMKM&dimension_id=42",
+			wantFrom:         "2025-01-01",
+			wantTo:           "2025-06-30",
+			wantFramework:    "EMKM",
+			wantDimensionIDs: []int64{42},
 		},
 		{
-			name:            "framework lowercased normalised",
-			query:           "framework=emkm",
-			wantFramework:   "EMKM",
-			wantDimensionID: 0,
+			name:             "framework lowercased normalised",
+			query:            "framework=emkm",
+			wantFramework:    "EMKM",
+			wantDimensionIDs: nil,
 		},
 		{
-			name:            "framework with spaces normalised",
-			query:           "framework=%20%20sak_umum%20",
-			wantFramework:   "SAK_UMUM",
-			wantDimensionID: 0,
+			name:             "framework with spaces normalised",
+			query:            "framework=%20%20sak_umum%20",
+			wantFramework:    "SAK_UMUM",
+			wantDimensionIDs: nil,
 		},
 		{
-			name:            "unknown framework dropped",
-			query:           "framework=IFRS",
-			wantFramework:   "",
-			wantDimensionID: 0,
+			name:             "unknown framework dropped",
+			query:            "framework=IFRS",
+			wantFramework:    "",
+			wantDimensionIDs: nil,
 		},
 		{
-			name:            "dimension zero dropped",
-			query:           "dimension_id=0",
-			wantDimensionID: 0,
+			name:             "dimension zero dropped",
+			query:            "dimension_id=0",
+			wantDimensionIDs: nil,
 		},
 		{
-			name:            "dimension negative dropped",
-			query:           "dimension_id=-5",
-			wantDimensionID: 0,
+			name:             "dimension negative dropped",
+			query:            "dimension_id=-5",
+			wantDimensionIDs: nil,
 		},
 		{
-			name:            "dimension non-numeric dropped",
-			query:           "dimension_id=abc",
-			wantDimensionID: 0,
+			name:             "dimension non-numeric dropped",
+			query:            "dimension_id=abc",
+			wantDimensionIDs: nil,
 		},
 		{
-			name:            "invalid date still drops framework-safe",
-			query:           "from_date=bad&framework=ETAP",
-			wantFrom:        "",
-			wantFramework:   "ETAP",
-			wantDimensionID: 0,
+			name:             "multiple dimensions via repeated params",
+			query:            "dimension_id=1&dimension_id=2",
+			wantDimensionIDs: []int64{1, 2},
+		},
+		{
+			name:             "multiple dimensions via comma list",
+			query:            "dimension_id=1,2,3",
+			wantDimensionIDs: []int64{1, 2, 3},
+		},
+		{
+			name:             "mixed repeated and comma list",
+			query:            "dimension_id=1,2&dimension_id=3",
+			wantDimensionIDs: []int64{1, 2, 3},
+		},
+		{
+			name:             "duplicates deduped preserving order",
+			query:            "dimension_id=2&dimension_id=1,2&dimension_id=1",
+			wantDimensionIDs: []int64{2, 1},
+		},
+		{
+			name:             "invalid values inside list dropped",
+			query:            "dimension_id=abc,5&dimension_id=0,-1,7",
+			wantDimensionIDs: []int64{5, 7},
+		},
+		{
+			name:             "whitespace inside list trimmed",
+			query:            "dimension_id=%204%20,%209%20",
+			wantDimensionIDs: []int64{4, 9},
+		},
+		{
+			name:             "invalid date still drops framework-safe",
+			query:            "from_date=bad&framework=ETAP",
+			wantFrom:         "",
+			wantFramework:    "ETAP",
+			wantDimensionIDs: nil,
 		},
 	}
 
@@ -436,8 +466,8 @@ func TestParseReportFilter(t *testing.T) {
 			if f.framework != tc.wantFramework {
 				t.Errorf("framework = %q, want %q", f.framework, tc.wantFramework)
 			}
-			if f.dimensionID != tc.wantDimensionID {
-				t.Errorf("dimensionID = %d, want %d", f.dimensionID, tc.wantDimensionID)
+			if !reflect.DeepEqual(f.dimensionIDs, tc.wantDimensionIDs) {
+				t.Errorf("dimensionIDs = %v, want %v", f.dimensionIDs, tc.wantDimensionIDs)
 			}
 		})
 	}
@@ -449,51 +479,51 @@ func TestParseReportFilter(t *testing.T) {
 
 func TestDateFilter(t *testing.T) {
 	cases := []struct {
-		name       string
-		dr         dateRange
-		baseArg    int
-		wantFrag   string
-		wantArgs   []any
+		name        string
+		dr          dateRange
+		baseArg     int
+		wantFrag    string
+		wantArgs    []any
 		wantNextArg int
 	}{
 		{
-			name:       "no bounds -> empty fragment",
-			dr:         dateRange{},
-			baseArg:    2,
-			wantFrag:   "",
-			wantArgs:   []any{},
+			name:        "no bounds -> empty fragment",
+			dr:          dateRange{},
+			baseArg:     2,
+			wantFrag:    "",
+			wantArgs:    []any{},
 			wantNextArg: 2,
 		},
 		{
-			name:       "from only",
-			dr:         dateRange{fromDate: "2025-01-01"},
-			baseArg:    2,
-			wantFrag:   " AND je.entry_date >= $2",
-			wantArgs:   []any{"2025-01-01"},
+			name:        "from only",
+			dr:          dateRange{fromDate: "2025-01-01"},
+			baseArg:     2,
+			wantFrag:    " AND je.entry_date >= $2",
+			wantArgs:    []any{"2025-01-01"},
 			wantNextArg: 3,
 		},
 		{
-			name:       "to only",
-			dr:         dateRange{toDate: "2025-01-31"},
-			baseArg:    2,
-			wantFrag:   " AND je.entry_date <= $2",
-			wantArgs:   []any{"2025-01-31"},
+			name:        "to only",
+			dr:          dateRange{toDate: "2025-01-31"},
+			baseArg:     2,
+			wantFrag:    " AND je.entry_date <= $2",
+			wantArgs:    []any{"2025-01-31"},
 			wantNextArg: 3,
 		},
 		{
-			name:       "both bounds",
-			dr:         dateRange{fromDate: "2025-01-01", toDate: "2025-01-31"},
-			baseArg:    2,
-			wantFrag:   " AND je.entry_date >= $2 AND je.entry_date <= $3",
-			wantArgs:   []any{"2025-01-01", "2025-01-31"},
+			name:        "both bounds",
+			dr:          dateRange{fromDate: "2025-01-01", toDate: "2025-01-31"},
+			baseArg:     2,
+			wantFrag:    " AND je.entry_date >= $2 AND je.entry_date <= $3",
+			wantArgs:    []any{"2025-01-01", "2025-01-31"},
 			wantNextArg: 4,
 		},
 		{
-			name:       "base arg advances past dimension",
-			dr:         dateRange{fromDate: "2025-01-01", toDate: "2025-01-31"},
-			baseArg:    3,
-			wantFrag:   " AND je.entry_date >= $3 AND je.entry_date <= $4",
-			wantArgs:   []any{"2025-01-01", "2025-01-31"},
+			name:        "base arg advances past dimension",
+			dr:          dateRange{fromDate: "2025-01-01", toDate: "2025-01-31"},
+			baseArg:     3,
+			wantFrag:    " AND je.entry_date >= $3 AND je.entry_date <= $4",
+			wantArgs:    []any{"2025-01-01", "2025-01-31"},
 			wantNextArg: 5,
 		},
 	}
@@ -512,10 +542,14 @@ func TestDateFilter(t *testing.T) {
 	}
 }
 
-// dimensionJoin must add the JOIN + arg when a dimension is set and leave
-// everything untouched when it is not.
+// dimensionJoin must add the JOIN + array arg when dimensions are set and
+// leave everything untouched when they are not. The join targets a DISTINCT
+// subquery so a line tagged with several selected dimensions counts once.
 
 func TestDimensionJoin(t *testing.T) {
+	wantFrag := " JOIN (SELECT DISTINCT tenant_id, journal_line_id FROM journal_line_dimensions WHERE dimension_id = ANY($2)) jld" +
+		" ON jld.tenant_id = jl.tenant_id AND jld.journal_line_id = jl.id"
+
 	t.Run("no dimension", func(t *testing.T) {
 		args := []any{int64(1)} // tenant
 		frag, next := dimensionJoin(reportFilter{}, 2, &args)
@@ -530,18 +564,31 @@ func TestDimensionJoin(t *testing.T) {
 		}
 	})
 
-	t.Run("with dimension", func(t *testing.T) {
+	t.Run("single dimension", func(t *testing.T) {
 		args := []any{int64(1)} // tenant
-		frag, next := dimensionJoin(reportFilter{dimensionID: 7}, 2, &args)
-		wantFrag := " JOIN journal_line_dimensions jld ON jld.tenant_id = jl.tenant_id AND jld.journal_line_id = jl.id AND jld.dimension_id = $2"
+		frag, next := dimensionJoin(reportFilter{dimensionIDs: []int64{7}}, 2, &args)
 		if frag != wantFrag {
 			t.Errorf("frag = %q, want %q", frag, wantFrag)
 		}
 		if next != 3 {
 			t.Errorf("next = %d, want 3", next)
 		}
-		if len(args) != 2 || args[1] != int64(7) {
-			t.Errorf("args = %v, want [1 7]", args)
+		if len(args) != 2 || !reflect.DeepEqual(args[1], []int64{7}) {
+			t.Errorf("args = %v, want [1 [7]]", args)
+		}
+	})
+
+	t.Run("multiple dimensions use one array arg", func(t *testing.T) {
+		args := []any{int64(1)} // tenant
+		frag, next := dimensionJoin(reportFilter{dimensionIDs: []int64{7, 8, 9}}, 2, &args)
+		if frag != wantFrag {
+			t.Errorf("frag = %q, want %q", frag, wantFrag)
+		}
+		if next != 3 {
+			t.Errorf("next = %d, want 3 (single array placeholder)", next)
+		}
+		if len(args) != 2 || !reflect.DeepEqual(args[1], []int64{7, 8, 9}) {
+			t.Errorf("args = %v, want [1 [7 8 9]]", args)
 		}
 	})
 }
@@ -584,10 +631,10 @@ func TestBuildFrameworkSections_EMKM(t *testing.T) {
 	// (expense side). Every account_type on the revenue report_group rolls
 	// into revenue; every expense-side type rolls into expense.
 	byType := map[string]int64{
-		"REVENUE":       100_000_00,
+		"REVENUE":        100_000_00,
 		"CONTRA_REVENUE": 5_000_00,
-		"COGS":          40_000_00,
-		"EXPENSE":       20_000_00,
+		"COGS":           40_000_00,
+		"EXPENSE":        20_000_00,
 	}
 	groupByType := map[string]string{
 		"REVENUE":        "revenue",
@@ -663,9 +710,9 @@ func TestBuildFrameworkSections_SAK_UMUM(t *testing.T) {
 		"EXPENSE": 30_000_00,
 	}
 	groupByType := map[string]string{
-		"REVENUE":  "revenue",
-		"COGS":     "expense",
-		"EXPENSE":  "expense",
+		"REVENUE": "revenue",
+		"COGS":    "expense",
+		"EXPENSE": "expense",
 	}
 
 	got := buildFrameworkSections("SAK_UMUM", byType, groupByType)
@@ -699,10 +746,10 @@ func TestBuildFrameworkSections_UnknownFrameworkReturnsNil(t *testing.T) {
 
 func TestBuildFrameworkSections_SweepsCustomAccountTypes(t *testing.T) {
 	byType := map[string]int64{
-		"REVENUE":     100_000_00,
-		"EXPENSE":     20_000_00,
-		"CUSTOM_REV":  7_000_00,  // unmapped, revenue side
-		"CUSTOM_EXP":  3_000_00,  // unmapped, expense side
+		"REVENUE":    100_000_00,
+		"EXPENSE":    20_000_00,
+		"CUSTOM_REV": 7_000_00, // unmapped, revenue side
+		"CUSTOM_EXP": 3_000_00, // unmapped, expense side
 	}
 	groupByType := map[string]string{
 		"REVENUE":    "revenue",
