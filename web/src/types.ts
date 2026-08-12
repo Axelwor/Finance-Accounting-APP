@@ -2177,8 +2177,54 @@ export interface CreateReportTemplateInput {
   name: string;
   document_type: ReportTemplateDocumentType;
   template_yaml: string;
-  is_default?: boolean;
 }
+
+/** Approval workflow types. */
+export interface ApprovalRule {
+  id: number;
+  tenant_id: number;
+  entity_type: string;
+  min_amount_cents: number;
+  approver_account_id: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateApprovalRuleInput {
+  entity_type: string;
+  min_amount_cents: number;
+  approver_account_id: number;
+}
+
+export interface ApprovalRequest {
+  id: number;
+  tenant_id: number;
+  entity_type: string;
+  entity_id: number;
+  amount_cents: number;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  requested_by: string;
+  requested_at: string;
+  approved_by?: string;
+  approved_at?: string;
+  rejected_by?: string;
+  rejected_at?: string;
+  rejection_reason?: string;
+  /** Array of previous approve/reject actions for audit trail. */
+  approval_history?: Array<{ action: "approved" | "rejected"; by: string; at: string }>;
+}
+
+export interface SubmitApprovalRequestInput {
+  entity_type: string;
+  entity_id: number;
+  amount_cents: number;
+}
+
+export interface ApproveApprovalRequestInput {
+  reason?: string;
+}
+
+/** End of file. Added approval workflow types 2026-08-12 Wave 4. */
 
 /** Document types with labels for dropdowns. */
 export const REPORT_TEMPLATE_TYPES: Record<ReportTemplateDocumentType, string> = {

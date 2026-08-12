@@ -54,7 +54,7 @@ export function ApprovalActions({ request, onSuccess }: ApprovalActionsProps) {
         type="button"
         className="btn btn--sm btn--success"
         onClick={() => openModal("approve")}
-        disabled={request.status !== "pending"}
+        disabled={request.status !== "PENDING"}
       >
         Approve
       </button>
@@ -62,7 +62,7 @@ export function ApprovalActions({ request, onSuccess }: ApprovalActionsProps) {
         type="button"
         className="btn btn--sm btn--danger"
         onClick={() => openModal("reject")}
-        disabled={request.status !== "pending"}
+        disabled={request.status !== "PENDING"}
       >
         Reject
       </button>
@@ -76,7 +76,7 @@ export function ApprovalActions({ request, onSuccess }: ApprovalActionsProps) {
             <div className="modal__body">
               <p><strong>Entity:</strong> {request.entity_type} #{request.entity_id}</p>
               <p><strong>Amount:</strong> {(request.amount_cents / 100).toLocaleString("id-ID", { style: "currency", currency: "IDR" })}</p>
-              <p><strong>Requested by:</strong> {request.requested_by_name || "Unknown"}</p>
+              <p><strong>Requested by:</strong> {request.requested_by || "Unknown"}</p>
               <hr />
               <div className="form-group">
                 <label htmlFor="approval-reason">Reason {actionType === "reject" ? "*" : ""}</label>
@@ -97,13 +97,13 @@ export function ApprovalActions({ request, onSuccess }: ApprovalActionsProps) {
                   <h4>Approval History</h4>
                   <ul className="timeline">
                     {request.approval_history.map((entry, idx) => (
-                      <li key={idx} className={`timeline__item timeline__item--${entry.status}`}>
-                        <span className="timeline__marker">{getIconForStatus(entry.status)}</span>
+                      <li key={idx} className={`timeline__item timeline__item--${entry.action}`}>
+                        <span className="timeline__marker">{getIconForStatus(entry.action)}</span>
                         <div className="timeline__content">
-                          <span className="timeline__status">{entry.status}</span>
-                          <span className="timeline__actor">by {entry.actor_name || "Unknown"}</span>
-                          {entry.reason && <span className="timeline__reason">{entry.reason}</span>}
-                          <span className="timeline__date">{new Date(entry.action_at).toLocaleString("id-ID")}</span>
+                          <span className="timeline__status">{entry.action}</span>
+                          <span className="timeline__actor">by {entry.by || "Unknown"}</span>
+
+                          <span className="timeline__date">{new Date(entry.at).toLocaleString("id-ID")}</span>
                         </div>
                       </li>
                     ))}

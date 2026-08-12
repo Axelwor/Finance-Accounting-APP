@@ -15,6 +15,8 @@
 import type {
   AccountItem,
   ApiError,
+  ApprovalRequest,
+  ApproveApprovalRequestInput,
   BackendAccount,
   BackendBalanceSheet,
   BackendCashFlow,
@@ -2384,22 +2386,49 @@ export const api = {
   },
 
   /** Render a template and return the raw blob for download or display.
-   * This uses a raw fetch with Bearer token because the endpoint returns PDF/HTML binary.
-   */
-  async renderReportTemplate(id: number, format: "pdf" | "html"): Promise<Blob> {
-    const token = getAccessToken();
-    if (!token) {
-      throw makeError("UNAUTHORIZED", "Authentication required to render templates.");
-    }
-    const response = await fetch(`${API_BASE}/reports/templates/${id}/render?format=${format}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      throw makeError(`RENDER_FAILED_${response.status}`, `Render failed (${response.status}): ${text || ""}`);
-    }
-    return response.blob();
-  },
+    * This uses a raw fetch with Bearer token because the endpoint returns PDF/HTML binary.
+    */
+   async renderReportTemplate(id: number, format: "pdf" | "html"): Promise<Blob> {
+     const token = getAccessToken();
+     if (!token) {
+       throw makeError("UNAUTHORIZED", "Authentication required to render templates.");
+     }
+     const response = await fetch(`${API_BASE}/reports/templates/${id}/render?format=${format}`, {
+       headers: { Authorization: `Bearer ${token}` },
+     });
+     if (!response.ok) {
+       const text = await response.text().catch(() => "");
+       throw makeError(`RENDER_FAILED_${response.status}`, `Render failed (${response.status}): ${text || ""}`);
+     }
+     return response.blob();
+   },
+
+   // -- Approval Workflow API methods (Wave 4) --
+
+   /** List pending approval requests for current user. */
+   async listApprovalRequests(): Promise<ApprovalRequest[]> {
+     return http<ApprovalRequest[]>(`/approval-requests`, { auth: true });
+   },
+
+   /** Approve an approval request with optional reason. */
+   async approveApprovalRequest(requestId: number, input: ApproveApprovalRequestInput): Promise<void> {
+     return http(`/approval-requests/${requestId}/approve`, {
+       method: "POST",
+       auth: true,
+       body: JSON.stringify(input),
+     });
+   },
+
+   /** Reject an approval request with mandatory reason. */
+   async rejectApprovalRequest(requestId: number, input: ApproveApprovalRequestInput): Promise<void> {
+     return http(`/approval-requests/${requestId}/reject`, {
+       method: "POST",
+       auth: true,
+       body: JSON.stringify(input),
+     });
+   },
+
+   // End of wave 4 approval workflow API methods.
 
   /** Access token for protected API calls (used later). */
   getAccessToken,
