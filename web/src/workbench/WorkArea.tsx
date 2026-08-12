@@ -87,6 +87,9 @@ import { LeaseContractForm } from "../screens/entry/LeaseContractForm";
 import { LeasePaymentSchedule } from "../screens/entry/LeasePaymentSchedule";
 import { FinancialNoteForm } from "../screens/entry/FinancialNoteForm";
 import { ReportTemplateEditor } from "../screens/entry/ReportTemplateEditor";
+import { ApprovalRuleList } from "../screens/list/ApprovalRuleList";
+import { PendingApprovalRequestList } from "../screens/list/PendingApprovalRequestList";
+import { ApprovalRuleForm } from "../screens/entry/ApprovalRuleForm";
 import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
@@ -334,6 +337,10 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <ConsolidatedReport />;
     case "report-templates":
       return <ReportTemplateList />;
+    case "approval-rules":
+      return <ApprovalRuleList />;
+    case "pending-approval-requests":
+      return <PendingApprovalRequestList />;
     default:
       return <PlaceholderTab title={tab.title} sub={`list · ${subKind}`} />;
   }
@@ -420,6 +427,8 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
       return <FinancialNoteForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "rp-editor":
       return <ReportTemplateEditor tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+    case "approval-rule-entry":
+      return <ApprovalRuleForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     default:
       return <PlaceholderTab title={tab.title} sub={`entry · ${subKind}`} />;
   }

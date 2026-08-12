@@ -90,6 +90,8 @@ const accountant: Module = {
     { id: "ac-register", label: "Journal Register", hint: "REG", openList: "journal-register" },
     { id: "ac-dimensions", label: "Dimensions", hint: "DIM", openList: "dimensions" },
     { id: "ac-budgets", label: "Budgets", hint: "BGT", openList: "budgets", openEntry: "budget-entry" },
+    { id: "ac-approval-rules", label: "Approval Rules", hint: "APR", openList: "approval-rules", openEntry: "approval-rule-entry" },
+    { id: "ac-approval-requests", label: "Pending Approvals", hint: "PND", openList: "pending-approval-requests" },
     { id: "ac-audit", label: "Audit Trail", hint: "AUD", openList: "audit-logs" },
     { id: "ac-statement", label: "Customer Statement", hint: "STMT", openList: "customer-statement" },
   ],
@@ -238,6 +240,10 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Consolidated Report";
     case "report-templates":
       return "Report Templates";
+    case "approval-rules":
+      return "Approval Rules";
+    case "pending-approval-requests":
+      return "Pending Approvals";
   }
 }
 
@@ -351,6 +357,7 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "lease-contract-entry": return "LS-DRAFT";
     case "lease-payment-schedule": return "LS-SCH";
     case "rp-editor": return "TPL-DRAFT";
+    case "approval-rule-entry": return "APR-DRAFT";
     default: return "DRAFT";
   }
 }

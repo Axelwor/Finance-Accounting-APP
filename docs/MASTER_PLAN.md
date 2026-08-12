@@ -884,8 +884,9 @@ Migration 000035 adds `tenant_id` but no RLS policy. Refresh tokens not tenant-i
 
 ## Implementation Roadmap
 
-### Phase 0: Critical Accounting Fixes (Day 1-4) — ~4 days
+### Phase 0: Critical Accounting Fixes (Day 1-4) — ~4 days ✅ COMPLETE
 
+Merged: 2026-08-11 (Wave 1). All fixes verified with go vet/test/build + tsc/vite.
 | Task | Effort | ID |
 |---|---|---|
 | Fix DP double-realization (track dp_consumed on SO) | 4h | A-01 |
@@ -906,8 +907,9 @@ Migration 000035 adds `tenant_id` but no RLS policy. Refresh tokens not tenant-i
 | Fix production helpers.go table name | 30 min | B-03 |
 | Add 4 missing accounts to seed.go + migration 000045 | 2h | B-04 |
 
-### Phase 1: Security & RLS (Day 2-5, parallel) — ~3 days
+### Phase 1: Security & RLS (Day 2-5, parallel) — ~3 days ✅ COMPLETE
 
+Merged: 2026-08-11 (Wave 1). All fixes verified.
 | Task | Effort | ID |
 |---|---|---|
 | Fix 2FA bypass (Setup2FA must not disable) | 2h | B-01 |
@@ -925,8 +927,9 @@ Migration 000035 adds `tenant_id` but no RLS policy. Refresh tokens not tenant-i
 | Fix report templates tenant_id=0 → per-tenant | 2h | G-05 |
 | Add RLS to user_tokens | 30 min | G-06 |
 
-### Phase 2: Frontend Architecture + Navigation (Day 3-6) — ~3 days
+### Phase 2: Frontend Architecture + Navigation (Day 3-6) — ~3 days ✅ COMPLETE
 
+Merged: 2026-08-11 (Wave 2). ErrorBoundary, Combobox, Toast, keyboard shortcuts all wired.
 | Task | Effort | ID |
 |---|---|---|
 | Add Error Boundary (app + per-tab) | 2h | E-01 |
@@ -946,8 +949,22 @@ Migration 000035 adds `tenant_id` but no RLS policy. Refresh tokens not tenant-i
 | Fix HTTP timeout/retry | 2h | D-34 |
 | Stop silent error masking (return discriminated results) | 4h | D-35 |
 
-### Phase 3: Frontend Form Fixes (Day 5-10) — ~5 days
+### Phase 3: Frontend Form Fixes + Workflow Chain (Day 5-10) — ~5 days ✅ COMPLETE
 
+Merged: 2026-08-12 (Wave 3). All fixes verified: npx tsc --noEmit PASS, npx vite build PASS,
+go vet/test/build PASS.
+**Changes:**
+- Real ItemForm built (D-02) — replaces DemoEntryForm stub, full field coverage
+- Workflow chain: NextStepsBar on QuotationForm, SalesOrderForm, InvoiceForm, GRNForm,
+  SupplierInvoiceForm, FixedAssetForm, LeaseContractForm
+- Parent autofill: PO→GRN, SO→DO, Invoice→CN, GRN→SI line loading with validation
+- CustomerForm/SupplierForm: edit mode, 13 missing fields, clickable list rows, tabId props
+- PPN/tax: TaxRateSelector component wired to InvoiceForm, SalesOrderForm, QuotationForm
+- CashEntryForm: real balance check, Save&New stale error fixed
+- JournalEntryForm: double-post prevention (Post disabled after save)
+- BudgetForm: edit mode via getBudget(id)
+- Report enhancements: date ranges, export PDF/Excel, framework/dimension filters
+**Total: +4,124 / -895 lines**
 | Task | Effort | ID |
 |---|---|---|
 | Fix CustomerForm loading + add 13 fields + getCustomer API | 4h | D-01, D-17, D-20 |

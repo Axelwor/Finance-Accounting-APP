@@ -56,7 +56,9 @@ export type ListSubKind =
   | "audit-logs"
   | "lease-contract"
   | "consolidated-report"
-  | "report-templates";
+  | "report-templates"
+  | "approval-rules"
+  | "pending-approval-requests";
 
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
@@ -92,7 +94,8 @@ export type EntrySubKind =
   | "budget-entry"
   | "lease-contract-entry"
   | "lease-payment-schedule"
-  | "rp-editor";
+  | "rp-editor"
+  | "approval-rule-entry";
 
 export type CurrencyCode = "IDR";
 
