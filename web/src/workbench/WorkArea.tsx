@@ -92,7 +92,9 @@ import { ReportTemplateEditor } from "../screens/entry/ReportTemplateEditor";
 import { ApprovalRuleList } from "../screens/list/ApprovalRuleList";
 import { PendingApprovalRequestList } from "../screens/list/PendingApprovalRequestList";
 import { ApprovalRuleForm } from "../screens/entry/ApprovalRuleForm";
-import { defaultEntryTitle, findModule } from "./modules";
+import { WarehouseList } from "../screens/list/WarehouseList";
+import { WarehouseForm } from "../screens/entry/WarehouseForm";
+import defaultEntryTitle, { findModule } from "./modules";
 
 export function WorkArea() {
   const workbench = useWorkbench();
@@ -345,6 +347,8 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <ApprovalRuleList />;
     case "pending-approval-requests":
       return <PendingApprovalRequestList />;
+    case "warehouse-list":
+      return <WarehouseList />;
     default:
       return <PlaceholderTab title={tab.title} sub={`list · ${subKind}`} />;
   }
