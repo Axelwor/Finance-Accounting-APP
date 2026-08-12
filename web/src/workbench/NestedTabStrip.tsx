@@ -28,7 +28,7 @@ export function NestedTabStrip({
   const sortedChildren = [...children].sort((a, b) => {
     if (a.kind === "list" && b.kind !== "list") return -1;
     if (a.kind !== "list" && b.kind === "list") return 1;
-    return a.index - b.index;
+    return a.createdAt - b.createdAt;
   });
 
   if (sortedChildren.length === 0 && !onAdd) return null;
@@ -69,9 +69,7 @@ export function NestedTabStrip({
 
     if (newIndex !== index) {
       workbench.activate(sortedChildren[newIndex].id);
-      document
-        .querySelector(`[data-nested-tab-index="${newIndex}"]`)
-        ?.focus();
+      (document.querySelector(`[data-nested-tab-index="${newIndex}"]`) as HTMLElement)?.focus?.();
     }
   };
 

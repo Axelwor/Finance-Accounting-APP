@@ -153,8 +153,8 @@ function FRow({ item, onOpen, onDelete }: { item: FinancialNote; onOpen: () => v
           <button type="button" className="btn btn--secondary btn--sm" onClick={(e) => { e.stopPropagation(); onOpen(); }}>
             Edit
           </button>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} disabled={deletingId === item.id}>
-            {deletingId === item.id ? "Deleting..." : "Delete"}
+          <button type="button" className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}>
+            Delete
           </button>
         </span>
       </td>

@@ -49,9 +49,7 @@ export function TabStrip() {
 
     if (newIndex !== index) {
       workbench.activate(tabs[newIndex].id);
-      document
-        .querySelector(`[data-tab-index="${newIndex}"]`)
-        ?.focus();
+      (document.querySelector(`[data-tab-index="${newIndex}"]`) as HTMLElement)?.focus?.();
     }
   };
 
@@ -59,14 +57,14 @@ export function TabStrip() {
     <nav className="tabstrip" aria-label="Open modules">
       <div className="tabstrip__inner" role="tablist" aria-orientation="horizontal">
         {tabs.map((tab, index) => (
-          <TabPill key={tab.id} tab={tab} tabIndex={index} onFocus={() => handleKeyDown({ key: "" as keyof KeyboardEvent, preventDefault: () => {} } as React.KeyboardEvent), index} onKeyDown={(e) => handleKeyDown(e, index)} />
+          <TabPill key={tab.id} tab={tab} tabIndex={index} onFocus={() => {}} onKeyDown={(e) => handleKeyDown(e, index)} />
         ))}
       </div>
     </nav>
   );
 }
 
-function TabPill({ tab, tabIndex, onFocus, onKeyDown }: { tab: Tab; tabIndex: number; onFocus?: (idx: number) => void; onKeyDown?: (e: React.KeyboardEvent) => void }) {
+function TabPill({ tab, tabIndex, onFocus, onKeyDown }: { tab: Tab; tabIndex: number; onFocus?: () => void; onKeyDown?: (e: React.KeyboardEvent) => void }) {
   const workbench = useWorkbench();
   const isActive = tab.id === workbench.activeId;
   const isDashboard = tab.kind === "dashboard";

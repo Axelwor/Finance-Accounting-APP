@@ -55,6 +55,8 @@ const PARTY_LABEL: Record<EntrySubKind, string> = {
   "lease-payment-schedule": "Lease Number",
   "rp-editor": "Template Code",
   "customer-entry": "Customer",
+  "approval-rule-entry": "Approval Rule",
+  "cheque-entry": "Cheque/GIRO",
 };
 
 const HEADER_TITLE: Record<EntrySubKind, string> = {
@@ -91,6 +93,8 @@ const HEADER_TITLE: Record<EntrySubKind, string> = {
   "lease-payment-schedule": "Lease Payment Schedule",
   "rp-editor": "Report Template",
   "customer-entry": "Customer",
+  "approval-rule-entry": "Approval Rule",
+  "cheque-entry": "Cheque/GIRO",
   // @ts-ignore: intentionally minimal demo coverage for Wave 6 modules
 };
 
@@ -108,6 +112,8 @@ const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
     "grn-entry": { label: "Received items" },
     "purchase-supplier-entry": { label: "Supplier info" },
     "customer-entry": { label: "Customer info" },
+  "approval-rule-entry": { label: "Approval Rule" },
+  "cheque-entry": { label: "Cheque/GIRO" },
     "purchase-return-entry": { label: "Return lines" },
     "purchase-invoice": { label: "Inventory / Expense" },
     "supplier-invoice-entry": { label: "Uninvoiced Payables" },

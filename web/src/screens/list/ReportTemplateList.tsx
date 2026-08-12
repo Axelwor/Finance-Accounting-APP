@@ -98,7 +98,6 @@ export function ReportTemplateList() {
         name: name.trim(),
         document_type: docType,
         template_yaml: yaml,
-        is_default: isDefault,
       };
       if (editingId) {
         await api.updateReportTemplate(editingId, input);
