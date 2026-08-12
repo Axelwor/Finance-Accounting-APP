@@ -482,6 +482,9 @@ export interface CustomerStatement {
   closing_balance_cents: number;
 }
 
+/** Item costing methods accepted by the backend (items.costing_method). */
+export type ItemCostingMethod = "fifo" | "moving_average" | "specific";
+
 /** Item master data (GET /api/v1/items). */
 export interface Item {
   id: number;
@@ -490,7 +493,15 @@ export interface Item {
   item_type: "goods" | "service";
   is_tracked_stock: boolean;
   is_active: boolean;
+  /** Base unit of measure (backend json: `uom`). */
+  uom?: string;
+  /** Legacy alias for uom kept for older list screens. */
   unit?: string;
+  costing_method?: ItemCostingMethod | null;
+  sale_account_id?: number | null;
+  cogs_account_id?: number | null;
+  inventory_account_id?: number | null;
+  min_stock_qty?: number | null;
   sale_price_cents: number;
   qty_on_hand?: number | null;
   description?: string;
@@ -510,6 +521,62 @@ export interface Item {
   abc_classification?: "A" | "B" | "C" | null;
   sale_uom?: string | null;
   purchase_uom?: string | null;
+}
+
+/**
+ * Payload for POST /api/v1/items (api.createItem). ERP columns follow
+ * migrations 000005 + 000033. Fields without a backend column yet
+ * (purchase price, opening balances) are accepted for forward
+ * compatibility; see api.createItem for what is persisted today.
+ */
+export interface CreateItemInput {
+  code: string;
+  name: string;
+  item_type: "goods" | "service";
+  /** Base unit of measure. */
+  uom: string;
+  costing_method?: ItemCostingMethod;
+  inventory_account_id?: number;
+  cogs_account_id?: number;
+  /** Revenue account FK (items.sale_account_id). */
+  sale_account_id?: number;
+  sale_uom?: string;
+  purchase_uom?: string;
+  barcode?: string;
+  brand?: string;
+  category?: string;
+  /** Short description; used as description_long when the long one is empty. */
+  description?: string;
+  description_long?: string;
+  weight_grams?: number;
+  volume_cc?: number;
+  /** Default sale price; persisted to the "Umum" item price list. */
+  sale_price_cents?: number;
+  /** Reference purchase price (no backend column yet). */
+  purchase_price_cents?: number;
+  reorder_point?: number;
+  reorder_qty?: number;
+  lead_time_days?: number;
+  preferred_supplier_id?: number;
+  abc_classification?: "A" | "B" | "C";
+  /** Opening stock qty (no backend column yet — use Stock Opname to post). */
+  opening_balance_qty?: number;
+  /** Opening stock cost in cents (no backend column yet). */
+  opening_balance_cost_cents?: number;
+}
+
+/** One item price-list entry (GET/POST /api/v1/items/{id}/prices). */
+export interface ItemPriceEntry {
+  id: number;
+  item_id: number;
+  price_list_name: string;
+  customer_group?: string | null;
+  customer_id?: number | null;
+  unit_price_cents: number;
+  currency_code: string;
+  effective_from?: string | null;
+  effective_to?: string | null;
+  is_active: boolean;
 }
 
 /** Sales quotation list row (GET /api/v1/quotations). */

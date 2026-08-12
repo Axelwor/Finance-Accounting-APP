@@ -91,7 +91,7 @@ export function InventoryItemsList() {
                   <span>{it.barcode || "—"}</span>
                   <span><span className={`kind-mark ${it.item_type === "goods" ? "" : "is-muted"}`}>{it.item_type}</span></span>
                   <span>{it.category || "—"}</span>
-                  <span className="ledger-table__memo">{it.unit || "—"}</span>
+                  <span className="ledger-table__memo">{it.uom ?? it.unit ?? "—"}</span>
                   <span className="ledger-table__amount right">{it.sale_price_cents ? formatIDR(it.sale_price_cents) : "—"}</span>
                   <span><span className={`kind-mark ${it.is_active ? "is-positive" : "is-negative"}`}>{it.is_active ? "Active" : "Inactive"}</span></span>
                 </div>
