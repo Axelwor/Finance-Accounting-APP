@@ -59,18 +59,18 @@ type ProfitLossResult struct {
 // Cash movements are classified into operating, investing, and financing
 // activities per PSAK 2 / IAS 7.
 type CashFlowResult struct {
-	OperatingInflowCents    int64 `json:"operating_inflow_cents"`
-	OperatingOutflowCents   int64 `json:"operating_outflow_cents"`
-	InvestingInflowCents    int64 `json:"investing_inflow_cents"`
-	InvestingOutflowCents   int64 `json:"investing_outflow_cents"`
-	FinancingInflowCents    int64 `json:"financing_inflow_cents"`
-	FinancingOutflowCents   int64 `json:"financing_outflow_cents"`
-	InflowCents             int64 `json:"inflow_cents"`
-	OutflowCents            int64 `json:"outflow_cents"`
-	NetCashFlowCents        int64 `json:"net_cash_flow_cents"`
-	NetOperatingCents       int64 `json:"net_operating_cents"`
-	NetInvestingCents       int64 `json:"net_investing_cents"`
-	NetFinancingCents       int64 `json:"net_financing_cents"`
+	OperatingInflowCents  int64 `json:"operating_inflow_cents"`
+	OperatingOutflowCents int64 `json:"operating_outflow_cents"`
+	InvestingInflowCents  int64 `json:"investing_inflow_cents"`
+	InvestingOutflowCents int64 `json:"investing_outflow_cents"`
+	FinancingInflowCents  int64 `json:"financing_inflow_cents"`
+	FinancingOutflowCents int64 `json:"financing_outflow_cents"`
+	InflowCents           int64 `json:"inflow_cents"`
+	OutflowCents          int64 `json:"outflow_cents"`
+	NetCashFlowCents      int64 `json:"net_cash_flow_cents"`
+	NetOperatingCents     int64 `json:"net_operating_cents"`
+	NetInvestingCents     int64 `json:"net_investing_cents"`
+	NetFinancingCents     int64 `json:"net_financing_cents"`
 }
 
 // BalanceSheetResult is the JSON shape returned by GET /reports/balance-sheet.
@@ -113,11 +113,12 @@ type dateRange struct {
 
 // reportFilter bundles the optional query params that narrow a report. It
 // extends dateRange with a dimension_id scope (only journal lines tagged with
-// the dimension are aggregated) and a framework presentation selector.
+// one of the selected dimensions are aggregated) and a framework presentation
+// selector.
 type reportFilter struct {
 	dateRange
-	dimensionID int64  // 0 = no dimension filter
-	framework   string // EMKM | ETAP | SAK_UMUM, or "" for the default
+	dimensionIDs []int64 // empty = no dimension filter
+	framework    string  // EMKM | ETAP | SAK_UMUM, or "" for the default
 }
 
 // parseDateRange reads the optional from_date / to_date query params and
@@ -141,6 +142,31 @@ func parseDateRange(r *http.Request) dateRange {
 	}
 }
 
+// parseDimensionIDs reads one or more dimension ids from the dimension_id
+// query param. Both repeated params (?dimension_id=1&dimension_id=2) and
+// comma-separated lists (?dimension_id=1,2) are accepted, and may be mixed.
+// Non-numeric and non-positive values are silently dropped and duplicates
+// removed (preserving first-seen order) so the report degrades gracefully
+// rather than erroring.
+func parseDimensionIDs(rawValues []string) []int64 {
+	var ids []int64
+	seen := make(map[int64]struct{})
+	for _, raw := range rawValues {
+		for _, part := range strings.Split(raw, ",") {
+			id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64)
+			if err != nil || id <= 0 {
+				continue
+			}
+			if _, dup := seen[id]; dup {
+				continue
+			}
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 // parseReportFilter reads from_date / to_date plus the optional framework and
 // dimension_id query params used by the reporting endpoints. Invalid values
 // are silently dropped so the report degrades to the default rather than
@@ -148,11 +174,7 @@ func parseDateRange(r *http.Request) dateRange {
 func parseReportFilter(r *http.Request) reportFilter {
 	dr := parseDateRange(r)
 	f := reportFilter{dateRange: dr}
-	if dimRaw := strings.TrimSpace(r.URL.Query().Get("dimension_id")); dimRaw != "" {
-		if id, err := strconv.ParseInt(dimRaw, 10, 64); err == nil && id > 0 {
-			f.dimensionID = id
-		}
-	}
+	f.dimensionIDs = parseDimensionIDs(r.URL.Query()["dimension_id"])
 	switch strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("framework"))) {
 	case "EMKM", "ETAP", "SAK_UMUM":
 		f.framework = strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("framework")))
@@ -227,7 +249,7 @@ func (service *Service) TrialBalance(writer http.ResponseWriter, request *http.R
 				"total_credit_cents": result.TotalCreditCents,
 				"diff_cents":         diff,
 			},
-			"rows":              result.Rows,
+			"rows":               result.Rows,
 			"total_debit_cents":  result.TotalDebitCents,
 			"total_credit_cents": result.TotalCreditCents,
 			"balanced":           false,
@@ -239,9 +261,9 @@ func (service *Service) TrialBalance(writer http.ResponseWriter, request *http.R
 
 // ProfitLoss aggregates revenue and expense groups for the requested range.
 // An optional `framework` query param switches the presentation (EMKM /
-// ETAP / SAK Umum); the underlying totals are identical. An optional
-// `dimension_id` query param narrows the aggregation to journal lines tagged
-// with that dimension (cabang / proyek).
+// ETAP / SAK Umum); the underlying totals are identical. Optional
+// `dimension_id` query params (repeated and/or comma-separated) narrow the
+// aggregation to journal lines tagged with those dimensions (cabang / proyek).
 func (service *Service) ProfitLoss(writer http.ResponseWriter, request *http.Request) {
 	f := parseReportFilter(request)
 	result, err := service.fetchProfitLoss(request.Context(), tenantFrom(request), f)

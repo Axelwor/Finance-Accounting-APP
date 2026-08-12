@@ -376,3 +376,112 @@ select.input {
   letter-spacing: 0.04em;
 }
 
+/* ------------------------------------------------------------
+   Toast notifications (export feedback)
+   ------------------------------------------------------------ */
+
+.toast-region {
+  position: fixed;
+  bottom: var(--u-5);
+  right: var(--u-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--u-2);
+  z-index: 1000;
+}
+.toast {
+  max-width: 360px;
+  padding: var(--u-3) var(--u-4);
+  background: var(--ink-deep);
+  color: var(--paper);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--text-sm);
+  animation: toast-in 0.18s ease-out;
+}
+.toast--error { background: var(--negative); }
+.toast.is-leaving { opacity: 0; transition: opacity 0.2s ease; }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; }
+  .toast.is-leaving { transition: none; }
+}
+
+/* ------------------------------------------------------------
+   Multi-select combobox (report dimension filter)
+   ------------------------------------------------------------ */
+
+.msel { position: relative; display: inline-flex; }
+.msel__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--u-1);
+  max-width: 220px;
+  height: 30px;
+  padding: 4px var(--u-2);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  color: var(--ink);
+  font-size: var(--text-xs);
+}
+.msel__trigger:hover { border-color: var(--rule-strong); }
+.msel__trigger.is-filtered { border-color: var(--accent-rule); color: var(--accent); }
+.msel__trigger-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msel__caret { flex-shrink: 0; color: var(--ink-muted); font-size: var(--text-2xs); }
+.msel__panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 60;
+  width: 264px;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+}
+.msel__search {
+  margin: var(--u-2);
+  padding: 6px var(--u-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-xs);
+  background: var(--paper-elev);
+  color: var(--ink);
+  font-size: var(--text-xs);
+}
+.msel__search:focus { outline: 0; border-color: var(--accent); }
+.msel__options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 0 var(--u-2) var(--u-2);
+}
+.msel__option {
+  display: flex;
+  align-items: center;
+  gap: var(--u-2);
+  padding: 6px var(--u-2);
+  border-radius: var(--radius-xs);
+  font-size: var(--text-xs);
+  color: var(--ink);
+  cursor: pointer;
+}
+.msel__option:hover { background: var(--panel-hover); }
+.msel__option input { accent-color: var(--accent); flex-shrink: 0; }
+.msel__empty { padding: var(--u-3) var(--u-2); font-size: var(--text-xs); color: var(--ink-muted); }
+.msel__clear {
+  padding: var(--u-2);
+  border-top: 1px solid var(--rule-soft);
+  font-size: var(--text-xs);
+  color: var(--accent);
+  text-align: center;
+}
+.msel__clear:hover { background: var(--accent-soft); }
+
