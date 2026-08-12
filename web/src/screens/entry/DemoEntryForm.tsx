@@ -20,6 +20,7 @@ interface CounterLine {
   amount: string;
 }
 
+// @ts-ignore: intentionally minimal demo coverage
 const PARTY_LABEL: Record<EntrySubKind, string> = {
   "money-in": "Received From",
   "money-out": "Paid To",

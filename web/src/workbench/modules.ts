@@ -16,6 +16,7 @@ const cashBank: Module = {
     { id: "cb-payment", label: "Other Payment", hint: "M-", openList: "cash-other-payment", openEntry: "money-out" },
     { id: "cb-transfer", label: "Bank Transfer", hint: "Xfer", openList: "cash-transfer", openEntry: "cash-transfer" },
     { id: "cb-recon", label: "Bank Reconciliation", hint: "REC", openList: "bank-reconciliation", openEntry: "bank-reconciliation-entry" },
+    { id: "cb-cheque", label: "Cheques & GIRO", hint: "CHK", openList: "cheque-list", openEntry: "cheque-entry" },
   ],
 };
 
@@ -184,6 +185,8 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Purchase Returns";
     case "bank-reconciliation":
       return "Bank Reconciliation";
+    case "cheque-list":
+      return "Cheques & GIRO";
     case "inventory-items":
       return "Item List";
     case "stock-movements":
@@ -358,6 +361,7 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "lease-payment-schedule": return "LS-SCH";
     case "rp-editor": return "TPL-DRAFT";
     case "approval-rule-entry": return "APR-DRAFT";
+    case "cheque-entry": return "CHK-DRAFT";
     default: return "DRAFT";
   }
 }
