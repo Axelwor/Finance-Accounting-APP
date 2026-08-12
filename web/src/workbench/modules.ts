@@ -63,7 +63,7 @@ const inventory: Module = {
   label: "Inventory",
   icon: "box",
   items: [
-    { id: "in-items", label: "Item List", hint: "ITM", openList: "inventory-items", openEntry: "inventory-item", mockData: true },
+    { id: "in-items", label: "Item List", hint: "ITM", openList: "inventory-items", openEntry: "inventory-item" },
     { id: "in-movements", label: "Stock Movements", hint: "STK", openList: "stock-movements", mockData: true },
     { id: "in-opname", label: "Stock Opnames", hint: "OPN", openList: "stock-opname", openEntry: "stock-opname-entry" },
     { id: "in-transfer", label: "Stock Transfers", hint: "TRF", openList: "stock-transfer", openEntry: "stock-transfer-entry" },

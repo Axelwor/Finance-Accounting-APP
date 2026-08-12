@@ -65,6 +65,7 @@ import { SupplierInvoiceForm } from "../screens/entry/SupplierInvoiceForm";
 import { PurchaseReturnForm } from "../screens/entry/PurchaseReturnForm";
 import { StockOpnameForm } from "../screens/entry/StockOpnameForm";
 import { StockTransferForm } from "../screens/entry/StockTransferForm";
+import { ItemForm } from "../screens/entry/ItemForm";
 import { BOMForm } from "../screens/entry/BOMForm";
 import { ProductionJobForm } from "../screens/entry/ProductionJobForm";
 import { BankStatementList } from "../screens/list/BankStatementList";
@@ -359,7 +360,6 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
     case "sales-receipt":
     case "purchase-invoice":
     case "purchase-payment":
-    case "inventory-item":
     case "asset-register":
       return (
         <DemoEntryForm
@@ -369,6 +369,8 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
           initialTitle={tab.title}
         />
       );
+    case "inventory-item":
+      return <ItemForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "sales-quotation-entry":
       return <QuotationForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "sales-order-entry":

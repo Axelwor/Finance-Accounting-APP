@@ -43,6 +43,8 @@ import type {
   CustomerStatement,
   CreateCustomerInput,
   Item,
+  CreateItemInput,
+  ItemPriceEntry,
   Quotation,
   QuotationCreateInput,
   QuotationListItem,
@@ -1413,9 +1415,111 @@ export const api = {
   },
 
   /** Item list (GET /items). Failure -> empty array. */
-  async listItems(): Promise<Item[]> {
+  async listItems(params: { type?: string; include_inactive?: boolean } = {}): Promise<Item[]> {
+    const search = new URLSearchParams();
+    if (params.type) search.set("type", params.type);
+    if (params.include_inactive) search.set("include_inactive", "true");
+    const query = search.toString();
     try {
-      return await http<Item[]>("/items", { auth: true });
+      return await http<Item[]>(`/items${query ? `?${query}` : ""}`, { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Creates an item (POST /items). ERP columns follow migrations
+   * 000005 + 000033. Persistence notes:
+   *  - goods are always created with is_tracked_stock = true (backend rule);
+   *  - `description` falls back to `description_long` (items has no short
+   *    description column);
+   *  - `sale_price_cents` is stored as the "Umum" entry in item_price_lists
+   *    via POST /items/{id}/prices after the item is created;
+   *  - `purchase_price_cents` and opening balances have no backend column
+   *    yet and are forwarded for forward compatibility only.
+   */
+  async createItem(input: CreateItemInput): Promise<{ id: number; code: string; name: string }> {
+    const numeric = (value: number | undefined): string | undefined =>
+      value === undefined || Number.isNaN(value) ? undefined : String(value);
+    const optionalText = (value: string | undefined): string | undefined => {
+      const trimmed = value?.trim();
+      return trimmed ? trimmed : undefined;
+    };
+    const isGoods = input.item_type === "goods";
+
+    const payload: Record<string, unknown> = {
+      code: input.code.trim(),
+      name: input.name.trim(),
+      item_type: input.item_type,
+      uom: input.uom.trim() || "pcs",
+      is_tracked_stock: isGoods,
+      sale_uom: optionalText(input.sale_uom),
+      purchase_uom: optionalText(input.purchase_uom),
+      barcode: optionalText(input.barcode),
+      brand: optionalText(input.brand),
+      category: optionalText(input.category),
+      description_long: optionalText(input.description_long) ?? optionalText(input.description),
+      weight_grams: numeric(input.weight_grams),
+      volume_cc: numeric(input.volume_cc),
+      reorder_point: numeric(input.reorder_point),
+      reorder_qty: numeric(input.reorder_qty),
+      lead_time_days: input.lead_time_days ?? undefined,
+      preferred_supplier_id: input.preferred_supplier_id ?? undefined,
+      abc_classification: input.abc_classification ?? undefined,
+      // No backend column yet; ignored by the current handler, kept so a
+      // future backend can pick it up without a client change.
+      purchase_price_cents: input.purchase_price_cents ?? undefined,
+    };
+    if (isGoods) {
+      payload.costing_method = input.costing_method;
+      payload.inventory_account_id = input.inventory_account_id;
+      payload.cogs_account_id = input.cogs_account_id;
+    }
+    if (input.sale_account_id) {
+      payload.sale_account_id = input.sale_account_id;
+    }
+
+    const created = await http<{ id: number; code: string; name: string }>("/items", {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(payload),
+    });
+
+    // Persist the default sale price in the "Umum" price list. The item is
+    // already created at this point, so a price-list failure is swallowed
+    // (retrying create would hit ITEM_CODE_EXISTS).
+    if ((input.sale_price_cents ?? 0) > 0) {
+      try {
+        await http<{ id: number; item_id: number }>(`/items/${created.id}/prices`, {
+          method: "POST",
+          auth: true,
+          idempotencyKey: newIdempotencyKey(),
+          body: JSON.stringify({
+            price_list_name: "Umum",
+            unit_price_cents: input.sale_price_cents,
+            currency_code: "IDR",
+          }),
+        });
+      } catch {
+        /* item created; price list entry can be added later */
+      }
+    }
+    return created;
+  },
+
+  /** Deactivates an item (POST /items/{id}/deactivate). */
+  async deactivateItem(id: number): Promise<{ id: number; is_active: boolean }> {
+    return http<{ id: number; is_active: boolean }>(`/items/${id}/deactivate`, {
+      method: "POST",
+      auth: true,
+    });
+  },
+
+  /** Lists an item's price-list entries (GET /items/{id}/prices). Failure -> empty array. */
+  async listItemPrices(id: number): Promise<ItemPriceEntry[]> {
+    try {
+      return await http<ItemPriceEntry[]>(`/items/${id}/prices`, { auth: true });
     } catch {
       return [];
     }
