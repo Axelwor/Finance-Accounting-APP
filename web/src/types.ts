@@ -59,7 +59,9 @@ export type ListSubKind =
   | "report-templates"
   | "approval-rules"
   | "pending-approval-requests"
-  | "cheque-list";
+  | "cheque-list"
+  | "email-templates"
+  | "email-queue";
 
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
@@ -97,7 +99,8 @@ export type EntrySubKind =
   | "lease-payment-schedule"
   | "rp-editor"
   | "approval-rule-entry"
-  | "cheque-entry";
+  | "cheque-entry"
+  | "email-template-entry";
 
 export type CurrencyCode = "IDR";
 
@@ -2291,3 +2294,53 @@ export const REPORT_TEMPLATE_TYPES: Record<ReportTemplateDocumentType, string> =
   asset_register: "Asset Register",
   stock_opname: "Stock Opname",
 };
+
+/* ------------------------------------------------------------------ */
+/* Email Templates & Queue (Wave 6b)                                  */
+/* ------------------------------------------------------------------ */
+
+/** Email template trigger events. */
+export type EmailTriggerEvent =
+  | "INVOICE_SENT"
+  | "PAYMENT_RECEIVED"
+  | "CREDIT_NOTE_ISSUED"
+  | "QUOTATION_ACCEPTED"
+  | "DELIVERY_ORDER_COMPLETED";
+
+/** Email template for automated notifications. */
+export interface EmailTemplate {
+  id: number;
+  tenant_id: number;
+  subject: string;
+  body_html: string;
+  body_text: string;
+  trigger_event: EmailTriggerEvent;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+/** Input for creating/updating email templates. */
+export interface CreateEmailTemplateInput {
+  subject: string;
+  body_html: string;
+  body_text?: string;
+  trigger_event: EmailTriggerEvent;
+  is_active?: boolean;
+}
+
+/** Email queue item - queued or sent email notification. */
+export interface EmailQueueItem {
+  id: number;
+  tenant_id: number;
+  template_id: number;
+  recipient_email: string;
+  subject: string;
+  status: "PENDING" | "SENT" | "FAILED";
+  trigger_event: EmailTriggerEvent;
+  sent_at?: string;
+  error_message?: string;
+  created_at: string;
+}
+
+/** End of file. Added email templates types 2026-08-12 Wave 6b. */

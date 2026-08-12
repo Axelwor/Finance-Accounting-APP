@@ -111,6 +111,17 @@ const tax: Module = {
   ],
 };
 
+// Email Communication module (Wave 6b)
+const email: Module = {
+  id: "email",
+  label: "Email Communication",
+  icon: "sale",
+  items: [
+    { id: "em-templates", label: "Email Templates", hint: "TPL", openList: "email-templates", openEntry: "email-template-entry" },
+    { id: "em-queue", label: "Email Queue", hint: "Q", openList: "email-queue" },
+  ],
+};
+
 const reports: Module = {
   id: "reports",
   label: "Reports",
@@ -128,7 +139,7 @@ const reports: Module = {
   ],
 };
 
-export const MODULES: Module[] = [cashBank, sales, purchases, production, inventory, fixedAssets, accountant, tax, reports];
+export const MODULES: Module[] = [cashBank, sales, purchases, production, inventory, fixedAssets, accountant, tax, email, reports];
 
 export function findModule(id: ModuleId): Module | undefined {
   return MODULES.find((m) => m.id === id);
@@ -247,6 +258,10 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Approval Rules";
     case "pending-approval-requests":
       return "Pending Approvals";
+    case "email-templates":
+      return "Email Templates";
+    case "email-queue":
+      return "Email Queue";
   }
 }
 
@@ -321,6 +336,8 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Lease Schedule";
     case "rp-editor":
       return "Report Template";
+    case "email-template-entry":
+      return "Email Template";
     default:
       return "Entry";
   }

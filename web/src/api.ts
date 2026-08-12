@@ -17,6 +17,8 @@ import type {
   ApiError,
   ApprovalRequest,
   ApproveApprovalRequestInput,
+  ApprovalRule,
+  CreateApprovalRuleInput,
   BackendAccount,
   BackendBalanceSheet,
   BackendCashFlow,
@@ -167,6 +169,9 @@ import type {
   CreateReportTemplateInput,
   ChequeListItem,
   ChequeCreateInput,
+  EmailTemplate,
+  CreateEmailTemplateInput,
+  EmailQueueItem,
 } from "./types";
 
 /** Reconciliation detail returned by the reconcile endpoints. */
@@ -2407,10 +2412,41 @@ export const api = {
 
    // -- Approval Workflow API methods (Wave 4) --
 
-   /** List pending approval requests for current user. */
-   async listApprovalRequests(): Promise<ApprovalRequest[]> {
-     return http<ApprovalRequest[]>(`/approval-requests`, { auth: true });
-   },
+  /** List pending approval requests for current user. */
+  async listApprovalRequests(): Promise<ApprovalRequest[]> {
+    return http<ApprovalRequest[]>(`/approval-requests`, { auth: true });
+  },
+
+  /** List approval rules. */
+  async getApprovalRules(): Promise<ApprovalRule[]> {
+    return http<ApprovalRule[]>(`/approval-rules`, { auth: true });
+  },
+
+  /** Create an approval rule. */
+  async createApprovalRule(input: CreateApprovalRuleInput): Promise<ApprovalRule> {
+    return http(`/approval-rules`, {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Update an approval rule. */
+  async updateApprovalRule(id: number, input: CreateApprovalRuleInput): Promise<ApprovalRule> {
+    return http(`/approval-rules/${id}`, {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Delete an approval rule. */
+  async deleteApprovalRule(id: number): Promise<void> {
+    return http(`/approval-rules/${id}`, {
+      method: "DELETE",
+      auth: true,
+    });
+  },
 
    /** Approve an approval request with optional reason. */
    async approveApprovalRequest(requestId: number, input: ApproveApprovalRequestInput): Promise<void> {
@@ -2491,6 +2527,63 @@ export const api = {
         body: JSON.stringify({ reason }),
       });
     },
+
+    // -- Email Templates & Queue API methods (Wave 6b) --
+
+    /** List all email templates. */
+    async listEmailTemplates(): Promise<EmailTemplate[]> {
+      return http<EmailTemplate[]>("/email/templates", { auth: true });
+    },
+
+    /** Create a new email template. */
+    async createEmailTemplate(input: CreateEmailTemplateInput): Promise<EmailTemplate> {
+      return http("/email/templates", {
+        method: "POST",
+        auth: true,
+        body: JSON.stringify(input),
+      });
+    },
+
+    /** Update an existing email template. */
+    async updateEmailTemplate(id: number, input: Partial<CreateEmailTemplateInput>): Promise<EmailTemplate> {
+      return http(`/email/templates/${id}`, {
+        method: "PUT",
+        auth: true,
+        body: JSON.stringify(input),
+      });
+    },
+
+    /** Delete an email template. */
+    async deleteEmailTemplate(id: number): Promise<void> {
+      return http(`/email/templates/${id}`, {
+        method: "DELETE",
+        auth: true,
+      });
+    },
+
+    /** List the email queue. */
+    async listEmailQueue(): Promise<EmailQueueItem[]> {
+      return http<EmailQueueItem[]>("/email/queue", { auth: true });
+    },
+
+    /** Send a queued email immediately. */
+    async sendEmail(id: number): Promise<void> {
+      return http("/email/queue/send", {
+        method: "POST",
+        auth: true,
+        body: JSON.stringify({ id }),
+      });
+    },
+
+    /** Cancel a pending email in the queue. */
+    async cancelEmail(id: number): Promise<void> {
+      return http(`/email/queue/${id}/cancel`, {
+        method: "POST",
+        auth: true,
+      });
+    },
+
+    // End of Wave 6b email templates & queue methods.
 
    /** Access token for protected API calls (used later). */
    getAccessToken,

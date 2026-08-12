@@ -57,6 +57,7 @@ const PARTY_LABEL: Record<EntrySubKind, string> = {
   "customer-entry": "Customer",
   "approval-rule-entry": "Approval Rule",
   "cheque-entry": "Cheque/GIRO",
+  "email-template-entry": "Email Template",
 };
 
 const HEADER_TITLE: Record<EntrySubKind, string> = {
@@ -95,7 +96,7 @@ const HEADER_TITLE: Record<EntrySubKind, string> = {
   "customer-entry": "Customer",
   "approval-rule-entry": "Approval Rule",
   "cheque-entry": "Cheque/GIRO",
-  // @ts-ignore: intentionally minimal demo coverage for Wave 6 modules
+  "email-template-entry": "Email Template",
 };
 
 const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
@@ -134,6 +135,7 @@ const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
   "lease-contract-entry": { label: "Lease details" },
   "lease-payment-schedule": { label: "Schedule" },
   "rp-editor": { label: "Template YAML" },
+  "email-template-entry": { label: "Email content" },
 };
 
 /**

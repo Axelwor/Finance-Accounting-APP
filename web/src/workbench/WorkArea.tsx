@@ -91,6 +91,8 @@ import { FinancialNoteForm } from "../screens/entry/FinancialNoteForm";
 import { ReportTemplateEditor } from "../screens/entry/ReportTemplateEditor";
 import { ApprovalRuleList } from "../screens/list/ApprovalRuleList";
 import { PendingApprovalRequestList } from "../screens/list/PendingApprovalRequestList";
+import { EmailTemplateList } from "../screens/list/EmailTemplateList";
+import { EmailQueueList } from "../screens/list/EmailQueueList";
 import { ApprovalRuleForm } from "../screens/entry/ApprovalRuleForm";
 import { defaultEntryTitle, findModule } from "./modules";
 
@@ -345,6 +347,10 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <ApprovalRuleList />;
     case "pending-approval-requests":
       return <PendingApprovalRequestList />;
+    case "email-templates":
+      return <EmailTemplateList />;
+    case "email-queue":
+      return <EmailQueueList />;
     default:
       return <PlaceholderTab title={tab.title} sub={`list · ${subKind}`} />;
   }
@@ -430,12 +436,11 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
     case "financial-notes-entry":
       return <FinancialNoteForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title as string} />;
     case "cheque-entry":
-      return <ChequeForm id={tab.id} entryId={tab.entryId} title={tab.title as string} />;
+      return <ChequeForm {...tab} />;
     case "rp-editor":
       return <ReportTemplateEditor tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title as string} />;
     case "approval-rule-entry":
-      // @ts-ignore: intentionally minimal demo coverage for Wave 4 modules
-      return <ApprovalRuleForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title as string} />;
+      return <ApprovalRuleForm tabId={tab.id} title={tab.title as string} />;
     default:
       return <PlaceholderTab title={tab.title} sub={`entry · ${subKind}`} />;
   }

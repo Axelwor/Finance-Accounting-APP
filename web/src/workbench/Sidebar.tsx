@@ -69,6 +69,21 @@ const Icon = ({ name }: { name: Module["icon"] }) => {
           <path d="M8 15h5" />
         </svg>
       );
+    case "email":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 6h16v12H4z" />
+          <path d="M22 6l-10 7L0 6" />
+        </svg>
+      );
+    case "sale":
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 12l4 4L19 6" />
+          <path d="M9 6h6" />
+          <path d="M9 18h6" />
+        </svg>
+      );
   }
 };
 
