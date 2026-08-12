@@ -17,6 +17,7 @@ import type {
   ApiError,
   ApprovalRequest,
   ApproveApprovalRequestInput,
+  AgingReport,
   BackendAccount,
   BackendBalanceSheet,
   BackendCashFlow,
@@ -1063,8 +1064,26 @@ export const api = {
     return http<BackendCashFlow>(`/reports/cash-flow${qs}`, { auth: true });
   },
 
+  /** AR Aging Report (GET /aging/ar). */
+  async getARAging(asOf?: string): Promise<AgingReport> {
+    const params = new URLSearchParams();
+    if (asOf) params.set("as_of", asOf);
+    return http<AgingReport>(`/aging/ar${params.toString() ? `?${params}` : ""}`, {
+      auth: true,
+    });
+  },
+
+  /** AP Aging Report (GET /aging/ap). */
+  async getAPAging(asOf?: string): Promise<AgingReport> {
+    const params = new URLSearchParams();
+    if (asOf) params.set("as_of", asOf);
+    return http<AgingReport>(`/aging/ap${params.toString() ? `?${params}` : ""}`, {
+      auth: true,
+    });
+  },
+
   /**
-   * Export a report as PDF or Excel (GET /reports/{reportType}/export).
+    * Export a report as PDF or Excel (GET /reports/{reportType}/export).
    * Returns a Blob suitable for download. Uses a raw fetch (not the shared
    * http() helper) because http() parses JSON; exports are binary.
    *
@@ -1072,21 +1091,23 @@ export const api = {
    * file matches the on-screen report; the backend export handler parses the
    * same filter params as the report endpoints.
    */
-  async exportReport(
-    reportType: string,
-    options: {
-      format: "pdf" | "xlsx";
-      from_date?: string;
-      to_date?: string;
-      framework?: string;
-      dimension_ids?: number[];
-    },
-  ): Promise<Blob> {
-    const qs = new URLSearchParams();
-    qs.set("format", options.format);
-    if (options.from_date) qs.set("from_date", options.from_date);
-    if (options.to_date) qs.set("to_date", options.to_date);
-    if (options.framework) qs.set("framework", options.framework);
+   async exportReport(
+     reportType: string,
+     options: {
+       format: "pdf" | "xlsx";
+       from_date?: string;
+       to_date?: string;
+       framework?: string;
+       dimension_ids?: number[];
+       as_of?: string;
+     },
+   ): Promise<Blob> {
+     const qs = new URLSearchParams();
+     qs.set("format", options.format);
+     if (options.from_date) qs.set("from_date", options.from_date);
+     if (options.to_date) qs.set("to_date", options.to_date);
+     if (options.framework) qs.set("framework", options.framework);
+     if (options.as_of) qs.set("as_of", options.as_of);
     const dimensionIds = (options.dimension_ids ?? []).filter((id) => Number.isFinite(id) && id > 0);
     if (dimensionIds.length > 0) qs.set("dimension_id", dimensionIds.join(","));
     const response = await fetch(`${API_BASE}/reports/${reportType}/export?${qs}`, {

@@ -59,7 +59,9 @@ export type ListSubKind =
   | "report-templates"
   | "approval-rules"
   | "pending-approval-requests"
-  | "cheque-list";
+  | "cheque-list"
+  | "ar-aging"
+  | "ap-aging";
 
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
@@ -318,6 +320,24 @@ export interface BackendCashFlow {
   inflow_cents: number;
   outflow_cents: number;
   net_cash_flow_cents: number;
+}
+
+/** One aging bucket in an AR/AP aging report. */
+export interface AgingBucket {
+  bucket: "0-30" | "31-60" | "61-90" | ">90";
+  amount_cents: number;
+  count: number;
+}
+
+/** Response GET /api/v1/aging/ar and /api/v1/aging/ap. */
+export interface AgingReport {
+  asOf: string;
+  buckets: AgingBucket[];
+  summary: {
+    total_invoices: number;
+    total_receivable_cents: number;
+    overdue_amount_cents: number;
+  };
 }
 
 /** Single row in the trial balance response. */

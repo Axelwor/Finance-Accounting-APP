@@ -125,6 +125,8 @@ const reports: Module = {
     { id: "rp-budget-actual", label: "Budget vs Actual", hint: "BVA", openList: "budget-vs-actual" },
     { id: "rp-consol-tb", label: "Consolidated TB", hint: "CTB", openList: "consolidated-report" },
     { id: "rp-templates", label: "Report Templates", hint: "TPL", openList: "report-templates" },
+    { id: "rp-ar-aging", label: "AR Aging", hint: "AR", openList: "ar-aging" },
+    { id: "rp-ap-aging", label: "AP Aging", hint: "AP", openList: "ap-aging" },
   ],
 };
 
@@ -237,6 +239,10 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Budget vs Actual";
     case "audit-logs":
       return "Audit Trail";
+    case "ar-aging":
+      return "AR Aging";
+    case "ap-aging":
+      return "AP Aging";
     case "lease-contract":
       return "Lease Contracts";
     case "consolidated-report":

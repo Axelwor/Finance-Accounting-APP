@@ -50,6 +50,8 @@ import { JournalRegister } from "../screens/list/JournalRegister";
 import { AuditLogList } from "../screens/list/AuditLogList";
 import { ReportTemplateList } from "../screens/list/ReportTemplateList";
 import { FinancialNotesList } from "../screens/list/FinancialNotesList";
+import { ARAgingList } from "../screens/list/ARAgingList";
+import { APAgingList } from "../screens/list/APAgingList";
 import { JournalEntryForm } from "../screens/entry/JournalEntryForm";
 import { DemoEntryForm } from "../screens/entry/DemoEntryForm";
 import { ChequeList } from "../screens/list/ChequeList";
@@ -329,6 +331,10 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <AuditLogList />;
     case "financial-notes":
       return <FinancialNotesList />;
+    case "ar-aging":
+      return <ARAgingList />;
+    case "ap-aging":
+      return <APAgingList />;
     case "cheque-list":
       return <ChequeList />;
     case "due-date-reminders":
