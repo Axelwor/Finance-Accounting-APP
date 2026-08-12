@@ -78,46 +78,43 @@ export function FixedAssetList() {
             }
           />
         ) : (
-          <div className="ledger-table">
-            <div className="ledger-table__row ledger-table__row--head">
-              <span>Code</span>
-              <span>Name</span>
-              <span>Acquired</span>
-              <span>Method</span>
-              <span className="right">Cost</span>
-              <span className="right">Accum. Dep.</span>
-              <span className="right">Book Value</span>
-              <span>Status</span>
-            </div>
-            {items.map((it) => (
-              <div
-                key={it.id}
-                className="ledger-table__row ledger-table__row--clickable"
-                onClick={() => openEntry(it)}
-                role="button"
-                tabIndex={0}
-              >
-                <span className="ledger-table__ref">{it.code}</span>
-                <span className="ledger-table__memo">{it.name}</span>
-                <span className="ledger-table__date">{it.acquisition_date}</span>
-                <span>{labelMethod(it.depreciation_method)}</span>
-                <span className="ledger-table__amount right">{formatIDR(it.acquisition_cost_cents)}</span>
-                <span className="ledger-table__amount right">{formatIDR(it.accum_dep_cents)}</span>
-                <span className="ledger-table__amount right">{formatIDR(it.book_value_cents)}</span>
-                <span>
-                  <span className={`kind-mark ${ASSET_STATUS_TONE[it.status] ?? "is-muted"}`}>
-                    {it.status}
-                  </span>
-                </span>
-              </div>
-            ))}
-          </div>
+          <table className="ledger-table" aria-label="Fixed assets list">
+            <thead>
+              <tr>
+                <th scope="col">Code</th>
+                <th scope="col">Name</th>
+                <th scope="col">Acquired</th>
+                <th scope="col">Method</th>
+                <th scope="col" className="right">Cost</th>
+                <th scope="col" className="right">Accum. Dep.</th>
+                <th scope="col" className="right">Book Value</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it) => (
+                <FixedAssetRow key={it.id} item={it} onOpen={() => openEntry(it)} />
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
-      <div className="listtab__footer">
-        <span className="listtab__footer-count">{items.length} Asset(s)</span>
-      </div>
     </div>
+  );
+}
+
+function FixedAssetRow({ item, onOpen }: { item: FixedAssetListItem; onOpen: () => void }) {
+  return (
+    <tr role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} style={{ cursor: "pointer" }}>
+      <th scope="row">{item.code}</th>
+      <td>{item.name}</td>
+      <td>{item.acquisition_date}</td>
+      <td>{labelMethod(item.depreciation_method)}</td>
+      <td className="right">{formatIDR(item.acquisition_cost_cents)}</td>
+      <td className="right">{formatIDR(item.accum_dep_cents)}</td>
+      <td className="right">{formatIDR(item.book_value_cents)}</td>
+      <td><span className={`kind-mark ${ASSET_STATUS_TONE[item.status] ?? "is-muted"}`}>{item.status}</span></td>
+    </tr>
   );
 }
 

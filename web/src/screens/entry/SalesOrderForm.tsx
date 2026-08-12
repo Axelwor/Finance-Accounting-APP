@@ -422,18 +422,24 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
           <div className="entrytab__detail">
             <div className="entrytab__detail-title">Item lines *</div>
             <div className="detail-grid detail-grid--quote">
-              <div className="detail-grid__head">
-                <div>Item</div>
-                <div>Qty</div>
-                <div className="right">Unit Price</div>
-                <div className="right">Discount</div>
-                <div className="right">Line Total</div>
+              <div className="detail-grid__head" role="row">
+                <div role="columnheader">Item</div>
+                <div role="columnheader">Qty</div>
+                <div role="columnheader" className="right">Unit Price</div>
+                <div role="columnheader" className="right">Discount</div>
+                <div role="columnheader" className="right">Line Total</div>
                 <div aria-hidden="true" />
               </div>
               {lines.map((line) => (
-                <div className="detail-grid__row" key={line.id}>
-                  <div>
-                    <select className="input" value={line.itemId} onChange={(e) => setItem(line.id, e.target.value)} disabled={isExisting}>
+                <div className="detail-grid__row" key={line.id} role="row">
+                  <div role="cell">
+                    <select
+                      className="input"
+                      value={line.itemId}
+                      onChange={(e) => setItem(line.id, e.target.value)}
+                      disabled={isExisting}
+                      aria-label={`Item for line ${line.id}`}
+                    >
                       <option value="">Choose item...</option>
                       {items.map((i) => (
                         <option key={i.id} value={i.id}>
@@ -442,20 +448,54 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <input className="amount" type="number" min={1} step="any" value={line.qty || ""} onChange={(e) => setQty(line.id, Number(e.target.value))} placeholder="1" disabled={isExisting} />
+                  <div role="cell">
+                    <input
+                      className="amount"
+                      type="number"
+                      min={1}
+                      step="any"
+                      value={line.qty || ""}
+                      onChange={(e) => setQty(line.id, Number(e.target.value))}
+                      placeholder="1"
+                      disabled={isExisting}
+                      aria-label={`Quantity for line ${line.id}`}
+                    />
                   </div>
-                  <div>
-                    <input className="amount right" type="text" inputMode="numeric" value={centsInput(line.unitPriceCents)} onChange={(e) => setPrice(line.id, parseCents(e.target.value))} placeholder="0" disabled={isExisting} />
+                  <div role="cell">
+                    <input
+                      className="amount right"
+                      type="text"
+                      inputMode="numeric"
+                      value={centsInput(line.unitPriceCents)}
+                      onChange={(e) => setPrice(line.id, parseCents(e.target.value))}
+                      placeholder="0"
+                      disabled={isExisting}
+                      aria-label={`Unit price for line ${line.id}`}
+                    />
                   </div>
-                  <div>
-                    <input className="amount right" type="text" inputMode="numeric" value={centsInput(line.discountCents)} onChange={(e) => setDiscount(line.id, parseCents(e.target.value))} placeholder="0" disabled={isExisting} />
+                  <div role="cell">
+                    <input
+                      className="amount right"
+                      type="text"
+                      inputMode="numeric"
+                      value={centsInput(line.discountCents)}
+                      onChange={(e) => setDiscount(line.id, parseCents(e.target.value))}
+                      placeholder="0"
+                      disabled={isExisting}
+                      aria-label={`Discount for line ${line.id}`}
+                    />
                   </div>
-                  <div className="right">
+                  <div role="cell" className="right">
                     <span className="ledger-table__amount">{formatIDR(line.lineTotalCents)}</span>
                   </div>
-                  <div>
-                    <button type="button" className="detail-grid__remove" onClick={() => setLines((cur) => (cur.length > 1 ? cur.filter((l) => l.id !== line.id) : cur))} aria-label="Remove line" disabled={isExisting || lines.length === 1}>
+                  <div role="cell">
+                    <button
+                      type="button"
+                      className="detail-grid__remove"
+                      onClick={() => setLines((cur) => (cur.length > 1 ? cur.filter((l) => l.id !== line.id) : cur))}
+                      aria-label={`Remove line ${line.id}`}
+                      disabled={isExisting || lines.length === 1}
+                    >
                       ×
                     </button>
                   </div>

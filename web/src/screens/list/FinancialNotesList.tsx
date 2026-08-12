@@ -118,51 +118,47 @@ export function FinancialNotesList() {
                   <span className="notes-list__group-year">Fiscal Year {year}</span>
                   <span className="notes-list__group-count">{notes.length} note(s)</span>
                 </header>
-                <div className="ledger-table">
-                  <div className="ledger-table__head">
-                    <span>No.</span>
-                    <span>Title</span>
-                    <span>Content</span>
-                    <span />
-                  </div>
-                  {notes.map((it) => (
-                    <div className="ledger-table__row" key={it.id}>
-                      <span className="ledger-table__num" onClick={() => openEntry(it)} role="button">
-                        {it.note_number}
-                      </span>
-                      <span className="ledger-table__party" onClick={() => openEntry(it)} role="button">
-                        {it.title}
-                      </span>
-                      <span className="ledger-table__memo">{previewContent(it.content)}</span>
-                      <span className="ledger-table__actions">
-                        <button
-                          type="button"
-                          className="btn btn--secondary btn--sm"
-                          onClick={() => openEntry(it)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn--ghost btn--sm"
-                          onClick={() => void handleDelete(it.id)}
-                          disabled={deletingId === it.id}
-                        >
-                          {deletingId === it.id ? "Deleting..." : "Delete"}
-                        </button>
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <table className="ledger-table" aria-label={`Financial notes for fiscal year ${year}`}>
+                  <thead>
+                    <tr>
+                      <th scope="col">No.</th>
+                      <th scope="col">Title</th>
+                      <th scope="col">Content</th>
+                      <th scope="col" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {notes.map((it) => (
+                      <FRow key={it.id} item={it} onOpen={() => openEntry(it)} onDelete={handleDelete} />
+                    ))}
+                  </tbody>
+                </table>
               </section>
             ))}
           </div>
         )}
       </div>
-      <div className="listtab__footer">
-        <span className="listtab__footer-count">{items.length} Note(s)</span>
-      </div>
     </div>
+  );
+}
+
+function FRow({ item, onOpen, onDelete }: { item: FinancialNote; onOpen: () => void; onDelete: (id: number) => void }) {
+  return (
+    <tr role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} style={{ cursor: "pointer" }}>
+      <td><span>{item.note_number}</span></td>
+      <td><span>{item.title}</span></td>
+      <td><span>{previewContent(item.content)}</span></td>
+      <td>
+        <span>
+          <button type="button" className="btn btn--secondary btn--sm" onClick={(e) => { e.stopPropagation(); onOpen(); }}>
+            Edit
+          </button>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} disabled={deletingId === item.id}>
+            {deletingId === item.id ? "Deleting..." : "Delete"}
+          </button>
+        </span>
+      </td>
+    </tr>
   );
 }
 
