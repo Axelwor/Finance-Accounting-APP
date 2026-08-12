@@ -42,6 +42,7 @@ func (service *Service) Routes(router chi.Router) {
 	router.Post("/suppliers", service.CreateSupplier)
 	router.Get("/suppliers", service.ListSuppliers)
 	router.Get("/suppliers/{id}", service.GetSupplier)
+	router.Put("/suppliers/{id}", service.UpdateSupplier)
 	router.Post("/suppliers/{id}/deactivate", service.DeactivateSupplier)
 
 	router.Post("/purchase-orders", service.CreatePurchaseOrder)

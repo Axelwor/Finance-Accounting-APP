@@ -29,6 +29,7 @@ func (service *Service) Routes(router chi.Router) {
 	// Static routes must precede the {id} wildcard in chi.
 	router.Get("/customers/ar-balances", service.ARBalances)
 	router.Get("/customers/{id}", service.GetCustomer)
+	router.Put("/customers/{id}", service.UpdateCustomer)
 	router.Get("/customers/{id}/ar-balance", service.ARBalance)
 	router.Post("/customers/{id}/deactivate", service.DeactivateCustomer)
 	router.Get("/customers/{id}/statement", service.CustomerStatement)
@@ -71,6 +72,9 @@ type CreateCustomerRequest struct {
 	NpwpName                   *string `json:"npwp_name"`
 	OpeningBalanceCents        *int64  `json:"opening_balance_cents"`
 	OpeningBalanceDate         *string `json:"opening_balance_date"`
+	// IsActive is only honoured by UpdateCustomer (PUT); create always starts
+	// active. Nil means "leave unchanged" on update.
+	IsActive *bool `json:"is_active"`
 }
 
 // CreatePaymentTermRequest is the JSON body for POST /payment-terms.
@@ -425,7 +429,7 @@ func (service *Service) CreateCustomer(writer http.ResponseWriter, request *http
 	// i-012: pre-check duplicates with clear messages before hitting the DB
 	// constraint (code must be unique per tenant; name is also rejected when
 	// an ACTIVE customer with the same name exists, to catch double-entry).
-	if code, message := service.checkCustomerDuplicates(request.Context(), tenant, req.Code, req.Name); code != "" {
+	if code, message := service.checkCustomerDuplicates(request.Context(), tenant, req.Code, req.Name, 0); code != "" {
 		writeError(writer, http.StatusConflict, code, message)
 		return
 	}
@@ -498,6 +502,84 @@ func (service *Service) GetCustomer(writer http.ResponseWriter, request *http.Re
 			return
 		}
 		writeError(writer, http.StatusInternalServerError, "CUSTOMER_GET_FAILED", err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, customer)
+}
+
+// UpdateCustomer updates an existing customer for the tenant (PUT
+// /customers/{id}). All master fields are replaced; the opening balance is
+// immutable after create. is_active is applied when provided (nil leaves the
+// current flag untouched).
+func (service *Service) UpdateCustomer(writer http.ResponseWriter, request *http.Request) {
+	tenant, err := tenantID(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	id, err := pathID(chi.URLParam(request, "id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	var req CreateCustomerRequest
+	if err := decodeJSON(request, &req); err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	if code, message := validateCreateCustomer(req); code != "" {
+		writeError(writer, http.StatusBadRequest, code, message)
+		return
+	}
+	if code, message := service.validateReferenceIDs(request.Context(), tenant, req); code != "" {
+		writeError(writer, http.StatusBadRequest, code, message)
+		return
+	}
+	// Duplicate check must exclude the customer being updated itself.
+	if code, message := service.checkCustomerDuplicates(request.Context(), tenant, req.Code, req.Name, id); code != "" {
+		writeError(writer, http.StatusConflict, code, message)
+		return
+	}
+	row := service.pool.QueryRow(request.Context(), `
+		UPDATE customers SET
+			code = $3, name = $4, npwp = $5, contact_person = $6, phone = $7,
+			email = $8, address = $9, city = $10, province = $11, postal_code = $12,
+			payment_term_id = $13, credit_limit_cents = $14,
+			default_revenue_account_id = $15, default_receivable_account_id = $16,
+			is_active = COALESCE($17, is_active),
+			billing_address = $18, shipping_address = $19, customer_group = $20,
+			price_level = $21, currency_code = $22, is_pkp = $23, credit_hold = $24,
+			website = $25, fax = $26, contact_person_2 = $27, phone_2 = $28,
+			npwp_name = $29, updated_at = now()
+		WHERE tenant_id = $1 AND id = $2
+		RETURNING id, code, name, npwp, contact_person, phone, email, address, city,
+			province, postal_code, payment_term_id, credit_limit_cents,
+			default_revenue_account_id, default_receivable_account_id, is_active,
+			billing_address, shipping_address, customer_group, price_level, currency_code,
+			is_pkp, credit_hold, website, fax, contact_person_2, phone_2, npwp_name,
+			opening_balance_cents, opening_balance_date
+	`, tenant, id, req.Code, req.Name, req.NPWP, req.ContactPerson, req.Phone,
+		req.Email, req.Address, req.City, req.Province, req.PostalCode,
+		req.PaymentTermID, req.CreditLimitCents, req.DefaultRevenueAccountID,
+		req.DefaultReceivableAccountID, req.IsActive,
+		req.BillingAddress, req.ShippingAddress, req.CustomerGroup, req.PriceLevel, req.CurrencyCode,
+		boolOrFalse(req.IsPKP), boolOrFalse(req.CreditHold), req.Website, req.Fax,
+		req.ContactPerson2, req.Phone2, req.NpwpName)
+	customer, err := scanCustomer(row)
+	if err != nil {
+		if isNoRows(err) {
+			writeError(writer, http.StatusNotFound, "CUSTOMER_NOT_FOUND", "customer does not exist for this tenant")
+			return
+		}
+		if isCheckViolation(err) {
+			writeError(writer, http.StatusBadRequest, "CUSTOMER_INVALID_FIELD", "invalid field value (check price_level/currency_code)")
+			return
+		}
+		if isUniqueViolation(err) {
+			writeError(writer, http.StatusConflict, "CUSTOMER_CODE_EXISTS", "a customer with this code already exists for this tenant")
+			return
+		}
+		writeError(writer, http.StatusInternalServerError, "CUSTOMER_UPDATE_FAILED", err.Error())
 		return
 	}
 	writeJSON(writer, http.StatusOK, customer)
@@ -619,21 +701,22 @@ func validateCreateCustomer(req CreateCustomerRequest) (string, string) {
 
 // checkCustomerDuplicates (i-012) rejects duplicate code or duplicate name
 // among ACTIVE customers of the tenant, giving callers a clear 409 before the
-// database unique constraint is reached.
-func (service *Service) checkCustomerDuplicates(ctx context.Context, tenantID int64, code, name string) (string, string) {
+// database unique constraint is reached. excludeID skips one customer id so
+// updates do not conflict with the record being edited (pass 0 on create).
+func (service *Service) checkCustomerDuplicates(ctx context.Context, tenantID int64, code, name string, excludeID int64) (string, string) {
 	code = strings.TrimSpace(code)
 	name = strings.TrimSpace(name)
 	var existingCode bool
 	if err := service.pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM customers WHERE tenant_id = $1 AND code = $2)`,
-		tenantID, code).Scan(&existingCode); err == nil && existingCode {
+		`SELECT EXISTS(SELECT 1 FROM customers WHERE tenant_id = $1 AND code = $2 AND id <> $3)`,
+		tenantID, code, excludeID).Scan(&existingCode); err == nil && existingCode {
 		return "CUSTOMER_CODE_EXISTS", "a customer with this code already exists for this tenant"
 	}
 	if name != "" {
 		var existingName bool
 		if err := service.pool.QueryRow(ctx,
-			`SELECT EXISTS(SELECT 1 FROM customers WHERE tenant_id = $1 AND is_active = true AND LOWER(name) = LOWER($2))`,
-			tenantID, name).Scan(&existingName); err == nil && existingName {
+			`SELECT EXISTS(SELECT 1 FROM customers WHERE tenant_id = $1 AND is_active = true AND LOWER(name) = LOWER($2) AND id <> $3)`,
+			tenantID, name, excludeID).Scan(&existingName); err == nil && existingName {
 			return "CUSTOMER_NAME_EXISTS", "an active customer with this name already exists for this tenant"
 		}
 	}

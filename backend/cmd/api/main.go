@@ -136,6 +136,7 @@ func main() {
 				router.Post("/report-mappings", coaHandler.CreateReportMapping)
 
 				router.Post("/customers", customerHandler.CreateCustomer)
+				router.Put("/customers/{id}", customerHandler.UpdateCustomer)
 				router.Post("/customers/{id}/deactivate", customerHandler.DeactivateCustomer)
 				router.Post("/payment-terms", customerHandler.CreatePaymentTerm)
 

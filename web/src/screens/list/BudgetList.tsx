@@ -95,7 +95,14 @@ export function BudgetList() {
                   </td>
                   <td>{b.line_count}</td>
                   <td style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}>{formatIDR(b.total_cents)}</td>
-                  <td>
+                  <td style={{ display: "flex", gap: 6 }}>
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => workbench.openEntryExisting("budget-entry", b.id, b.name, b.status)}
+                    >
+                      Edit
+                    </button>
                     <button
                       type="button"
                       className="btn btn--secondary btn--sm"

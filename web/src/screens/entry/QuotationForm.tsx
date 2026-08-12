@@ -4,6 +4,7 @@ import { FormError } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
+import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
 import type { Customer, Item, QuotationLineInput } from "../../types";
 
 interface Props {
@@ -29,7 +30,7 @@ interface Line {
  * the live backend.
  */
 export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
-  const workbench = useWorkbench();
+  const { markUnsaved, replaceDraft } = useWorkbench();
   const [date, setDate] = useState(todayISO());
   const [number, setNumber] = useState(initialTitle ?? draftNumber("sales-quotation-entry"));
   const [customerId, setCustomerId] = useState("");
@@ -40,17 +41,23 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
   const [items, setItems] = useState<Item[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [taxRate, setTaxRate] = useState(0);
 
   useEffect(() => {
-    workbench.markUnsaved(tabId, true);
-  }, [tabId, date, number, customerId, validUntil, notes, lines, workbench]);
+    markUnsaved(tabId, true);
+  }, [tabId, date, number, customerId, validUntil, notes, lines, taxRate, markUnsaved]);
 
   useEffect(() => {
     void api.listCustomers().then(setCustomers);
     void api.listItems().then(setItems);
   }, []);
 
-  const totalCents = useMemo(() => lines.reduce((sum, l) => sum + l.lineTotalCents, 0), [lines]);
+  const subtotalCents = useMemo(() => lines.reduce((sum, l) => sum + l.lineTotalCents, 0), [lines]);
+  const ppnCents = useMemo(
+    () => lines.reduce((sum, l) => sum + taxForLine(l.lineTotalCents, taxRate), 0),
+    [lines, taxRate],
+  );
+  const totalCents = subtotalCents + ppnCents;
 
   const setItem = (id: string, itemId: string) => {
     const item = items.find((i) => String(i.id) === itemId);
@@ -93,7 +100,7 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
         qty: l.qty > 0 ? l.qty : 1,
         unit_price_cents: l.unitPriceCents,
         discount_cents: l.discountCents,
-        tax_rate: 0,
+        tax_rate: taxRate,
         description: undefined,
       }));
     if (payloadLines.length === 0) {
@@ -109,8 +116,8 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
         notes: notes.trim() || undefined,
         lines: payloadLines,
       });
-      workbench.replaceDraft(tabId, created.number, "DRAFT");
-      workbench.markUnsaved(tabId, false);
+      replaceDraft(tabId, created.number, "DRAFT");
+      markUnsaved(tabId, false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the quotation.");
     } finally {
@@ -158,6 +165,7 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
                 <span className="field__label">No</span>
                 <input className="input" value={number} onChange={(e) => setNumber(e.target.value)} />
               </label>
+              <TaxRateSelector value={taxRate} onChange={setTaxRate} />
             </div>
           </div>
 
@@ -252,6 +260,14 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
           </div>
 
           <div className="entrytab__total">
+            <span className="entrytab__total-label">DPP (Subtotal)</span>
+            <span className="entrytab__total-value">{formatIDR(subtotalCents)}</span>
+          </div>
+          <div className="entrytab__total" style={{ marginTop: 8 }}>
+            <span className="entrytab__total-label">PPN {taxRate > 0 ? `(${taxRate}%)` : ""}</span>
+            <span className="entrytab__total-value">{formatIDR(ppnCents)}</span>
+          </div>
+          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--accent)", paddingTop: 8 }}>
             <span className="entrytab__total-label">Total</span>
             <span className="entrytab__total-value">{formatIDR(totalCents)}</span>
           </div>

@@ -4,7 +4,7 @@ import { Button, EmptyState, ErrorState, FieldShell, LoadingState } from "../../
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
-import type { BackendAccount, CreateBudgetInput } from "../../types";
+import type { BackendAccount, Budget, CreateBudgetInput } from "../../types";
 
 interface Props {
   tabId: string;
@@ -35,8 +35,9 @@ function uid(): string {
  * The form loads revenue/expense accounts so the user can fill in monthly
  * planned amounts. Lines are optional; empty rows are skipped on submit.
  */
-export function BudgetForm({ tabId, initialTitle }: Props) {
+export function BudgetForm({ tabId, entryId, initialTitle }: Props) {
   const workbench = useWorkbench();
+  const isEdit = entryId !== undefined && entryId !== null && entryId !== "";
   const [name, setName] = useState("");
   const [fiscalYear, setFiscalYear] = useState(String(new Date().getFullYear()));
   const [lines, setLines] = useState<BudgetLineDraft[]>([]);
@@ -45,14 +46,20 @@ export function BudgetForm({ tabId, initialTitle }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [budget, setBudget] = useState<Budget | null>(null);
 
   const draftNo = useMemo(() => draftNumber("budget-entry"), []);
-  const title = initialTitle ?? `BUD-${draftNo}`;
+  const title = isEdit
+    ? `Edit Budget · ${initialTitle ?? name ?? ""}`
+    : initialTitle ?? `BUD-${draftNo}`;
+
+  // Budgets are editable only while DRAFT; approved/closed budgets are locked.
+  const isLocked = isEdit && budget !== null && budget.status !== "DRAFT";
 
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [entryId]);
 
   const load = async () => {
     setLoading(true);
@@ -61,14 +68,31 @@ export function BudgetForm({ tabId, initialTitle }: Props) {
       const accs = await api.listBudgetAccounts();
       accs.sort((a: BackendAccount, b: BackendAccount) => a.code.localeCompare(b.code));
       setAccounts(accs);
-      // Seed one empty line per account, month 1.
-      if (lines.length === 0 && accs.length > 0) {
-        setLines([
-          { id: uid(), accountId: accs[0].id, month: 1, amount: "" },
-        ]);
+      if (isEdit) {
+        // Load the existing budget into editable state.
+        const existing = await api.getBudget(Number(entryId));
+        setBudget(existing);
+        setName(existing.name);
+        setFiscalYear(String(existing.fiscal_year));
+        setLines(
+          (existing.lines ?? []).map((line) => ({
+            id: uid(),
+            accountId: line.account_id,
+            month: line.month,
+            amount: String(Math.round(line.amount_cents / 100)),
+          })),
+        );
+        workbench.markUnsaved(tabId, false);
+      } else if (accs.length > 0) {
+        // Seed one empty line for a fresh budget.
+        setLines((current) =>
+          current.length === 0
+            ? [{ id: uid(), accountId: accs[0].id, month: 1, amount: "" }]
+            : current,
+        );
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load accounts.");
+      setError(err instanceof Error ? err.message : "Failed to load budget.");
     } finally {
       setLoading(false);
     }
@@ -137,11 +161,20 @@ export function BudgetForm({ tabId, initialTitle }: Props) {
     };
     setSubmitting(true);
     try {
-      const budget = await api.createBudget(payload);
-      setSuccess(`Budget "${budget.name}" created (${budget.lines?.length ?? 0} lines).`);
-      workbench.replaceDraft(tabId, `${budget.name}`, "APPROVED");
+      if (isEdit) {
+        const updated = await api.updateBudget(Number(entryId), payload);
+        setBudget(updated);
+        setSuccess(`Budget "${updated.name}" updated (${updated.lines?.length ?? 0} lines).`);
+        workbench.replaceDraft(tabId, updated.name, updated.status, updated.id);
+      } else {
+        const created = await api.createBudget(payload);
+        setBudget(created);
+        setSuccess(`Budget "${created.name}" created (${created.lines?.length ?? 0} lines).`);
+        workbench.replaceDraft(tabId, created.name, created.status, created.id);
+      }
+      workbench.markUnsaved(tabId, false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create budget.");
+      setError(err instanceof Error ? err.message : "Failed to save budget.");
     } finally {
       setSubmitting(false);
     }
@@ -155,6 +188,14 @@ export function BudgetForm({ tabId, initialTitle }: Props) {
           <small>Budget · monthly plan per account</small>
         </div>
         <div className="listtab__toolbar">
+          {budget ? (
+            <span className={`kind-mark ${budget.status === "DRAFT" ? "is-positive" : "is-negative"}`}>
+              {budget.status}
+            </span>
+          ) : null}
+          {isLocked ? (
+            <span style={{ color: "var(--neg)" }}>Locked — only DRAFT budgets can be edited.</span>
+          ) : null}
           {success ? <span style={{ color: "var(--pos)" }}>{success}</span> : null}
         </div>
       </div>
@@ -179,6 +220,7 @@ export function BudgetForm({ tabId, initialTitle }: Props) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Annual Operating Budget 2026"
+                  disabled={isLocked}
                 />
               </FieldShell>
               <FieldShell label="Fiscal Year" htmlFor="budget-year">
@@ -188,6 +230,7 @@ export function BudgetForm({ tabId, initialTitle }: Props) {
                   inputMode="numeric"
                   value={fiscalYear}
                   onChange={(e) => setFiscalYear(e.target.value.replace(/[^\d]/g, ""))}
+                  disabled={isLocked}
                 />
               </FieldShell>
             </div>
@@ -219,6 +262,7 @@ export function BudgetForm({ tabId, initialTitle }: Props) {
                             value={line.accountId}
                             onChange={(e) => updateLine(line.id, { accountId: Number(e.target.value) })}
                             style={{ minWidth: 220 }}
+                            disabled={isLocked}
                           >
                             {accounts.map((acc) => (
                               <option key={acc.id} value={acc.id}>
@@ -232,6 +276,7 @@ export function BudgetForm({ tabId, initialTitle }: Props) {
                             className="field__input"
                             value={line.month}
                             onChange={(e) => updateLine(line.id, { month: Number(e.target.value) })}
+                            disabled={isLocked}
                           >
                             {MONTH_LABELS.map((label, idx) => (
                               <option key={idx} value={idx + 1}>
@@ -248,10 +293,11 @@ export function BudgetForm({ tabId, initialTitle }: Props) {
                             onChange={(e) => updateLine(line.id, { amount: e.target.value.replace(/[^\d]/g, "") })}
                             placeholder="0"
                             style={{ textAlign: "right", maxWidth: 160 }}
+                            disabled={isLocked}
                           />
                         </td>
                         <td style={{ padding: "8px 12px" }}>
-                          <Button variant="ghost" onClick={() => removeLine(line.id)}>
+                          <Button variant="ghost" onClick={() => removeLine(line.id)} disabled={isLocked}>
                             Remove
                           </Button>
                         </td>
@@ -273,7 +319,7 @@ export function BudgetForm({ tabId, initialTitle }: Props) {
               </div>
 
               <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-                <Button variant="secondary" onClick={addLine}>
+                <Button variant="secondary" onClick={addLine} disabled={isLocked}>
                   + Add Line
                 </Button>
               </div>
@@ -289,11 +335,11 @@ export function BudgetForm({ tabId, initialTitle }: Props) {
       <div className="listtab__footer">
         <span className="listtab__footer-count">{lines.length} Line(s)</span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <Button variant="secondary" onClick={() => void workbench.activate(tabId)}>
+          <Button variant="secondary" onClick={() => workbench.close(tabId)}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={() => void handleSubmit()} disabled={submitting || loading}>
-            {submitting ? "Saving..." : "Save Budget"}
+          <Button variant="primary" onClick={() => void handleSubmit()} disabled={submitting || loading || isLocked}>
+            {submitting ? "Saving..." : isEdit ? "Save Changes" : "Save Budget"}
           </Button>
         </div>
       </div>

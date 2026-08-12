@@ -4,6 +4,7 @@ import { FormError } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
+import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
 import type { Customer, Item, SalesOrderLineInput, DownPayment, SalesOrder } from "../../types";
 
 interface Props {
@@ -54,10 +55,11 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
   const [shippingTerms, setShippingTerms] = useState<SalesOrder["shipping_terms"] | undefined>(undefined);
   const [shipToAddress, setShipToAddress] = useState("");
   const [salespersonId, setSalespersonId] = useState("");
+  const [taxRate, setTaxRate] = useState(0);
 
   useEffect(() => {
     workbench.markUnsaved(tabId, true);
-  }, [tabId, date, number, customerId, notes, lines, workbench]);
+  }, [tabId, date, number, customerId, notes, lines, taxRate, workbench]);
 
   useEffect(() => {
     void api.listCustomers().then(setCustomers);
@@ -92,6 +94,8 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
       setShippingTerms(order.shipping_terms);
       setShipToAddress(order.ship_to_address ?? "");
       setSalespersonId(order.salesperson_id ? String(order.salesperson_id) : "");
+      const firstRate = order.lines.find((l) => Number(l.tax_rate) > 0);
+      setTaxRate(firstRate ? Number(firstRate.tax_rate) : Number(order.lines[0]?.tax_rate ?? 0) || 0);
       setLines(
         order.lines.map((l) => ({
           id: `ln-${l.id}`,
@@ -110,7 +114,12 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
     }
   };
 
-  const totalCents = useMemo(() => lines.reduce((sum, l) => sum + l.lineTotalCents, 0), [lines]);
+  const subtotalCents = useMemo(() => lines.reduce((sum, l) => sum + l.lineTotalCents, 0), [lines]);
+  const ppnCents = useMemo(
+    () => lines.reduce((sum, l) => sum + taxForLine(l.lineTotalCents, taxRate), 0),
+    [lines, taxRate],
+  );
+  const totalCents = subtotalCents + ppnCents;
 
   const setItem = (id: string, itemId: string) => {
     const item = items.find((i) => String(i.id) === itemId);
@@ -153,7 +162,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
         qty: l.qty > 0 ? l.qty : 1,
         unit_price_cents: l.unitPriceCents,
         discount_cents: l.discountCents,
-        tax_rate: 0,
+        tax_rate: taxRate,
         description: undefined,
       }));
     if (payloadLines.length === 0) {
@@ -272,6 +281,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
                 <span className="field__label">No</span>
                 <input className="input" value={number} onChange={(e) => setNumber(e.target.value)} />
               </label>
+              <TaxRateSelector value={taxRate} onChange={setTaxRate} disabled={isExisting} />
             </div>
           </div>
 
@@ -395,8 +405,16 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
           </div>
 
           <div className="entrytab__total">
+            <span className="entrytab__total-label">DPP (Subtotal)</span>
+            <span className="entrytab__total-value">{formatIDR(isExisting ? subtotalCents : subtotalCents)}</span>
+          </div>
+          <div className="entrytab__total" style={{ marginTop: 8 }}>
+            <span className="entrytab__total-label">PPN {taxRate > 0 ? `(${taxRate}%)` : ""}</span>
+            <span className="entrytab__total-value">{formatIDR(ppnCents)}</span>
+          </div>
+          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--accent)", paddingTop: 8 }}>
             <span className="entrytab__total-label">Total</span>
-            <span className="entrytab__total-value">{formatIDR(isExisting ? orderTotal : totalCents)}</span>
+            <span className="entrytab__total-value">{formatIDR(isExisting ? subtotalCents + ppnCents : totalCents)}</span>
           </div>
         </div>
 

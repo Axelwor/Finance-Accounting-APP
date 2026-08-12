@@ -43,6 +43,7 @@ func (service *Service) Routes(router chi.Router) {
 	router.Post("/budgets", service.CreateBudget)
 	router.Get("/budgets", service.ListBudgets)
 	router.Get("/budgets/{id}", service.GetBudget)
+	router.Put("/budgets/{id}", service.UpdateBudget)
 	router.Get("/budgets/{id}/vs-actual", service.BudgetVsActual)
 }
 

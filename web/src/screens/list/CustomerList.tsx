@@ -56,7 +56,20 @@ export function CustomerList() {
               <span>Status</span>
             </div>
             {customers.map((c) => (
-              <div key={c.id} className="ledger-table__row">
+              <div
+                key={c.id}
+                className="ledger-table__row"
+                role="button"
+                tabIndex={0}
+                onClick={() => workbench.openEntryExisting("customer-entry", c.id, `${c.code} · ${c.name}`, c.is_active ? "ACTIVE" : "INACTIVE")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    workbench.openEntryExisting("customer-entry", c.id, `${c.code} · ${c.name}`, c.is_active ? "ACTIVE" : "INACTIVE");
+                  }
+                }}
+                style={{ cursor: "pointer" }}
+              >
                 <span className="ledger-table__no">{c.code}</span>
                 <span className="ledger-table__cat">{c.name}</span>
                 <span className="ledger-table__memo">{c.price_level || "—"}</span>

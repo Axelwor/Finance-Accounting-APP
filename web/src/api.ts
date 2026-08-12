@@ -42,6 +42,7 @@ import type {
   Customer,
   CustomerStatement,
   CreateCustomerInput,
+  PaymentTerm,
   Item,
   CreateItemInput,
   ItemPriceEntry,
@@ -1404,6 +1405,11 @@ export const api = {
     }
   },
 
+  /** Get one customer with all master fields (GET /customers/{id}). Throws on failure. */
+  async getCustomer(id: number): Promise<Customer> {
+    return http<Customer>(`/customers/${id}`, { auth: true });
+  },
+
   /** Customer statement (GET /customers/{id}/statement?from_date=&to_date=). Throws on failure. */
   async getCustomerStatement(
     customerId: number,
@@ -1738,12 +1744,39 @@ export const api = {
     });
   },
 
+  /** Update an existing supplier (PUT /suppliers/{id}). Throws on failure. */
+  async updateSupplier(id: number, input: CreateSupplierInput): Promise<Supplier> {
+    return http<Supplier>(`/suppliers/${id}`, {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
   async createCustomer(input: CreateCustomerInput): Promise<Customer> {
     return http<Customer>("/customers", {
       method: "POST",
       auth: true,
       body: JSON.stringify(input),
     });
+  },
+
+  /** Update an existing customer (PUT /customers/{id}). Throws on failure. */
+  async updateCustomer(id: number, input: CreateCustomerInput): Promise<Customer> {
+    return http<Customer>(`/customers/${id}`, {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Payment term list (GET /payment-terms). Failure -> empty array. */
+  async listPaymentTerms(): Promise<PaymentTerm[]> {
+    try {
+      return await http<PaymentTerm[]>("/payment-terms", { auth: true });
+    } catch {
+      return [];
+    }
   },
 
   // -- Purchase Orders --
@@ -2137,6 +2170,15 @@ export const api = {
       method: "POST",
       auth: true,
       idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Update a DRAFT budget and its lines (PUT /budgets/{id}). Throws on failure. */
+  async updateBudget(id: number, input: CreateBudgetInput): Promise<Budget> {
+    return http<Budget>(`/budgets/${id}`, {
+      method: "PUT",
+      auth: true,
       body: JSON.stringify(input),
     });
   },

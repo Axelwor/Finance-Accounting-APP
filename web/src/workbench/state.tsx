@@ -54,7 +54,7 @@ type Action =
   | { type: "open-dashboard" }
   | { type: "close"; id: string }
   | { type: "activate"; id: string }
-  | { type: "replace-draft"; id: string; title: string; status: string }
+  | { type: "replace-draft"; id: string; title: string; status: string; entryId?: string | number }
   | { type: "mark-unsaved"; id: string; unsaved: boolean }
   | { type: "hydrate"; state: State }
   | { type: "ensure-dashboard" };
@@ -193,21 +193,27 @@ function reducer(state: State, action: Action): State {
       // Find which module owns this nested child.
       const next = { ...state.nested };
       for (const parentId of Object.keys(state.nested)) {
-        const idx = next[parentId].findIndex((c) => c.id === action.id);
-        if (idx < 0) continue;
-        const current = next[parentId][idx];
-        if (current.kind === "entry") {
-          // Cast through unknown because the discriminator narrowed the kind.
-          const updated = current as NestedTab;
-          (updated as EntryTab).draft = false;
-          (updated as EntryTab).title = action.title;
-          (updated as EntryTab).status = action.status;
-          (updated as EntryTab).unsaved = false;
-          // Preserve entryId if it was already known (e.g., customer-entry
-          // with created backend id), else keep undefined until loaded.
-        }
-        next[parentId] = [...next[parentId]];
-        next[parentId][idx] = current;
+        const children = next[parentId];
+        if (!children.some((c) => c.id === action.id)) continue;
+        const updatedChildren = children.map((c): NestedTab => {
+          if (c.id !== action.id || c.kind !== "entry") return c;
+          const entry: EntryTab = {
+            ...c,
+            draft: false,
+            title: action.title,
+            status: action.status,
+            unsaved: false,
+          };
+          // Record the persisted backend id so opening the same record from a
+          // list reuses this tab (matching in activateNestedChild). The tab id
+          // itself stays stable — re-keying it would remount the form and
+          // refetch the record right after saving.
+          if (action.entryId !== undefined) {
+            entry.entryId = action.entryId;
+          }
+          return entry;
+        });
+        next[parentId] = updatedChildren;
         return { ...state, nested: next };
       }
       return state;
@@ -280,12 +286,11 @@ function activateNestedChild(state: State, child: NestedTab): State {
   const existingIdx = (next.nested[parentId] ?? []).findIndex((c) => {
     if (c.kind !== child.kind || c.subKind !== child.subKind) return false;
     if (child.kind === "entry" && c.kind === "entry") {
-      // Drafts match each other (one draft per entry kind).
-      // Posted entries only match on the same entryId, so two different
-      // invoices of the same subKind open as separate tabs (E-03).
-      if (child.draft !== c.draft) return false;
-      if (!child.draft) return c.entryId === child.entryId;
-      return true;
+      // Draft tabs: one draft per subkind. Persisted entries: only reuse the
+      // tab when it is the same record — clicking a different list row must
+      // open that record, not re-activate another record's tab.
+      if (child.draft || c.draft) return c.draft === child.draft;
+      return c.id === child.id || String(c.entryId ?? "") === String(child.entryId ?? "");
     }
     return true;
   });
@@ -412,7 +417,7 @@ interface WorkbenchApi {
   openEntryExisting: (sub: EntrySubKind, entryId: string | number, title: string, status?: string) => void;
   close: (id: string) => void;
   activate: (id: string) => void;
-  replaceDraft: (id: string, title: string, status: string) => void;
+  replaceDraft: (id: string, title: string, status: string, entryId?: string | number) => void;
   markUnsaved: (id: string, unsaved: boolean) => void;
   /** Look up a nested tab by id, used by entry forms to update themselves. */
   getNested: (id: string) => NestedTab | undefined;
@@ -473,7 +478,8 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
   }, [state.nested]);
   const activate = useCallback((id: string) => dispatch({ type: "activate", id }), []);
   const replaceDraft = useCallback(
-    (id: string, title: string, status: string) => dispatch({ type: "replace-draft", id, title, status }),
+    (id: string, title: string, status: string, entryId?: string | number) =>
+      dispatch({ type: "replace-draft", id, title, status, entryId }),
     [],
   );
   const markUnsaved = useCallback(

@@ -4,6 +4,7 @@ import { FormError } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
+import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
 import type { Customer, Item, InvoiceLineInput, SalesOrderListItem, InvoicePayment, CreatePaymentInput, Invoice } from "../../types";
 import { AttachmentPanel } from "../../components/AttachmentPanel";
 
@@ -25,7 +26,7 @@ interface Line {
 }
 
 export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
-  const workbench = useWorkbench();
+  const { markUnsaved, replaceDraft } = useWorkbench();
   const [date, setDate] = useState(todayISO());
   const [dueDate, setDueDate] = useState("");
   const [number, setNumber] = useState(initialTitle ?? draftNumber("sales-invoice"));
@@ -42,6 +43,7 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
   const [invId, setInvId] = useState<number | null>(typeof entryId === "number" ? entryId : null);
   const [invStatus, setInvStatus] = useState("DRAFT");
   const [total, setTotal] = useState(0);
+  const [taxTotal, setTaxTotal] = useState<number | null>(null);
   const [dpApplied, setDpApplied] = useState(0);
   const [receivable, setReceivable] = useState(0);
   const [payments, setPayments] = useState<InvoicePayment[]>([]);
@@ -53,10 +55,11 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
   const [postingPay, setPostingPay] = useState(false);
   const [taxInvoiceNumber, setTaxInvoiceNumber] = useState("");
   const [salespersonId, setSalespersonId] = useState("");
+  const [taxRate, setTaxRate] = useState(0);
 
   useEffect(() => {
-    workbench.markUnsaved(tabId, true);
-  }, [tabId, date, number, customerId, salesOrderId, notes, lines, workbench]);
+    markUnsaved(tabId, true);
+  }, [tabId, date, number, customerId, salesOrderId, notes, lines, taxRate, markUnsaved]);
 
   useEffect(() => {
     void api.listCustomers().then(setCustomers);
@@ -81,6 +84,9 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
       setNumber(inv.number);
       setInvStatus(inv.status);
       setTotal(inv.total_cents);
+      // total_cents is tax-inclusive; tax_total_cents is not populated by the
+      // API (always 0), so a 0/absent value means "recompute from the lines".
+      setTaxTotal(inv.tax_total_cents || null);
       setDpApplied(inv.dp_applied_cents);
       setReceivable(inv.receivable_cents);
       setDate(inv.invoice_date);
@@ -90,6 +96,9 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
       setNotes(inv.notes ?? "");
       setTaxInvoiceNumber(inv.tax_invoice_number ?? "");
       setSalespersonId(inv.salesperson_id ? String(inv.salesperson_id) : "");
+      // Restore the document-level rate from the first line that carries one.
+      const firstRate = inv.lines.find((l) => Number(l.tax_rate) > 0);
+      setTaxRate(firstRate ? Number(firstRate.tax_rate) : Number(inv.lines[0]?.tax_rate ?? 0) || 0);
       setLines(
         inv.lines.map((l) => ({
           id: `ln-${l.id}`,
@@ -109,13 +118,18 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
       } catch {
         setPayments([]);
       }
-      workbench.markUnsaved(tabId, false);
+      markUnsaved(tabId, false);
     } catch {
       // new invoice or fetch failed
     }
   };
 
-  const totalCents = useMemo(() => lines.reduce((sum, l) => sum + l.lineTotalCents, 0), [lines]);
+  const subtotalCents = useMemo(() => lines.reduce((sum, l) => sum + l.lineTotalCents, 0), [lines]);
+  const ppnCents = useMemo(
+    () => lines.reduce((sum, l) => sum + taxForLine(l.lineTotalCents, taxRate), 0),
+    [lines, taxRate],
+  );
+  const totalCents = subtotalCents + ppnCents;
 
   const setItem = (id: string, itemId: string) => {
     const item = items.find((i) => String(i.id) === itemId);
@@ -158,7 +172,7 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
         qty: l.qty > 0 ? l.qty : 1,
         unit_price_cents: l.unitPriceCents,
         discount_cents: l.discountCents,
-        tax_rate: 0,
+        tax_rate: taxRate,
         description: undefined,
       }));
     if (payloadLines.length === 0) {
@@ -183,8 +197,8 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
       setDpApplied(created.dp_applied_cents);
       setReceivable(created.receivable_cents);
       setNumber(created.number);
-      workbench.replaceDraft(tabId, created.number, created.status);
-      workbench.markUnsaved(tabId, false);
+      replaceDraft(tabId, created.number, created.status);
+      markUnsaved(tabId, false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the invoice.");
     } finally {
@@ -297,6 +311,9 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
                   </label>
                 </div>
                 <div className="entrytab__header-col">
+                  <TaxRateSelector value={taxRate} onChange={setTaxRate} disabled={isExisting} />
+                </div>
+                <div className="entrytab__header-col">
                   <label className="field">
                     <span className="field__label">Salesperson ID</span>
                     <input className="input" type="number" value={salespersonId} onChange={(e) => setSalespersonId(e.target.value)} placeholder="e.g., 1" disabled={isExisting} />
@@ -366,6 +383,14 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
           </div>
 
           <div className="entrytab__total">
+            <span className="entrytab__total-label">DPP (Subtotal)</span>
+            <span className="entrytab__total-value">{formatIDR(isExisting ? total - (taxTotal ?? ppnCents) : subtotalCents)}</span>
+          </div>
+          <div className="entrytab__total" style={{ marginTop: 8 }}>
+            <span className="entrytab__total-label">PPN {taxRate > 0 ? `(${taxRate}%)` : ""}</span>
+            <span className="entrytab__total-value">{formatIDR(isExisting ? (taxTotal ?? ppnCents) : ppnCents)}</span>
+          </div>
+          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--accent)", paddingTop: 8 }}>
             <span className="entrytab__total-label">Total</span>
             <span className="entrytab__total-value">{formatIDR(isExisting ? total : totalCents)}</span>
           </div>

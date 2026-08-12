@@ -56,7 +56,20 @@ export function PurchaseSupplierList() {
               <span>Status</span>
             </div>
             {suppliers.map((s) => (
-              <div key={s.id} className="ledger-table__row">
+              <div
+                key={s.id}
+                className="ledger-table__row"
+                role="button"
+                tabIndex={0}
+                onClick={() => workbench.openEntryExisting("purchase-supplier-entry", s.id, `${s.code} · ${s.name}`, s.is_active ? "ACTIVE" : "INACTIVE")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    workbench.openEntryExisting("purchase-supplier-entry", s.id, `${s.code} · ${s.name}`, s.is_active ? "ACTIVE" : "INACTIVE");
+                  }
+                }}
+                style={{ cursor: "pointer" }}
+              >
                 <span className="ledger-table__no">{s.code}</span>
                 <span className="ledger-table__cat">{s.name}</span>
                 <span className="ledger-table__memo">{s.contact_person || "—"}</span>
