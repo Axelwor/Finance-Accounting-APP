@@ -405,7 +405,18 @@ export interface Customer {
   id: number;
   code: string;
   name: string;
+  npwp?: string | null;
+  contact_person?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postal_code?: string | null;
   payment_term_id?: number | null;
+  credit_limit_cents?: number | null;
+  default_revenue_account_id?: number | null;
+  default_receivable_account_id?: number | null;
   is_active: boolean;
   billing_address?: string | null;
   shipping_address?: string | null;
@@ -417,7 +428,6 @@ export interface Customer {
   website?: string | null;
   fax?: string | null;
   contact_person_2?: string | null;
-  phone?: string | null;
   phone_2?: string | null;
   npwp_name?: string | null;
   opening_balance_cents: number;
@@ -427,7 +437,18 @@ export interface Customer {
 /** Customer price levels (migration 000033). */
 export type PriceLevel = "RETAIL" | "WHOLESALE" | "DISTRIBUTOR" | "SPECIAL";
 
-/** Payload POST /api/v1/customers. */
+/** Payment term master data (GET/POST /api/v1/payment-terms). */
+export interface PaymentTerm {
+  id: number;
+  code: string;
+  name: string;
+  due_days: number;
+  discount_days?: number | null;
+  discount_percent?: string | null;
+  is_active: boolean;
+}
+
+/** Payload POST /api/v1/customers (also reused for PUT /api/v1/customers/{id}). */
 export interface CreateCustomerInput {
   code: string;
   name: string;
@@ -441,6 +462,9 @@ export interface CreateCustomerInput {
   postal_code?: string;
   payment_term_id?: number;
   credit_limit_cents?: number;
+  default_revenue_account_id?: number;
+  default_receivable_account_id?: number;
+  is_active?: boolean;
   billing_address?: string;
   shipping_address?: string;
   customer_group?: string;
@@ -925,6 +949,8 @@ export interface CreateSupplierInput {
   city?: string;
   province?: string;
   postal_code?: string;
+  payment_term_id?: number;
+  credit_limit_cents?: number;
   supplier_type?: "GOODS" | "SERVICE" | "MIXED";
   is_pkp?: boolean;
   currency_code?: string;

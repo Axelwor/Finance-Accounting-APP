@@ -4,6 +4,7 @@ import { FormError } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
+import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
 import type { Supplier, Item, PurchaseOrderLineInput } from "../../types";
 
 interface Props {
@@ -42,6 +43,7 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
   const [supplierQuoteDate, setSupplierQuoteDate] = useState("");
   const [buyerId, setBuyerId] = useState("");
   const [notes, setNotes] = useState("");
+  const [taxRate, setTaxRate] = useState(0);
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -60,6 +62,8 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
         setSupplierQuoteNumber(po.supplier_quote_number ?? "");
         setSupplierQuoteDate(po.supplier_quote_date ?? "");
         setBuyerId(po.buyer_id ? String(po.buyer_id) : "");
+        const firstRate = po.lines.find((l) => Number(l.tax_rate) > 0);
+        setTaxRate(firstRate ? Number(firstRate.tax_rate) : Number(po.lines[0]?.tax_rate ?? 0) || 0);
         setLines(
           po.lines.map((l) => ({
             id: String(l.id),
@@ -74,10 +78,16 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
     }
   }, [entryId, isExisting]);
 
-  const totalCents = lines.reduce(
+  const subtotalCents = lines.reduce(
     (sum, l) => sum + lineTotal(parseFloat(l.qty) || 0, parseInt(l.unitPriceCents) || 0, parseInt(l.discountCents) || 0),
     0,
   );
+  const ppnCents = lines.reduce(
+    (sum, l) =>
+      sum + taxForLine(lineTotal(parseFloat(l.qty) || 0, parseInt(l.unitPriceCents) || 0, parseInt(l.discountCents) || 0), taxRate),
+    0,
+  );
+  const totalCents = subtotalCents + ppnCents;
 
   function setLine(id: string, field: keyof Line, value: string) {
     setLines((prev) => prev.map((l) => (l.id === id ? { ...l, [field]: value } : l)));
@@ -112,7 +122,7 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
         qty: parseFloat(l.qty) || 0,
         unit_price_cents: parseInt(l.unitPriceCents) || 0,
         discount_cents: parseInt(l.discountCents) || 0,
-        tax_rate: parseFloat(l.taxRate) || 0,
+        tax_rate: taxRate,
       }));
 
     if (inputLines.some((l) => l.qty <= 0)) {
@@ -167,6 +177,7 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
               <span className="field__label">Order Date *</span>
               <input className="input" type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} disabled={isExisting} />
             </label>
+            <TaxRateSelector value={taxRate} onChange={setTaxRate} disabled={isExisting} label="PPN Masukan / Tax" />
           </div>
 
           <label className="field">
@@ -256,6 +267,14 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
           )}
 
           <div className="entrytab__total">
+            <span className="entrytab__total-label">DPP (Subtotal)</span>
+            <span className="entrytab__total-value">{formatIDR(subtotalCents)}</span>
+          </div>
+          <div className="entrytab__total" style={{ marginTop: 8 }}>
+            <span className="entrytab__total-label">PPN {taxRate > 0 ? `(${taxRate}%)` : ""}</span>
+            <span className="entrytab__total-value">{formatIDR(ppnCents)}</span>
+          </div>
+          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--accent)", paddingTop: 8 }}>
             <span className="entrytab__total-label">Total</span>
             <span className="entrytab__total-value">{formatIDR(totalCents)}</span>
           </div>

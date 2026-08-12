@@ -341,9 +341,9 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
     case "purchase-return-entry":
       return <PurchaseReturnForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "purchase-supplier-entry":
-      return <PurchaseSupplierForm />;
+      return <PurchaseSupplierForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "customer-entry":
-      return <CustomerForm />;
+      return <CustomerForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "stock-opname-entry":
       return <StockOpnameForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "stock-transfer-entry":

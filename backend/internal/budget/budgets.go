@@ -73,36 +73,11 @@ func (service *Service) CreateBudget(writer http.ResponseWriter, request *http.R
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", "invalid JSON body")
 		return
 	}
+	if code, message := validateBudgetRequest(req); code != "" {
+		writeError(writer, http.StatusBadRequest, code, message)
+		return
+	}
 	name := strings.TrimSpace(req.Name)
-	if name == "" {
-		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", "name is required")
-		return
-	}
-	if req.FiscalYear <= 0 {
-		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", "fiscal_year is required")
-		return
-	}
-	if len(req.Lines) == 0 {
-		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", "at least one budget line is required")
-		return
-	}
-	for i, line := range req.Lines {
-		if line.AccountID <= 0 {
-			writeError(writer, http.StatusBadRequest, "INVALID_REQUEST",
-				fmt.Sprintf("line %d: account_id is required", i+1))
-			return
-		}
-		if line.Month < 1 || line.Month > 12 {
-			writeError(writer, http.StatusBadRequest, "INVALID_REQUEST",
-				fmt.Sprintf("line %d: month must be 1..12", i+1))
-			return
-		}
-		if line.AmountCents < 0 {
-			writeError(writer, http.StatusBadRequest, "INVALID_REQUEST",
-				fmt.Sprintf("line %d: amount_cents cannot be negative", i+1))
-			return
-		}
-	}
 
 	ctx := request.Context()
 	tx, err := service.pool.Begin(ctx)
@@ -254,6 +229,139 @@ func (service *Service) GetBudget(writer http.ResponseWriter, request *http.Requ
 			return
 		}
 		b.Lines = append(b.Lines, bl)
+	}
+	writeJSON(writer, http.StatusOK, b)
+}
+
+// validateBudgetRequest shares the create/update payload validation.
+func validateBudgetRequest(req budgetRequest) (string, string) {
+	if strings.TrimSpace(req.Name) == "" {
+		return "INVALID_REQUEST", "name is required"
+	}
+	if req.FiscalYear <= 0 {
+		return "INVALID_REQUEST", "fiscal_year is required"
+	}
+	if len(req.Lines) == 0 {
+		return "INVALID_REQUEST", "at least one budget line is required"
+	}
+	for i, line := range req.Lines {
+		if line.AccountID <= 0 {
+			return "INVALID_REQUEST", fmt.Sprintf("line %d: account_id is required", i+1)
+		}
+		if line.Month < 1 || line.Month > 12 {
+			return "INVALID_REQUEST", fmt.Sprintf("line %d: month must be 1..12", i+1)
+		}
+		if line.AmountCents < 0 {
+			return "INVALID_REQUEST", fmt.Sprintf("line %d: amount_cents cannot be negative", i+1)
+		}
+	}
+	return "", ""
+}
+
+// UpdateBudget — PUT /budgets/{id}. Only DRAFT budgets are editable; the
+// lines are replaced wholesale (delete + re-insert). APPROVED/CLOSED budgets
+// are locked and rejected with 409.
+func (service *Service) UpdateBudget(writer http.ResponseWriter, request *http.Request) {
+	tenant, err := tenantID(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	id, err := pathID(chi.URLParam(request, "id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	var req budgetRequest
+	if err := decodeJSON(request, &req); err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", "invalid JSON body")
+		return
+	}
+	if code, message := validateBudgetRequest(req); code != "" {
+		writeError(writer, http.StatusBadRequest, code, message)
+		return
+	}
+
+	ctx := request.Context()
+	tx, err := service.pool.Begin(ctx)
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "BUDGET_UPDATE_FAILED", err.Error())
+		return
+	}
+	defer tx.Rollback(ctx)
+	if err := withTenant(ctx, tx, tenant); err != nil {
+		writeError(writer, http.StatusInternalServerError, "BUDGET_UPDATE_FAILED", err.Error())
+		return
+	}
+
+	var status string
+	err = tx.QueryRow(ctx, `
+		SELECT status FROM budgets WHERE tenant_id = $1 AND id = $2 FOR UPDATE
+	`, tenant, id).Scan(&status)
+	if err != nil {
+		if isNoRows(err) {
+			writeError(writer, http.StatusNotFound, "BUDGET_NOT_FOUND", "budget not found")
+			return
+		}
+		writeError(writer, http.StatusInternalServerError, "BUDGET_UPDATE_FAILED", err.Error())
+		return
+	}
+	if status != "DRAFT" {
+		writeError(writer, http.StatusConflict, "BUDGET_LOCKED", "only DRAFT budgets can be edited")
+		return
+	}
+
+	name := strings.TrimSpace(req.Name)
+	dimArg := nullableInt8(req.DimensionID)
+	var b budgetResponse
+	err = tx.QueryRow(ctx, `
+		UPDATE budgets SET name = $3, fiscal_year = $4, dimension_id = $5
+		WHERE tenant_id = $1 AND id = $2
+		RETURNING id, name, fiscal_year, COALESCE(dimension_id, 0), status, created_at
+	`, tenant, id, name, req.FiscalYear, dimArg).Scan(
+		&b.ID, &b.Name, &b.FiscalYear, &b.DimensionID, &b.Status, &b.CreatedAt)
+	if err != nil {
+		if isUniqueViolation(err) {
+			writeError(writer, http.StatusConflict, "BUDGET_EXISTS",
+				"a budget with this name and fiscal_year already exists")
+			return
+		}
+		writeError(writer, http.StatusInternalServerError, "BUDGET_UPDATE_FAILED", err.Error())
+		return
+	}
+
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM budget_lines WHERE tenant_id = $1 AND budget_id = $2
+	`, tenant, id); err != nil {
+		writeError(writer, http.StatusInternalServerError, "BUDGET_UPDATE_FAILED", err.Error())
+		return
+	}
+
+	b.Lines = make([]budgetLineResponse, 0, len(req.Lines))
+	for _, line := range req.Lines {
+		var bl budgetLineResponse
+		lineDimArg := nullableInt8(line.DimensionID)
+		err = tx.QueryRow(ctx, `
+			INSERT INTO budget_lines (tenant_id, budget_id, account_id, dimension_id, month, amount_cents)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			RETURNING id, budget_id, account_id, COALESCE(dimension_id, 0), month, amount_cents
+		`, tenant, id, line.AccountID, lineDimArg, line.Month, line.AmountCents).Scan(
+			&bl.ID, &bl.BudgetID, &bl.AccountID, &bl.DimensionID, &bl.Month, &bl.AmountCents)
+		if err != nil {
+			if isForeignKeyViolation(err) {
+				writeError(writer, http.StatusBadRequest, "ACCOUNT_OR_DIMENSION_NOT_FOUND",
+					"account_id or dimension_id does not exist for this tenant")
+				return
+			}
+			writeError(writer, http.StatusInternalServerError, "BUDGET_UPDATE_FAILED", err.Error())
+			return
+		}
+		b.Lines = append(b.Lines, bl)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		writeError(writer, http.StatusInternalServerError, "BUDGET_UPDATE_FAILED", err.Error())
+		return
 	}
 	writeJSON(writer, http.StatusOK, b)
 }

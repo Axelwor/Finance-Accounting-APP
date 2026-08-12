@@ -59,7 +59,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
   const [cashAccount, setCashAccount] = useState("");
   const [counterAccount, setCounterAccount] = useState("");
   const [counterLines, setCounterLines] = useState<CounterLine[]>([seedCounterLine()]);
-  const [transferAmount, setTransferAmount] = useState("");
+  const [amountDisplay, setAmountDisplay] = useState("");
   const [accountSearch, setAccountSearch] = useState("");
 
   useEffect(() => {
@@ -81,7 +81,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
 
   useEffect(() => {
     workbench.markUnsaved(tabId, true);
-  }, [tabId, date, number, description, cashAccount, counterAccount, counterLines, transferAmount, workbench]);
+  }, [tabId, date, number, description, cashAccount, counterAccount, counterLines, amountDisplay, workbench]);
 
   const accountByID = useMemo(() => {
     const map = new Map<string, AccountItem>();
@@ -91,15 +91,28 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
 
   const isTransfer = subKind === "cash-transfer";
 
-  const cashAmountCents = useMemo(() => {
-    if (isTransfer) return parseCents(transferAmount);
-    return counterLines.reduce((sum, line) => sum + parseCents(line.amount), 0);
-  }, [isTransfer, transferAmount, counterLines]);
+  // Cash side of the journal: comes from its own header amount input.
+  const cashAmountCents = useMemo(() => parseCents(amountDisplay), [amountDisplay]);
 
+  // Counter side of the journal: summed independently from the detail grid.
+  // Deliberately a separate accumulator from `cashAmountCents` so the balance
+  // check below compares two real sides of the entry, not one value to itself.
   const counterTotalCents = useMemo(
     () => counterLines.reduce((sum, line) => sum + parseCents(line.amount), 0),
     [counterLines],
   );
+
+  // Debit/credit column totals across ALL lines of the implied journal.
+  //   money-in : Dr cash / Cr counter lines
+  //   money-out: Dr counter lines / Cr cash
+  //   transfer : Dr from-account / Cr to-account (single amount)
+  const { debitTotalCents, creditTotalCents } = useMemo(() => {
+    if (isTransfer) return { debitTotalCents: cashAmountCents, creditTotalCents: cashAmountCents };
+    if (subKind === "money-in") return { debitTotalCents: cashAmountCents, creditTotalCents: counterTotalCents };
+    return { debitTotalCents: counterTotalCents, creditTotalCents: cashAmountCents };
+  }, [isTransfer, subKind, cashAmountCents, counterTotalCents]);
+
+  const balanced = debitTotalCents > 0 && debitTotalCents === creditTotalCents;
 
   const updateCounter = (lineId: string, patch: Partial<CounterLine>) => {
     setCounterLines((current) => current.map((line) => (line.id === lineId ? { ...line, ...patch } : line)));
@@ -111,28 +124,34 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
 
   const validate = (): string | null => {
     if (cashAmountCents <= 0) return "Enter a positive amount.";
-    if (!isTransfer && counterTotalCents !== cashAmountCents) {
-      return "Sum of detail lines must equal the cash amount.";
-    }
     if (isTransfer) {
       if (!cashAccount || !counterAccount) return "Pick two accounts to transfer between.";
       if (cashAccount === counterAccount) return "From and To accounts must differ.";
-    } else {
-      if (!cashAccount) return "Pick a cash/bank account.";
-      if (counterLines.length === 0) return "Add at least one detail line.";
-      for (const line of counterLines) {
-        if (!line.accountId) return "Every detail line needs an account.";
-      }
+      return null;
+    }
+    if (!cashAccount) return "Pick a cash/bank account.";
+    if (counterLines.length === 0) return "Add at least one detail line.";
+    for (const line of counterLines) {
+      if (!line.accountId) return "Every detail line needs an account.";
+    }
+    if (counterTotalCents <= 0) return "Enter an amount on at least one detail line.";
+    // Real double-entry check: total debit must equal total credit.
+    if (!balanced) {
+      return `Out of balance — debit ${formatIDR(debitTotalCents)} vs credit ${formatIDR(creditTotalCents)}. Make the amount equal the sum of the detail lines.`;
     }
     return null;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  /**
+   * Posts the entry and reports the outcome. Returns `true` only when the
+   * backend accepted the entry, so callers (Save & New / Save & Close) can
+   * branch on the real result instead of a stale `error` closure.
+   */
+  const doSave = async (): Promise<boolean> => {
     const validation = validate();
     if (validation) {
       setError(validation);
-      return;
+      return false;
     }
     setError(null);
     setSaving(true);
@@ -164,23 +183,42 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
       workbench.replaceDraft(tabId, number, "POSTED");
       setSaved(true);
       workbench.markUnsaved(tabId, false);
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to post the entry.");
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await doSave();
+  };
+
+  const resetForNew = () => {
+    setCounterLines([seedCounterLine()]);
+    setAmountDisplay("");
+    setDescription("");
+    setNumber(draftNumber(subKind));
+    setDate(mockHelpers.today());
+    setCashAccount("");
+    setCounterAccount("");
+    setAccountSearch("");
+    setSaved(false);
+    setError(null);
+  };
+
   const handleSaveAndNew = async () => {
-    await handleSubmit(new Event("submit") as unknown as React.FormEvent);
-    if (!error) {
-      // reset the form for the next entry
-      setCounterLines([seedCounterLine()]);
-      setTransferAmount("");
-      setNumber(initialTitle ?? draftNumber(subKind));
-      setDescription("");
-      setSaved(false);
-    }
+    const ok = await doSave();
+    if (!ok) return; // keep the data + error on screen; do not clear a failed entry
+    resetForNew();
+  };
+
+  const handleSaveAndClose = async () => {
+    const ok = await doSave();
+    if (ok) workbench.close(tabId);
   };
 
   if (loading) return <LoadingState label="Loading masters..." />;
@@ -191,6 +229,13 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
   const titleLabel = subKind === "money-in" ? "Other Receipt" : subKind === "money-out" ? "Other Payment" : "Bank Transfer";
   const detailLabel = isTransfer ? "Transfer" : `${titleLabel} detail`;
   const status = saved ? "POSTED" : "DRAFT";
+
+  // True once the user has entered something worth saving; Save & New stays
+  // disabled right after a reset until fresh data is typed.
+  const lineHasContent = counterLines.some((line) => line.accountId !== "" || line.amount.trim() !== "");
+  const hasData = isTransfer
+    ? amountDisplay.trim() !== "" && cashAccount !== "" && counterAccount !== ""
+    : amountDisplay.trim() !== "" || lineHasContent;
 
   return (
     <form className="entrytab entrytab--accurate" onSubmit={handleSubmit} noValidate>
@@ -221,6 +266,21 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
               <label className="field">
                 <span className="field__label">Date</span>
                 <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+              </label>
+              <label className="field">
+                <span className="field__label">Nilai / Amount</span>
+                <input
+                  className="amount"
+                  type="text"
+                  inputMode="numeric"
+                  value={formatAmountInput(amountDisplay)}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/[^\d]/g, "").slice(0, 15);
+                    setAmountDisplay(digits);
+                  }}
+                  placeholder="0"
+                  aria-label="Cash amount"
+                />
               </label>
             </div>
             <div className="entrytab__header-col">
@@ -363,14 +423,29 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
             <span className="entrytab__total-label">Nilai</span>
             <span className="entrytab__total-value">{formatIDR(cashAmountCents)}</span>
           </div>
+          {!isTransfer && (
+            <div className="entrytab__total" style={{ marginTop: 8 }}>
+              <span className="entrytab__total-label">Debit / Credit</span>
+              <span className="entrytab__total-value">
+                {formatIDR(debitTotalCents)} / {formatIDR(creditTotalCents)}{" "}
+                {balanced ? (
+                  <span className="kind-mark is-positive">Balanced</span>
+                ) : (
+                  <span className="kind-mark is-negative">
+                    Δ {formatIDR(Math.abs(debitTotalCents - creditTotalCents))}
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
         </div>
 
         <aside className="action-rail" aria-label="Form actions">
           <button
             type="submit"
             className="action-rail__btn action-rail__btn--primary"
-            disabled={saving || saved}
-            title="Save and close"
+            disabled={saving || saved || !hasData}
+            title="Save this entry"
           >
             <DiskIcon />
             <span>{saving ? "Saving..." : saved ? "Saved" : "Save"}</span>
@@ -379,11 +454,21 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
             type="button"
             className="action-rail__btn action-rail__btn--secondary"
             onClick={handleSaveAndNew}
-            disabled={saving}
+            disabled={saving || saved || !hasData}
             title="Save and start a new entry"
           >
             <SavePlusIcon />
             <span>Save &amp; New</span>
+          </button>
+          <button
+            type="button"
+            className="action-rail__btn action-rail__btn--secondary"
+            onClick={handleSaveAndClose}
+            disabled={saving || saved || !hasData}
+            title="Save and close this tab"
+          >
+            <CloseIcon />
+            <span>Save &amp; Close</span>
           </button>
           <button type="button" className="action-rail__btn" disabled title="Duplicate this entry">
             <DocIcon />
@@ -458,6 +543,15 @@ function SavePlusIcon() {
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
       <rect x="3" y="4" width="18" height="16" rx="2" fill="currentColor" />
       <path d="M12 9v6m-3-3h6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2" fill="currentColor" />
+      <path d="M9 9l6 6m0-6l-6 6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
 }

@@ -38,6 +38,8 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // Tracks the posted journal entry id so the Post button cannot fire twice.
+  const [journalId, setJournalId] = useState<number | null>(typeof entryId === "number" ? entryId : null);
 
   const [date, setDate] = useState(mockHelpers.today());
   const [description, setDescription] = useState("");
@@ -94,6 +96,11 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
   );
   const balanced = debitTotal > 0 && debitTotal === creditTotal;
 
+  // Once posted (this session or opened as an existing entry) the journal is
+  // immutable — this also removes any chance of posting the same entry twice.
+  const posted = journalId !== null;
+  const readOnly = isDetail || posted;
+
   const updateLine = (lineId: string, patch: Partial<FormLine>) => {
     setLines((current) => current.map((l) => (l.id === lineId ? { ...l, ...patch } : l)));
   };
@@ -141,14 +148,21 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
       const result = await api.createManualJournal(payload);
       setNumber(result.number);
       setStatus(result.status);
+      setJournalId(result.id);
       setSaved(true);
-      workbench.replaceDraft(tabId, result.number, result.status);
+      workbench.replaceDraft(tabId, result.number, result.status, result.id);
       workbench.markUnsaved(tabId, false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to post the journal entry.");
     } finally {
       setSaving(false);
     }
+  };
+
+  // Open a fresh draft tab to start another journal (the posted one stays open
+  // and read-only behind it).
+  const handleNewJournal = () => {
+    workbench.openEntryDraft("journal-entry");
   };
 
   if (loading) return <LoadingState label="Loading masters..." />;
@@ -158,8 +172,8 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
     <form className="entrytab entrytab--journal" onSubmit={handleSubmit}>
       <div className="entrytab__head">
         <div className="entrytab__head-title">
-          <span className={`entrytab__status ${saved || isDetail ? "entrytab__status--posted" : "entrytab__status--draft"}`}>
-            {status || "DRAFT"}
+          <span className={`entrytab__status ${readOnly ? "entrytab__status--posted" : "entrytab__status--draft"}`}>
+            {posted || isDetail ? status || "POSTED" : status || "DRAFT"}
           </span>
           <span className="entrytab__number">{number}</span>
           <span className="entrytab__date">{formatDateID(date)}</span>
@@ -175,7 +189,7 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
                 type="date"
                 className="input"
                 value={date}
-                disabled={isDetail}
+                disabled={readOnly}
                 onChange={(e) => setDate(e.target.value)}
               />
             </label>
@@ -186,7 +200,7 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
                 className="input"
                 placeholder="Memo / description"
                 value={description}
-                disabled={isDetail}
+                disabled={readOnly}
                 onChange={(e) => setDescription(e.target.value)}
               />
             </label>
@@ -195,7 +209,7 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
           <div className="entrytab__section">
             <div className="entrytab__section-head">
               <span>Lines</span>
-              {!isDetail ? (
+              {!readOnly ? (
                 <button type="button" className="btn btn--secondary btn--sm" onClick={addLine}>
                   + Add line
                 </button>
@@ -207,7 +221,7 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
                 <span>Description</span>
                 <span className="right">Debit</span>
                 <span className="right">Credit</span>
-                {!isDetail ? <span /> : null}
+                {!readOnly ? <span /> : null}
               </div>
               {lines.map((line) => (
                 <LineRow
@@ -215,7 +229,7 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
                   line={line}
                   accounts={accounts}
                   accountById={accountById}
-                  disabled={isDetail}
+                  disabled={readOnly}
                   onChange={(patch) => updateLine(line.id, patch)}
                   onRemove={() => removeLine(line.id)}
                 />
@@ -234,7 +248,7 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
               <small>Credit</small>
               <strong>{formatIDR(creditTotal)}</strong>
             </span>
-            {!isDetail ? <span /> : null}
+            {!readOnly ? <span /> : null}
           </div>
           <div className="entrytab__balance">
             {balanced ? (
@@ -254,12 +268,30 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
         <aside className="entrytab__aside action-rail">
           {!isDetail ? (
             <>
-              <button type="submit" className="btn btn--primary btn--full" disabled={saving || !balanced}>
-                {saving ? "Posting..." : "Post Journal"}
+              {posted && (
+                <div className="action-rail__hint">
+                  <span className="kind-mark is-positive">Posted</span>
+                  <p>
+                    <small>Journal {number} has been posted and is locked.</small>
+                  </p>
+                </div>
+              )}
+              <button
+                type="submit"
+                className="btn btn--primary btn--full"
+                disabled={saving || !balanced || posted}
+              >
+                {saving ? "Posting..." : posted ? "Posted" : "Post Journal"}
               </button>
-              <button type="button" className="btn btn--secondary btn--full" disabled>
-                Save & New
-              </button>
+              {posted ? (
+                <button type="button" className="btn btn--secondary btn--full" onClick={handleNewJournal}>
+                  New Journal
+                </button>
+              ) : (
+                <button type="button" className="btn btn--secondary btn--full" disabled>
+                  Save & New
+                </button>
+              )}
             </>
           ) : (
             <div className="action-rail__hint">
