@@ -165,6 +165,8 @@ import type {
   ConsolidatedProfitLossResult,
   ReportTemplate,
   CreateReportTemplateInput,
+  ChequeListItem,
+  ChequeCreateInput,
 } from "./types";
 
 /** Reconciliation detail returned by the reconcile endpoints. */
@@ -2428,10 +2430,70 @@ export const api = {
      });
    },
 
-   // End of wave 4 approval workflow API methods.
+    // End of wave 4 approval workflow API methods.
 
-  /** Access token for protected API calls (used later). */
-  getAccessToken,
+    // -- Cheque & Giro Management API (Wave 6) --
+
+    /** List cheques with optional type filter. */
+    async listCheques(params?: { direction?: string }): Promise<ChequeListItem[]> {
+      const query = new URLSearchParams();
+      if (params?.direction) query.set("type", params.direction);
+      return http<ChequeListItem[]>(`/cheques${query.toString() ? "?" + query.toString() : ""}`, { auth: true });
+    },
+
+    /** Register a new cheque. */
+    async createCheque(input: ChequeCreateInput): Promise<void> {
+      return http("/cheques", {
+        method: "POST",
+        auth: true,
+        body: JSON.stringify(input),
+      });
+    },
+
+    /** Update an existing cheque. */
+    async updateCheque(id: string, input: Partial<ChequeCreateInput>): Promise<void> {
+      return http(`/cheques/${id}`, {
+        method: "PUT",
+        auth: true,
+        body: JSON.stringify(input),
+      });
+    },
+
+    /** Delete a cheque. */
+    async deleteCheque(id: string): Promise<void> {
+      return http(`/cheques/${id}`, {
+        method: "DELETE",
+        auth: true,
+      });
+    },
+
+    /** Deposit a cheque (moves from REGISTERED to DEPOSITED). */
+    async depositCheque(id: string): Promise<void> {
+      return http(`/cheques/${id}/deposit`, {
+        method: "POST",
+        auth: true,
+      });
+    },
+
+    /** Manually clear a deposited cheque. */
+    async clearCheque(id: string): Promise<void> {
+      return http(`/cheques/${id}/clear`, {
+        method: "POST",
+        auth: true,
+      });
+    },
+
+    /** Bounce a deposited cheque (reverse journal, re-establish AR/AP if needed). */
+    async bounceCheque(id: string, reason: string): Promise<void> {
+      return http(`/cheques/${id}/bounce`, {
+        method: "POST",
+        auth: true,
+        body: JSON.stringify({ reason }),
+      });
+    },
+
+   /** Access token for protected API calls (used later). */
+   getAccessToken,
 };
 
 export const mockHelpers = {
