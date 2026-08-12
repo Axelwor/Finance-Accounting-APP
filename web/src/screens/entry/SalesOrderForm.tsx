@@ -1,15 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
 import { FormError } from "../../components/ui";
+import { NextStepsBar } from "../../components/NextSteps";
+import { useToast } from "../../components/Toast";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import type { Customer, Item, SalesOrderLineInput, DownPayment, SalesOrder } from "../../types";
+import type { PrefillRef } from "../../workbench/types";
 
 interface Props {
   tabId: string;
   entryId?: string | number;
   initialTitle?: string;
+  /** Workflow-chain prefill: {kind:"quotation", id} copies quote lines. */
+  prefill?: PrefillRef;
 }
 
 interface Line {
@@ -23,8 +28,10 @@ interface Line {
   lineTotalCents: number;
 }
 
-export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
+export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props) {
   const workbench = useWorkbench();
+  const toast = useToast();
+  const dpSectionRef = useRef<HTMLDivElement>(null);
   const [date, setDate] = useState(todayISO());
   const [number, setNumber] = useState(initialTitle ?? draftNumber("sales-order-entry"));
   const [customerId, setCustomerId] = useState("");
@@ -54,6 +61,9 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
   const [shippingTerms, setShippingTerms] = useState<SalesOrder["shipping_terms"] | undefined>(undefined);
   const [shipToAddress, setShipToAddress] = useState("");
   const [salespersonId, setSalespersonId] = useState("");
+  /** Source quotation when this order was created via "Convert to SO". */
+  const [quotationId, setQuotationId] = useState<number | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     workbench.markUnsaved(tabId, true);
@@ -67,6 +77,40 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
       if (accs.length > 0) setDpCashAccount(Number(accs[0].id));
     });
   }, []);
+
+  // Workflow chain: pre-fill from the source quotation ("Convert to SO").
+  useEffect(() => {
+    if (!prefill || prefill.kind !== "quotation" || entryId) return;
+    let cancelled = false;
+    void api
+      .getQuotation(prefill.id)
+      .then((q) => {
+        if (cancelled) return;
+        setQuotationId(q.id);
+        setCustomerId(String(q.customer_id));
+        setNotes(q.number ? `Quotation ${q.number}` : "");
+        setLines(
+          q.lines.length > 0
+            ? q.lines.map((l) => ({
+                id: `ln-src-${l.id}`,
+                itemId: String(l.item_id ?? ""),
+                itemCode: l.item_code ?? "",
+                itemName: l.item_name ?? "",
+                qty: Number(l.qty) || 1,
+                unitPriceCents: l.unit_price_cents,
+                discountCents: l.discount_cents,
+                lineTotalCents: l.line_total_cents,
+              }))
+            : [seedLine()],
+        );
+        toast.info(`Loaded ${q.lines.length} line(s) from quotation ${q.number}`);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.kind, prefill?.id, entryId]);
 
   useEffect(() => {
     if (orderId) {
@@ -164,6 +208,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
     try {
       const created = await api.createSalesOrder({
         customer_id: Number(customerId),
+        quotation_id: quotationId ?? undefined,
         order_date: date,
         notes: notes.trim() || undefined,
         customer_po_number: customerPONumber.trim() || undefined,
@@ -180,11 +225,39 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
       setNumber(created.number);
       workbench.replaceDraft(tabId, created.number, created.status);
       workbench.markUnsaved(tabId, false);
+      toast.success(`✓ Saved ${created.number} (${created.status})`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the sales order.");
     } finally {
       setSaving(false);
     }
+  };
+
+  /** Workflow chain: open a Delivery Order draft against this order. */
+  const handleCreateDelivery = () => {
+    if (!orderId) return;
+    workbench.openEntryDraftFromParent("delivery-order-entry", { kind: "sales-order", id: orderId });
+  };
+
+  const handleCancelOrder = async () => {
+    if (!orderId) return;
+    if (!window.confirm(`Cancel sales order ${number}? This cannot be undone.`)) return;
+    setCancelling(true);
+    try {
+      const res = await api.cancelSalesOrder(orderId);
+      setOrderStatus(res.status);
+      workbench.replaceDraft(tabId, number, res.status);
+      toast.success(`Sales order ${number} cancelled`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not cancel the sales order.");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  /** Scroll to the inline down-payment panel (Receive DP next step). */
+  const handleReceiveDP = () => {
+    dpSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const handlePostDP = async () => {
@@ -214,6 +287,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
       await loadOrder(orderId);
       setDpAmount(0);
       setDpDesc("");
+      toast.success(`✓ Down payment of ${formatIDR(dpAmount)} received`);
     } catch (err) {
       setDpError(err instanceof Error ? err.message : "Could not post the down payment.");
     } finally {
@@ -398,6 +472,23 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
             <span className="entrytab__total-label">Total</span>
             <span className="entrytab__total-value">{formatIDR(isExisting ? orderTotal : totalCents)}</span>
           </div>
+
+          {isExisting && orderStatus === "CONFIRMED" && (
+            <NextStepsBar number={number} hint={orderStatus}>
+              <button type="button" className="next-steps__btn next-steps__btn--primary" onClick={handleReceiveDP} disabled={remaining <= 0}>
+                Receive DP
+              </button>
+              <button type="button" className="next-steps__btn" onClick={handleCreateDelivery}>
+                Create Delivery Order
+              </button>
+              <button type="button" className="next-steps__btn next-steps__btn--danger" onClick={() => void handleCancelOrder()} disabled={cancelling || dpReceived > 0} title={dpReceived > 0 ? "Orders with a down payment cannot be cancelled" : undefined}>
+                {cancelling ? "Cancelling..." : "Cancel SO"}
+              </button>
+              <button type="button" className="next-steps__btn" onClick={() => workbench.close(tabId)}>
+                Close
+              </button>
+            </NextStepsBar>
+          )}
         </div>
 
         <aside className="action-rail" aria-label="Form actions">
@@ -413,7 +504,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle }: Props) {
       </div>
 
       {isExisting && (
-        <div className="entrytab__dp-section" style={{ marginTop: 16, borderTop: "2px solid var(--accent)", paddingTop: 12 }}>
+        <div ref={dpSectionRef} className="entrytab__dp-section" style={{ marginTop: 16, borderTop: "2px solid var(--accent)", paddingTop: 12 }}>
           <div className="entrytab__detail-title" style={{ marginBottom: 8 }}>
             Down Payments — DP Received: <strong>{formatIDR(dpReceived)}</strong> / Remaining: <strong>{formatIDR(remaining)}</strong>
           </div>

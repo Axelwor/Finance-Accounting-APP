@@ -1237,3 +1237,75 @@
 }
 .tenant-switcher__form-actions { display: flex; gap: 6px; }
 .tenant-switcher__error { margin: 4px 10px; color: var(--negative, #c0392b); font-size: 13px; }
+
+/* Workflow chain — next-step action bar shown after a document is saved */
+.next-steps {
+  margin-top: 16px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: var(--positive-soft);
+  border: 1px solid var(--positive);
+  border-radius: var(--radius-sm);
+}
+.next-steps__saved {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink);
+  margin-right: auto;
+}
+.next-steps__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--positive);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.next-steps__saved-text small { color: var(--ink-muted); }
+.next-steps__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.next-steps__btn {
+  padding: 6px 12px;
+  background: var(--paper-elev);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.next-steps__btn:hover:not(:disabled) { background: var(--panel); border-color: var(--accent); }
+.next-steps__btn:active { transform: translateY(1px); }
+.next-steps__btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.next-steps__btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.next-steps__btn--primary:hover:not(:disabled) { background: var(--accent-deep, #1f66c4); border-color: var(--accent-deep, #1f66c4); }
+.next-steps__btn--danger:hover:not(:disabled) { border-color: var(--negative); color: var(--negative); }
+
+/* Inline warning strip (e.g. delivering more than ordered) */
+.field-warning {
+  margin: 8px 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #7a5210;
+  background: rgba(240, 173, 54, 0.12);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+}

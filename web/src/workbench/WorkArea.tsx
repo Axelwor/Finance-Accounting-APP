@@ -353,9 +353,9 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
         />
       );
     case "sales-invoice":
-      return <InvoiceForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+      return <InvoiceForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} prefill={tab.prefill} />;
     case "credit-note-entry":
-      return <CreditNoteForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+      return <CreditNoteForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} prefill={tab.prefill} />;
     case "sales-receipt":
     case "purchase-invoice":
     case "purchase-payment":
@@ -372,15 +372,15 @@ function EntryTabContent({ tab }: { tab: EntryTab }) {
     case "sales-quotation-entry":
       return <QuotationForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "sales-order-entry":
-      return <SalesOrderForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+      return <SalesOrderForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} prefill={tab.prefill} />;
     case "delivery-order-entry":
-      return <DeliveryOrderForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+      return <DeliveryOrderForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} prefill={tab.prefill} />;
     case "purchase-order-entry":
       return <PurchaseOrderForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "grn-entry":
-      return <GRNForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+      return <GRNForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} prefill={tab.prefill} />;
     case "supplier-invoice-entry":
-      return <SupplierInvoiceForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
+      return <SupplierInvoiceForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} prefill={tab.prefill} />;
     case "purchase-return-entry":
       return <PurchaseReturnForm tabId={tab.id} entryId={tab.entryId} initialTitle={tab.title} />;
     case "purchase-supplier-entry":

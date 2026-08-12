@@ -1,15 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
 import { FormError } from "../../components/ui";
+import { NextStepsBar } from "../../components/NextSteps";
+import { useToast } from "../../components/Toast";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
+import { openPrintWindow } from "../../lib/print";
 import { draftNumber } from "../../workbench/modules";
 import type { DeliveryLineInput, Item, SalesOrderListItem } from "../../types";
+import type { PrefillRef } from "../../workbench/types";
 
 interface Props {
   tabId: string;
   entryId?: string | number;
   initialTitle?: string;
+  /** Workflow-chain prefill: {kind:"sales-order", id} selects that SO. */
+  prefill?: PrefillRef;
 }
 
 interface Line {
@@ -22,11 +28,14 @@ interface Line {
   cogsCents: number;
 }
 
-export function DeliveryOrderForm({ tabId, entryId, initialTitle }: Props) {
+export function DeliveryOrderForm({ tabId, entryId, initialTitle, prefill }: Props) {
   const workbench = useWorkbench();
+  const toast = useToast();
   const [date, setDate] = useState(todayISO());
   const [number, setNumber] = useState(initialTitle ?? draftNumber("delivery-order-entry"));
-  const [salesOrderId, setSalesOrderId] = useState("");
+  const [salesOrderId, setSalesOrderId] = useState(
+    prefill?.kind === "sales-order" ? String(prefill.id) : "",
+  );
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Line[]>([seedLine()]);
   const [items, setItems] = useState<Item[]>([]);
@@ -36,6 +45,9 @@ export function DeliveryOrderForm({ tabId, entryId, initialTitle }: Props) {
   const [doId, setDoId] = useState<number | null>(typeof entryId === "number" ? entryId : null);
   const [doStatus, setDoStatus] = useState("DRAFT");
   const [totalCOGS, setTotalCOGS] = useState(0);
+  /** Ordered qty per item for the selected SO (over-delivery validation). */
+  const [orderedQty, setOrderedQty] = useState<Record<string, number>>({});
+  const [loadingSO, setLoadingSO] = useState(false);
 
   useEffect(() => {
     workbench.markUnsaved(tabId, true);
@@ -45,6 +57,61 @@ export function DeliveryOrderForm({ tabId, entryId, initialTitle }: Props) {
     void api.listItems().then(setItems);
     void api.listSalesOrders("CONFIRMED").then(setSalesOrders);
   }, []);
+
+  // Auto-fill: when a sales order is picked (manually or via workflow-chain
+  // prefill), copy its lines into the delivery so nothing is re-keyed.
+  useEffect(() => {
+    if (!salesOrderId || doId !== null) {
+      setOrderedQty({});
+      return;
+    }
+    let cancelled = false;
+    setLoadingSO(true);
+    void api
+      .getSalesOrder(Number(salesOrderId))
+      .then((so) => {
+        if (cancelled) return;
+        const ordered: Record<string, number> = {};
+        for (const l of so.lines) ordered[String(l.item_id)] = Number(l.qty) || 0;
+        setOrderedQty(ordered);
+        setLines(
+          so.lines.length > 0
+            ? so.lines.map((l) => ({
+                id: `ln-src-${l.id}`,
+                itemId: String(l.item_id),
+                itemCode: l.item_code ?? "",
+                itemName: l.item_name ?? "",
+                qty: Number(l.qty) || 1,
+                // COGS is resolved server-side for FIFO/average items; the
+                // cost entered here only matters for specific-identification.
+                unitCostCents: 0,
+                cogsCents: 0,
+              }))
+            : [seedLine()],
+        );
+        toast.info(`Loaded ${so.lines.length} line(s) from ${so.number}`);
+      })
+      .catch(() => {
+        if (!cancelled) setOrderedQty({});
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSO(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [salesOrderId, doId, toast]);
+
+  // Over-delivery warning: delivering more than ordered is allowed (backorder
+  // corrections happen) but must be a conscious choice, so warn loudly.
+  const overDelivered = useMemo(
+    () =>
+      lines.filter((l) => {
+        const ordered = orderedQty[l.itemId];
+        return l.itemId && ordered !== undefined && l.qty > ordered;
+      }),
+    [lines, orderedQty],
+  );
 
   useEffect(() => {
     if (doId) {
@@ -138,11 +205,46 @@ export function DeliveryOrderForm({ tabId, entryId, initialTitle }: Props) {
       setNumber(created.number);
       workbench.replaceDraft(tabId, created.number, created.status);
       workbench.markUnsaved(tabId, false);
+      toast.success(`✓ Saved ${created.number}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the delivery order.");
     } finally {
       setSaving(false);
     }
+  };
+
+  /** Workflow chain: open an Invoice draft pre-filled from this delivery. */
+  const handleCreateInvoice = () => {
+    if (!doId) return;
+    workbench.openEntryDraftFromParent("sales-invoice", { kind: "delivery-order", id: doId });
+  };
+
+  const handlePrint = () => {
+    const so = salesOrders.find((s) => String(s.id) === salesOrderId);
+    openPrintWindow({
+      title: `Delivery Order ${number}`,
+      subtitle: isExisting ? doStatus : "DRAFT",
+      meta: [
+        ["Sales Order", so ? so.number : salesOrderId || "-"],
+        ["Delivery date", formatDateID(date)],
+        ["Notes", notes || "-"],
+      ],
+      columns: [
+        { label: "Item" },
+        { label: "Qty", right: true },
+        { label: "Unit Cost", right: true },
+        { label: "COGS", right: true },
+      ],
+      rows: lines
+        .filter((l) => l.itemId)
+        .map((l) => [
+          `${l.itemCode || l.itemId}${l.itemName ? ` · ${l.itemName}` : ""}`,
+          l.qty,
+          formatIDR(l.unitCostCents),
+          formatIDR(l.cogsCents),
+        ]),
+      totals: [["Total COGS", formatIDR(isExisting ? totalCOGS : totalCOGSCents)]],
+    });
   };
 
   const isExisting = doId !== null;
@@ -193,8 +295,18 @@ export function DeliveryOrderForm({ tabId, entryId, initialTitle }: Props) {
             <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Delivery instructions, carrier info..." disabled={isExisting} />
           </label>
 
+          {overDelivered.length > 0 && (
+            <div className="field-warning" role="alert">
+              Delivery qty exceeds the ordered qty for:{" "}
+              {overDelivered
+                .map((l) => `${l.itemCode || l.itemName || `item ${l.itemId}`} (ordered ${orderedQty[l.itemId]}, delivering ${l.qty})`)
+                .join("; ")}
+              . Double-check before saving.
+            </div>
+          )}
+
           <div className="entrytab__detail">
-            <div className="entrytab__detail-title">Item lines *</div>
+            <div className="entrytab__detail-title">Item lines *{loadingSO ? " — loading from sales order..." : ""}</div>
             <div className="detail-grid detail-grid--quote">
               <div className="detail-grid__head">
                 <div>Item</div>
@@ -251,6 +363,20 @@ export function DeliveryOrderForm({ tabId, entryId, initialTitle }: Props) {
             <span className="entrytab__total-label">Total COGS</span>
             <span className="entrytab__total-value">{formatIDR(isExisting ? totalCOGS : totalCOGSCents)}</span>
           </div>
+
+          {isExisting && (
+            <NextStepsBar number={number} hint={doStatus}>
+              <button type="button" className="next-steps__btn next-steps__btn--primary" onClick={handleCreateInvoice}>
+                Create Invoice
+              </button>
+              <button type="button" className="next-steps__btn" onClick={handlePrint}>
+                Print DO
+              </button>
+              <button type="button" className="next-steps__btn" onClick={() => workbench.close(tabId)}>
+                Close
+              </button>
+            </NextStepsBar>
+          )}
         </div>
 
         <aside className="action-rail" aria-label="Form actions">

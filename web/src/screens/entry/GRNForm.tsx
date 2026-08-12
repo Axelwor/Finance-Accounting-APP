@@ -1,15 +1,20 @@
 import { useEffect, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
 import { FormError } from "../../components/ui";
+import { NextStepsBar } from "../../components/NextSteps";
+import { useToast } from "../../components/Toast";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import type { PurchaseOrderListItem, Item, GRNLineInput } from "../../types";
+import type { PrefillRef } from "../../workbench/types";
 
 interface Props {
   tabId: string;
   entryId?: string | number;
   initialTitle?: string;
+  /** Workflow-chain prefill: {kind:"purchase-order", id} selects that PO. */
+  prefill?: PrefillRef;
 }
 
 interface Line {
@@ -19,18 +24,37 @@ interface Line {
   unitCostCents: string;
 }
 
-export function GRNForm({ tabId, entryId, initialTitle }: Props) {
+/** PO line data kept for auto-fill and the "Receive All" shortcut. */
+interface PoLineInfo {
+  itemId: string;
+  remainingQty: number;
+  unitCostCents: number;
+}
+
+export function GRNForm({ tabId, entryId, initialTitle, prefill }: Props) {
   const workbench = useWorkbench();
-  const isExisting = !!entryId;
+  const toast = useToast();
 
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderListItem[]>([]);
   const [items, setItems] = useState<Item[]>([]);
-  const [poId, setPoId] = useState("");
+  const [poId, setPoId] = useState(prefill?.kind === "purchase-order" ? String(prefill.id) : "");
   const [grnDate, setGrnDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Line[]>([{ id: crypto.randomUUID(), itemId: "", qty: "1", unitCostCents: "0" }]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  /** PO lines pending receipt, used by auto-fill and "Receive All". */
+  const [poLines, setPoLines] = useState<PoLineInfo[]>([]);
+  const [loadingPO, setLoadingPO] = useState(false);
+  /** Backend id once the GRN is saved. */
+  const [savedId, setSavedId] = useState<number | null>(
+    entryId != null && !Number.isNaN(Number(entryId)) ? Number(entryId) : null,
+  );
+  const [savedNumber, setSavedNumber] = useState(initialTitle ?? "");
+  const [savedStatus, setSavedStatus] = useState("");
+
+  /** Read-only once the GRN exists (reopened tab or just saved). */
+  const isExisting = !!entryId || savedId !== null;
 
   useEffect(() => {
     api.listPurchaseOrders("CONFIRMED").then(setPurchaseOrders).catch(() => {});
@@ -39,6 +63,73 @@ export function GRNForm({ tabId, entryId, initialTitle }: Props) {
     }).catch(() => {});
     api.listItems().then(setItems).catch(() => {});
   }, []);
+
+  // Auto-fill: when a PO is picked (manually or via workflow-chain prefill),
+  // load its lines and pre-populate the remaining qty per item (D-08).
+  useEffect(() => {
+    if (!poId || isExisting) {
+      setPoLines([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingPO(true);
+    void api
+      .getPurchaseOrder(Number(poId))
+      .then((po) => {
+        if (cancelled) return;
+        const infos: PoLineInfo[] = po.lines.map((l) => ({
+          itemId: String(l.item_id),
+          remainingQty: Math.max((Number(l.qty) || 0) - (Number(l.received_qty) || 0), 0),
+          unitCostCents: l.unit_price_cents,
+        }));
+        setPoLines(infos);
+        const receivable = infos.filter((l) => l.remainingQty > 0);
+        if (receivable.length === 0) {
+          toast.warning(`All lines on ${po.number} are already fully received.`);
+          return;
+        }
+        setLines(
+          receivable.map((l) => ({
+            id: crypto.randomUUID(),
+            itemId: l.itemId,
+            qty: String(l.remainingQty),
+            unitCostCents: String(l.unitCostCents),
+          })),
+        );
+        toast.info(`Loaded ${receivable.length} line(s) from ${po.number}`);
+      })
+      .catch(() => {
+        if (!cancelled) setPoLines([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPO(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [poId, isExisting, toast]);
+
+  /** Set every line's qty back to the PO's remaining quantity. */
+  function receiveAll() {
+    const receivable = poLines.filter((l) => l.remainingQty > 0);
+    if (receivable.length === 0) {
+      toast.warning("Nothing left to receive on this purchase order.");
+      return;
+    }
+    setLines(
+      receivable.map((l) => ({
+        id: crypto.randomUUID(),
+        itemId: l.itemId,
+        qty: String(l.remainingQty),
+        unitCostCents: String(l.unitCostCents),
+      })),
+    );
+    markDirty();
+  }
+
+  function markDirty() {
+    workbench.markUnsaved(tabId, true);
+  }
 
   const totalCents = lines.reduce(
     (sum, l) => sum + Math.round((parseFloat(l.qty) || 0) * (parseInt(l.unitCostCents) || 0)),
@@ -79,6 +170,10 @@ export function GRNForm({ tabId, entryId, initialTitle }: Props) {
       });
       workbench.replaceDraft(tabId, grn.number, grn.status);
       workbench.markUnsaved(tabId, false);
+      setSavedId(grn.id);
+      setSavedNumber(grn.number);
+      setSavedStatus(grn.status);
+      toast.success(`✓ Saved ${grn.number}`);
     } catch (err: any) {
       setError(err?.message || "Failed to create GRN.");
     } finally {
@@ -86,12 +181,18 @@ export function GRNForm({ tabId, entryId, initialTitle }: Props) {
     }
   }
 
+  /** Workflow chain: open a Supplier Invoice draft from this GRN. */
+  function handleCreateSupplierInvoice() {
+    if (!savedId) return;
+    workbench.openEntryDraftFromParent("supplier-invoice-entry", { kind: "grn", id: savedId });
+  }
+
   return (
     <form className="entrytab" onSubmit={handleSubmit}>
       <div className="entrytab__header">
         <div className="entrytab__header-info">
-          <div className="entrytab__header-title">{initialTitle || "Goods Received Note"}</div>
-          <div className="entrytab__header-number">{isExisting ? initialTitle : draftNumber("grn-entry")}</div>
+          <div className="entrytab__header-title">{savedNumber || initialTitle || "Goods Received Note"}</div>
+          <div className="entrytab__header-number">{isExisting ? savedNumber || initialTitle : draftNumber("grn-entry")}</div>
         </div>
       </div>
       <div className="entrytab__body">
@@ -119,7 +220,14 @@ export function GRNForm({ tabId, entryId, initialTitle }: Props) {
             <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={isExisting} />
           </label>
 
-          <div className="entrytab__detail-title">Received items *</div>
+          <div className="entrytab__detail-title">
+            Received items *{loadingPO ? " — loading from purchase order..." : ""}
+            {!isExisting && poLines.some((l) => l.remainingQty > 0) && (
+              <button type="button" className="btn btn--secondary btn--sm" style={{ marginLeft: 12 }} onClick={receiveAll} title="Set every line to the remaining ordered quantity">
+                Receive All
+              </button>
+            )}
+          </div>
           <div className="detail-grid detail-grid--quote">
             <div className="detail-grid__head">
               <div>Item</div>
@@ -169,6 +277,17 @@ export function GRNForm({ tabId, entryId, initialTitle }: Props) {
             <span className="entrytab__total-label">Total (Dr Inventory / Cr Payable)</span>
             <span className="entrytab__total-value">{formatIDR(totalCents)}</span>
           </div>
+
+          {savedId !== null && (
+            <NextStepsBar number={savedNumber || undefined} hint={savedStatus || undefined}>
+              <button type="button" className="next-steps__btn next-steps__btn--primary" onClick={handleCreateSupplierInvoice}>
+                Create Supplier Invoice
+              </button>
+              <button type="button" className="next-steps__btn" onClick={() => workbench.close(tabId)}>
+                Close
+              </button>
+            </NextStepsBar>
+          )}
         </div>
 
         <aside className="action-rail" aria-label="Form actions">

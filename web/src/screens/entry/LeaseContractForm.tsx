@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
 import { FormError } from "../../components/ui";
+import { NextStepsBar } from "../../components/NextSteps";
+import { useToast } from "../../components/Toast";
 import { api } from "../../api";
-import { formatIDR } from "../../lib/format";
+import { formatIDR, todayISO } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import type { LeaseContract, CreateLeaseContractInput } from "../../types";
 
@@ -20,6 +22,7 @@ const FREQUENCIES = [
 
 export function LeaseContractForm({ tabId, entryId, initialTitle }: Props) {
   const workbench = useWorkbench();
+  const toast = useToast();
   const isExisting = !!entryId;
 
   const [lesseeName, setLesseeName] = useState("");
@@ -94,6 +97,7 @@ export function LeaseContractForm({ tabId, entryId, initialTitle }: Props) {
       };
       const result = await api.createLeaseContract(input);
       workbench.replaceDraft(tabId, result.number, result.status);
+      toast.success(`✓ Registered lease ${result.number}`);
       workbench.openEntryExisting("lease-contract-entry", result.id, result.number, result.status);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to register lease.");
@@ -102,8 +106,18 @@ export function LeaseContractForm({ tabId, entryId, initialTitle }: Props) {
     }
   }
 
+  /** Re-fetch the contract after a payment / modification / termination. */
+  const reloadLease = useCallback(async (id: number) => {
+    try {
+      const lc = await api.getLeaseContract(id);
+      setExisting(lc);
+    } catch {
+      // keep the last known copy if the refresh fails
+    }
+  }, []);
+
   if (isExisting && existing) {
-    return <LeaseContractDetail tabId={tabId} lease={existing} />;
+    return <LeaseContractDetail tabId={tabId} lease={existing} onReload={() => void reloadLease(existing.id)} />;
   }
 
   const pvPreview = computePVPreview();
@@ -198,11 +212,94 @@ export function LeaseContractForm({ tabId, entryId, initialTitle }: Props) {
 }
 
 // ---------------------------------------------------------------------------
-// Lease contract detail view — shows the contract + payment schedule.
+// Lease contract detail view — workflow chain for a saved contract:
+// View Schedule / Post Payment / Modify / Terminate / Close.
 // ---------------------------------------------------------------------------
 
-function LeaseContractDetail({ tabId, lease }: { tabId: string; lease: LeaseContract }) {
+function LeaseContractDetail({
+  tabId,
+  lease,
+  onReload,
+}: {
+  tabId: string;
+  lease: LeaseContract;
+  onReload: () => void;
+}) {
   const workbench = useWorkbench();
+  const toast = useToast();
+  const [postingPayment, setPostingPayment] = useState(false);
+  const [showModify, setShowModify] = useState(false);
+  const [modPayment, setModPayment] = useState(String(lease.payment_amount_cents));
+  const [modTotalPayments, setModTotalPayments] = useState(String(lease.total_payments));
+  const [modEffectiveDate, setModEffectiveDate] = useState(todayISO());
+  const [modError, setModError] = useState("");
+  const [postingModify, setPostingModify] = useState(false);
+  const [terminating, setTerminating] = useState(false);
+
+  const isActive = lease.status === "ACTIVE";
+  const nextPayment = lease.schedule?.find((p) => !p.posted);
+
+  const handlePostPayment = async () => {
+    if (!nextPayment) return;
+    setPostingPayment(true);
+    try {
+      const result = await api.postLeasePayment(lease.id, nextPayment.payment_no);
+      toast.success(`✓ Payment #${result.payment_no} posted — principal ${formatIDR(result.principal_cents)}, interest ${formatIDR(result.interest_cents)}`);
+      onReload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not post the lease payment.");
+    } finally {
+      setPostingPayment(false);
+    }
+  };
+
+  const handleModify = async () => {
+    setModError("");
+    const paymentCents = parseInt(modPayment, 10);
+    const n = parseInt(modTotalPayments, 10);
+    if (!Number.isFinite(paymentCents) || paymentCents <= 0) {
+      setModError("New payment amount must be > 0.");
+      return;
+    }
+    if (!Number.isFinite(n) || n <= 0) {
+      setModError("New total payments must be > 0.");
+      return;
+    }
+    if (!modEffectiveDate) {
+      setModError("Effective date is required.");
+      return;
+    }
+    setPostingModify(true);
+    try {
+      const result = await api.modifyLeaseContract(lease.id, {
+        new_payment_amount_cents: paymentCents,
+        new_total_payments: n,
+        effective_date: modEffectiveDate,
+      });
+      toast.success(`Lease modified — new PV ${formatIDR(result.new_pv_cents)} (adjustment ${formatIDR(Math.abs(result.delta_cents))})`);
+      setShowModify(false);
+      onReload();
+    } catch (err) {
+      setModError(err instanceof Error ? err.message : "Could not modify the lease.");
+    } finally {
+      setPostingModify(false);
+    }
+  };
+
+  const handleTerminate = async () => {
+    if (!window.confirm(`Terminate lease ${lease.number}? This derecognises the RoU asset and liability.`)) return;
+    setTerminating(true);
+    try {
+      await api.terminateLeaseContract(lease.id, { termination_date: todayISO() });
+      toast.success(`Lease ${lease.number} terminated`);
+      onReload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not terminate the lease.");
+    } finally {
+      setTerminating(false);
+    }
+  };
+
   return (
     <div className="entrytab">
       <div className="entrytab__head">
@@ -223,11 +320,66 @@ function LeaseContractDetail({ tabId, lease }: { tabId: string; lease: LeaseCont
             <div><span>Initial Liability</span><strong>{formatIDR(lease.initial_liability_cents)}</strong></div>
           </div>
 
-          <div className="entryform__actions">
-            <button type="button" className="btn btn--secondary" onClick={() => workbench.openEntryExisting("lease-payment-schedule", lease.id, `Schedule ${lease.number}`, lease.status)}>
-              View Payment Schedule
+          <NextStepsBar number={lease.number} hint={lease.status}>
+            <button
+              type="button"
+              className="next-steps__btn"
+              onClick={() => workbench.openEntryExisting("lease-payment-schedule", lease.id, `Schedule ${lease.number}`, lease.status)}
+            >
+              View Schedule
             </button>
-          </div>
+            {isActive && (
+              <>
+                <button
+                  type="button"
+                  className="next-steps__btn next-steps__btn--primary"
+                  onClick={() => void handlePostPayment()}
+                  disabled={postingPayment || !nextPayment}
+                  title={nextPayment ? `Post payment #${nextPayment.payment_no} (${nextPayment.payment_date})` : "All payments posted"}
+                >
+                  {postingPayment ? "Posting..." : nextPayment ? `Post Payment #${nextPayment.payment_no}` : "Post Payment"}
+                </button>
+                <button type="button" className="next-steps__btn" onClick={() => setShowModify((v) => !v)}>
+                  Modify
+                </button>
+                <button type="button" className="next-steps__btn next-steps__btn--danger" onClick={() => void handleTerminate()} disabled={terminating}>
+                  {terminating ? "Terminating..." : "Terminate"}
+                </button>
+              </>
+            )}
+            <button type="button" className="next-steps__btn" onClick={() => workbench.close(tabId)}>
+              Close
+            </button>
+          </NextStepsBar>
+
+          {isActive && showModify && (
+            <div style={{ marginTop: 12 }}>
+              <div className="entrytab__detail-title">Lease modification (re-measurement)</div>
+              <div className="entryform__row">
+                <label className="entryform__field">
+                  <span>New Payment Amount (Rp)</span>
+                  <input type="number" value={modPayment} onChange={(e) => { setModPayment(e.target.value); setModError(""); }} />
+                </label>
+                <label className="entryform__field">
+                  <span>New Total Payments</span>
+                  <input type="number" value={modTotalPayments} onChange={(e) => { setModTotalPayments(e.target.value); setModError(""); }} />
+                </label>
+                <label className="entryform__field">
+                  <span>Effective Date</span>
+                  <input type="date" value={modEffectiveDate} onChange={(e) => { setModEffectiveDate(e.target.value); setModError(""); }} />
+                </label>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button type="button" className="btn btn--primary" onClick={() => void handleModify()} disabled={postingModify}>
+                  {postingModify ? "Posting..." : "Post Modification"}
+                </button>
+                <button type="button" className="btn btn--secondary" onClick={() => setShowModify(false)}>
+                  Cancel
+                </button>
+              </div>
+              <FormError message={modError} />
+            </div>
+          )}
         </div>
       </div>
     </div>

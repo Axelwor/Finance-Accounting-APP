@@ -1,16 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
 import { FormError } from "../../components/ui";
+import { NextStepsBar } from "../../components/NextSteps";
+import { useToast } from "../../components/Toast";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
+import { openPrintWindow } from "../../lib/print";
 import { draftNumber } from "../../workbench/modules";
 import type { Customer, Item, InvoiceLineInput, SalesOrderListItem, InvoicePayment, CreatePaymentInput, Invoice } from "../../types";
+import type { PrefillRef } from "../../workbench/types";
 import { AttachmentPanel } from "../../components/AttachmentPanel";
 
 interface Props {
   tabId: string;
   entryId?: string | number;
   initialTitle?: string;
+  /** Workflow-chain prefill: {kind:"delivery-order", id} copies DO lines. */
+  prefill?: PrefillRef;
 }
 
 interface Line {
@@ -24,8 +30,10 @@ interface Line {
   lineTotalCents: number;
 }
 
-export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
+export function InvoiceForm({ tabId, entryId, initialTitle, prefill }: Props) {
   const workbench = useWorkbench();
+  const toast = useToast();
+  const paymentsRef = useRef<HTMLDivElement>(null);
   const [date, setDate] = useState(todayISO());
   const [dueDate, setDueDate] = useState("");
   const [number, setNumber] = useState(initialTitle ?? draftNumber("sales-invoice"));
@@ -67,6 +75,62 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
       if (accs.length > 0) setPayCashAccount(Number(accs[0].id));
     });
   }, []);
+
+  // Workflow chain: pre-fill from a Delivery Order ("Create Invoice"). The
+  // DO supplies customer + delivered qty; its sales order supplies prices.
+  useEffect(() => {
+    if (!prefill || prefill.kind !== "delivery-order" || entryId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const deliv = await api.getDeliveryOrder(prefill.id);
+        if (cancelled) return;
+        // Prices live on the SO, not the DO — resolve them per item.
+        let priceByItem = new Map<number, { price: number; discount: number }>();
+        if (deliv.sales_order_id) {
+          try {
+            const so = await api.getSalesOrder(deliv.sales_order_id);
+            priceByItem = new Map(
+              so.lines.map((l) => [l.item_id, { price: l.unit_price_cents, discount: l.discount_cents }]),
+            );
+            if (!cancelled) setSalesOrderId(String(so.id));
+          } catch {
+            // SO unavailable — invoice lines fall back to zero price.
+          }
+        }
+        if (cancelled) return;
+        setCustomerId(String(deliv.customer_id));
+        setNotes(`Delivery ${deliv.number}`);
+        setLines(
+          deliv.lines.length > 0
+            ? deliv.lines.map((l) => {
+                const pricing = priceByItem.get(l.item_id);
+                const qty = Number(l.qty) || 1;
+                const unitPriceCents = pricing?.price ?? 0;
+                const discountCents = pricing?.discount ?? 0;
+                return {
+                  id: `ln-src-${l.id}`,
+                  itemId: String(l.item_id),
+                  itemCode: l.item_code ?? "",
+                  itemName: l.item_name ?? "",
+                  qty,
+                  unitPriceCents,
+                  discountCents,
+                  lineTotalCents: Math.round(qty * unitPriceCents) - discountCents,
+                };
+              })
+            : [seedLine()],
+        );
+        toast.info(`Loaded ${deliv.lines.length} line(s) from delivery ${deliv.number}`);
+      } catch {
+        // Leave the draft blank if the delivery cannot be loaded.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.kind, prefill?.id, entryId]);
 
   useEffect(() => {
     if (invId) {
@@ -185,11 +249,69 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
       setNumber(created.number);
       workbench.replaceDraft(tabId, created.number, created.status);
       workbench.markUnsaved(tabId, false);
+      toast.success(`✓ Saved ${created.number}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the invoice.");
     } finally {
       setSaving(false);
     }
+  };
+
+  /** Scroll to the inline payment panel (Receive Payment next step). */
+  const handleReceivePayment = () => {
+    paymentsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const handlePrint = () => {
+    const customer = customers.find((c) => String(c.id) === customerId);
+    openPrintWindow({
+      title: `Sales Invoice ${number}`,
+      subtitle: isExisting ? invStatus : "DRAFT",
+      meta: [
+        ["Customer", customer ? `${customer.code} · ${customer.name}` : "-"],
+        ["Invoice date", formatDateID(date)],
+        ["Due date", dueDate ? formatDateID(dueDate) : "-"],
+        ["Tax invoice no", taxInvoiceNumber || "-"],
+        ["Notes", notes || "-"],
+      ],
+      columns: [
+        { label: "Item" },
+        { label: "Qty", right: true },
+        { label: "Unit Price", right: true },
+        { label: "Discount", right: true },
+        { label: "Line Total", right: true },
+      ],
+      rows: lines
+        .filter((l) => l.itemId)
+        .map((l) => [
+          `${l.itemCode || l.itemId}${l.itemName ? ` · ${l.itemName}` : ""}`,
+          l.qty,
+          formatIDR(l.unitPriceCents),
+          formatIDR(l.discountCents),
+          formatIDR(l.lineTotalCents),
+        ]),
+      totals: [
+        ["Total", formatIDR(isExisting ? total : totalCents)],
+        ...(isExisting && dpApplied > 0 ? ([["DP Applied", formatIDR(dpApplied)]] as Array<[string, string]>) : []),
+        ...(isExisting ? ([["Receivable", formatIDR(receivable)]] as Array<[string, string]>) : []),
+      ],
+    });
+  };
+
+  /** No email endpoint yet — the print view doubles as the send artifact. */
+  const handleSend = () => {
+    handlePrint();
+    toast.info("Print preview opened — save it as PDF to send the invoice.");
+  };
+
+  /** The API has no invoice void; a full credit note is the supported path. */
+  const handleVoid = () => {
+    if (!invId) return;
+    const ok = window.confirm(
+      `The API cannot void posted invoices directly. Open a pre-filled credit note for ${number} instead? Saving it reverses the invoice.`,
+    );
+    if (!ok) return;
+    workbench.openEntryDraftFromParent("credit-note-entry", { kind: "invoice", id: invId });
   };
 
   const handlePostPayment = async () => {
@@ -214,6 +336,7 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
       await loadInv(invId);
       setPayAmount(0);
       setPayDesc("");
+      toast.success(`✓ Payment of ${formatIDR(payAmount)} received`);
     } catch (err) {
       setPayError(err instanceof Error ? err.message : "Could not post the payment.");
     } finally {
@@ -384,7 +507,31 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
           )}
 
           {isExisting && (
-            <div style={{ marginTop: 16, borderTop: "2px solid var(--accent)", paddingTop: 12 }}>
+            <NextStepsBar number={number} hint={invStatus}>
+              {receivable > 0 && invStatus !== "VOID" && (
+                <button type="button" className="next-steps__btn next-steps__btn--primary" onClick={handleReceivePayment}>
+                  Receive Payment
+                </button>
+              )}
+              <button type="button" className="next-steps__btn" onClick={handlePrint}>
+                Print Invoice
+              </button>
+              <button type="button" className="next-steps__btn" onClick={handleSend}>
+                Send
+              </button>
+              {invStatus !== "VOID" && invStatus !== "PAID" && (
+                <button type="button" className="next-steps__btn next-steps__btn--danger" onClick={handleVoid}>
+                  Void
+                </button>
+              )}
+              <button type="button" className="next-steps__btn" onClick={() => workbench.close(tabId)}>
+                Close
+              </button>
+            </NextStepsBar>
+          )}
+
+          {isExisting && (
+            <div ref={paymentsRef} style={{ marginTop: 16, borderTop: "2px solid var(--accent)", paddingTop: 12 }}>
               <div className="entrytab__detail-title" style={{ marginBottom: 8 }}>
                 Payments — Received: <strong>{formatIDR(payments.reduce((s, p) => s + p.ar_applied_cents, 0))}</strong> / Receivable: <strong>{formatIDR(receivable)}</strong>
               </div>
