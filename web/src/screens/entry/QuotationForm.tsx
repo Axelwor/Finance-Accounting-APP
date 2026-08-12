@@ -54,8 +54,8 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
   const [savedStatus, setSavedStatus] = useState<string>("");
 
   useEffect(() => {
-    markUnsaved(tabId, true);
-  }, [tabId, date, number, customerId, validUntil, notes, lines, taxRate, markUnsaved]);
+    workbench.markUnsaved(tabId, true);
+  }, [tabId, date, number, customerId, validUntil, notes, lines, taxRate, workbench.markUnsaved]);
 
   useEffect(() => {
     void api.listCustomers().then(setCustomers);

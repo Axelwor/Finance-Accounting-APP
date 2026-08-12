@@ -66,8 +66,8 @@ export function InvoiceForm({ tabId, entryId, initialTitle, prefill }: Props) {
   const [taxRate, setTaxRate] = useState(0);
 
   useEffect(() => {
-    markUnsaved(tabId, true);
-  }, [tabId, date, number, customerId, salesOrderId, notes, lines, taxRate, markUnsaved]);
+    workbench.markUnsaved(tabId, true);
+  }, [tabId, date, number, customerId, salesOrderId, notes, lines, taxRate, workbench.markUnsaved]);
 
   useEffect(() => {
     void api.listCustomers().then(setCustomers);
@@ -182,7 +182,7 @@ export function InvoiceForm({ tabId, entryId, initialTitle, prefill }: Props) {
       } catch {
         setPayments([]);
       }
-      markUnsaved(tabId, false);
+      workbench.markUnsaved(tabId, false);
     } catch {
       // new invoice or fetch failed
     }
