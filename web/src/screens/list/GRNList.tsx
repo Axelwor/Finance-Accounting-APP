@@ -62,40 +62,39 @@ export function GRNList() {
             }
           />
         ) : (
-          <div className="ledger-table">
-            <div className="ledger-table__head">
-              <span>Number</span>
-              <span>Date</span>
-              <span>Supplier</span>
-              <span>PO</span>
-              <span>Status</span>
-              <span className="right">Total</span>
-            </div>
-            {items.map((it) => (
-              <div
-                key={it.id}
-                className="ledger-table__row"
-                role="button"
-                tabIndex={0}
-                onClick={() => openEntry(it)}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEntry(it); } }}
-                style={{ cursor: "pointer" }}
-              >
-                <span className="ledger-table__no">{it.number}</span>
-                <span className="ledger-table__date">{it.grn_date}</span>
-                <span className="ledger-table__cat">{it.supplier_name ?? `#${it.supplier_id}`}</span>
-                <span className="ledger-table__memo">PO #{it.purchase_order_id}</span>
-                <span><span className={`kind-mark ${GRN_STATUS_TONE[it.status] ?? "is-muted"}`}>{it.status}</span></span>
-                <span className="ledger-table__amount right">{formatIDR(it.total_cents)}</span>
-              </div>
-            ))}
-          </div>
+          <table className="ledger-table" aria-label="Goods received notes list">
+            <thead>
+              <tr>
+                <th scope="col">Number</th>
+                <th scope="col">Date</th>
+                <th scope="col">Supplier</th>
+                <th scope="col">PO</th>
+                <th scope="col">Status</th>
+                <th scope="col" className="right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it) => (
+                <GRNRow key={it.id} item={it} onOpen={() => openEntry(it)} />
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
-      <div className="listtab__footer">
-        <span className="listtab__footer-count">{items.length} GRN(s)</span>
-      </div>
     </div>
+  );
+}
+
+function GRNRow({ item, onOpen }: { item: GoodsReceivedNoteListItem; onOpen: () => void }) {
+  return (
+    <tr role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} style={{ cursor: "pointer" }}>
+      <th scope="row">{item.number}</th>
+      <td>{item.grn_date}</td>
+      <td>{item.supplier_name ?? `#${item.supplier_id}`}</td>
+      <td>PO #{item.purchase_order_id}</td>
+      <td><span className={`kind-mark ${GRN_STATUS_TONE[item.status] ?? "is-muted"}`}>{item.status}</span></td>
+      <td className="right">{formatIDR(item.total_cents)}</td>
+    </tr>
   );
 }
 

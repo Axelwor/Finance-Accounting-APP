@@ -121,17 +121,22 @@ export function StockTransferForm({ tabId, entryId, initialTitle }: Props) {
             <>
               <div className="entrytab__detail-title">Items to transfer *</div>
               <div className="detail-grid detail-grid--quote">
-                <div className="detail-grid__head">
-                  <div>Item</div>
-                  <div>Qty</div>
-                  <div className="right">Unit Cost</div>
-                  <div>Description</div>
+                <div className="detail-grid__head" role="row">
+                  <div role="columnheader">Item</div>
+                  <div role="columnheader">Qty</div>
+                  <div role="columnheader" className="right">Unit Cost</div>
+                  <div role="columnheader">Description</div>
                   <div aria-hidden="true" />
                 </div>
                 {lines.map((line) => (
-                  <div className="detail-grid__row" key={line.id}>
-                    <div>
-                      <select className="input" value={line.itemId} onChange={(e) => setLine(line.id, "itemId", e.target.value)}>
+                  <div className="detail-grid__row" key={line.id} role="row">
+                    <div role="cell">
+                      <select
+                        className="input"
+                        value={line.itemId}
+                        onChange={(e) => setLine(line.id, "itemId", e.target.value)}
+                        aria-label={`Item for line ${line.id}`}
+                      >
                         <option value="">Choose item...</option>
                         {items.filter((i) => i.item_type === "goods").map((i) => (
                           <option key={i.id} value={i.id}>
@@ -140,17 +145,42 @@ export function StockTransferForm({ tabId, entryId, initialTitle }: Props) {
                         ))}
                       </select>
                     </div>
-                    <div>
-                      <input className="input input--narrow" type="number" step="0.001" value={line.qty} onChange={(e) => setLine(line.id, "qty", e.target.value)} />
+                    <div role="cell">
+                      <input
+                        className="input input--narrow"
+                        type="number"
+                        step="0.001"
+                        value={line.qty}
+                        onChange={(e) => setLine(line.id, "qty", e.target.value)}
+                        aria-label={`Quantity for line ${line.id}`}
+                      />
                     </div>
-                    <div>
-                      <input className="input input--narrow right" type="number" value={line.unitCostCents} onChange={(e) => setLine(line.id, "unitCostCents", e.target.value)} />
+                    <div role="cell">
+                      <input
+                        className="input input--narrow right"
+                        type="number"
+                        value={line.unitCostCents}
+                        onChange={(e) => setLine(line.id, "unitCostCents", e.target.value)}
+                        aria-label={`Unit cost for line ${line.id}`}
+                      />
                     </div>
-                    <div>
-                      <input className="input" type="text" value={line.description} placeholder="optional" onChange={(e) => setLine(line.id, "description", e.target.value)} />
+                    <div role="cell">
+                      <input
+                        className="input"
+                        type="text"
+                        value={line.description}
+                        placeholder="optional"
+                        onChange={(e) => setLine(line.id, "description", e.target.value)}
+                        aria-label={`Description for line ${line.id}`}
+                      />
                     </div>
-                    <div>
-                      <button type="button" className="detail-grid__remove" onClick={() => removeLine(line.id)} aria-label="Remove line">
+                    <div role="cell">
+                      <button
+                        type="button"
+                        className="detail-grid__remove"
+                        onClick={() => removeLine(line.id)}
+                        aria-label={`Remove line ${line.id}`}
+                      >
                         ×
                       </button>
                     </div>

@@ -23,20 +23,20 @@
   --ink-deep: #18324b;
   --ink: #263d55;
   --ink-secondary: #5c6f82;
-  --ink-muted: #8191a0;
-  --ink-faint: #aebbc7;
+  --ink-muted: #6c757d;
+  --ink-faint: #6c757d;
 
   /* Wave-style primary: blue. Green remains semantic only. */
-  --accent: #2f80ed;
-  --accent-hover: #236dcc;
+  --accent: #1a6dc4;
+  --accent-hover: #1459a0;
   --accent-soft: rgba(47, 128, 237, 0.1);
   --accent-rule: rgba(47, 128, 237, 0.25);
 
-  --positive: #27966f;
+  --positive: #1e7e34;
   --positive-soft: rgba(39, 150, 111, 0.1);
   --negative: #c64b4b;
   --negative-soft: rgba(198, 75, 75, 0.1);
-  --warning: #d18b2c;
+  --warning: #b87333;
   --warning-soft: rgba(209, 139, 44, 0.1);
 
   /* Type */

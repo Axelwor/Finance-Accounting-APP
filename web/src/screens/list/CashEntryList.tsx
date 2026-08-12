@@ -154,31 +154,41 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
         ) : error ? (
           <EmptyState title="Could not load" message={error} />
         ) : filtered.length === 0 ? (
-          <div className="ledger-table">
-            <div className="ledger-table__head">
-              <span>Nomor #</span>
-              <span>Tanggal</span>
-              <span>Kas/Bank</span>
-              <span>No Cek #</span>
-              <span>Keterangan</span>
-              <span className="right">Nilai</span>
-            </div>
-            <div className="ledger-table__empty">Belum ada data</div>
-          </div>
+          <table className="ledger-table" aria-label="Cash entries list">
+            <thead>
+              <tr>
+                <th scope="col">Nomor #</th>
+                <th scope="col">Tanggal</th>
+                <th scope="col">Kas/Bank</th>
+                <th scope="col">No Cek #</th>
+                <th scope="col">Keterangan</th>
+                <th scope="col" className="right">Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colSpan={6} className="ledger-table__empty" role="status">Belum ada data</td>
+              </tr>
+            </tbody>
+          </table>
         ) : (
-          <div className="ledger-table">
-            <div className="ledger-table__head">
-              <span>Nomor #</span>
-              <span>Tanggal</span>
-              <span>Kas/Bank</span>
-              <span>No Cek #</span>
-              <span>Keterangan</span>
-              <span className="right">Nilai</span>
-            </div>
-            {filtered.map((it) => (
-              <CashRow key={it.id} item={it} fixedKind={fixedKind} onOpen={() => openEntry(it)} />
-            ))}
-          </div>
+          <table className="ledger-table" aria-label="Cash entries list">
+            <thead>
+              <tr>
+                <th scope="col">Nomor #</th>
+                <th scope="col">Tanggal</th>
+                <th scope="col">Kas/Bank</th>
+                <th scope="col">No Cek #</th>
+                <th scope="col">Keterangan</th>
+                <th scope="col" className="right">Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((it) => (
+                <CashRow key={it.id} item={it} fixedKind={fixedKind} onOpen={() => openEntry(it)} />
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 
@@ -230,29 +240,17 @@ function CashRow({
       : `${item.cash_account_code || "—"} · ${item.counter_account_name || "—"}`;
 
   return (
-    <div
-      className="ledger-table__row"
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
-      style={{ cursor: "pointer" }}
-    >
-      <span className="ledger-table__no">{item.number || `Entry #${item.id}`}</span>
-      <span className="ledger-table__date">{item.entry_date}</span>
-      <span className="ledger-table__cat">{accountLine}</span>
-      <span className="ledger-table__memo">{item.reference || "—"}</span>
-      <span className="ledger-table__desc">
+    <tr role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} style={{ cursor: "pointer" }}>
+      <th scope="row">{item.number || `Entry #${item.id}`}</th>
+      <td>{item.entry_date}</td>
+      <td>{accountLine}</td>
+      <td>{item.reference || "—"}</td>
+      <td>
         <span className={`kind-mark ${kindClass}`}>{kindLabel}</span>
         <span>{item.description || "—"}</span>
-      </span>
-      <span className={`ledger-table__amount ${toneClass}`}>{signedAmount}</span>
-    </div>
+      </td>
+      <td className={`${toneClass}`}>{signedAmount}</td>
+    </tr>
   );
 }
 

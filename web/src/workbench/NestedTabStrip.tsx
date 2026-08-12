@@ -25,18 +25,66 @@ export function NestedTabStrip({
   addLabel?: string;
 }) {
   const workbench = useWorkbench();
+  const sortedChildren = [...children].sort((a, b) => {
+    if (a.kind === "list" && b.kind !== "list") return -1;
+    if (a.kind !== "list" && b.kind === "list") return 1;
+    return a.index - b.index;
+  });
 
-  if (children.length === 0 && !onAdd) return null;
+  if (sortedChildren.length === 0 && !onAdd) return null;
   void parentId;
+
+  const activeIndex = sortedChildren.findIndex((c) => c.id === activeChildId);
+
+  const handleKeyDown = (event: React.KeyboardEvent, index: number) => {
+    let newIndex = index;
+
+    switch (event.key) {
+      case "ArrowLeft":
+      case "ArrowUp":
+        newIndex = index > 0 ? index - 1 : sortedChildren.length - 1;
+        event.preventDefault();
+        break;
+      case "ArrowRight":
+      case "ArrowDown":
+        newIndex = index < sortedChildren.length - 1 ? index + 1 : 0;
+        event.preventDefault();
+        break;
+      case "Home":
+        newIndex = 0;
+        event.preventDefault();
+        break;
+      case "End":
+        newIndex = sortedChildren.length - 1;
+        event.preventDefault();
+        break;
+      case "Enter":
+      case " ":
+        workbench.activate(sortedChildren[index].id);
+        event.preventDefault();
+        return;
+      default:
+        return;
+    }
+
+    if (newIndex !== index) {
+      workbench.activate(sortedChildren[newIndex].id);
+      document
+        .querySelector(`[data-nested-tab-index="${newIndex}"]`)
+        ?.focus();
+    }
+  };
 
   return (
     <nav className="nested-tabstrip" aria-label="Open items in this module">
-      <div className="nested-tabstrip__inner">
-        {children.map((child) => (
+      <div className="nested-tabstrip__inner" role="tablist" aria-orientation="horizontal">
+        {sortedChildren.map((child, index) => (
           <NestedTabPill
             key={child.id}
             tab={child}
             isActive={child.id === activeChildId}
+            tabIndex={activeIndex === index ? 0 : -1}
+            onKeyDown={(e) => handleKeyDown(e, index)}
           />
         ))}
         {onAdd ? (
@@ -58,9 +106,13 @@ export function NestedTabStrip({
 function NestedTabPill({
   tab,
   isActive,
+  tabIndex,
+  onKeyDown,
 }: {
   tab: NestedTab;
   isActive: boolean;
+  tabIndex?: number;
+  onKeyDown?: (e: React.KeyboardEvent) => void;
 }) {
   const workbench = useWorkbench();
 
@@ -72,8 +124,11 @@ function NestedTabPill({
         className={`nested-icon-tab${isActive ? " is-active" : ""}`}
         role="tab"
         aria-selected={isActive}
+        tabIndex={tabIndex}
+        data-nested-tab-index={tabIndex ?? -1}
         title={tab.title}
         onClick={() => workbench.activate(tab.id)}
+        onKeyDown={onKeyDown}
       >
         <ListIcon />
       </button>
@@ -86,7 +141,10 @@ function NestedTabPill({
       className={`nested-tabpill${isActive ? " is-active" : ""}${tab.unsaved ? " is-unsaved" : ""}`}
       role="tab"
       aria-selected={isActive}
+      tabIndex={tabIndex}
+      data-nested-tab-index={tabIndex ?? -1}
       onClick={() => workbench.activate(tab.id)}
+      onKeyDown={onKeyDown}
     >
       <span className="nested-tabpill__title" title={tab.title}>{tab.title}</span>
       {tab.unsaved ? <span className="nested-tabpill__dot" aria-hidden="true" /> : null}

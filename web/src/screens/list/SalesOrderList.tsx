@@ -84,53 +84,41 @@ export function SalesOrderList() {
             }
           />
         ) : (
-          <div className="ledger-table">
-            <div className="ledger-table__head">
-              <span>Number</span>
-              <span>Date</span>
-              <span>Customer</span>
-              <span>Customer PO</span>
-              <span>Status</span>
-              <span className="right">DP Received</span>
-              <span className="right">Total</span>
-            </div>
-            {items.map((it) => (
-              <div
-                key={it.id}
-                className="ledger-table__row"
-                role="button"
-                tabIndex={0}
-                onClick={() => openEntry(it)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    openEntry(it);
-                  }
-                }}
-                style={{ cursor: "pointer" }}
-              >
-                <span className="ledger-table__no">{it.number}</span>
-                <span className="ledger-table__date">{it.order_date}</span>
-                <span className="ledger-table__cat">{it.customer_name ?? `#${it.customer_id}`}</span>
-                <span>{it.customer_po_number ?? "—"}</span>
-                <span>
-                  <span className={`kind-mark ${SO_STATUS_TONE[it.status] ?? "is-muted"}`}>{it.status}</span>
-                </span>
-                <span className="ledger-table__amount right">{it.dp_received_cents > 0 ? formatIDR(it.dp_received_cents) : "—"}</span>
-                <span className="ledger-table__amount right">{formatIDR(it.total_cents)}</span>
-              </div>
-            ))}
-          </div>
+          <table className="ledger-table" aria-label="Sales orders list">
+            <thead>
+              <tr>
+                <th scope="col">Number</th>
+                <th scope="col">Date</th>
+                <th scope="col">Customer</th>
+                <th scope="col">Customer PO</th>
+                <th scope="col">Status</th>
+                <th scope="col" className="right">DP Received</th>
+                <th scope="col" className="right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it) => (
+                <SODow key={it.id} item={it} onOpen={() => openEntry(it)} />
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
-
-      <div className="listtab__footer">
-        <span>
-          DP <strong>{formatIDR(dpTotal)}</strong> · Total <strong>{formatIDR(total)}</strong>
-        </span>
-        <span className="listtab__footer-count">{items.length} order(s)</span>
-      </div>
     </div>
+  );
+}
+
+function SODow({ item, onOpen }: { item: SalesOrderListItem; onOpen: () => void }) {
+  return (
+    <tr role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} style={{ cursor: "pointer" }}>
+      <th scope="row">{item.number}</th>
+      <td>{item.order_date}</td>
+      <td>{item.customer_name ?? `#${item.customer_id}`}</td>
+      <td>{item.customer_po_number ?? "—"}</td>
+      <td><span className={`kind-mark ${SO_STATUS_TONE[item.status] ?? "is-muted"}`}>{item.status}</span></td>
+      <td className="right">{item.dp_received_cents > 0 ? formatIDR(item.dp_received_cents) : "—"}</td>
+      <td className="right">{formatIDR(item.total_cents)}</td>
+    </tr>
   );
 }
 

@@ -10,21 +10,63 @@ import type { Tab } from "./types";
  */
 export function TabStrip() {
   const workbench = useWorkbench();
+  const tabs = workbench.tabs;
 
-  if (workbench.tabs.length === 0) return null;
+  if (tabs.length === 0) return null;
+
+  const activeIndex = tabs.findIndex((tab) => tab.id === workbench.activeId);
+
+  const handleKeyDown = (event: React.KeyboardEvent, index: number) => {
+    let newIndex = index;
+
+    switch (event.key) {
+      case "ArrowLeft":
+      case "ArrowUp":
+        newIndex = index > 0 ? index - 1 : tabs.length - 1;
+        event.preventDefault();
+        break;
+      case "ArrowRight":
+      case "ArrowDown":
+        newIndex = index < tabs.length - 1 ? index + 1 : 0;
+        event.preventDefault();
+        break;
+      case "Home":
+        newIndex = 0;
+        event.preventDefault();
+        break;
+      case "End":
+        newIndex = tabs.length - 1;
+        event.preventDefault();
+        break;
+      case "Enter":
+      case " ":
+        workbench.activate(tabs[index].id);
+        event.preventDefault();
+        return;
+      default:
+        return;
+    }
+
+    if (newIndex !== index) {
+      workbench.activate(tabs[newIndex].id);
+      document
+        .querySelector(`[data-tab-index="${newIndex}"]`)
+        ?.focus();
+    }
+  };
 
   return (
     <nav className="tabstrip" aria-label="Open modules">
-      <div className="tabstrip__inner">
-        {workbench.tabs.map((tab) => (
-          <TabPill key={tab.id} tab={tab} />
+      <div className="tabstrip__inner" role="tablist" aria-orientation="horizontal">
+        {tabs.map((tab, index) => (
+          <TabPill key={tab.id} tab={tab} tabIndex={index} onFocus={() => handleKeyDown({ key: "" as keyof KeyboardEvent, preventDefault: () => {} } as React.KeyboardEvent), index} onKeyDown={(e) => handleKeyDown(e, index)} />
         ))}
       </div>
     </nav>
   );
 }
 
-function TabPill({ tab }: { tab: Tab }) {
+function TabPill({ tab, tabIndex, onFocus, onKeyDown }: { tab: Tab; tabIndex: number; onFocus?: (idx: number) => void; onKeyDown?: (e: React.KeyboardEvent) => void }) {
   const workbench = useWorkbench();
   const isActive = tab.id === workbench.activeId;
   const isDashboard = tab.kind === "dashboard";
@@ -35,7 +77,11 @@ function TabPill({ tab }: { tab: Tab }) {
       className={`tabpill${isActive ? " is-active" : ""}`}
       role="tab"
       aria-selected={isActive}
+      tabIndex={isActive ? 0 : -1}
+      data-tab-index={tabIndex}
       onClick={() => workbench.activate(tab.id)}
+      onFocus={onFocus}
+      onKeyDown={onKeyDown}
     >
       <span className={`tabpill__kind tabpill__kind--${isDashboard ? "home" : "module"}`}>
         {isDashboard ? "HOME" : "MENU"}
