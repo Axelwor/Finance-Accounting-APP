@@ -289,6 +289,8 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Purchase Return";
     case "bank-reconciliation-entry":
       return "Bank Reconciliation";
+    case "cheque-entry":
+      return "Cheque";
     case "inventory-item":
       return "Item";
     case "stock-opname-entry":

@@ -58,7 +58,8 @@ export type ListSubKind =
   | "consolidated-report"
   | "report-templates"
   | "approval-rules"
-  | "pending-approval-requests";
+  | "pending-approval-requests"
+  | "cheque-list";
 
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
@@ -95,7 +96,8 @@ export type EntrySubKind =
   | "lease-contract-entry"
   | "lease-payment-schedule"
   | "rp-editor"
-  | "approval-rule-entry";
+  | "approval-rule-entry"
+  | "cheque-entry";
 
 export type CurrencyCode = "IDR";
 
@@ -2222,6 +2224,47 @@ export interface SubmitApprovalRequestInput {
 
 export interface ApproveApprovalRequestInput {
   reason?: string;
+}
+
+/** Cheque list item for GET /api/v1/cheques. */
+export interface ChequeListItem {
+  id: number;
+  cheque_number: string;
+  type: "RECEIVED" | "ISSUED";
+  direction: "INBOUND" | "OUTBOUND";
+  bank_name: string;
+  amount_cents: number;
+  counterparty_name: string;
+  date: string;
+  status: "REGISTERED" | "DEPOSITED" | "CLEARED" | "BOUNCED";
+}
+
+/** Cheque full record with all fields. */
+export interface Cheque extends ChequeListItem {
+  bank_account_id?: number | null;
+  image_url?: string | null;
+  notes?: string | null;
+}
+
+/** Input for POST /api/v1/cheques and PUT /api/v1/cheques/{id}. */
+export interface ChequeCreateInput {
+  cheque_number: string;
+  type: "RECEIVED" | "ISSUED";
+  direction: "INBOUND" | "OUTBOUND";
+  bank_account_id?: number | null;
+  amount_cents: number;
+  counterparty_name: string;
+  date: string;
+  bank_name?: string | null;
+  image_url?: string | null;
+  notes?: string | null;
+}
+
+/** Backend account for bank account combobox (from accounts table). */
+export interface BankAccountListItem {
+  id: number;
+  account_name: string;
+  code: string;
 }
 
 /** End of file. Added approval workflow types 2026-08-12 Wave 4. */
