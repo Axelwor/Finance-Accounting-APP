@@ -1,7 +1,7 @@
 -- Rollback all tables and columns added in 000029.
 
--- Remove FX gain/loss accounts.
-DELETE FROM accounts WHERE code IN ('4904', '5904');
+-- Remove FX gain/loss accounts only (NOT 5904 Deferred Tax Expense - code is 5304).
+DELETE FROM accounts WHERE code IN ('4904', '5904') AND name LIKE '%Gain%' OR name LIKE '%Loss%';
 
 -- Drop currency columns from journal_entries.
 ALTER TABLE journal_entries DROP COLUMN IF EXISTS exchange_rate;

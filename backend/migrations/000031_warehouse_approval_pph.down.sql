@@ -1,4 +1,5 @@
 -- Rollback 000031
+-- Delete PPh payable and expense accounts only (NOT Deferred Tax Expense at 5304)
 DELETE FROM accounts WHERE code IN ('2107', '2108', '2109', '2110', '2111', '5203');
 DROP TABLE IF EXISTS pph_calculations;
 DROP TABLE IF EXISTS approval_requests;
