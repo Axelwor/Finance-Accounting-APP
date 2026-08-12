@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
 import { FormError } from "../../components/ui";
+import { NextStepsBar } from "../../components/NextSteps";
+import { useToast } from "../../components/Toast";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
@@ -20,7 +22,8 @@ const METHODS: { value: DepreciationMethod; label: string }[] = [
 
 export function FixedAssetForm({ tabId, entryId, initialTitle }: Props) {
   const workbench = useWorkbench();
-  const isExisting = !!entryId;
+  const toast = useToast();
+  const impairPanelRef = useRef<HTMLDivElement>(null);
 
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -37,6 +40,17 @@ export function FixedAssetForm({ tabId, entryId, initialTitle }: Props) {
   const [existing, setExisting] = useState<FixedAsset | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  /** Read-only once the asset exists (reopened tab or just registered). */
+  const isExisting = !!entryId || existing !== null;
+
+  // Revaluation panel state (PSAK 16 revaluation model).
+  const [showRevalue, setShowRevalue] = useState(false);
+  const [revalDate, setRevalDate] = useState(new Date().toISOString().slice(0, 10));
+  const [revalAmount, setRevalAmount] = useState(0);
+  const [revalDesc, setRevalDesc] = useState("");
+  const [revalError, setRevalError] = useState("");
+  const [postingReval, setPostingReval] = useState(false);
 
   // Impairment panel state (PSAK 16 / PSAK 48). Shown only for an existing
   // ACTIVE asset, mirroring the inline payment panel in InvoiceForm.
@@ -100,6 +114,7 @@ export function FixedAssetForm({ tabId, entryId, initialTitle }: Props) {
       setImpairSuccess(
         `Impairment posted. Loss: ${formatIDR(result.impairment_loss_cents)} · New book value: ${formatIDR(result.new_book_value_cents)}`
       );
+      toast.success(`✓ Impairment posted — loss ${formatIDR(result.impairment_loss_cents)}`);
       setImpairAmount(0);
       setImpairDesc("");
       await reloadAsset(existing.id);
@@ -148,12 +163,60 @@ export function FixedAssetForm({ tabId, entryId, initialTitle }: Props) {
       workbench.replaceDraft(tabId, `${asset.code} · ${asset.name}`, asset.status);
       setExisting(asset);
       workbench.markUnsaved(tabId, false);
+      toast.success(`✓ Registered asset ${asset.code}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to register asset.");
     } finally {
       setSaving(false);
     }
   }
+
+  async function handlePostRevaluation() {
+    if (!existing) return;
+    setRevalError("");
+    if (!revalDate) {
+      setRevalError("Entry date is required.");
+      return;
+    }
+    if (!Number.isFinite(revalAmount) || revalAmount <= 0) {
+      setRevalError("New fair value must be greater than zero.");
+      return;
+    }
+    setPostingReval(true);
+    try {
+      const result = await api.revalueAsset(existing.id, {
+        new_value_cents: revalAmount,
+        entry_date: revalDate,
+        description: revalDesc.trim() || undefined,
+      });
+      const direction = result.direction === "up" ? "increase" : "decrease";
+      toast.success(`Revaluation posted — ${direction} of ${formatIDR(Math.abs(result.adjustment_cents))}`);
+      setRevalAmount(0);
+      setRevalDesc("");
+      setShowRevalue(false);
+      await reloadAsset(existing.id);
+      workbench.markUnsaved(tabId, false);
+    } catch (err) {
+      setRevalError(err instanceof Error ? err.message : "Could not post the revaluation.");
+    } finally {
+      setPostingReval(false);
+    }
+  }
+
+  /** Workflow-chain shortcuts for a saved asset. */
+  const nextSteps = existing
+    ? {
+        depreciate: () =>
+          workbench.openEntryExisting("asset-depreciate", existing.id, `Depreciate · ${existing.code}`, existing.status),
+        dispose: () =>
+          workbench.openEntryExisting("asset-dispose", existing.id, `Dispose · ${existing.code}`, existing.status),
+        revalue: () => setShowRevalue((v) => !v),
+        impair: () => {
+          impairPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        },
+        close: () => workbench.close(tabId),
+      }
+    : null;
 
   const monthlyDepreciation = computeMonthlyPreview(
     parseInt(acquisitionCost, 10) || 0,
@@ -326,8 +389,30 @@ export function FixedAssetForm({ tabId, entryId, initialTitle }: Props) {
             </div>
           )}
 
-          {isExisting && existing && (
+          {isExisting && existing && nextSteps && (
             <>
+              <NextStepsBar number={existing.code} hint={existing.status}>
+                {existing.status === "ACTIVE" && (
+                  <>
+                    <button type="button" className="next-steps__btn next-steps__btn--primary" onClick={nextSteps.depreciate}>
+                      Depreciate
+                    </button>
+                    <button type="button" className="next-steps__btn next-steps__btn--danger" onClick={nextSteps.dispose}>
+                      Dispose
+                    </button>
+                    <button type="button" className="next-steps__btn" onClick={nextSteps.revalue}>
+                      Revalue
+                    </button>
+                    <button type="button" className="next-steps__btn" onClick={nextSteps.impair}>
+                      Impair
+                    </button>
+                  </>
+                )}
+                <button type="button" className="next-steps__btn" onClick={nextSteps.close}>
+                  Close
+                </button>
+              </NextStepsBar>
+
               <div className="entrytab__detail-title">Asset Summary</div>
               <div className="detail-grid detail-grid--quote">
                 <div className="detail-grid__head">
@@ -397,8 +482,44 @@ export function FixedAssetForm({ tabId, entryId, initialTitle }: Props) {
                 </>
               )}
 
-              {canAct && (
+              {canAct && showRevalue && (
                 <>
+                  <div className="entrytab__detail-title">Record Revaluation (PSAK 16)</div>
+                  <p className="field-note" style={{ marginBottom: 8 }}>
+                    Adjust the asset to a new fair value. Posts the adjustment through the revaluation accounts. Current book value: {formatIDR(existing.book_value_cents)}.
+                  </p>
+                  <div className="detail-grid detail-grid--quote" style={{ gridTemplateColumns: "1fr 1fr 2fr" }}>
+                    <div className="field">
+                      <span className="field__label">Entry date</span>
+                      <input className="input" type="date" value={revalDate} onChange={(e) => { setRevalDate(e.target.value); setRevalError(""); }} />
+                    </div>
+                    <div className="field">
+                      <span className="field__label">New fair value (IDR)</span>
+                      <input
+                        className="amount input"
+                        type="text"
+                        inputMode="numeric"
+                        value={centsInput(revalAmount)}
+                        onChange={(e) => { setRevalAmount(parseCents(e.target.value)); setRevalError(""); }}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="field">
+                      <span className="field__label">Description</span>
+                      <input className="input" type="text" value={revalDesc} onChange={(e) => { setRevalDesc(e.target.value); setRevalError(""); }} placeholder="Valuation reference" />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
+                    <button type="button" className="btn btn--secondary btn--sm" disabled={postingReval} onClick={() => void handlePostRevaluation()}>
+                      {postingReval ? "Posting..." : "Post Revaluation"}
+                    </button>
+                  </div>
+                  <FormError message={revalError} />
+                </>
+              )}
+
+              {canAct && (
+                <div ref={impairPanelRef}>
                   <div className="entrytab__detail-title">Record Impairment (PSAK 16)</div>
                   <p className="field-note" style={{ marginBottom: 8 }}>
                     Write the asset down to its impaired value. Posts Dr 5207 Impairment Loss / Cr 1401 Accumulated Impairment. Current book value: {formatIDR(existing.book_value_cents)}.
@@ -449,7 +570,7 @@ export function FixedAssetForm({ tabId, entryId, initialTitle }: Props) {
                     ) : null}
                   </div>
                   <FormError message={impairError} />
-                </>
+                </div>
               )}
             </>
           )}
@@ -460,24 +581,6 @@ export function FixedAssetForm({ tabId, entryId, initialTitle }: Props) {
             <button type="submit" className="action-rail__btn action-rail__btn--primary" disabled={saving}>
               <span>{saving ? "Saving..." : "Register Asset"}</span>
             </button>
-          )}
-          {canAct && (
-            <>
-              <button
-                type="button"
-                className="action-rail__btn"
-                onClick={() => workbench.openEntryExisting("asset-depreciate", existing!.id, `Depreciate · ${existing!.code}`, existing!.status)}
-              >
-                Post Depreciation
-              </button>
-              <button
-                type="button"
-                className="action-rail__btn"
-                onClick={() => workbench.openEntryExisting("asset-dispose", existing!.id, `Dispose · ${existing!.code}`, existing!.status)}
-              >
-                Dispose / Sell
-              </button>
-            </>
           )}
         </aside>
 

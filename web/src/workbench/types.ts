@@ -26,6 +26,25 @@ export type ModuleId =
 
 export type NestedTabKind = "list" | "entry";
 
+/**
+ * Reference to a parent source document used to pre-fill a new draft entry
+ * (workflow chain: Quotation → SO, SO → DO, DO → Invoice, PO → GRN,
+ * GRN → Supplier Invoice, Invoice → Credit Note). The target form loads the
+ * parent document and copies its header fields + lines on mount.
+ */
+export type PrefillKind =
+  | "quotation"
+  | "sales-order"
+  | "delivery-order"
+  | "invoice"
+  | "purchase-order"
+  | "grn";
+
+export interface PrefillRef {
+  kind: PrefillKind;
+  id: number;
+}
+
 export interface TabBase {
   id: string;
   moduleId: ModuleId;
@@ -46,6 +65,8 @@ export interface EntryTab extends TabBase {
   /** When false, this is a draft. Persisted entries carry backend ids. */
   draft: boolean;
   entryId?: string | number;
+  /** Parent document to auto-fill lines from (workflow chain drafts only). */
+  prefill?: PrefillRef;
 }
 
 /** Module parent — owns a list of nested child tabs. */

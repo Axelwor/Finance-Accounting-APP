@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
 import { FormError } from "../../components/ui";
+import { NextStepsBar } from "../../components/NextSteps";
+import { useToast } from "../../components/Toast";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
+import { openPrintWindow } from "../../lib/print";
 import { draftNumber } from "../../workbench/modules";
 import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
 import type { Supplier, Item, PurchaseOrderLineInput } from "../../types";
@@ -32,7 +35,9 @@ const emptyLine = (): Line => ({
 });
 
 export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
-  const { replaceDraft, markUnsaved, getNested } = useWorkbench();
+  const workbench = useWorkbench();
+  const { replaceDraft, markUnsaved } = workbench;
+  const toast = useToast();
   const isExisting = !!entryId;
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -47,6 +52,12 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  /** Backend id once saved (this tab or reopened existing). */
+  const [savedId, setSavedId] = useState<number | null>(
+    entryId != null && !Number.isNaN(Number(entryId)) ? Number(entryId) : null,
+  );
+  const [savedNumber, setSavedNumber] = useState("");
+  const [savedStatus, setSavedStatus] = useState("");
 
   useEffect(() => {
     api.listSuppliers().then(setSuppliers).catch(() => {});
@@ -56,6 +67,9 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
   useEffect(() => {
     if (isExisting && entryId) {
       api.getPurchaseOrder(Number(entryId)).then((po) => {
+        setSavedId(po.id);
+        setSavedNumber(po.number);
+        setSavedStatus(po.status);
         setSupplierId(String(po.supplier_id));
         setOrderDate(po.order_date);
         setNotes(po.notes || "");
@@ -143,11 +157,58 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
       });
       replaceDraft(tabId, po.number, po.status);
       markUnsaved(tabId, false);
+      setSavedId(po.id);
+      setSavedNumber(po.number);
+      setSavedStatus(po.status);
+      toast.success(`✓ Saved ${po.number}`);
     } catch (err: any) {
       setError(err?.message || "Failed to save purchase order.");
     } finally {
       setSaving(false);
     }
+  }
+
+  /** Workflow chain: open a GRN draft pre-filled from this PO. */
+  function handleCreateGRN() {
+    if (!savedId) return;
+    workbench.openEntryDraftFromParent("grn-entry", { kind: "purchase-order", id: savedId });
+  }
+
+  function handlePrint() {
+    const supplier = suppliers.find((s) => String(s.id) === supplierId);
+    openPrintWindow({
+      title: `Purchase Order ${savedNumber || draftNumber("purchase-order-entry")}`,
+      subtitle: savedStatus || "CONFIRMED",
+      meta: [
+        ["Supplier", supplier ? `${supplier.code} · ${supplier.name}` : "-"],
+        ["Order date", orderDate],
+        ["Notes", notes || "-"],
+      ],
+      columns: [
+        { label: "Item" },
+        { label: "Qty", right: true },
+        { label: "Unit Price", right: true },
+        { label: "Discount", right: true },
+        { label: "Line Total", right: true },
+      ],
+      rows: lines
+        .filter((l) => l.itemId)
+        .map((l) => {
+          const item = items.find((i) => String(i.id) === l.itemId);
+          return [
+            item ? `${item.code} · ${item.name}` : `#${l.itemId}`,
+            l.qty,
+            formatIDR(parseInt(l.unitPriceCents) || 0),
+            formatIDR(parseInt(l.discountCents) || 0),
+            formatIDR(lineTotal(parseFloat(l.qty) || 0, parseInt(l.unitPriceCents) || 0, parseInt(l.discountCents) || 0)),
+          ];
+        }),
+      totals: [["Total", formatIDR(totalCents)]],
+    });
+  }
+
+  function handleCancel() {
+    toast.warning("The API does not support cancelling purchase orders yet. Mark it fully received or ignore it instead.");
   }
 
   return (
@@ -278,6 +339,23 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
             <span className="entrytab__total-label">Total</span>
             <span className="entrytab__total-value">{formatIDR(totalCents)}</span>
           </div>
+
+          {savedId !== null && (
+            <NextStepsBar number={savedNumber || undefined} hint={savedStatus || undefined}>
+              <button type="button" className="next-steps__btn next-steps__btn--primary" onClick={handleCreateGRN}>
+                Create GRN
+              </button>
+              <button type="button" className="next-steps__btn" onClick={handlePrint}>
+                Print PO
+              </button>
+              <button type="button" className="next-steps__btn next-steps__btn--danger" onClick={handleCancel}>
+                Cancel
+              </button>
+              <button type="button" className="next-steps__btn" onClick={() => workbench.close(tabId)}>
+                Close
+              </button>
+            </NextStepsBar>
+          )}
         </div>
 
         <aside className="action-rail" aria-label="Form actions">

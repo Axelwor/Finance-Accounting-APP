@@ -953,6 +953,8 @@ export interface CreditNote extends CreditNoteListItem {
 export interface CreditNoteLineInput {
   item_id: number;
   invoice_line_id?: number;
+  /** Original delivery order — lets the backend resolve the true cost. */
+  delivery_order_id?: number;
   qty: number;
   unit_price_cents: number;
   unit_cost_cents: number;
@@ -2045,6 +2047,41 @@ export interface LeasePaymentResult {
   remaining_liability_cents: number;
   journal_entry_id?: number;
   posted: boolean;
+}
+
+/** Payload POST /api/v1/lease-contracts/{id}/modify (m-014). */
+export interface ModifyLeaseContractInput {
+  new_payment_amount_cents: number;
+  new_total_payments: number;
+  effective_date: string;
+  description?: string;
+}
+
+/** Result of POST /api/v1/lease-contracts/{id}/modify. */
+export interface ModifyLeaseResult {
+  lease_id: number;
+  number: string;
+  journal_entry_id?: number;
+  journal_number?: string;
+  delta_cents: number;
+  new_pv_cents: number;
+  new_payment_cents: number;
+  new_total_payments: number;
+}
+
+/** Payload POST /api/v1/lease-contracts/{id}/terminate (m-014). */
+export interface TerminateLeaseContractInput {
+  termination_date: string;
+  description?: string;
+}
+
+/** Result of POST /api/v1/lease-contracts/{id}/terminate. */
+export interface TerminateLeaseResult {
+  lease_id: number;
+  number: string;
+  status: string;
+  journal_entry_id?: number;
+  journal_number?: string;
 }
 
 /** Entity hierarchy (US-110, PSAK 65). */

@@ -27,6 +27,7 @@ import type {
   ModuleId,
   ModuleTab,
   NestedTab,
+  PrefillRef,
   Tab,
 } from "./types";
 import { defaultEntryTitle, defaultListTitle, draftNumber, findSubItemByList, findModule } from "./modules";
@@ -49,7 +50,7 @@ const EMPTY_STATE: State = { tabs: [], nested: {}, activeId: null, activeChild: 
 
 type Action =
   | { type: "open-list"; subKind: ListSubKind }
-  | { type: "open-entry-draft"; subKind: EntrySubKind }
+  | { type: "open-entry-draft"; subKind: EntrySubKind; prefill?: PrefillRef }
   | { type: "open-entry-existing"; subKind: EntrySubKind; entryId: string | number; title: string; status?: string }
   | { type: "open-dashboard" }
   | { type: "close"; id: string }
@@ -61,6 +62,13 @@ type Action =
 
 function newId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/** True when two prefill references point at the same parent document. */
+function samePrefill(a?: PrefillRef, b?: PrefillRef): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.kind === b.kind && a.id === b.id;
 }
 
 function reducer(state: State, action: Action): State {
@@ -119,8 +127,14 @@ function reducer(state: State, action: Action): State {
       const moduleId: ModuleId = lookup?.module.id ?? "cash-bank";
       const subLabel = lookup?.item.label ?? findModule(moduleId)?.label ?? moduleId;
       const parent = ensureModuleParent(state, moduleId, subLabel);
+      // Workflow-chain drafts (prefilled from a parent document) get a stable
+      // per-parent id so re-clicking a "next step" button reactivates the same
+      // tab instead of stacking duplicates.
+      const draftId = action.prefill
+        ? `entry-${action.subKind}-draft-${action.prefill.kind}-${action.prefill.id}`
+        : newId(`entry-${action.subKind}-draft`);
       return activateNestedChild(parent, {
-        id: newId(`entry-${action.subKind}-draft`),
+        id: draftId,
         kind: "entry",
         moduleId,
         subKind: action.subKind,
@@ -128,6 +142,7 @@ function reducer(state: State, action: Action): State {
         draft: true,
         status: draftNumber(action.subKind),
         unsaved: true,
+        prefill: action.prefill,
         createdAt: Date.now(),
       });
     }
@@ -286,11 +301,14 @@ function activateNestedChild(state: State, child: NestedTab): State {
   const existingIdx = (next.nested[parentId] ?? []).findIndex((c) => {
     if (c.kind !== child.kind || c.subKind !== child.subKind) return false;
     if (child.kind === "entry" && c.kind === "entry") {
-      // Draft tabs: one draft per subkind. Persisted entries: only reuse the
-      // tab when it is the same record — clicking a different list row must
-      // open that record, not re-activate another record's tab.
-      if (child.draft || c.draft) return c.draft === child.draft;
-      return c.id === child.id || String(c.entryId ?? "") === String(child.entryId ?? "");
+      // Drafts match only when they come from the same source: a blank draft
+      // matches the blank draft, and a workflow-chain draft matches only the
+      // draft prefilled from the same parent document. Posted entries only
+      // match on the same entryId, so two different invoices of the same
+      // subKind open as separate tabs (E-03).
+      if (child.draft !== c.draft) return false;
+      if (!child.draft) return c.entryId === child.entryId;
+      return samePrefill(child.prefill, c.prefill);
     }
     return true;
   });
@@ -414,6 +432,8 @@ interface WorkbenchApi {
   openDashboard: () => void;
   openList: (sub: ListSubKind) => void;
   openEntryDraft: (sub: EntrySubKind) => void;
+  /** Open a draft pre-filled from a parent document (workflow chain). */
+  openEntryDraftFromParent: (sub: EntrySubKind, prefill: PrefillRef) => void;
   openEntryExisting: (sub: EntrySubKind, entryId: string | number, title: string, status?: string) => void;
   close: (id: string) => void;
   activate: (id: string) => void;
@@ -460,6 +480,10 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
 
   const openList = useCallback((sub: ListSubKind) => dispatch({ type: "open-list", subKind: sub }), []);
   const openEntryDraft = useCallback((sub: EntrySubKind) => dispatch({ type: "open-entry-draft", subKind: sub }), []);
+  const openEntryDraftFromParent = useCallback(
+    (sub: EntrySubKind, prefill: PrefillRef) => dispatch({ type: "open-entry-draft", subKind: sub, prefill }),
+    [],
+  );
   const openEntryExisting = useCallback(
     (sub: EntrySubKind, entryId: string | number, title: string, status?: string) =>
       dispatch({ type: "open-entry-existing", subKind: sub, entryId, title, status }),
@@ -504,6 +528,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
       openDashboard,
       openList,
       openEntryDraft,
+      openEntryDraftFromParent,
       openEntryExisting,
       close,
       activate,
@@ -522,6 +547,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
     openDashboard,
     openList,
     openEntryDraft,
+    openEntryDraftFromParent,
     openEntryExisting,
     close,
     activate,

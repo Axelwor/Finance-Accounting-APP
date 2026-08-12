@@ -153,6 +153,10 @@ import type {
   LeaseContractListItem,
   CreateLeaseContractInput,
   LeasePaymentResult,
+  ModifyLeaseContractInput,
+  ModifyLeaseResult,
+  TerminateLeaseContractInput,
+  TerminateLeaseResult,
   EntityHierarchyItem,
   CreateEntityHierarchyInput,
   ConsolidatedTrialBalanceResult,
@@ -2273,6 +2277,24 @@ export const api = {
       auth: true,
       idempotencyKey: newIdempotencyKey(),
       body: JSON.stringify({}),
+    });
+  },
+
+  async modifyLeaseContract(id: number, input: ModifyLeaseContractInput): Promise<ModifyLeaseResult> {
+    return http<ModifyLeaseResult>(`/lease-contracts/${id}/modify`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
+    });
+  },
+
+  async terminateLeaseContract(id: number, input: TerminateLeaseContractInput): Promise<TerminateLeaseResult> {
+    return http<TerminateLeaseResult>(`/lease-contracts/${id}/terminate`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
+      body: JSON.stringify(input),
     });
   },
 

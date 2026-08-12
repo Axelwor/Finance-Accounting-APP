@@ -1,15 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
 import { FormError } from "../../components/ui";
+import { NextStepsBar } from "../../components/NextSteps";
+import { useToast } from "../../components/Toast";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
+import { openPrintWindow } from "../../lib/print";
 import { draftNumber } from "../../workbench/modules";
 import type { SupplierListItem, GoodsReceivedNoteListItem, Item, SupplierInvoiceLineInput } from "../../types";
+import type { PrefillRef } from "../../workbench/types";
+import { SupplierPaymentPanel } from "./SupplierPaymentPanel";
 
 interface Props {
   tabId: string;
   entryId?: string | number;
   initialTitle?: string;
+  /** Workflow-chain prefill: {kind:"grn", id} selects that GRN. */
+  prefill?: PrefillRef;
 }
 
 interface Line {
@@ -25,13 +32,15 @@ interface Line {
   vatCents: number;
 }
 
-export function SupplierInvoiceForm({ tabId, entryId, initialTitle }: Props) {
+export function SupplierInvoiceForm({ tabId, entryId, initialTitle, prefill }: Props) {
   const workbench = useWorkbench();
+  const toast = useToast();
+  const paymentsRef = useRef<HTMLDivElement>(null);
   const [date, setDate] = useState(todayISO());
   const [dueDate, setDueDate] = useState("");
   const [number, setNumber] = useState(initialTitle ?? draftNumber("supplier-invoice-entry"));
   const [supplierId, setSupplierId] = useState("");
-  const [grnId, setGrnId] = useState("");
+  const [grnId, setGrnId] = useState(prefill?.kind === "grn" ? String(prefill.id) : "");
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Line[]>([seedLine()]);
@@ -56,6 +65,44 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle }: Props) {
     void api.listItems().then(setItems);
     void api.listGRNs("RECEIVED").then(setGrNs).catch(() => setGrNs([]));
   }, []);
+
+  // Auto-fill: when a GRN is picked (manually or via workflow-chain
+  // prefill), copy its supplier + received lines into the invoice.
+  useEffect(() => {
+    if (!grnId || invId !== null) return;
+    let cancelled = false;
+    void api
+      .getGRN(Number(grnId))
+      .then((grn) => {
+        if (cancelled) return;
+        setSupplierId(String(grn.supplier_id));
+        setLines(
+          grn.lines.length > 0
+            ? grn.lines.map((l) => {
+                const qty = Number(l.qty) || 1;
+                const unitPriceCents = l.unit_cost_cents;
+                return {
+                  id: `ln-src-${l.id}`,
+                  itemId: String(l.item_id),
+                  itemCode: l.item_code ?? "",
+                  itemName: l.item_name ?? "",
+                  qty,
+                  unitPriceCents,
+                  discountCents: 0,
+                  taxRate: 0,
+                  lineTotalCents: Math.round(qty * unitPriceCents),
+                  vatCents: 0,
+                };
+              })
+            : [seedLine()],
+        );
+        toast.info(`Loaded ${grn.lines.length} line(s) from GRN ${grn.number}`);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [grnId, invId, toast]);
 
   useEffect(() => {
     if (invId) {
@@ -219,11 +266,55 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle }: Props) {
       setNumber(created.number);
       workbench.replaceDraft(tabId, created.number, created.status);
       workbench.markUnsaved(tabId, false);
+      toast.success(`✓ Saved ${created.number}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the supplier invoice.");
     } finally {
       setSaving(false);
     }
+  };
+
+  /** Scroll to the inline payment panel (Pay Supplier next step). */
+  const handlePaySupplier = () => {
+    paymentsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const handlePrint = () => {
+    const supplier = suppliers.find((s) => String(s.id) === supplierId);
+    openPrintWindow({
+      title: `Supplier Invoice ${number}`,
+      subtitle: isExisting ? invStatus : "DRAFT",
+      meta: [
+        ["Supplier", supplier ? `${supplier.code} · ${supplier.name}` : "-"],
+        ["GRN", grns.find((g) => String(g.id) === grnId)?.number ?? (grnId || "-")],
+        ["Invoice date", formatDateID(date)],
+        ["Due date", dueDate ? formatDateID(dueDate) : "-"],
+        ["Supplier invoice no", supplierInvoiceNumber || "-"],
+      ],
+      columns: [
+        { label: "Item" },
+        { label: "Qty", right: true },
+        { label: "Unit Price", right: true },
+        { label: "Tax %", right: true },
+        { label: "VAT", right: true },
+        { label: "Line Total", right: true },
+      ],
+      rows: lines
+        .filter((l) => l.itemId)
+        .map((l) => [
+          `${l.itemCode || l.itemId}${l.itemName ? ` · ${l.itemName}` : ""}`,
+          l.qty,
+          formatIDR(l.unitPriceCents),
+          l.taxRate,
+          formatIDR(l.vatCents),
+          formatIDR(l.lineTotalCents),
+        ]),
+      totals: [
+        ["DPP", formatIDR(isExisting ? dpp : computedDpp)],
+        ["VAT", formatIDR(isExisting ? vat : computedVat)],
+        ["Payable", formatIDR(isExisting ? payable : computedPayable)],
+      ],
+    });
   };
 
   const isExisting = invId !== null;
@@ -378,6 +469,28 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle }: Props) {
             <span className="entrytab__total-label">Payable (Cr 2101 AP)</span>
             <span className="entrytab__total-value">{formatIDR(isExisting ? payable : computedPayable)}</span>
           </div>
+
+          {isExisting && (
+            <NextStepsBar number={number} hint={invStatus}>
+              {payable > 0 && invStatus !== "VOID" && invStatus !== "PAID" && (
+                <button type="button" className="next-steps__btn next-steps__btn--primary" onClick={handlePaySupplier}>
+                  Pay Supplier
+                </button>
+              )}
+              <button type="button" className="next-steps__btn" onClick={handlePrint}>
+                Print
+              </button>
+              <button type="button" className="next-steps__btn" onClick={() => workbench.close(tabId)}>
+                Close
+              </button>
+            </NextStepsBar>
+          )}
+
+          {isExisting && invId !== null && (
+            <div ref={paymentsRef}>
+              <SupplierPaymentPanel invoiceId={invId} payableCents={payable} invoiceStatus={invStatus} />
+            </div>
+          )}
         </div>
 
         <aside className="action-rail" aria-label="Form actions">
