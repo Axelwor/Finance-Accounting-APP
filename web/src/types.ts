@@ -60,8 +60,12 @@ export type ListSubKind =
   | "approval-rules"
   | "pending-approval-requests"
   | "cheque-list"
+<<<<<<< HEAD
   | "ar-aging"
   | "ap-aging";
+=======
+  | "warehouse-list";
+>>>>>>> fix-warehouses-wave6b
 
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
@@ -99,7 +103,8 @@ export type EntrySubKind =
   | "lease-payment-schedule"
   | "rp-editor"
   | "approval-rule-entry"
-  | "cheque-entry";
+  | "cheque-entry"
+  | "warehouse-entry";
 
 export type CurrencyCode = "IDR";
 
@@ -2285,6 +2290,37 @@ export interface BankAccountListItem {
   id: number;
   account_name: string;
   code: string;
+}
+
+/** Warehouse master data (GET /warehouses). */
+export interface Warehouse {
+  id: number;
+  code: string;
+  name: string;
+  address?: string;
+  city?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface CreateWarehouseInput {
+  code: string;
+  name: string;
+  address?: string;
+  city?: string;
+  is_active: boolean;
+}
+
+export type UpdateWarehouseInput = CreateWarehouseInput;
+
+/** Per-item stock balance in one warehouse (GET /warehouses/{id}/stock). */
+export interface WarehouseStockItem {
+  item_id: number;
+  item_code: string;
+  item_name: string;
+  qty_on_hand: number;
+  avg_unit_cost_cents: number;
 }
 
 /** End of file. Added approval workflow types 2026-08-12 Wave 4. */

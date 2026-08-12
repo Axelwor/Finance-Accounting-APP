@@ -65,6 +65,7 @@ const inventory: Module = {
   icon: "box",
   items: [
     { id: "in-items", label: "Item List", hint: "ITM", openList: "inventory-items", openEntry: "inventory-item" },
+    { id: "in-warehouse", label: "Warehouses", hint: "WH", openList: "warehouse-list", openEntry: "warehouse-entry" },
     { id: "in-movements", label: "Stock Movements", hint: "STK", openList: "stock-movements", mockData: true },
     { id: "in-opname", label: "Stock Opnames", hint: "OPN", openList: "stock-opname", openEntry: "stock-opname-entry" },
     { id: "in-transfer", label: "Stock Transfers", hint: "TRF", openList: "stock-transfer", openEntry: "stock-transfer-entry" },
@@ -253,6 +254,8 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Approval Rules";
     case "pending-approval-requests":
       return "Pending Approvals";
+    case "warehouse-list":
+      return "Warehouses";
   }
 }
 
@@ -327,6 +330,8 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Lease Schedule";
     case "rp-editor":
       return "Report Template";
+    case "warehouse-entry":
+      return "Warehouse";
     default:
       return "Entry";
   }
@@ -370,6 +375,7 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "rp-editor": return "TPL-DRAFT";
     case "approval-rule-entry": return "APR-DRAFT";
     case "cheque-entry": return "CHK-DRAFT";
+    case "warehouse-entry": return "WH-DRAFT";
     default: return "DRAFT";
   }
 }

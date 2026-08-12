@@ -138,7 +138,11 @@ import type {
   CalculateECLInput,
   WriteOffInput,
   WriteOffResult,
-  CalculateDeferredTaxInput,
+  Warehouse,
+  CreateWarehouseInput,
+  UpdateWarehouseInput,
+  WarehouseStockItem,
+  ReportTemplateDocumentType,  CalculateDeferredTaxInput,
   CalculateDeferredTaxResult,
   ReportFrameworkRecord,
   SetFrameworkInput,
@@ -2511,6 +2515,57 @@ export const api = {
         auth: true,
         body: JSON.stringify({ reason }),
       });
+    },
+
+    /* ----------------------- Warehouses (Wave 5) ----------------------- */
+
+    /** List warehouses (GET /warehouses). Failure -> empty array. */
+    async listWarehouses(): Promise<Warehouse[]> {
+      try {
+        return await http<Warehouse[]>(`/warehouses`, { auth: true });
+      } catch {
+        return [];
+      }
+    },
+
+    /** Create warehouse (POST /warehouses). */
+    async createWarehouse(input: CreateWarehouseInput): Promise<Warehouse> {
+      return http<Warehouse>(`/warehouses`, {
+        method: "POST",
+        auth: true,
+        body: JSON.stringify(input),
+      });
+    },
+
+    /** Get warehouse by ID (GET /warehouses/{id}). */
+    async getWarehouse(id: number): Promise<Warehouse> {
+      return http<Warehouse>(`/warehouses/${id}`, { auth: true });
+    },
+
+    /** Update warehouse (PUT /warehouses/{id}). */
+    async updateWarehouse(id: number, input: UpdateWarehouseInput): Promise<Warehouse> {
+      return http<Warehouse>(`/warehouses/${id}`, {
+        method: "PUT",
+        auth: true,
+        body: JSON.stringify(input),
+      });
+    },
+
+    /** Deactivate warehouse (DELETE /warehouses/{id}). */
+    async deactivateWarehouse(id: number): Promise<{ id: number; is_active: boolean }> {
+      return http<{ id: number; is_active: boolean }>(`/warehouses/${id}`, {
+        method: "DELETE",
+        auth: true,
+      });
+    },
+
+    /** Get stock balance per item in a warehouse (GET /warehouses/{id}/stock). */
+    async getWarehouseStock(id: number): Promise<WarehouseStockItem[]> {
+      try {
+        return await http<WarehouseStockItem[]>(`/warehouses/${id}/stock`, { auth: true });
+      } catch {
+        return [];
+      }
     },
 
    /** Access token for protected API calls (used later). */
