@@ -17,7 +17,12 @@ import type {
   ApiError,
   ApprovalRequest,
   ApproveApprovalRequestInput,
+<<<<<<< HEAD
   AgingReport,
+=======
+  ApprovalRule,
+  CreateApprovalRuleInput,
+>>>>>>> fix-email-wave6b
   BackendAccount,
   BackendBalanceSheet,
   BackendCashFlow,
@@ -172,6 +177,9 @@ import type {
   CreateReportTemplateInput,
   ChequeListItem,
   ChequeCreateInput,
+  EmailTemplate,
+  CreateEmailTemplateInput,
+  EmailQueueItem,
 } from "./types";
 
 /** Reconciliation detail returned by the reconcile endpoints. */
@@ -2432,10 +2440,41 @@ export const api = {
 
    // -- Approval Workflow API methods (Wave 4) --
 
-   /** List pending approval requests for current user. */
-   async listApprovalRequests(): Promise<ApprovalRequest[]> {
-     return http<ApprovalRequest[]>(`/approval-requests`, { auth: true });
-   },
+  /** List pending approval requests for current user. */
+  async listApprovalRequests(): Promise<ApprovalRequest[]> {
+    return http<ApprovalRequest[]>(`/approval-requests`, { auth: true });
+  },
+
+  /** List approval rules. */
+  async getApprovalRules(): Promise<ApprovalRule[]> {
+    return http<ApprovalRule[]>(`/approval-rules`, { auth: true });
+  },
+
+  /** Create an approval rule. */
+  async createApprovalRule(input: CreateApprovalRuleInput): Promise<ApprovalRule> {
+    return http(`/approval-rules`, {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Update an approval rule. */
+  async updateApprovalRule(id: number, input: CreateApprovalRuleInput): Promise<ApprovalRule> {
+    return http(`/approval-rules/${id}`, {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Delete an approval rule. */
+  async deleteApprovalRule(id: number): Promise<void> {
+    return http(`/approval-rules/${id}`, {
+      method: "DELETE",
+      auth: true,
+    });
+  },
 
    /** Approve an approval request with optional reason. */
    async approveApprovalRequest(requestId: number, input: ApproveApprovalRequestInput): Promise<void> {
@@ -2517,6 +2556,7 @@ export const api = {
       });
     },
 
+<<<<<<< HEAD
     /* ----------------------- Warehouses (Wave 5) ----------------------- */
 
     /** List warehouses (GET /warehouses). Failure -> empty array. */
@@ -2531,12 +2571,25 @@ export const api = {
     /** Create warehouse (POST /warehouses). */
     async createWarehouse(input: CreateWarehouseInput): Promise<Warehouse> {
       return http<Warehouse>(`/warehouses`, {
+=======
+    // -- Email Templates & Queue API methods (Wave 6b) --
+
+    /** List all email templates. */
+    async listEmailTemplates(): Promise<EmailTemplate[]> {
+      return http<EmailTemplate[]>("/email/templates", { auth: true });
+    },
+
+    /** Create a new email template. */
+    async createEmailTemplate(input: CreateEmailTemplateInput): Promise<EmailTemplate> {
+      return http("/email/templates", {
+>>>>>>> fix-email-wave6b
         method: "POST",
         auth: true,
         body: JSON.stringify(input),
       });
     },
 
+<<<<<<< HEAD
     /** Get warehouse by ID (GET /warehouses/{id}). */
     async getWarehouse(id: number): Promise<Warehouse> {
       return http<Warehouse>(`/warehouses/${id}`, { auth: true });
@@ -2545,20 +2598,32 @@ export const api = {
     /** Update warehouse (PUT /warehouses/{id}). */
     async updateWarehouse(id: number, input: UpdateWarehouseInput): Promise<Warehouse> {
       return http<Warehouse>(`/warehouses/${id}`, {
+=======
+    /** Update an existing email template. */
+    async updateEmailTemplate(id: number, input: Partial<CreateEmailTemplateInput>): Promise<EmailTemplate> {
+      return http(`/email/templates/${id}`, {
+>>>>>>> fix-email-wave6b
         method: "PUT",
         auth: true,
         body: JSON.stringify(input),
       });
     },
 
+<<<<<<< HEAD
     /** Deactivate warehouse (DELETE /warehouses/{id}). */
     async deactivateWarehouse(id: number): Promise<{ id: number; is_active: boolean }> {
       return http<{ id: number; is_active: boolean }>(`/warehouses/${id}`, {
+=======
+    /** Delete an email template. */
+    async deleteEmailTemplate(id: number): Promise<void> {
+      return http(`/email/templates/${id}`, {
+>>>>>>> fix-email-wave6b
         method: "DELETE",
         auth: true,
       });
     },
 
+<<<<<<< HEAD
     /** Get stock balance per item in a warehouse (GET /warehouses/{id}/stock). */
     async getWarehouseStock(id: number): Promise<WarehouseStockItem[]> {
       try {
@@ -2568,6 +2633,32 @@ export const api = {
       }
     },
 
+=======
+    /** List the email queue. */
+    async listEmailQueue(): Promise<EmailQueueItem[]> {
+      return http<EmailQueueItem[]>("/email/queue", { auth: true });
+    },
+
+    /** Send a queued email immediately. */
+    async sendEmail(id: number): Promise<void> {
+      return http("/email/queue/send", {
+        method: "POST",
+        auth: true,
+        body: JSON.stringify({ id }),
+      });
+    },
+
+    /** Cancel a pending email in the queue. */
+    async cancelEmail(id: number): Promise<void> {
+      return http(`/email/queue/${id}/cancel`, {
+        method: "POST",
+        auth: true,
+      });
+    },
+
+    // End of Wave 6b email templates & queue methods.
+
+>>>>>>> fix-email-wave6b
    /** Access token for protected API calls (used later). */
    getAccessToken,
 };
