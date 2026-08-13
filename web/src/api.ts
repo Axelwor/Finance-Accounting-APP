@@ -388,6 +388,83 @@ function computeMonthlyProfitLossLocal(transactions: Transaction[]): number {
     .reduce((acc, trx) => acc + (trx.kind === "money-in" ? trx.amount : -trx.amount), 0);
 }
 
+/** Shape of one row in the GET /aging/ar response (see backend aging handler). */
+interface AgingRow {
+  days_overdue?: number;
+  outstanding_cents?: number;
+}
+
+/** Shape of the GET /aging/ar response body. */
+interface AgingResponse {
+  rows?: AgingRow[];
+  total_cents?: number;
+}
+
+/**
+ * Counts past-due receivable invoices ("due bills") from GET /aging/ar.
+ * Each row is one outstanding invoice; a row with days_overdue > 0 is past
+ * due. Falls back to 0 on any failure so the dashboard never shows fake
+ * counts. Never throws.
+ */
+async function fetchDueBillsCount(): Promise<number> {
+  try {
+    const report = await http<AgingResponse>("/aging/ar", { auth: true });
+    const rows = report?.rows ?? [];
+    if (rows.length === 0) return 0;
+    // Count rows that are genuinely past due; if the backend omits
+    // days_overdue, fall back to counting every outstanding row.
+    const pastDue = rows.filter((r) => typeof r.days_overdue === "number" && r.days_overdue > 0);
+    return pastDue.length > 0 || rows.some((r) => "days_overdue" in r)
+      ? pastDue.length
+      : rows.length;
+  } catch {
+    return 0;
+  }
+}
+
+/** Shape of the GET /dashboard/widgets/{id}/data low-stock response. */
+interface LowStockWidgetData {
+  widget_type?: string;
+  items?: Array<{ code?: string; name?: string; qty_on_hand?: number; min_stock_qty?: number }>;
+}
+
+/** Shape of one widget in the GET /dashboard/layout response. */
+interface DashboardWidget {
+  id: number;
+  widget_type: string;
+}
+
+/** Shape of the GET /dashboard/layout response. */
+interface DashboardLayout {
+  layout_id?: number;
+  widgets?: DashboardWidget[];
+}
+
+/**
+ * Counts tracked inventory items at or below their reorder point, using the
+ * dashboard low-stock widget data endpoint (the only backend surface that
+ * joins stock_balances.qty_on_hand with items.min_stock_qty today).
+ *
+ * Flow: GET /dashboard/layout -> find the low_stock_alert widget id ->
+ * GET /dashboard/widgets/{id}/data -> count returned items.
+ *
+ * Returns 0 on any failure (never throws, never shows a fake count). When the
+ * tenant has no low-stock widget in its layout, returns 0.
+ */
+async function fetchLowStockCount(): Promise<number> {
+  try {
+    const layout = await http<DashboardLayout>("/dashboard/layout", { auth: true });
+    const widget = (layout?.widgets ?? []).find((w) => w.widget_type === "low_stock_alert");
+    if (!widget || !widget.id) return 0;
+    const data = await http<LowStockWidgetData>(`/dashboard/widgets/${widget.id}/data`, {
+      auth: true,
+    });
+    return data?.items?.length ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 /** Builds the POST /cash-in or /cash-out payload. */
 function buildCashCommand(input: TransactionInput, cashAccountId: number, counterAccountId: number): CashCommandPayload {
   return {
@@ -634,7 +711,10 @@ export const api = {
 
   /**
    * Dashboard summary from backend reports (profit-loss, balance-sheet,
-   * cash-flow). Network failure -> computed from local transactions (mock).
+   * cash-flow, AR aging, low-stock). Network failure -> computed from local
+   * transactions (mock). dueBills and lowStock are sourced from real backend
+   * endpoints and degrade to 0 when unavailable rather than showing fake
+   * numbers.
    */
   async getDashboard(): Promise<DashboardSummary> {
     const state = loadState();
@@ -650,15 +730,22 @@ export const api = {
         0,
       ),
       monthlyProfitLoss: computeMonthlyProfitLossLocal(sorted),
-      dueBills: 2,
-      lowStock: 4,
+      // TODO(F-04): wire to /aging/ar once the auth token refresh path is
+      // stable in offline mode. Falls back to 0 (no fake counts) so the
+      // dashboard never shows misleading open-bill figures.
+      dueBills: 0,
+      // TODO: /items does not yet return qty_on_hand, so a client-side low
+      // stock count is not possible. Falls back to 0 (no fake counts).
+      lowStock: 0,
       recentTransactions: sorted.slice(0, 8),
     });
     try {
-      const [profitLoss, cashFlow, balanceSheet] = await Promise.all([
+      const [profitLoss, cashFlow, balanceSheet, dueBills, lowStock] = await Promise.all([
         http<BackendProfitLoss>("/reports/profit-loss", { auth: true }),
         http<BackendCashFlow>("/reports/cash-flow", { auth: true }),
         http<BackendBalanceSheet>("/reports/balance-sheet", { auth: true }),
+        fetchDueBillsCount(),
+        fetchLowStockCount(),
       ]);
       const cashAndBankBalance = Math.round(cashFlow.net_cash_flow_cents / 100);
       const monthlyProfitLoss = Math.round(profitLoss.profit_cents / 100);
@@ -671,8 +758,8 @@ export const api = {
         return delay({
           cashAndBankBalance,
           monthlyProfitLoss,
-          dueBills: 2,
-          lowStock: 4,
+          dueBills,
+          lowStock,
           recentTransactions: sorted.slice(0, 8),
         });
       }

@@ -8,15 +8,27 @@ import { TransactionRow } from "../../components/transactions";
 import { formatIDR } from "../../lib/format";
 import type { DashboardSummary } from "../../types";
 
-const todayStamp = new Intl.DateTimeFormat("en-US", {
-  weekday: "long",
-  day: "2-digit",
-  month: "long",
-  year: "numeric",
-}).format(new Date());
+/** Today's date, formatted for the greeting header (computed once per mount). */
+function useTodayStamp(): string {
+  return useMemo(
+    () =>
+      new Intl.DateTimeFormat("en-US", {
+        weekday: "long",
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      }).format(new Date()),
+    [],
+  );
+}
 
 function Spark({ values, tone }: { values: number[]; tone: "pos" | "neg" | "acc" }) {
-  if (values.length < 2) return null;
+  // Flat CSS-gradient bar when there is not enough data for a real line.
+  // Replaces the previous Math.sin() drift — no fabricated shape.
+  if (values.length < 2) {
+    const cls = tone === "neg" ? "spark spark--neg spark--flat" : tone === "acc" ? "spark spark--acc spark--flat" : "spark spark--flat";
+    return <div className={cls} aria-hidden="true" />;
+  }
   const width = 220;
   const height = 28;
   const min = Math.min(...values);
@@ -40,6 +52,27 @@ function Spark({ values, tone }: { values: number[]; tone: "pos" | "neg" | "acc"
   );
 }
 
+/** Small inline chart icon (keeps the dashboard free of icon dependencies). */
+function ChartIcon() {
+  return (
+    <svg
+      className="status-cell__icon"
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M2 12 L6 7 L9 10 L14 4" />
+      <path d="M2 14 L14 14" opacity="0.4" />
+    </svg>
+  );
+}
+
 function StatusCell({
   label,
   value,
@@ -50,6 +83,7 @@ function StatusCell({
   sparkTone,
   lead,
   meta,
+  onDetails,
 }: {
   label: string;
   value: string;
@@ -60,6 +94,8 @@ function StatusCell({
   sparkTone?: "pos" | "neg" | "acc";
   lead?: boolean;
   meta: string;
+  /** Click handler for the "View details" link; when omitted, no link is shown. */
+  onDetails?: () => void;
 }) {
   const dotClass =
     tone === "pos" ? "" : tone === "neg" ? "dot--neg" : tone === "warn" ? "dot--warn" : tone === "acc" ? "dot--acc" : "";
@@ -68,6 +104,7 @@ function StatusCell({
   return (
     <div className={`status-cell${lead ? " status-cell--lead" : ""}`}>
       <div className="status-cell__label">
+        <ChartIcon />
         <span className={`dot ${dotClass}`} aria-hidden="true" />
         <span>{label}</span>
       </div>
@@ -77,6 +114,11 @@ function StatusCell({
         <strong className={`is-${deltaTone}`}>{meta}</strong>
       </div>
       {spark && sparkTone ? <Spark values={spark} tone={sparkTone} /> : null}
+      {onDetails ? (
+        <button type="button" className="status-cell__details" onClick={onDetails}>
+          View details
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -135,24 +177,45 @@ export function DashboardScreen() {
   }, [load, retryKey, transactions]);
 
   const businessName = business?.name || user?.businessName || "Your business";
+  const todayStamp = useTodayStamp();
   const recent = data?.recentTransactions ?? [];
 
+  // Real cash trend: build a sparkline from the recent transactions the
+  // backend actually returned (running balance). When there is not enough
+  // data, Spark renders a flat gradient bar — no fabricated Math.sin() drift.
   const spark = useMemo<number[]>(() => {
-    if (!data) return [];
-    const base = Math.max(1, Math.abs(data.cashAndBankBalance) / 1_000_000);
-    return Array.from({ length: 14 }, (_, i) => {
-      const drift = Math.sin((i + businessName.length) * 0.5) * base * 0.4;
-      const linear = (data.cashAndBankBalance / 14) * i;
-      return Math.max(0, base + linear + drift);
-    });
-  }, [data, businessName]);
+    if (!data || recent.length < 2) return [];
+    const running: number[] = [];
+    let acc = 0;
+    // Oldest first so the line reads left-to-right over time.
+    for (const trx of [...recent].reverse()) {
+      acc += trx.kind === "money-in" ? trx.amount : trx.kind === "money-out" ? -trx.amount : 0;
+      running.push(acc);
+    }
+    // Anchor the end of the sparkline to the real reported balance so the
+    // final point reflects the backend figure, not the local sample.
+    if (running.length) running[running.length - 1] = data.cashAndBankBalance;
+    return running;
+  }, [data, recent]);
 
+  // Real entries trend: count of transactions per day over the last 14 days
+  // from the local store. No synthetic drift — flat zero when empty.
   const entriesSpark = useMemo<number[]>(() => {
-    const seed = transactions.length || 1;
-    return Array.from({ length: 14 }, (_, i) =>
-      Math.max(0, Math.round(seed + Math.sin(i * 0.9) * 3 + i * 0.4)),
-    );
-  }, [transactions.length]);
+    if (transactions.length === 0) return [];
+    const days = 14;
+    const buckets = new Array(days).fill(0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (const trx of transactions) {
+      const [y, m, d] = trx.date.split("-").map(Number);
+      if (!y || !m || !d) continue;
+      const t = new Date(y, m - 1, d);
+      t.setHours(0, 0, 0, 0);
+      const idx = Math.floor((today.getTime() - t.getTime()) / 86_400_000);
+      if (idx >= 0 && idx < days) buckets[days - 1 - idx] += 1;
+    }
+    return buckets;
+  }, [transactions]);
 
   return (
     <div className="dashboard">
@@ -203,6 +266,7 @@ export function DashboardScreen() {
               spark={spark}
               sparkTone={data.cashAndBankBalance >= 0 ? "pos" : "neg"}
               meta="End of day"
+              onDetails={() => workbench.openList("cash-other-payment")}
             />
             <StatusCell
               label="MTD P&amp;L"
@@ -213,6 +277,7 @@ export function DashboardScreen() {
               spark={entriesSpark}
               sparkTone="acc"
               meta="vs last cycle"
+              onDetails={() => workbench.openList("cash-other-payment")}
             />
             <StatusCell
               label="Open bills"
@@ -221,6 +286,7 @@ export function DashboardScreen() {
               deltaTone={data.dueBills > 0 ? "neg" : "neutral"}
               tone={data.dueBills > 0 ? "warn" : "neutral"}
               meta={data.dueBills > 0 ? "Action needed" : "Clear"}
+              onDetails={() => workbench.openList("sales-invoice")}
             />
             <StatusCell
               label="Low stock"
@@ -229,6 +295,7 @@ export function DashboardScreen() {
               deltaTone={data.lowStock > 0 ? "neg" : "neutral"}
               tone={data.lowStock > 0 ? "warn" : "neutral"}
               meta={data.lowStock > 0 ? "Restock" : "Stable"}
+              onDetails={() => workbench.openList("inventory-items")}
             />
           </section>
 

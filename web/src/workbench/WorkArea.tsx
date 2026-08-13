@@ -98,7 +98,7 @@ import { EmailQueueList } from "../screens/list/EmailQueueList";
 import { ApprovalRuleForm } from "../screens/entry/ApprovalRuleForm";
 import { WarehouseList } from "../screens/list/WarehouseList";
 import { WarehouseForm } from "../screens/entry/WarehouseForm";
-import defaultEntryTitle, { findModule } from "./modules";
+import { defaultEntryTitle, findModule } from "./modules";
 
 export function WorkArea() {
   const workbench = useWorkbench();
