@@ -59,7 +59,10 @@ export type ListSubKind =
   | "pending-approval-requests"
   | "cheque-list"
   | "ar-aging"
-  | "ap-aging";
+  | "ap-aging"
+  | "warehouse-list"
+  | "email-templates"
+  | "email-queue";
 
 /** The currency code used throughout the app. */
 export type CurrencyCode = "IDR";
