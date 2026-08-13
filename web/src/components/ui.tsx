@@ -190,9 +190,10 @@ interface DateFieldProps {
   onChange: (value: string) => void;
   error?: string;
   max?: string;
+  onBlur?: () => void;
 }
 
-export function DateField({ label, value, onChange, error, max }: DateFieldProps) {
+export function DateField({ label, value, onChange, error, max, onBlur }: DateFieldProps) {
   const id = useId();
   return (
     <FieldShell label={label} htmlFor={id} error={error}>
@@ -203,7 +204,9 @@ export function DateField({ label, value, onChange, error, max }: DateFieldProps
         value={value}
         max={max}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
       />
     </FieldShell>
   );
@@ -253,12 +256,14 @@ interface TextareaFieldProps {
   onChange: (value: string) => void;
   placeholder?: string;
   hint?: string;
+  error?: string;
+  onBlur?: () => void;
 }
 
-export function TextareaField({ label, value, onChange, placeholder, hint }: TextareaFieldProps) {
+export function TextareaField({ label, value, onChange, placeholder, hint, error, onBlur }: TextareaFieldProps) {
   const id = useId();
   return (
-    <FieldShell label={label} htmlFor={id} hint={hint}>
+    <FieldShell label={label} htmlFor={id} hint={hint} error={error}>
       <textarea
         id={id}
         className="input"
@@ -266,6 +271,9 @@ export function TextareaField({ label, value, onChange, placeholder, hint }: Tex
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
       />
     </FieldShell>
   );

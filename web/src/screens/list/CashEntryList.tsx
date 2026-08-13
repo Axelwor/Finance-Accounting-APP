@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
-import { EmptyState, LoadingState } from "../../components/ui";
+import { LoadingState } from "../../components/ui";
+import { EmptyState } from "../../components/EmptyState";
+import { SortableHeader, type SortState } from "../../components/SortableHeader";
+import { StatusBadge } from "../../components/StatusBadge";
+import { RowActions, type RowAction } from "../../components/RowActions";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { CashEntryListItem, EntrySubKind, ListSubKind } from "../../types";
@@ -47,6 +51,13 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
   const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [sort, setSort] = useState<SortState>({ column: "date", direction: "desc" });
+
+  const onSort = (column: string) =>
+    setSort((s) => ({
+      column,
+      direction: s.column === column && s.direction === "asc" ? "desc" : "asc",
+    }));
 
   const load = async () => {
     setLoading(true);
@@ -80,12 +91,53 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
     );
   }, [items, search]);
 
+  const sorted = useMemo(() => {
+    const dir = sort.direction === "asc" ? 1 : -1;
+    const by = sort.column;
+    const cmp = (a: CashEntryListItem, b: CashEntryListItem) => {
+      let av: string | number;
+      let bv: string | number;
+      switch (by) {
+        case "number":
+          av = a.number ?? "";
+          bv = b.number ?? "";
+          break;
+        case "date":
+          av = a.entry_date ?? "";
+          bv = b.entry_date ?? "";
+          break;
+        case "account":
+          av = a.cash_account_code ?? a.from_account_code ?? "";
+          bv = b.cash_account_code ?? b.from_account_code ?? "";
+          break;
+        case "reference":
+          av = a.reference ?? "";
+          bv = b.reference ?? "";
+          break;
+        case "description":
+          av = a.description ?? "";
+          bv = b.description ?? "";
+          break;
+        case "amount":
+          av = a.amount_cents;
+          bv = b.amount_cents;
+          break;
+        default:
+          av = a.entry_date ?? "";
+          bv = b.entry_date ?? "";
+      }
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+      return String(av).localeCompare(String(bv)) * dir;
+    };
+    return [...filtered].sort(cmp);
+  }, [filtered, sort]);
+
   const total = useMemo(() => {
-    return filtered.reduce((acc, it) => {
+    return sorted.reduce((acc, it) => {
       const signed = it.kind === "money-in" ? it.amount_cents : it.kind === "money-out" ? -it.amount_cents : 0;
       return acc + signed;
     }, 0);
-  }, [filtered]);
+  }, [sorted]);
 
   const openEntry = (item: CashEntryListItem) => {
     workbench.openEntryExisting(entrySubKind, item.id, item.number || `Entry #${item.id}`, item.status);
@@ -144,48 +196,48 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
               if (e.key === "Enter") void load();
             }}
           />
-          <span className="listtab__count">{filtered.length}</span>
+          <span className="listtab__count">{sorted.length}</span>
         </div>
       </div>
 
-      <div className="listtab__body">
+      <div className="listtab__body listtab__body--scroll">
         {loading ? (
           <LoadingState label="Loading entries..." />
         ) : error ? (
           <EmptyState title="Could not load" message={error} />
-        ) : filtered.length === 0 ? (
-          <table className="ledger-table" aria-label="Cash entries list">
-            <thead>
-              <tr>
-                <th scope="col">Nomor #</th>
-                <th scope="col">Tanggal</th>
-                <th scope="col">Kas/Bank</th>
-                <th scope="col">No Cek #</th>
-                <th scope="col">Keterangan</th>
-                <th scope="col" className="right">Nilai</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td colSpan={6} className="ledger-table__empty" role="status">Belum ada data</td>
-              </tr>
-            </tbody>
-          </table>
+        ) : sorted.length === 0 ? (
+          <EmptyState
+            entity="cash entry"
+            filtered={items.length > 0}
+            action={
+              <button type="button" className="btn btn--primary" onClick={openAdd}>
+                + Tambah
+              </button>
+            }
+          />
         ) : (
           <table className="ledger-table" aria-label="Cash entries list">
             <thead>
               <tr>
-                <th scope="col">Nomor #</th>
-                <th scope="col">Tanggal</th>
-                <th scope="col">Kas/Bank</th>
-                <th scope="col">No Cek #</th>
-                <th scope="col">Keterangan</th>
-                <th scope="col" className="right">Nilai</th>
+                <SortableHeader column="number" sort={sort} onSort={onSort}>Nomor #</SortableHeader>
+                <SortableHeader column="date" sort={sort} onSort={onSort}>Tanggal</SortableHeader>
+                <SortableHeader column="account" sort={sort} onSort={onSort}>Kas/Bank</SortableHeader>
+                <SortableHeader column="reference" sort={sort} onSort={onSort}>No Cek #</SortableHeader>
+                <SortableHeader column="description" sort={sort} onSort={onSort}>Keterangan</SortableHeader>
+                <SortableHeader column="amount" sort={sort} onSort={onSort} align="right">Nilai</SortableHeader>
+                <th scope="col" className="right">Aksi</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((it) => (
-                <CashRow key={it.id} item={it} fixedKind={fixedKind} onOpen={() => openEntry(it)} />
+              {sorted.map((it) => (
+                <CashRow
+                  key={it.id}
+                  item={it}
+                  fixedKind={fixedKind}
+                  onOpen={() => openEntry(it)}
+                  onVoid={() => alert(`Void ${it.number}`)}
+                  onPrint={() => window.print()}
+                />
               ))}
             </tbody>
           </table>
@@ -201,7 +253,7 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
           </strong>
         </span>
         <span className="listtab__footer-count">
-          {filtered.length} of {items.length}
+          {sorted.length} of {items.length}
         </span>
       </div>
     </div>
@@ -212,10 +264,14 @@ function CashRow({
   item,
   fixedKind,
   onOpen,
+  onVoid,
+  onPrint,
 }: {
   item: CashEntryListItem;
   fixedKind: Props["fixedKind"];
   onOpen: () => void;
+  onVoid: () => void;
+  onPrint: () => void;
 }) {
   const amount = formatIDR(item.amount_cents);
   const signedAmount =
@@ -239,6 +295,12 @@ function CashRow({
       ? `${item.from_account_code || "—"} → ${item.to_account_code || "—"}`
       : `${item.cash_account_code || "—"} · ${item.counter_account_name || "—"}`;
 
+  const actions: RowAction[] = [
+    { label: "Open", onClick: onOpen },
+    { label: "Print", onClick: onPrint, disabled: item.status === "VOID" },
+    { label: "Void", onClick: onVoid, destructive: true, disabled: item.status === "VOID" },
+  ];
+
   return (
     <tr role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} style={{ cursor: "pointer" }}>
       <th scope="row">{item.number || `Entry #${item.id}`}</th>
@@ -249,7 +311,13 @@ function CashRow({
         <span className={`kind-mark ${kindClass}`}>{kindLabel}</span>
         <span>{item.description || "—"}</span>
       </td>
-      <td className={`${toneClass}`}>{signedAmount}</td>
+      <td className={`${toneClass} right`}>{signedAmount}</td>
+      <td className="right">
+        <StatusBadge status={item.status} />
+        <span onClick={(e) => e.stopPropagation()}>
+          <RowActions actions={actions} label={`Actions for ${item.number ?? item.id}`} />
+        </span>
+      </td>
     </tr>
   );
 }

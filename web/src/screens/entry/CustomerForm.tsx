@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
 import { FormError, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { BackendAccount, CreateCustomerInput, Customer, PaymentTerm } from "../../types";
+import { useFormValidation } from "../../hooks/useFormValidation";
+import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts";
 
 interface Props {
   tabId: string;
@@ -21,6 +23,7 @@ const CURRENCIES = ["IDR", "USD", "EUR", "SGD", "JPY", "CNY", "AUD", "GBP"] as c
 export function CustomerForm({ tabId, entryId, initialTitle }: Props) {
   const { markUnsaved, replaceDraft } = useWorkbench();
   const isEdit = entryId !== undefined && entryId !== null && entryId !== "";
+  const id = useId();
 
   // Identity
   const [code, setCode] = useState("");
@@ -68,6 +71,11 @@ export function CustomerForm({ tabId, entryId, initialTitle }: Props) {
   const [loading, setLoading] = useState(isEdit);
   const [error, setError] = useState("");
   const [savedCustomer, setSavedCustomer] = useState<Customer | null>(null);
+
+  const { errors, validateField, clearErrors, onFieldBlur, onFieldChange } = useFormValidation({
+    code: (v) => !v || !v.toString().trim() ? "Code is required" : null,
+    name: (v) => !v || !v.toString().trim() ? "Name is required" : null,
+  });
 
   // Load master data (payment terms + accounts for the default-account pickers).
   useEffect(() => {
@@ -144,6 +152,24 @@ export function CustomerForm({ tabId, entryId, initialTitle }: Props) {
     priceLevel, currencyCode, npwp, npwpName, isPkp, creditHold, website, fax,
     contactPerson2, phone2, openingBalanceDisplay, openingBalanceDate, markUnsaved,
   ]);
+
+  useKeyboardShortcuts({
+    "Cmd+S": (e) => {
+      e.preventDefault();
+      handleSubmit(e as unknown as React.FormEvent);
+    },
+    "Escape": () => {
+      window.history.back();
+    },
+  });
+
+  const handleFieldBlur = (field: string, value: unknown) => {
+    onFieldBlur(field, value);
+  };
+
+  const handleFieldChange = (field: string) => {
+    onFieldChange(field);
+  };
 
   const buildInput = (): CreateCustomerInput => ({
     code: code.trim(),
@@ -232,11 +258,31 @@ export function CustomerForm({ tabId, entryId, initialTitle }: Props) {
           <div className="entrytab__detail-grid">
             <label className="field">
               <span className="field__label">Code *</span>
-              <input className="input" value={code} onChange={(e) => setCode(e.target.value)} required />
+              <input 
+                className="input" 
+                value={code} 
+                onChange={(e) => { setCode(e.target.value); handleFieldChange('code'); }}
+                onBlur={(e) => handleFieldBlur('code', e.target.value)}
+                aria-invalid={errors.code ? true : undefined}
+                aria-describedby={errors.code ? `${id}-error` : undefined}
+              />
+              {errors.code && (
+                <span className="field-error">{errors.code}</span>
+              )}
             </label>
             <label className="field">
               <span className="field__label">Name *</span>
-              <input className="input" value={name} onChange={(e) => setName(e.target.value)} required />
+              <input 
+                className="input" 
+                value={name} 
+                onChange={(e) => { setName(e.target.value); handleFieldChange('name'); }}
+                onBlur={(e) => handleFieldBlur('name', e.target.value)}
+                aria-invalid={errors.name ? true : undefined}
+                aria-describedby={errors.name ? `${id}-error` : undefined}
+              />
+              {errors.name && (
+                <span className="field-error">{errors.name}</span>
+              )}
             </label>
             <label className="field field--checkbox">
               <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
@@ -436,10 +482,22 @@ export function CustomerForm({ tabId, entryId, initialTitle }: Props) {
           )}
         </div>
 
-        <aside className="action-rail">
-          <button type="submit" className="action-rail__btn action-rail__btn--primary" disabled={saving}>
-            {saving ? "Saving..." : isEdit ? "Save Changes" : "Save"}
-          </button>
+        <aside className="action-rail action-rail--inline">
+          <div className="action-rail__content">
+            <button 
+              type="button" 
+              className="action-rail__btn action-rail__btn--secondary" 
+              onClick={() => window.history.back()}>
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              className="action-rail__btn action-rail__btn--primary" 
+              disabled={saving || !!errors.code || !!errors.name}>
+              {saving ? "Saving..." : isEdit ? "Save Changes" : "Save"}
+            </button>
+          </div>
+          <p className="action-rail__hint">Cmd+S · Esc</p>
         </aside>
         <FormError message={error} />
       </div>

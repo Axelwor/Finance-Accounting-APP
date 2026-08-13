@@ -1,57 +1,80 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
-/**
- * useKeyboardShortcuts — app-wide keyboard shortcuts listened on `document`.
- *
- *  - Ctrl/Cmd+S: dispatches `"app:save"` so the active entry form can save.
- *    Prevents the browser's native save dialog.
- *  - Esc: dispatches `"app:close-tab"` so the workbench can close the active
- *    tab. Components that use Esc for their own dismissal (e.g. the Combobox
- *    dropdown) call `stopPropagation` so the tab is not closed underneath
- *    them.
- *
- * Call once near the top of the mounted work area (e.g. <WorkArea />) so the
- * shortcuts are only active inside the shell, not on auth/onboarding screens.
- *
- * Custom events carry no payload; consumers add their own listeners:
- *
- *   useEffect(() => {
- *     const onSave = () => handleSave();
- *     document.addEventListener("app:save", onSave);
- *     return () => document.removeEventListener("app:save", onSave);
- *   }, [handleSave]);
- */
+type Handler = (e: KeyboardEvent) => void;
+type Shortcuts = Record<string, Handler>;
 
-export interface KeyboardShortcutOptions {
-  /** Toggle the listeners off without unmounting the host. Defaults to true. */
-  enabled?: boolean;
+const MODIFIER_KEYS = ["Meta", "Control", "Alt", "Shift"];
+const SPECIAL_KEYS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter", "Escape", "Space"];
+
+function normalizeKey(key: string): string {
+  return key.replace(/Key/g, "").replace(/Digit/g, "");
 }
 
-export function useKeyboardShortcuts({ enabled = true }: KeyboardShortcutOptions = {}) {
+function parseShortcut(shortcut: string): { modifiers: string[]; key: string } {
+  const parts = shortcut.split("+").map((p) => p.trim());
+  const modifiers: string[] = [];
+  let key = "";
+
+  for (const part of parts) {
+    if (MODIFIER_KEYS.includes(part) || part === "Cmd" || part === "Command") {
+      if (part === "Cmd" || part === "Command") {
+        modifiers.push("Meta");
+      } else {
+        modifiers.push(part);
+      }
+    } else {
+      key = part;
+    }
+  }
+
+  return { modifiers, key };
+}
+
+export function useKeyboardShortcuts(shortcuts: Shortcuts) {
+  const shortcutsRef = useRef(shortcuts);
+  shortcutsRef.current = shortcuts;
+
+  const ignoreKeysRef = useRef(new Set(["Input", "textarea", "input", "select", "button"]));
+
   useEffect(() => {
-    if (!enabled) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tagName = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      const isEditable =
+        tagName === "textarea" ||
+        tagName === "input" ||
+        tagName === "select" ||
+        ((e.target as HTMLElement)?.isContentEditable ?? false);
 
-    function onKeyDown(e: KeyboardEvent) {
-      const mod = e.ctrlKey || e.metaKey;
-
-      // Ctrl/Cmd+S — save the active form.
-      if (mod && (e.key === "s" || e.key === "S" || e.code === "KeyS")) {
-        e.preventDefault();
-        document.dispatchEvent(new CustomEvent("app:save"));
+      if (isEditable && e.key !== "Escape" && e.key !== "Enter") {
         return;
       }
 
-      // Esc — close the active tab (no modifiers).
-      if (!mod && !e.altKey && e.key === "Escape") {
-        document.dispatchEvent(new CustomEvent("app:close-tab"));
+      const { modifiers, key } = parseShortcut(e.code);
+      const normalizedKey = normalizeKey(e.key);
+
+      const expectedModifiers = Object.keys(shortcutsRef.current);
+      for (const shortcut of expectedModifiers) {
+        const { modifiers: expectedMod, key: expectedKey } = parseShortcut(shortcut);
+        const actualKey = normalizeKey(e.key);
+
+        if (actualKey.toUpperCase() !== expectedKey.toUpperCase()) continue;
+
+        const hasAllModifiers = expectedMod.every((mod) => {
+          if (mod === "Meta") return e.metaKey;
+          if (mod === "Control") return e.ctrlKey;
+          if (mod === "Alt") return e.altKey;
+          if (mod === "Shift") return e.shiftKey;
+          return false;
+        });
+
+        if (hasAllModifiers) {
+          shortcutsRef.current[shortcut]?.(e);
+          break;
+        }
       }
-    }
+    };
 
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [enabled]);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
 }
-
-/** Stable event names so consumers and this hook stay in sync. */
-export const SAVE_EVENT = "app:save" as const;
-export const CLOSE_TAB_EVENT = "app:close-tab" as const;

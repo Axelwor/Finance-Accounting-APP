@@ -1,23 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
-import { EmptyState, LoadingState } from "../../components/ui";
+import { LoadingState } from "../../components/ui";
+import { EmptyState } from "../../components/EmptyState";
+import { SortableHeader, type SortState } from "../../components/SortableHeader";
+import { StatusBadge } from "../../components/StatusBadge";
+import { RowActions, type RowAction } from "../../components/RowActions";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { InvoiceListItem } from "../../types";
 
-const INV_STATUS_TONE: Record<string, string> = {
-  DRAFT: "is-muted",
-  ISSUED: "",
-  PARTIALLY_PAID: "",
-  PAID: "is-positive",
-  VOID: "is-negative",
-};
+type SortableColumn = "number" | "date" | "customer" | "due" | "status" | "dp" | "receivable";
 
 export function InvoiceList() {
   const workbench = useWorkbench();
   const [items, setItems] = useState<InvoiceListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<"ALL" | InvoiceListItem["status"]>("ALL");
+  const [sort, setSort] = useState<SortState>({ column: "date", direction: "desc" });
 
   const load = async (filter: "ALL" | InvoiceListItem["status"] = status) => {
     setLoading(true);
@@ -31,9 +30,60 @@ export function InvoiceList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const onSort = (column: string) =>
+    setSort((s) => ({
+      column,
+      direction: s.column === column && s.direction === "asc" ? "desc" : "asc",
+    }));
+
+  const sorted = useMemo(() => {
+    const dir = sort.direction === "asc" ? 1 : -1;
+    const by = sort.column as SortableColumn;
+    const cmp = (a: InvoiceListItem, b: InvoiceListItem) => {
+      let av: string | number;
+      let bv: string | number;
+      switch (by) {
+        case "number":
+          av = a.number ?? "";
+          bv = b.number ?? "";
+          break;
+        case "date":
+          av = a.invoice_date ?? "";
+          bv = b.invoice_date ?? "";
+          break;
+        case "customer":
+          av = a.customer_name ?? `#${a.customer_id}`;
+          bv = b.customer_name ?? `#${b.customer_id}`;
+          break;
+        case "due":
+          av = a.due_date ?? "";
+          bv = b.due_date ?? "";
+          break;
+        case "status":
+          av = a.status;
+          bv = b.status;
+          break;
+        case "dp":
+          av = a.dp_applied_cents;
+          bv = b.dp_applied_cents;
+          break;
+        case "receivable":
+          av = a.receivable_cents;
+          bv = b.receivable_cents;
+          break;
+        default:
+          av = a.invoice_date ?? "";
+          bv = b.invoice_date ?? "";
+      }
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+      return String(av).localeCompare(String(bv)) * dir;
+    };
+    return [...items].sort(cmp);
+  }, [items, sort]);
+
   const totalReceivable = useMemo(
-    () => items.filter((i) => i.status !== "VOID").reduce((acc, it) => acc + it.receivable_cents, 0),
-    [items],
+    () => sorted.filter((i) => i.status !== "VOID").reduce((acc, it) => acc + it.receivable_cents, 0),
+    [sorted],
   );
   const openEntry = (item: InvoiceListItem) =>
     workbench.openEntryExisting("sales-invoice", item.id, item.number, item.status);
@@ -66,24 +116,24 @@ export function InvoiceList() {
           <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
             <ReloadIcon />
           </button>
-          <span className="listtab__count">{items.length}</span>
+          <span className="listtab__count">{sorted.length}</span>
         </div>
       </div>
 
-      <div className="listtab__body">
+      <div className="listtab__body listtab__body--scroll">
         {loading ? (
           <LoadingState label="Loading invoices..." />
-        ) : items.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <EmptyState
-            title="No invoices yet"
-            message="Issue an invoice to recognize revenue and accounts receivable. When the linked SO has down payments, the invoice automatically realizes them against the receivable."
+            entity="invoice"
+            filtered={items.length > 0}
             action={
               <button
                 type="button"
                 className="btn btn--primary"
                 onClick={() => workbench.openEntryDraft("sales-invoice")}
               >
-                New Invoice
+                + New Invoice
               </button>
             }
           />
@@ -91,17 +141,18 @@ export function InvoiceList() {
           <table className="ledger-table" aria-label="Sales invoices list">
             <thead>
               <tr>
-                <th scope="col">Number</th>
-                <th scope="col">Date</th>
-                <th scope="col">Customer</th>
-                <th scope="col">Due</th>
-                <th scope="col">Status</th>
-                <th scope="col" className="right">DP Applied</th>
-                <th scope="col" className="right">Receivable</th>
+                <SortableHeader column="number" sort={sort} onSort={onSort}>Number</SortableHeader>
+                <SortableHeader column="date" sort={sort} onSort={onSort}>Date</SortableHeader>
+                <SortableHeader column="customer" sort={sort} onSort={onSort}>Customer</SortableHeader>
+                <SortableHeader column="due" sort={sort} onSort={onSort}>Due</SortableHeader>
+                <SortableHeader column="status" sort={sort} onSort={onSort}>Status</SortableHeader>
+                <SortableHeader column="dp" sort={sort} onSort={onSort} align="right">DP Applied</SortableHeader>
+                <SortableHeader column="receivable" sort={sort} onSort={onSort} align="right">Receivable</SortableHeader>
+                <th scope="col" className="right">Aksi</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((it) => (
+              {sorted.map((it) => (
                 <InvoiceRow key={it.id} item={it} onOpen={() => openEntry(it)} />
               ))}
             </tbody>
@@ -113,13 +164,18 @@ export function InvoiceList() {
         <span>
           Outstanding receivable <strong>{formatIDR(totalReceivable)}</strong>
         </span>
-        <span className="listtab__footer-count">{items.length} invoice(s)</span>
+        <span className="listtab__footer-count">{sorted.length} invoice(s)</span>
       </div>
     </div>
   );
 }
 
 function InvoiceRow({ item, onOpen }: { item: InvoiceListItem; onOpen: () => void }) {
+  const actions: RowAction[] = [
+    { label: "Open", onClick: onOpen },
+    { label: "Print", onClick: () => window.print(), disabled: item.status === "VOID" },
+    { label: "Void", onClick: onOpen, destructive: true, disabled: item.status === "VOID" },
+  ];
   return (
     <tr role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} style={{ cursor: "pointer" }}>
       <th scope="row">{item.number}</th>
@@ -127,10 +183,15 @@ function InvoiceRow({ item, onOpen }: { item: InvoiceListItem; onOpen: () => voi
       <td>{item.customer_name ?? `#${item.customer_id}`}</td>
       <td>{item.due_date ?? "—"}</td>
       <td>
-        <span className={`kind-mark ${INV_STATUS_TONE[item.status] ?? "is-muted"}`}>{item.status}</span>
+        <StatusBadge status={item.status} />
       </td>
       <td className="right">{item.dp_applied_cents > 0 ? formatIDR(item.dp_applied_cents) : "—"}</td>
       <td className="right">{formatIDR(item.receivable_cents)}</td>
+      <td className="right">
+        <span onClick={(e) => e.stopPropagation()}>
+          <RowActions actions={actions} label={`Actions for ${item.number}`} />
+        </span>
+      </td>
     </tr>
   );
 }
