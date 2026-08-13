@@ -64,7 +64,7 @@ export type ListSubKind =
   | "ap-aging";
 
   | "warehouse-list";
-  | "email-templates"
+  | "email-templates";
   | "email-queue";
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
