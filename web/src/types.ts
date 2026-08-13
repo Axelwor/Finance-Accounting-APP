@@ -104,6 +104,8 @@ export type EntrySubKind =
   | "approval-rule-entry"
   | "cheque-entry"
   | "warehouse-entry";
+  | "email-templates"
+  | "email-template-entry";
 export interface Business {
   id: string;
   name: string;
