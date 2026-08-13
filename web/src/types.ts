@@ -5,10 +5,8 @@
  * available, these types will be aligned with the Go API contract
  * (see ARCHITECTURE.md, shared types).
  */
-
 /** User-friendly label for each record kind (no debit/credit terms). */
 export type TransactionKind = "money-in" | "money-out" | "transfer";
-
 /** Workbench list sub-kind identifiers (drives the sidebar + tab dispatch). */
 export type ListSubKind =
   | "cash-other-receipt"
@@ -63,9 +61,8 @@ export type ListSubKind =
   | "ar-aging"
   | "ap-aging";
 
-  | "warehouse-list";
-  | "email-templates";
-  | "email-queue";
+/** The currency code used throughout the app. */
+export type CurrencyCode = "IDR";
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
   | "money-in"
@@ -104,11 +101,6 @@ export type EntrySubKind =
   | "approval-rule-entry"
   | "cheque-entry"
   | "warehouse-entry";
-
-  | "email-template-entry";
-
-export type CurrencyCode = "IDR";
-
 export interface Business {
   id: string;
   name: string;
@@ -117,7 +109,6 @@ export interface Business {
   /** Month (1-12) when the fiscal year starts. */
   fiscalYearStart: number;
 }
-
 /** A tenant (book) the signed-in user belongs to, from GET /tenants. */
 export interface Tenant {
   id: string;
@@ -125,8 +116,6 @@ export interface Tenant {
   slug: string;
   role: string;
 }
-
-
 /** Accounting book period. */
 export interface BookPeriod {
   /** Fiscal year, e.g. 2026. */
@@ -134,7 +123,6 @@ export interface BookPeriod {
   /** Month (1-12) when the period starts. */
   startMonth: number;
 }
-
 export interface OpeningBalance {
   cash: number;
   bank: number;
@@ -142,20 +130,17 @@ export interface OpeningBalance {
   payables: number;
   equity: number;
 }
-
 export interface User {
   id: string;
   email: string;
   businessName: string;
 }
-
 export interface Category {
   id: string;
   name: string;
   /** Only relevant for Money In / Money Out. */
   kind: "money-in" | "money-out";
 }
-
 export interface Transaction {
   id: string;
   kind: TransactionKind;
@@ -170,7 +155,6 @@ export interface Transaction {
   to?: string;
   createdAt: string;
 }
-
 export interface DashboardSummary {
   cashAndBankBalance: number;
   monthlyProfitLoss: number;
@@ -178,23 +162,19 @@ export interface DashboardSummary {
   lowStock: number;
   recentTransactions: Transaction[];
 }
-
 export interface ApiError {
   code: string;
   message: string;
 }
-
 export interface RegisterInput {
   email: string;
   password: string;
   businessName: string;
 }
-
 export interface LoginInput {
   email: string;
   password: string;
 }
-
 export interface OnboardingInput {
   business: {
     name: string;
@@ -204,7 +184,6 @@ export interface OnboardingInput {
   period: BookPeriod;
   openingBalance: OpeningBalance;
 }
-
 export interface TransactionInput {
   kind: TransactionKind;
   amount: number;
@@ -214,17 +193,14 @@ export interface TransactionInput {
   from?: string;
   to?: string;
 }
-
 /** List of accounts/cash for the Transfer form dropdown. */
 export interface AccountItem {
   id: string;
   name: string;
 }
-
 /* ------------------------------------------------------------------ */
 /* Backend contract types (Go JSON at /api/v1) — mapped to UI types.  */
 /* ------------------------------------------------------------------ */
-
 /** Account row from GET /api/v1/accounts (coa.account struct). */
 export interface BackendAccount {
   id: number;
@@ -238,7 +214,6 @@ export interface BackendAccount {
   valid_from: string | null;
   valid_to: string | null;
 }
-
 /** Category row from GET /api/v1/categories (coa.category struct). */
 export interface BackendCategory {
   id: number;
@@ -248,21 +223,18 @@ export interface BackendCategory {
   default_credit_account_id: number | null;
   is_active: boolean;
 }
-
 /** Response from POST /api/v1/tenants. */
 export interface BackendTenant {
   id: number;
   name: string;
   slug: string;
 }
-
 /** A single counter line for multi-line cash commands. */
 export interface CounterLinePayload {
   account_id: number;
   amount_cents: number;
   description: string;
 }
-
 /** Common financial command payload (POST /cash-in, /cash-out). */
 export interface CashCommandPayload {
   source_ref: string;
@@ -274,7 +246,6 @@ export interface CashCommandPayload {
   /** Optional multi-counter: when provided, replaces counter_account_id. */
   counter_lines?: CounterLinePayload[];
 }
-
 /** Payload POST /api/v1/transfers. */
 export interface TransferCommandPayload {
   source_ref: string;
@@ -284,7 +255,6 @@ export interface TransferCommandPayload {
   amount_cents: number;
   description: string;
 }
-
 /** Journal posting response (cash.postingResult). */
 export interface BackendJournalResult {
   id: number;
@@ -295,7 +265,6 @@ export interface BackendJournalResult {
   intent_type: string;
   is_reversal: boolean;
 }
-
 /** Response GET /api/v1/reports/profit-loss. */
 export interface BackendProfitLoss {
   revenue_cents: number;
@@ -305,14 +274,12 @@ export interface BackendProfitLoss {
   framework?: string;
   sections?: ProfitLossSection[];
 }
-
 /** One grouped line in a framework P&L (EMKM/ETAP/SAK Umum). */
 export interface ProfitLossSection {
   code: string;
   label: string;
   amount_cents: number;
 }
-
 /** Response GET /api/v1/reports/balance-sheet. */
 export interface BackendBalanceSheet {
   asset_cents: number;
@@ -320,21 +287,18 @@ export interface BackendBalanceSheet {
   equity_cents: number;
   balanced: boolean;
 }
-
 /** Response GET /api/v1/reports/cash-flow. */
 export interface BackendCashFlow {
   inflow_cents: number;
   outflow_cents: number;
   net_cash_flow_cents: number;
 }
-
 /** One aging bucket in an AR/AP aging report. */
 export interface AgingBucket {
   bucket: "0-30" | "31-60" | "61-90" | ">90";
   amount_cents: number;
   count: number;
 }
-
 /** Response GET /api/v1/aging/ar and /api/v1/aging/ap. */
 export interface AgingReport {
   asOf: string;
@@ -345,7 +309,6 @@ export interface AgingReport {
     overdue_amount_cents: number;
   };
 }
-
 /** Single row in the trial balance response. */
 export interface BackendTrialBalanceRow {
   account_id: number;
@@ -355,7 +318,6 @@ export interface BackendTrialBalanceRow {
   debit_cents: number;
   credit_cents: number;
 }
-
 /** Response GET /api/v1/reports/trial-balance. */
 export interface BackendTrialBalance {
   rows: BackendTrialBalanceRow[];
@@ -363,14 +325,12 @@ export interface BackendTrialBalance {
   total_credit_cents: number;
   balanced: boolean;
 }
-
 /** Opening balance line for POST /api/v1/opening-balances. */
 export interface OpeningBalanceLine {
   account_id: number;
   debit_cents: number;
   credit_cents: number;
 }
-
 /** Cash & bank history list item returned by GET /api/v1/cash-entries. */
 export interface CashEntryListItem {
   id: number;
@@ -395,14 +355,12 @@ export interface CashEntryListItem {
   reference: string;
   reversal_of_id: number;
 }
-
 export interface CashEntryListResponse {
   items: CashEntryListItem[];
   limit: number;
   offset: number;
   count: number;
 }
-
 export interface ListCashEntriesParams {
   kind?: "money-in" | "money-out" | "transfer";
   from?: string;
@@ -412,7 +370,6 @@ export interface ListCashEntriesParams {
   limit?: number;
   offset?: number;
 }
-
 /** Payload POST /api/v1/opening-balances. */
 export interface OpeningBalancePayload {
   source_ref: string;
@@ -421,7 +378,6 @@ export interface OpeningBalancePayload {
   balances: OpeningBalanceLine[];
   description: string;
 }
-
 /** Result of period close/open commands (POST /api/v1/periods/close|unlock). */
 export interface PeriodResult {
   period_id: number;
@@ -430,7 +386,6 @@ export interface PeriodResult {
   number: string;
   hash?: string;
 }
-
 /** Customer master data (GET/POST /api/v1/customers). */
 export interface Customer {
   id: number;
@@ -464,10 +419,8 @@ export interface Customer {
   opening_balance_cents: number;
   opening_balance_date?: string | null;
 }
-
 /** Customer price levels (migration 000033). */
 export type PriceLevel = "RETAIL" | "WHOLESALE" | "DISTRIBUTOR" | "SPECIAL";
-
 /** Payment term master data (GET/POST /api/v1/payment-terms). */
 export interface PaymentTerm {
   id: number;
@@ -478,7 +431,6 @@ export interface PaymentTerm {
   discount_percent?: string | null;
   is_active: boolean;
 }
-
 /** Payload POST /api/v1/customers (also reused for PUT /api/v1/customers/{id}). */
 export interface CreateCustomerInput {
   code: string;
@@ -511,7 +463,6 @@ export interface CreateCustomerInput {
   opening_balance_cents?: number;
   opening_balance_date?: string;
 }
-
 /** Statement line for customer AR statement. */
 export interface CustomerStatementLine {
   date: string;
@@ -522,7 +473,6 @@ export interface CustomerStatementLine {
   credit_cents: number;
   running_balance_cents: number;
 }
-
 /** Customer statement response (GET /customers/{id}/statement). */
 export interface CustomerStatement {
   customer_id: number;
@@ -536,10 +486,8 @@ export interface CustomerStatement {
   paid_cents: number;
   closing_balance_cents: number;
 }
-
 /** Item costing methods accepted by the backend (items.costing_method). */
 export type ItemCostingMethod = "fifo" | "moving_average" | "specific";
-
 /** Item master data (GET /api/v1/items). */
 export interface Item {
   id: number;
@@ -577,7 +525,6 @@ export interface Item {
   sale_uom?: string | null;
   purchase_uom?: string | null;
 }
-
 /**
  * Payload for POST /api/v1/items (api.createItem). ERP columns follow
  * migrations 000005 + 000033. Fields without a backend column yet
@@ -619,7 +566,6 @@ export interface CreateItemInput {
   /** Opening stock cost in cents (no backend column yet). */
   opening_balance_cost_cents?: number;
 }
-
 /** One item price-list entry (GET/POST /api/v1/items/{id}/prices). */
 export interface ItemPriceEntry {
   id: number;
@@ -633,7 +579,6 @@ export interface ItemPriceEntry {
   effective_to?: string | null;
   is_active: boolean;
 }
-
 /** Sales quotation list row (GET /api/v1/quotations). */
 export interface QuotationListItem {
   id: number;
@@ -646,7 +591,6 @@ export interface QuotationListItem {
   status: "DRAFT" | "SENT" | "CONVERTED" | "EXPIRED" | "CANCELLED";
   total_cents: number;
 }
-
 /** A quotation line as returned by GET /api/v1/quotations/{id}. */
 export interface QuotationLine {
   id: number;
@@ -660,12 +604,10 @@ export interface QuotationLine {
   line_total_cents: number;
   description?: string | null;
 }
-
 /** Full quotation with lines (GET /api/v1/quotations/{id}). */
 export interface Quotation extends QuotationListItem {
   lines: QuotationLine[];
 }
-
 /** Input line for POST /api/v1/quotations. */
 export interface QuotationLineInput {
   item_id: number;
@@ -675,7 +617,6 @@ export interface QuotationLineInput {
   tax_rate: number;
   description?: string;
 }
-
 /** Payload POST /api/v1/quotations. */
 export interface QuotationCreateInput {
   customer_id: number;
@@ -686,11 +627,9 @@ export interface QuotationCreateInput {
   source_ref?: string;
   lines: QuotationLineInput[];
 }
-
 /* ------------------------------------------------------------------ */
 /* Sales Order (SO) + Down Payment (DP)                                */
 /* ------------------------------------------------------------------ */
-
 /** Sales order list row (GET /api/v1/sales-orders). */
 export interface SalesOrderListItem {
   id: number;
@@ -706,7 +645,6 @@ export interface SalesOrderListItem {
   dp_received_cents: number;
   customer_po_number?: string | null;
 }
-
 /** A sales order line (GET /api/v1/sales-orders/{id}). */
 export interface SalesOrderLine {
   id: number;
@@ -721,7 +659,6 @@ export interface SalesOrderLine {
   line_total_cents: number;
   description?: string;
 }
-
 /** Down payment attached to an order (GET /api/v1/sales-orders/{id}). */
 export interface DownPayment {
   id: number;
@@ -734,7 +671,6 @@ export interface DownPayment {
   description?: string;
   status: "RECEIVED" | "REFUNDED";
 }
-
 /** Full sales order with lines and down payments. */
 export interface SalesOrder extends SalesOrderListItem {
   lines: SalesOrderLine[];
@@ -745,7 +681,6 @@ export interface SalesOrder extends SalesOrderListItem {
   ship_to_address?: string | null;
   shipping_terms?: "FOB" | "CIF" | "EXW" | "CFR" | "DAP";
 }
-
 /** Input line for POST /api/v1/sales-orders. */
 export interface SalesOrderLineInput {
   item_id: number;
@@ -755,7 +690,6 @@ export interface SalesOrderLineInput {
   tax_rate: number;
   description?: string;
 }
-
 /** Payload POST /api/v1/sales-orders. */
 export interface SalesOrderCreateInput {
   customer_id: number;
@@ -771,7 +705,6 @@ export interface SalesOrderCreateInput {
   shipping_terms?: "FOB" | "CIF" | "EXW" | "CFR" | "DAP";
   lines: SalesOrderLineInput[];
 }
-
 /** Payload POST /api/v1/sales-orders/{id}/down-payments. */
 export interface CreateDownPaymentInput {
   cash_account_id: number;
@@ -779,11 +712,9 @@ export interface CreateDownPaymentInput {
   dp_date: string;
   description?: string;
 }
-
 /* ------------------------------------------------------------------ */
 /* Delivery Order (DO)                                                 */
 /* ------------------------------------------------------------------ */
-
 /** Delivery order list row (GET /api/v1/delivery-orders). */
 export interface DeliveryOrderListItem {
   id: number;
@@ -797,7 +728,6 @@ export interface DeliveryOrderListItem {
   journal_entry_id?: number;
   total_cogs_cents: number;
 }
-
 /** A delivery order line (GET /api/v1/delivery-orders/{id}). */
 export interface DeliveryOrderLine {
   id: number;
@@ -812,12 +742,10 @@ export interface DeliveryOrderLine {
   cogs_account_id: number;
   description?: string;
 }
-
 /** Full delivery order with lines. */
 export interface DeliveryOrder extends DeliveryOrderListItem {
   lines: DeliveryOrderLine[];
 }
-
 /** Input line for POST /api/v1/delivery-orders. */
 export interface DeliveryLineInput {
   item_id: number;
@@ -825,7 +753,6 @@ export interface DeliveryLineInput {
   unit_cost_cents: number;
   description?: string;
 }
-
 /** Payload POST /api/v1/delivery-orders. */
 export interface CreateDeliveryInput {
   sales_order_id: number;
@@ -833,11 +760,9 @@ export interface CreateDeliveryInput {
   notes?: string;
   lines: DeliveryLineInput[];
 }
-
 /* ------------------------------------------------------------------ */
 /* Invoice (INV)                                                       */
 /* ------------------------------------------------------------------ */
-
 /** Invoice list row (GET /api/v1/invoices). */
 export interface InvoiceListItem {
   id: number;
@@ -854,7 +779,6 @@ export interface InvoiceListItem {
   dp_applied_cents: number;
   receivable_cents: number;
 }
-
 /** An invoice line (GET /api/v1/invoices/{id}). */
 export interface InvoiceLine {
   id: number;
@@ -870,7 +794,6 @@ export interface InvoiceLine {
   line_total_cents: number;
   description?: string;
 }
-
 /** Full invoice with lines. */
 export interface Invoice extends InvoiceListItem {
   lines: InvoiceLine[];
@@ -883,7 +806,6 @@ export interface Invoice extends InvoiceListItem {
   rounding_cents?: number;
   salesperson_id?: number | null;
 }
-
 /** Input line for POST /api/v1/invoices. */
 export interface InvoiceLineInput {
   item_id: number;
@@ -894,7 +816,6 @@ export interface InvoiceLineInput {
   tax_rate: number;
   description?: string;
 }
-
 /** Payload POST /api/v1/invoices. */
 export interface CreateInvoiceInput {
   sales_order_id?: number;
@@ -910,11 +831,9 @@ export interface CreateInvoiceInput {
   salesperson_id?: number;
   lines: InvoiceLineInput[];
 }
-
 /* ------------------------------------------------------------------ */
 /* Invoice Payment (Pelunasan)                                         */
 /* ------------------------------------------------------------------ */
-
 /** Payment record (POST /invoices/{id}/payments response). */
 export interface InvoicePayment {
   id: number;
@@ -930,7 +849,6 @@ export interface InvoicePayment {
   description?: string;
   status: "RECEIVED" | "REVERSED";
 }
-
 /** Payload POST /api/v1/invoices/{id}/payments. */
 export interface CreatePaymentInput {
   cash_account_id: number;
@@ -938,11 +856,9 @@ export interface CreatePaymentInput {
   payment_date: string;
   description?: string;
 }
-
 /* ------------------------------------------------------------------ */
 /* Credit Note (CN / Sales Return)                                     */
 /* ------------------------------------------------------------------ */
-
 /** Credit note list row (GET /api/v1/credit-notes). */
 export interface CreditNoteListItem {
   id: number;
@@ -958,7 +874,6 @@ export interface CreditNoteListItem {
   ar_deducted_cents: number;
   cogs_reversed_cents: number;
 }
-
 /** A credit note line (GET /api/v1/credit-notes/{id}). */
 export interface CreditNoteLine {
   id: number;
@@ -974,12 +889,10 @@ export interface CreditNoteLine {
   cogs_reversed_cents: number;
   description?: string;
 }
-
 /** Full credit note with lines. */
 export interface CreditNote extends CreditNoteListItem {
   lines: CreditNoteLine[];
 }
-
 /** Input line for POST /api/v1/credit-notes. */
 export interface CreditNoteLineInput {
   item_id: number;
@@ -991,7 +904,6 @@ export interface CreditNoteLineInput {
   unit_cost_cents: number;
   description?: string;
 }
-
 /** Payload POST /api/v1/credit-notes. */
 export interface CreateCreditNoteInput {
   invoice_id: number;
@@ -1001,11 +913,9 @@ export interface CreateCreditNoteInput {
   reason?: string;
   lines: CreditNoteLineInput[];
 }
-
 /* ------------------------------------------------------------------ */
 /* Suppliers                                                           */
 /* ------------------------------------------------------------------ */
-
 export interface SupplierListItem {
   id: number;
   code: string;
@@ -1018,7 +928,6 @@ export interface SupplierListItem {
   city?: string;
   is_active: boolean;
 }
-
 export interface Supplier extends SupplierListItem {
   province?: string;
   postal_code?: string;
@@ -1037,7 +946,6 @@ export interface Supplier extends SupplierListItem {
   opening_balance_cents?: number;
   opening_balance_date?: string | null;
 }
-
 export interface CreateSupplierInput {
   code: string;
   name: string;
@@ -1064,11 +972,9 @@ export interface CreateSupplierInput {
   opening_balance_cents?: number;
   opening_balance_date?: string;
 }
-
 /* ------------------------------------------------------------------ */
 /* Purchase Order (PO) — commitment only, no journal                    */
 /* ------------------------------------------------------------------ */
-
 export interface PurchaseOrderListItem {
   id: number;
   number: string;
@@ -1084,7 +990,6 @@ export interface PurchaseOrderListItem {
   supplier_quote_date?: string | null;
   buyer_id?: number | null;
 }
-
 export interface PurchaseOrderLine {
   id: number;
   item_id: number;
@@ -1099,11 +1004,9 @@ export interface PurchaseOrderLine {
   received_qty: string;
   description?: string;
 }
-
 export interface PurchaseOrder extends PurchaseOrderListItem {
   lines: PurchaseOrderLine[];
 }
-
 export interface PurchaseOrderLineInput {
   item_id: number;
   qty: number;
@@ -1112,7 +1015,6 @@ export interface PurchaseOrderLineInput {
   tax_rate: number;
   description?: string;
 }
-
 export interface CreatePurchaseOrderInput {
   supplier_id: number;
   order_date: string;
@@ -1123,11 +1025,9 @@ export interface CreatePurchaseOrderInput {
   buyer_id?: number;
   lines: PurchaseOrderLineInput[];
 }
-
 /* ------------------------------------------------------------------ */
 /* Goods Received Note (GRN) — posts Dr Inventory / Cr Accrued Payable */
 /* ------------------------------------------------------------------ */
-
 export interface GoodsReceivedNoteListItem {
   id: number;
   number: string;
@@ -1140,7 +1040,6 @@ export interface GoodsReceivedNoteListItem {
   journal_entry_id?: number;
   total_cents: number;
 }
-
 export interface GRNLine {
   id: number;
   item_id: number;
@@ -1152,11 +1051,9 @@ export interface GRNLine {
   line_total_cents: number;
   description?: string;
 }
-
 export interface GoodsReceivedNote extends GoodsReceivedNoteListItem {
   lines: GRNLine[];
 }
-
 export interface GRNLineInput {
   item_id: number;
   po_line_id?: number;
@@ -1164,14 +1061,12 @@ export interface GRNLineInput {
   unit_cost_cents: number;
   description?: string;
 }
-
 export interface CreateGRNInput {
   purchase_order_id: number;
   grn_date: string;
   notes?: string;
   lines: GRNLineInput[];
 }
-
 /* Supplier Invoice (Tagihan) */
 export interface SupplierInvoiceListItem {
   id: number; number: string; supplier_id: number; supplier_name?: string;
@@ -1193,7 +1088,6 @@ export interface CreateSupplierInvoiceInput {
   supplier_id: number; grn_id?: number; invoice_date: string; due_date?: string;
   supplier_invoice_number?: string; notes?: string; lines: SupplierInvoiceLineInput[];
 }
-
 /* Supplier Payment (Bayar) */
 export interface SupplierPayment {
   id: number;
@@ -1209,14 +1103,12 @@ export interface SupplierPayment {
   description?: string;
   status: "PAID" | "REVERSED";
 }
-
 export interface CreateSupplierPaymentInput {
   cash_account_id: number;
   amount_cents: number;
   payment_date: string;
   description?: string;
 }
-
 /* Purchase Return (Retur Pembelian) */
 export interface PurchaseReturnListItem {
   id: number; number: string; supplier_id: number; supplier_name?: string;
@@ -1238,13 +1130,11 @@ export interface CreatePurchaseReturnInput {
   invoice_id: number; supplier_id: number; return_date: string;
   refund_method?: string; reason?: string; lines: PurchaseReturnLineInput[];
 }
-
 /* ------------------------------------------------------------------ */
 /* Stock Opname (US-043) — physical count adjustment                  */
 /*   surplus  (diff > 0): Dr Inventory / Cr Inventory Adjustment Gain */
 /*   shortage (diff < 0): Dr Inventory Adjustment Loss / Cr Inventory */
 /* ------------------------------------------------------------------ */
-
 export interface StockOpnameListItem {
   id: number;
   number: string;
@@ -1254,7 +1144,6 @@ export interface StockOpnameListItem {
   journal_entry_id?: number;
   total_adjustment_cents: number;
 }
-
 export interface StockOpnameLine {
   id: number;
   item_id: number;
@@ -1269,29 +1158,24 @@ export interface StockOpnameLine {
   inventory_account_id: number;
   reason?: string;
 }
-
 export interface StockOpname extends StockOpnameListItem {
   lines: StockOpnameLine[];
 }
-
 export interface StockOpnameLineInput {
   item_id: number;
   counted_qty: number;
   unit_cost_cents: number;
   reason?: string;
 }
-
 export interface CreateStockOpnameInput {
   opname_date: string;
   notes?: string;
   lines: StockOpnameLineInput[];
 }
-
 /* ------------------------------------------------------------------ */
 /* Stock Transfer (US-042) — stock movement, no journal posted        */
 /*   (same inventory account, no value change)                        */
 /* ------------------------------------------------------------------ */
-
 export interface StockTransferListItem {
   id: number;
   number: string;
@@ -1299,7 +1183,6 @@ export interface StockTransferListItem {
   notes?: string;
   status: "COMPLETED" | "VOID";
 }
-
 export interface StockTransferLine {
   id: number;
   item_id: number;
@@ -1311,28 +1194,21 @@ export interface StockTransferLine {
   inventory_account_id: number;
   description?: string;
 }
-
 export interface StockTransfer extends StockTransferListItem {
   lines: StockTransferLine[];
 }
-
 export interface StockTransferLineInput {
   item_id: number;
   qty: number;
   unit_cost_cents: number;
   description?: string;
 }
-
 export interface CreateStockTransferInput {
   transfer_date: string;
   notes?: string;
   lines: StockTransferLineInput[];
 }
-
-/* ================================================================== */
 /* Accountant Mode (manual journals, general ledger, journal register) */
-/* ================================================================== */
-
 /* Manual Journal Entry */
 export interface JournalEntryListItem {
   id: number; number: string; entry_date: string; description: string;
@@ -1349,7 +1225,6 @@ export interface ManualJournalInput {
   entry_date: string; description: string;
   lines: { account_id: number; debit_cents: number; credit_cents: number; description?: string }[];
 }
-
 /* General Ledger (Buku Besar) */
 export interface GeneralLedgerEntry {
   entry_number: string; entry_date: string; description: string;
@@ -1359,17 +1234,14 @@ export interface GeneralLedgerResult {
   account_id: number; account_code: string; account_name: string;
   opening_balance_cents: number; entries: GeneralLedgerEntry[]; closing_balance_cents: number;
 }
-
 /* Journal Register */
 export interface JournalRegisterItem {
   id: number; number: string; entry_date: string; description: string;
   intent_type: string; total_debit_cents: number; total_credit_cents: number;
 }
-
 /* ------------------------------------------------------------------ */
 /* Bank Reconciliation (US-050)                                       */
 /* ------------------------------------------------------------------ */
-
 export interface BankStatementLineInput {
   tx_date: string; description?: string; reference?: string; amount_cents: number;
 }
@@ -1378,7 +1250,6 @@ export interface CreateBankStatementInput {
   opening_balance_cents: number; closing_balance_cents: number;
   notes?: string; lines: BankStatementLineInput[];
 }
-
 export interface BankStatementLine {
   id: number; line_no: number; tx_date: string;
   description?: string; reference?: string; amount_cents: number;
@@ -1397,7 +1268,6 @@ export interface BankStatementListItem {
 export interface BankStatement extends BankStatementListItem {
   notes?: string; lines: BankStatementLine[];
 }
-
 export interface BookCandidate {
   journal_line_id: number; entry_id: number;
   entry_number: string; entry_date: string;
@@ -1425,18 +1295,15 @@ export interface BankReconciliation extends BankReconciliationListItem {
     matched_count: number; unmatched_count: number; total_lines: number;
   };
 }
-
 export interface ReconcileMatchInput {
   statement_line_id: number; journal_line_id: number;
 }
 export interface ReconcileUnmatchInput {
   statement_line_id: number;
 }
-
 /* ------------------------------------------------------------------ */
 /* Financial Notes (Catatan atas Laporan Keuangan — dasar)             */
 /* ------------------------------------------------------------------ */
-
 export interface FinancialNote {
   id: number;
   period_year: number;
@@ -1445,7 +1312,6 @@ export interface FinancialNote {
   content: string;
   display_order: number;
 }
-
 export interface FinancialNoteInput {
   period_year: number;
   note_number: string;
@@ -1453,13 +1319,10 @@ export interface FinancialNoteInput {
   content: string;
   display_order?: number;
 }
-
 /* ------------------------------------------------------------------ */
 /* Due Date Reminders (Pengingat Jatuh Tempo)                          */
 /* ------------------------------------------------------------------ */
-
 export type DueDateDirection = "customer" | "supplier";
-
 export interface DueDateReminder {
   id: number;
   number: string;
@@ -1471,15 +1334,12 @@ export interface DueDateReminder {
   status: string;
   days_overdue: number;
 }
-
 /* ------------------------------------------------------------------ */
 /* Fixed Assets (Aset Tetap) — US-060..063                             */
 /* ------------------------------------------------------------------ */
-
 export type DepreciationMethod = "straight_line" | "declining_balance" | "units_of_production";
 export type AssetStatus = "ACTIVE" | "DISPOSED" | "IMPAIRED";
 export type AssetTxType = "ACQUISITION" | "DEPRECIATION" | "REVALUATION" | "DISPOSAL" | "IMPAIRMENT";
-
 /** Row in the asset register list. */
 export interface FixedAssetListItem {
   id: number;
@@ -1495,7 +1355,6 @@ export interface FixedAssetListItem {
   book_value_cents: number;
   accum_dep_cents: number;
 }
-
 export interface AssetDepreciationScheduleItem {
   id: number;
   asset_id: number;
@@ -1506,7 +1365,6 @@ export interface AssetDepreciationScheduleItem {
   posted: boolean;
   posted_at?: string;
 }
-
 export interface AssetTransactionItem {
   id: number;
   asset_id: number;
@@ -1517,7 +1375,6 @@ export interface AssetTransactionItem {
   description?: string;
   created_at: string;
 }
-
 /** Full asset detail (GET /fixed-assets/{id}). */
 export interface FixedAsset {
   id: number;
@@ -1544,7 +1401,6 @@ export interface FixedAsset {
   schedule?: AssetDepreciationScheduleItem[];
   transactions?: AssetTransactionItem[];
 }
-
 export interface RegisterFixedAssetInput {
   code: string;
   name: string;
@@ -1558,14 +1414,12 @@ export interface RegisterFixedAssetInput {
   payment_account_code?: string;
   description?: string;
 }
-
 export interface DepreciateAssetInput {
   period_year: number;
   period_month: number;
   entry_date: string;
   description?: string;
 }
-
 export interface DepreciationResult {
   asset_id: number;
   period_year: number;
@@ -1578,20 +1432,17 @@ export interface DepreciationResult {
   already_posted?: boolean;
   status: string;
 }
-
 export interface RevalueAssetInput {
   new_value_cents: number;
   entry_date: string;
   description?: string;
 }
-
 export interface DisposeAssetInput {
   disposal_date: string;
   proceeds_cents: number;
   cash_account_code?: string;
   description?: string;
 }
-
 export interface AssetDisposalResult {
   asset_id: number;
   proceeds_cents: number;
@@ -1600,13 +1451,11 @@ export interface AssetDisposalResult {
   journal_entry_id?: number;
   status: string;
 }
-
 export interface ImpairAssetInput {
   entry_date: string;
   impaired_value_cents: number;
   description?: string;
 }
-
 /* ------------------------------------------------------------------ */
 /* Production / Job Order Costing (US-070..072)                        */
 /*   BOM, production jobs, job costs, job completion.                  */
@@ -1615,9 +1464,7 @@ export interface ImpairAssetInput {
 /*   Complete: Dr 1304 Finished Goods / Cr 1303 WIP                   */
 /*   Variance loss: Dr 5901 / Cr 1303; gain: Dr 1303 / Cr 4902        */
 /* ------------------------------------------------------------------ */
-
 export type ProductionCostType = "material" | "labor" | "overhead";
-
 export interface BOMLine {
   id: number;
   item_id: number;
@@ -1630,7 +1477,6 @@ export interface BOMLine {
   cost_type: ProductionCostType;
   description?: string;
 }
-
 export interface BOM {
   id: number;
   code: string;
@@ -1642,10 +1488,8 @@ export interface BOM {
   status: "ACTIVE" | "VOID";
   lines?: BOMLine[];
 }
-
 /** BOM list item (header only, no lines). */
 export type BOMListItem = BOM;
-
 export interface BOMLineInput {
   item_id: number;
   qty: number;
@@ -1653,7 +1497,6 @@ export interface BOMLineInput {
   cost_type: ProductionCostType;
   description?: string;
 }
-
 export interface CreateBOMInput {
   code: string;
   name: string;
@@ -1661,7 +1504,6 @@ export interface CreateBOMInput {
   output_qty: number;
   lines: BOMLineInput[];
 }
-
 export interface ProductionJobCost {
   id: number;
   cost_type: ProductionCostType;
@@ -1675,7 +1517,6 @@ export interface ProductionJobCost {
   journal_entry_id?: number;
   posted_at?: string;
 }
-
 export interface ProductionJob {
   id: number;
   number: string;
@@ -1698,17 +1539,14 @@ export interface ProductionJob {
   journal_entry_id?: number;
   costs?: ProductionJobCost[];
 }
-
 /** Production job list item (header only, no costs). */
 export type ProductionJobListItem = ProductionJob;
-
 export interface CreateProductionJobInput {
   bom_id?: number;
   finished_good_item_id: number;
   target_qty: number;
   start_date: string;
 }
-
 export interface AddProductionJobCostInput {
   cost_type: ProductionCostType;
   item_id?: number;
@@ -1716,19 +1554,15 @@ export interface AddProductionJobCostInput {
   qty: number;
   unit_cost_cents: number;
 }
-
 /** Alias for the cost-creation request body (same shape). */
 export type CreateProductionJobCostInput = AddProductionJobCostInput;
-
 export interface CompleteProductionJobInput {
   /** Optional completed quantity (defaults to target_qty when omitted). */
   completed_qty?: number;
 }
-
 /* ------------------------------------------------------------------ */
 /* Tax — PPN, PPh Final UMKM, ECL, Deferred Tax (US-080..083)         */
 /* ------------------------------------------------------------------ */
-
 /** PPN summary (GET /ppn/summary). */
 export interface PPNSummary {
   from_date: string;
@@ -1737,7 +1571,6 @@ export interface PPNSummary {
   ppn_masukan_cents: number;
   net_ppn_cents: number;
 }
-
 /** One VAT movement in the detailed PPN reconciliation. */
 export interface PPNReconciliationLine {
   entry_id: number;
@@ -1752,7 +1585,6 @@ export interface PPNReconciliationLine {
   debit_cents: number;
   credit_cents: number;
 }
-
 /** PPN reconciliation report (GET /ppn/reconciliation). */
 export interface PPNReconciliationResult {
   period_year: number;
@@ -1762,7 +1594,6 @@ export interface PPNReconciliationResult {
   net_ppn_cents: number;
   lines: PPNReconciliationLine[];
 }
-
 /** Filed PPN reconciliation record (POST /ppn/reconcile). */
 export interface PPNReconciliationRecord {
   id: number;
@@ -1775,13 +1606,11 @@ export interface PPNReconciliationRecord {
   notes: string;
   created_at: string;
 }
-
 export interface CreatePPNReconciliationInput {
   period_year: number;
   period_month: number;
   notes?: string;
 }
-
 /** PPh Final UMKM calculation result. */
 export interface PPhFinalResult {
   journal_entry_id: number;
@@ -1794,21 +1623,18 @@ export interface PPhFinalResult {
   tax_cents: number;
   payable_balance_cents: number;
 }
-
 export interface CalculatePPhFinalInput {
   period_year: number;
   period_month: number;
   entry_date: string;
   notes?: string;
 }
-
 export interface PayPPhFinalInput {
   entry_date: string;
   cash_account_id: number;
   amount_cents: number;
   notes?: string;
 }
-
 /** One ECL aging bucket. */
 export interface ECLBucket {
   label: string;
@@ -1818,7 +1644,6 @@ export interface ECLBucket {
   balance_cents: number;
   provision_cents: number;
 }
-
 /** ECL calculation result. */
 export interface CalculateECLResult {
   journal_entry_id: number;
@@ -1832,21 +1657,18 @@ export interface CalculateECLResult {
   current_allowance_cents: number;
   adjustment_cents: number;
 }
-
 export interface CalculateECLInput {
   as_of_date: string;
   entry_date: string;
   notes?: string;
   rates?: Record<string, number>;
 }
-
 export interface WriteOffInput {
   entry_date: string;
   invoice_id?: number;
   amount_cents: number;
   notes?: string;
 }
-
 export interface WriteOffResult {
   journal_entry_id: number;
   number: string;
@@ -1856,7 +1678,6 @@ export interface WriteOffResult {
   invoice_id: number;
   amount_cents: number;
 }
-
 /** Deferred tax calculation (US-083). */
 export interface CalculateDeferredTaxInput {
   temporary_differences_cents: number;
@@ -1864,7 +1685,6 @@ export interface CalculateDeferredTaxInput {
   entry_date: string;
   notes?: string;
 }
-
 export interface CalculateDeferredTaxResult {
   journal_entry_id: number;
   number: string;
@@ -1876,13 +1696,10 @@ export interface CalculateDeferredTaxResult {
   deferred_tax_cents: number;
   direction: "ASSET" | "REVERSAL";
 }
-
 /* ------------------------------------------------------------------ */
 /* Report Frameworks (US-090A) + Dimensions + Budgets (US-093)       */
 /* ------------------------------------------------------------------ */
-
 export type ReportFramework = "EMKM" | "ETAP" | "SAK_UMUM";
-
 /** Row in the report_frameworks table (GET /report-frameworks). */
 export interface ReportFrameworkRecord {
   id: number;
@@ -1891,13 +1708,11 @@ export interface ReportFrameworkRecord {
   tenant_id: number;
   created_at: string;
 }
-
 /** Payload POST /report-frameworks. */
 export interface SetFrameworkInput {
   framework: ReportFramework;
   is_default?: boolean;
 }
-
 /** Dimension master (GET/POST /dimensions). */
 export interface Dimension {
   id: number;
@@ -1907,18 +1722,15 @@ export interface Dimension {
   is_active: boolean;
   created_at: string;
 }
-
 export interface CreateDimensionInput {
   code: string;
   name: string;
   dimension_type: Dimension["dimension_type"];
 }
-
 /** Payload POST /journal-lines/{id}/dimensions. */
 export interface TagJournalLineInput {
   dimension_ids: number[];
 }
-
 /** Budget line input (POST /budgets). */
 export interface BudgetLineInput {
   account_id: number;
@@ -1926,7 +1738,6 @@ export interface BudgetLineInput {
   month: number;
   amount_cents: number;
 }
-
 /** Budget line as returned by GET /budgets/{id}. */
 export interface BudgetLine {
   id: number;
@@ -1936,7 +1747,6 @@ export interface BudgetLine {
   month: number;
   amount_cents: number;
 }
-
 /** Full budget with lines (GET /budgets/{id}, POST /budgets). */
 export interface Budget {
   id: number;
@@ -1947,7 +1757,6 @@ export interface Budget {
   created_at: string;
   lines?: BudgetLine[];
 }
-
 /** Budget list row (GET /budgets). */
 export interface BudgetListItem {
   id: number;
@@ -1959,14 +1768,12 @@ export interface BudgetListItem {
   line_count: number;
   total_cents: number;
 }
-
 export interface CreateBudgetInput {
   name: string;
   fiscal_year: number;
   dimension_id?: number;
   lines: BudgetLineInput[];
 }
-
 /** One row in the budget vs actual report. */
 export interface BudgetVsActualRow {
   account_id: number;
@@ -1977,7 +1784,6 @@ export interface BudgetVsActualRow {
   actual_cents: number;
   variance_cents: number;
 }
-
 /** Response GET /budgets/{id}/vs-actual. */
 export interface BudgetVsActualResult {
   budget_id: number;
@@ -2003,7 +1809,6 @@ export interface Attachment {
   created_at: string;
   uploaded_by: number;
 }
-
 /** US-101: Audit log entry returned by GET /audit-logs. */
 export interface AuditLog {
   id: number;
@@ -2017,7 +1822,6 @@ export interface AuditLog {
   after_data: Record<string, unknown> | null;
   created_at: string;
 }
-
 /** Lease contract list item (US-111, PSAK 73). */
 export interface LeaseContractListItem {
   id: number;
@@ -2035,7 +1839,6 @@ export interface LeaseContractListItem {
   initial_liability_cents: number;
   journal_entry_id?: number;
 }
-
 /** Lease contract with full detail + payment schedule. */
 export interface LeasePaymentScheduleItem {
   payment_no: number;
@@ -2047,14 +1850,12 @@ export interface LeasePaymentScheduleItem {
   journal_entry_id?: number;
   posted: boolean;
 }
-
 export interface LeaseContract extends LeaseContractListItem {
   rou_asset_account_id: number;
   lease_liability_account_id: number;
   interest_expense_account_id: number;
   schedule?: LeasePaymentScheduleItem[];
 }
-
 export interface CreateLeaseContractInput {
   lessee_name: string;
   lessor_name?: string;
@@ -2067,7 +1868,6 @@ export interface CreateLeaseContractInput {
   payment_account_code?: string;
   description?: string;
 }
-
 export interface LeasePaymentResult {
   lease_id: number;
   payment_no: number;
@@ -2079,7 +1879,6 @@ export interface LeasePaymentResult {
   journal_entry_id?: number;
   posted: boolean;
 }
-
 /** Payload POST /api/v1/lease-contracts/{id}/modify (m-014). */
 export interface ModifyLeaseContractInput {
   new_payment_amount_cents: number;
@@ -2087,7 +1886,6 @@ export interface ModifyLeaseContractInput {
   effective_date: string;
   description?: string;
 }
-
 /** Result of POST /api/v1/lease-contracts/{id}/modify. */
 export interface ModifyLeaseResult {
   lease_id: number;
@@ -2099,13 +1897,11 @@ export interface ModifyLeaseResult {
   new_payment_cents: number;
   new_total_payments: number;
 }
-
 /** Payload POST /api/v1/lease-contracts/{id}/terminate (m-014). */
 export interface TerminateLeaseContractInput {
   termination_date: string;
   description?: string;
 }
-
 /** Result of POST /api/v1/lease-contracts/{id}/terminate. */
 export interface TerminateLeaseResult {
   lease_id: number;
@@ -2114,7 +1910,6 @@ export interface TerminateLeaseResult {
   journal_entry_id?: number;
   journal_number?: string;
 }
-
 /** Entity hierarchy (US-110, PSAK 65). */
 export interface EntityHierarchyItem {
   id: number;
@@ -2126,13 +1921,11 @@ export interface EntityHierarchyItem {
   parent_tenant_name?: string;
   created_at?: string;
 }
-
 export interface CreateEntityHierarchyInput {
   child_tenant_id: number;
   parent_tenant_id: number;
   consolidation_pct?: number;
 }
-
 /** Consolidated trial balance (US-110). */
 export interface ConsolidatedTrialBalanceRow {
   account_id: number;
@@ -2142,7 +1935,6 @@ export interface ConsolidatedTrialBalanceRow {
   debit_cents: number;
   credit_cents: number;
 }
-
 export interface ConsolidatedTrialBalanceResult {
   rows: ConsolidatedTrialBalanceRow[];
   total_debit_cents: number;
@@ -2151,7 +1943,6 @@ export interface ConsolidatedTrialBalanceResult {
   balanced: boolean;
   consolidated_tenant_ids: number[];
 }
-
 /** Consolidated P&L (US-110). */
 export interface ConsolidatedProfitLossResult {
   revenue_cents: number;
@@ -2160,11 +1951,9 @@ export interface ConsolidatedProfitLossResult {
   elimination_cents: number;
   consolidated_tenant_ids: number[];
 }
-
 /* ------------------------------------------------------------------ */
 /* Report Templates (US-090A)                                         */
 /* ------------------------------------------------------------------ */
-
 export type ReportTemplateDocumentType =
   | "invoice"
   | "purchase_order"
@@ -2185,7 +1974,6 @@ export type ReportTemplateDocumentType =
   | "ap_aging"
   | "asset_register"
   | "stock_opname";
-
 export interface ReportTemplate {
   id: number;
   tenant_id?: number;
@@ -2199,14 +1987,12 @@ export interface ReportTemplate {
   created_at?: string;
   updated_at?: string;
 }
-
 export interface CreateReportTemplateInput {
   code: string;
   name: string;
   document_type: ReportTemplateDocumentType;
   template_yaml: string;
 }
-
 /** Approval workflow types. */
 export interface ApprovalRule {
   id: number;
@@ -2217,13 +2003,11 @@ export interface ApprovalRule {
   created_at: string;
   updated_at: string;
 }
-
 export interface CreateApprovalRuleInput {
   entity_type: string;
   min_amount_cents: number;
   approver_account_id: number;
 }
-
 export interface ApprovalRequest {
   id: number;
   tenant_id: number;
@@ -2241,17 +2025,14 @@ export interface ApprovalRequest {
   /** Array of previous approve/reject actions for audit trail. */
   approval_history?: Array<{ action: "approved" | "rejected"; by: string; at: string }>;
 }
-
 export interface SubmitApprovalRequestInput {
   entity_type: string;
   entity_id: number;
   amount_cents: number;
 }
-
 export interface ApproveApprovalRequestInput {
   reason?: string;
 }
-
 /** Cheque list item for GET /api/v1/cheques. */
 export interface ChequeListItem {
   id: number;
@@ -2264,14 +2045,12 @@ export interface ChequeListItem {
   date: string;
   status: "REGISTERED" | "DEPOSITED" | "CLEARED" | "BOUNCED";
 }
-
 /** Cheque full record with all fields. */
 export interface Cheque extends ChequeListItem {
   bank_account_id?: number | null;
   image_url?: string | null;
   notes?: string | null;
 }
-
 /** Input for POST /api/v1/cheques and PUT /api/v1/cheques/{id}. */
 export interface ChequeCreateInput {
   cheque_number: string;
@@ -2285,14 +2064,12 @@ export interface ChequeCreateInput {
   image_url?: string | null;
   notes?: string | null;
 }
-
 /** Backend account for bank account combobox (from accounts table). */
 export interface BankAccountListItem {
   id: number;
   account_name: string;
   code: string;
 }
-
 /** Warehouse master data (GET /warehouses). */
 export interface Warehouse {
   id: number;
@@ -2304,7 +2081,6 @@ export interface Warehouse {
   created_at: string;
   updated_at?: string;
 }
-
 export interface CreateWarehouseInput {
   code: string;
   name: string;
@@ -2312,9 +2088,7 @@ export interface CreateWarehouseInput {
   city?: string;
   is_active: boolean;
 }
-
 export type UpdateWarehouseInput = CreateWarehouseInput;
-
 /** Per-item stock balance in one warehouse (GET /warehouses/{id}/stock). */
 export interface WarehouseStockItem {
   item_id: number;
@@ -2323,9 +2097,7 @@ export interface WarehouseStockItem {
   qty_on_hand: number;
   avg_unit_cost_cents: number;
 }
-
 /** End of file. Added approval workflow types 2026-08-12 Wave 4. */
-
 /** Document types with labels for dropdowns. */
 export const REPORT_TEMPLATE_TYPES: Record<ReportTemplateDocumentType, string> = {
   invoice: "Invoice",
@@ -2348,11 +2120,9 @@ export const REPORT_TEMPLATE_TYPES: Record<ReportTemplateDocumentType, string> =
   asset_register: "Asset Register",
   stock_opname: "Stock Opname",
 };
-
 /* ------------------------------------------------------------------ */
 /* Email Templates & Queue (Wave 6b)                                  */
 /* ------------------------------------------------------------------ */
-
 /** Email template trigger events. */
 export type EmailTriggerEvent =
   | "INVOICE_SENT"
@@ -2360,7 +2130,6 @@ export type EmailTriggerEvent =
   | "CREDIT_NOTE_ISSUED"
   | "QUOTATION_ACCEPTED"
   | "DELIVERY_ORDER_COMPLETED";
-
 /** Email template for automated notifications. */
 export interface EmailTemplate {
   id: number;
@@ -2373,7 +2142,6 @@ export interface EmailTemplate {
   created_at: string;
   updated_at?: string;
 }
-
 /** Input for creating/updating email templates. */
 export interface CreateEmailTemplateInput {
   subject: string;
@@ -2382,7 +2150,6 @@ export interface CreateEmailTemplateInput {
   trigger_event: EmailTriggerEvent;
   is_active?: boolean;
 }
-
 /** Email queue item - queued or sent email notification. */
 export interface EmailQueueItem {
   id: number;
@@ -2396,5 +2163,4 @@ export interface EmailQueueItem {
   error_message?: string;
   created_at: string;
 }
-
 /** End of file. Added email templates types 2026-08-12 Wave 6b. */

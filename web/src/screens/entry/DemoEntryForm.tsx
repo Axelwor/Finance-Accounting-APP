@@ -57,7 +57,7 @@ const PARTY_LABEL: Record<EntrySubKind, string> = {
   "customer-entry": "Customer",
   "approval-rule-entry": "Approval Rule",
   "cheque-entry": "Cheque/GIRO",
-  "email-template-entry": "Email Template",
+  "warehouse-entry": "Warehouses",
 };
 
 const HEADER_TITLE: Record<EntrySubKind, string> = {
@@ -96,7 +96,7 @@ const HEADER_TITLE: Record<EntrySubKind, string> = {
   "customer-entry": "Customer",
   "approval-rule-entry": "Approval Rule",
   "cheque-entry": "Cheque/GIRO",
-  "email-template-entry": "Email Template",
+  "warehouse-entry": "Warehouses",
 };
 
 const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
@@ -115,6 +115,7 @@ const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
     "customer-entry": { label: "Customer info" },
   "approval-rule-entry": { label: "Approval Rule" },
   "cheque-entry": { label: "Cheque/GIRO" },
+    "warehouse-entry": { label: "Warehouse stock" },
     "purchase-return-entry": { label: "Return lines" },
     "purchase-invoice": { label: "Inventory / Expense" },
     "supplier-invoice-entry": { label: "Uninvoiced Payables" },
@@ -135,7 +136,6 @@ const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
   "lease-contract-entry": { label: "Lease details" },
   "lease-payment-schedule": { label: "Schedule" },
   "rp-editor": { label: "Template YAML" },
-  "email-template-entry": { label: "Email content" },
 };
 
 /**
