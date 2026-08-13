@@ -60,16 +60,12 @@ export type ListSubKind =
   | "approval-rules"
   | "pending-approval-requests"
   | "cheque-list"
-<<<<<<< HEAD
   | "ar-aging"
   | "ap-aging";
 
   | "warehouse-list";
-=======
   | "email-templates"
   | "email-queue";
->>>>>>> fix-email-wave6b
-
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
   | "money-in"
