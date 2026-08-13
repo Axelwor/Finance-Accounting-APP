@@ -61,12 +61,10 @@ export type ListSubKind =
   | "pending-approval-requests"
   | "cheque-list"
 <<<<<<< HEAD
-<<<<<<< HEAD
   | "ar-aging"
   | "ap-aging";
-=======
+
   | "warehouse-list";
->>>>>>> fix-warehouses-wave6b
 =======
   | "email-templates"
   | "email-queue";
@@ -109,11 +107,9 @@ export type EntrySubKind =
   | "rp-editor"
   | "approval-rule-entry"
   | "cheque-entry"
-<<<<<<< HEAD
   | "warehouse-entry";
-=======
+
   | "email-template-entry";
->>>>>>> fix-email-wave6b
 
 export type CurrencyCode = "IDR";
 

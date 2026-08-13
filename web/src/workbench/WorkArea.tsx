@@ -355,15 +355,13 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <ApprovalRuleList />;
     case "pending-approval-requests":
       return <PendingApprovalRequestList />;
-<<<<<<< HEAD
     case "warehouse-list":
       return <WarehouseList />;
-=======
+
     case "email-templates":
       return <EmailTemplateList />;
     case "email-queue":
       return <EmailQueueList />;
->>>>>>> fix-email-wave6b
     default:
       return <PlaceholderTab title={tab.title} sub={`list · ${subKind}`} />;
   }
