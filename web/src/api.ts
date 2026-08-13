@@ -2644,8 +2644,8 @@ export const api = {
 
     // End of Wave 6b email templates & queue methods.
 
-   /** Access token for protected API calls (used later). */
-   getAccessToken,
+  /** Access token for protected API calls (used later). */
+  getAccessToken,
 };
 
 export const mockHelpers = {
