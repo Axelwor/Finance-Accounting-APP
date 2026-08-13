@@ -2580,6 +2580,54 @@ export const api = {
       return http<Warehouse>(`/warehouses/${id}`, { auth: true });
     },
 
+  /** List email templates (GET /email/templates). */
+  async listEmailTemplates(): Promise<EmailTemplate[]> {
+    return http<EmailTemplate[]>("/email/templates", { auth: true });
+  },
+
+  /** Send queued email immediately (POST /email/queue/send). */
+  async sendEmail(id: number): Promise<void> {
+    return http("/email/queue/send", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify({ id }),
+    });
+  },
+
+  /** Cancel pending email in queue (POST /email/queue/{id}/cancel). */
+  async cancelEmail(id: number): Promise<void> {
+    return http(`/email/queue/${id}/cancel`, {
+      method: "POST",
+      auth: true,
+    });
+  },
+
+  /** Update an existing email template. */
+  async updateEmailTemplate(id: number, input: Partial<CreateEmailTemplateInput>): Promise<EmailTemplate> {
+    return http(`/email/templates/${id}`, {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Delete an email template. */
+  async deleteEmailTemplate(id: number): Promise<void> {
+    return http(`/email/templates/${id}`, {
+      method: "DELETE",
+      auth: true,
+    });
+  },
+
+  /** Create a new email template. */
+  async createEmailTemplate(input: CreateEmailTemplateInput): Promise<EmailTemplate> {
+    return http("/email/templates", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
     /** Update warehouse (PUT /warehouses/{id}). */
     async updateWarehouse(id: number, input: UpdateWarehouseInput): Promise<Warehouse> {
       return http<Warehouse>(`/warehouses/${id}`, {

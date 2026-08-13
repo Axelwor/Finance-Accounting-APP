@@ -103,7 +103,7 @@ export type EntrySubKind =
   | "rp-editor"
   | "approval-rule-entry"
   | "cheque-entry"
-  | "warehouse-entry";
+  | "warehouse-entry"
   | "email-templates"
   | "email-template-entry";
 export interface Business {
