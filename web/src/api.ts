@@ -284,6 +284,25 @@ async function http<T>(path: string, options: HttpOptions = {}): Promise<T> {
   }
   if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
   const response = await fetch(`${API_BASE}${path}`, { ...rest, headers });
+  
+  // Auto-refresh on 401: try to rotate the access token via refresh token
+  if (response.status === 401 && auth) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      // Retry the original request with the new token
+      const newToken = getAccessToken();
+      if (newToken) headers.Authorization = `Bearer ${newToken}`;
+      const retryResponse = await fetch(`${API_BASE}${path}`, { ...rest, headers });
+      const retryBody = await retryResponse.json().catch(() => ({}));
+      if (!retryResponse.ok) {
+        const code = (retryBody as ApiError)?.code ?? "REQUEST_FAILED";
+        const message = (retryBody as ApiError)?.message ?? "Something went wrong. Please try again.";
+        throw makeError(code, message);
+      }
+      return retryBody as T;
+    }
+  }
+  
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const code = (body as ApiError)?.code ?? "REQUEST_FAILED";
@@ -291,6 +310,26 @@ async function http<T>(path: string, options: HttpOptions = {}): Promise<T> {
     throw makeError(code, message);
   }
   return body as T;
+}
+
+/** Attempt to refresh the access token using the stored refresh token.
+ *  Returns true if a new token was obtained, false otherwise. */
+async function tryRefreshToken(): Promise<boolean> {
+  const refreshToken = readRefreshToken();
+  if (!refreshToken) return false;
+  try {
+    const response = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!response.ok) return false;
+    const tokens = await response.json();
+    storeSession(tokens);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** UUID v4 for the Idempotency-Key header (crypto.randomUUID when available). */
