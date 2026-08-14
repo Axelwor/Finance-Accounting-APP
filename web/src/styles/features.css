@@ -417,6 +417,41 @@
   background: var(--paper);
   overflow: hidden;
 }
+
+/* Variant for sales/purchase forms with 6 columns: Item, Qty, Unit Price, Discount, Line Total, Remove */
+.detail-grid--quote {
+  grid-template-columns: 2fr 70px 120px 100px 120px 32px;
+}
+
+/* Variant for supplier invoice forms with 8 columns: Item, Qty, Unit Price, Discount, Tax%, VAT, Line Total, Remove */
+.detail-grid--si {
+  grid-template-columns: 2fr 60px 100px 80px 70px 80px 110px 32px;
+}
+
+/* Variant for GRN/Delivery forms with 5 columns: Item, Qty, Unit Cost, Line Total/COGS, Remove */
+.detail-grid--grn {
+  grid-template-columns: 2fr 70px 120px 120px 32px;
+}
+
+/* Variant for credit note forms with 6 columns: Item, Qty, Return Qty, Unit Cost, Return Total, Remove */
+.detail-grid--cn {
+  grid-template-columns: 2fr 70px 70px 120px 120px 32px;
+}
+
+/* Responsive: stack columns on narrow screens */
+@media (max-width: 768px) {
+  .detail-grid,
+  .detail-grid--quote,
+  .detail-grid--cn {
+    grid-template-columns: 1fr;
+  }
+  .detail-grid__head {
+    display: none;
+  }
+  .detail-grid__row > div {
+    border-bottom: 1px solid var(--rule-soft);
+  }
+}
 .detail-grid__head {
   display: contents;
 }

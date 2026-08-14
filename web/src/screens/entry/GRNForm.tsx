@@ -228,7 +228,7 @@ export function GRNForm({ tabId, entryId, initialTitle, prefill }: Props) {
               </button>
             )}
           </div>
-          <div className="detail-grid detail-grid--quote">
+          <div className="detail-grid detail-grid--grn">
             <div className="detail-grid__head">
               <div>Item</div>
               <div>Qty</div>

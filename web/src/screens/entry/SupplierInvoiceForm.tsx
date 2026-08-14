@@ -386,7 +386,7 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle, prefill }: P
 
           <div className="entrytab__detail">
             <div className="entrytab__detail-title">Item lines *</div>
-            <div className="detail-grid detail-grid--quote">
+            <div className="detail-grid detail-grid--si">
               <div className="detail-grid__head" role="row">
                 <div role="columnheader">Item</div>
                 <div role="columnheader">Qty</div>

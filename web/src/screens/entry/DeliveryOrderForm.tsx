@@ -307,7 +307,7 @@ export function DeliveryOrderForm({ tabId, entryId, initialTitle, prefill }: Pro
 
           <div className="entrytab__detail">
             <div className="entrytab__detail-title">Item lines *{loadingSO ? " — loading from sales order..." : ""}</div>
-            <div className="detail-grid detail-grid--quote">
+            <div className="detail-grid detail-grid--grn">
               <div className="detail-grid__head">
                 <div>Item</div>
                 <div>Qty</div>
