@@ -230,22 +230,40 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
         setViewAmountCents(match.amount_cents);
         
         // Now fetch the full entry with lines for display
-        const fullEntry = await api.getJournalEntry(match.id);
+        const journalId = match.id;
+        console.log('Fetching journal entry with ID:', journalId, 'Type:', typeof journalId); // DEBUG
+        if (!journalId) {
+          setLoadError("Entri tidak memiliki ID untuk dimuat.");
+          setViewLoading(false);
+          return;
+        }
+        
+        const fullEntry = await api.getJournalEntry(journalId);
+        console.log('API response:', fullEntry); // DEBUG
         if (cancelled || !fullEntry) {
-          if (!cancelled) setLoadError("Gagal memuat rincian entri.");
+          const msg = cancelled ? "Cancelled" : "Entry not found in backend";
+          console.warn(msg, "| Response:", fullEntry); // DEBUG
+          if (!cancelled) setLoadError("Gagal memuat rincian entri (tidak ditemukan).");
+          setViewLoading(false);
+          return;
+        }
+        
+        if (!fullEntry.lines || fullEntry.lines.length === 0) {
+          console.warn("No lines found for this entry"); // DEBUG
+          setLoadError("Rincian entri kosong.");
           setViewLoading(false);
           return;
         }
         
         // Transform lines to local format
-        setJournalLines(
-          fullEntry.lines.map(l => ({
-            account_id: String(l.account_id),
-            debit_cents: l.debit_cents,
-            credit_cents: l.credit_cents,
-            account_name: l.account_name
-          }))
-        );
+        const transformedLines = fullEntry.lines.map(l => ({
+          account_id: String(l.account_id),
+          debit_cents: l.debit_cents ?? 0,
+          credit_cents: l.credit_cents ?? 0,
+          account_name: l.account_name || `#${l.account_id}`
+        }));
+        console.log('Transformed lines:', transformedLines); // DEBUG
+        setJournalLines(transformedLines);
       } catch (err) {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : "Gagal memuat entri.");
       } finally {
