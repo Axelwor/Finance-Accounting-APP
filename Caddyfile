@@ -18,7 +18,7 @@ accounting.tikuma.net {
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "geolocation=(), microphone=(), camera=()"
-		# Cache static assets, never cache API responses
+		# Never cache API responses
 		?Cache-Control "no-store"
 	}
 
@@ -28,8 +28,17 @@ accounting.tikuma.net {
 	handle /api/* {
 		reverse_proxy api:8080
 	}
+
+	# Hashed build assets are immutable — cache aggressively (1 year).
+	handle /assets/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		reverse_proxy web:80
+	}
+
+	# The SPA shell (index.html) must always revalidate so a new deploy is
+	# picked up immediately — it references the hashed asset filenames.
 	handle {
-		header ?Cache-Control "public, max-age=3600"
+		header Cache-Control "no-cache"
 		reverse_proxy web:80
 	}
 }
@@ -43,7 +52,12 @@ accounting.tikuma.net {
 	handle /api/* {
 		reverse_proxy api:8080
 	}
+	handle /assets/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		reverse_proxy web:80
+	}
 	handle {
+		header Cache-Control "no-cache"
 		reverse_proxy web:80
 	}
 }
