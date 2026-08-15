@@ -230,19 +230,25 @@ ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS buyer_id BIGINT;
 -- RLS policies for new tables
 -- =====================================================
 ALTER TABLE cheques ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS cheques_tenant_isolation ON cheques;
 CREATE POLICY cheques_tenant_isolation ON cheques USING (tenant_id = current_setting('app.tenant_id', true)::bigint);
 
 ALTER TABLE cost_centers ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS cost_centers_tenant_isolation ON cost_centers;
 CREATE POLICY cost_centers_tenant_isolation ON cost_centers USING (tenant_id = current_setting('app.tenant_id', true)::bigint);
 
 ALTER TABLE cost_center_allocations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS cost_center_allocations_tenant_isolation ON cost_center_allocations;
 CREATE POLICY cost_center_allocations_tenant_isolation ON cost_center_allocations USING (tenant_id = current_setting('app.tenant_id', true)::bigint);
 
 ALTER TABLE budget_variance_reports ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS budget_variance_tenant_isolation ON budget_variance_reports;
 CREATE POLICY budget_variance_tenant_isolation ON budget_variance_reports USING (tenant_id = current_setting('app.tenant_id', true)::bigint);
 
 ALTER TABLE email_templates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS email_templates_tenant_isolation ON email_templates;
 CREATE POLICY email_templates_tenant_isolation ON email_templates USING (tenant_id = current_setting('app.tenant_id', true)::bigint);
 
 ALTER TABLE email_queue ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS email_queue_tenant_isolation ON email_queue;
 CREATE POLICY email_queue_tenant_isolation ON email_queue USING (tenant_id = current_setting('app.tenant_id', true)::bigint);

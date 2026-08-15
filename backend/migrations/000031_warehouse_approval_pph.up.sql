@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS warehouses (
     UNIQUE (tenant_id, code)
 );
 ALTER TABLE warehouses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS warehouses_tenant ON warehouses;
 CREATE POLICY warehouses_tenant ON warehouses
     USING (tenant_id = current_setting('app.tenant_id', true)::bigint);
 ALTER TABLE warehouses FORCE ROW LEVEL SECURITY;
@@ -19,7 +20,10 @@ ALTER TABLE warehouses FORCE ROW LEVEL SECURITY;
 -- Add warehouse_id to stock_balances (nullable for backward compat)
 ALTER TABLE stock_balances ADD COLUMN IF NOT EXISTS warehouse_id BIGINT;
 ALTER TABLE stock_balances DROP CONSTRAINT IF EXISTS stock_balances_tenant_item_key;
-ALTER TABLE stock_balances ADD UNIQUE IF NOT EXISTS (tenant_id, item_id, COALESCE(warehouse_id, 0));
+-- Unique index (not a table constraint) so the COALESCE expression is allowed;
+-- CREATE UNIQUE INDEX IF NOT EXISTS is idempotent.
+CREATE UNIQUE INDEX IF NOT EXISTS stock_balances_tenant_item_warehouse_uidx
+    ON stock_balances (tenant_id, item_id, COALESCE(warehouse_id, 0));
 
 -- F-03: Approval Workflow Engine
 CREATE TABLE IF NOT EXISTS approval_workflows (
@@ -33,6 +37,7 @@ CREATE TABLE IF NOT EXISTS approval_workflows (
     UNIQUE (tenant_id, entity_type)
 );
 ALTER TABLE approval_workflows ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS approval_workflows_tenant ON approval_workflows;
 CREATE POLICY approval_workflows_tenant ON approval_workflows
     USING (tenant_id = current_setting('app.tenant_id', true)::bigint);
 ALTER TABLE approval_workflows FORCE ROW LEVEL SECURITY;
@@ -52,6 +57,7 @@ CREATE TABLE IF NOT EXISTS approval_requests (
     UNIQUE (tenant_id, entity_type, entity_id)
 );
 ALTER TABLE approval_requests ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS approval_requests_tenant ON approval_requests;
 CREATE POLICY approval_requests_tenant ON approval_requests
     USING (tenant_id = current_setting('app.tenant_id', true)::bigint);
 ALTER TABLE approval_requests FORCE ROW LEVEL SECURITY;
@@ -75,6 +81,7 @@ CREATE TABLE IF NOT EXISTS pph_calculations (
     UNIQUE (tenant_id, id)
 );
 ALTER TABLE pph_calculations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS pph_calculations_tenant ON pph_calculations;
 CREATE POLICY pph_calculations_tenant ON pph_calculations
     USING (tenant_id = current_setting('app.tenant_id', true)::bigint);
 ALTER TABLE pph_calculations FORCE ROW LEVEL SECURITY;

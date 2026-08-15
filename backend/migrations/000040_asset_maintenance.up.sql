@@ -23,6 +23,7 @@ CREATE INDEX IF NOT EXISTS asset_maintenance_asset_idx ON asset_maintenance (ten
 CREATE INDEX IF NOT EXISTS asset_maintenance_due_idx ON asset_maintenance (tenant_id, next_due_date);
 
 ALTER TABLE asset_maintenance ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_asset_maintenance ON asset_maintenance;
 CREATE POLICY tenant_isolation_asset_maintenance ON asset_maintenance
     USING (tenant_id = current_setting('app.tenant_id', true)::BIGINT)
     WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::BIGINT);

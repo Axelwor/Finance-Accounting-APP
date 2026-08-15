@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS report_templates (
 
 -- RLS
 ALTER TABLE report_templates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS report_templates_tenant ON report_templates;
 CREATE POLICY report_templates_tenant ON report_templates
     USING (tenant_id = current_setting('app.tenant_id', true)::bigint);
 
@@ -51,6 +52,7 @@ CREATE TABLE IF NOT EXISTS dashboard_layouts (
 
 -- RLS
 ALTER TABLE dashboard_layouts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS dashboard_layouts_tenant ON dashboard_layouts;
 CREATE POLICY dashboard_layouts_tenant ON dashboard_layouts
     USING (tenant_id = current_setting('app.tenant_id', true)::bigint);
 
@@ -85,6 +87,7 @@ CREATE TABLE IF NOT EXISTS dashboard_widgets (
 
 -- RLS
 ALTER TABLE dashboard_widgets ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS dashboard_widgets_tenant ON dashboard_widgets;
 CREATE POLICY dashboard_widgets_tenant ON dashboard_widgets
     USING (tenant_id = current_setting('app.tenant_id', true)::bigint);
 

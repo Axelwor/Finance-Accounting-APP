@@ -1,4 +1,4 @@
--- 000054 down: remove idempotency keys from quotations and sales orders.
+-- 000055 down: remove idempotency keys from quotations and sales orders.
 
 DROP INDEX IF EXISTS sales_orders_idem;
 DROP INDEX IF EXISTS sales_quotations_idem;

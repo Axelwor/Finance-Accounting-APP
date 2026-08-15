@@ -18,6 +18,7 @@ CREATE INDEX IF NOT EXISTS supplier_balances_tenant_ap_idx
     ON supplier_balances (tenant_id, ap_cents);
 
 ALTER TABLE supplier_balances ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS supplier_balances_tenant_isolation ON supplier_balances;
 CREATE POLICY supplier_balances_tenant_isolation ON supplier_balances
     USING (tenant_id = current_setting('app.tenant_id', true)::BIGINT)
     WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::BIGINT);

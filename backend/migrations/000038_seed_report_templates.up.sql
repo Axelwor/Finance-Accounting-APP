@@ -502,4 +502,5 @@ sections:
       - value: Amount
   - title: Approval
     content: "Counted by: ______________   Verified by: ______________   Approved by: ______________"
-footer_text: Post adjustment journals for variances only after approval.$$, true, true);
+footer_text: Post adjustment journals for variances only after approval.$$, true, true)
+ON CONFLICT (tenant_id, code) DO NOTHING;

@@ -1,4 +1,4 @@
--- 000054: Idempotency keys for quotations and sales orders (double-submit
+-- 000055: Idempotency keys for quotations and sales orders (double-submit
 -- protection) — the two sales-cycle documents that post no journal and thus
 -- cannot reuse journal_entries.idempotency_key.
 

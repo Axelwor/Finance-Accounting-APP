@@ -16,6 +16,7 @@ CREATE INDEX IF NOT EXISTS customer_balances_tenant_ar_idx
     ON customer_balances (tenant_id, ar_cents);
 
 ALTER TABLE customer_balances ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS customer_balances_tenant_isolation ON customer_balances;
 CREATE POLICY customer_balances_tenant_isolation ON customer_balances
     USING (tenant_id = current_setting('app.tenant_id', true)::BIGINT)
     WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::BIGINT);
