@@ -16,3 +16,10 @@ if (!window.matchMedia) {
     }),
   });
 }
+
+// jsdom implements scrollIntoView as a no-op absence — stub it for the
+// Combobox (and any other component that scrolls the active option into
+// view).
+if (typeof Element !== "undefined" && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}

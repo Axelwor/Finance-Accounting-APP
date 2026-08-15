@@ -156,6 +156,9 @@ export interface Category {
   name: string;
   /** Only relevant for Money In / Money Out. */
   kind: "money-in" | "money-out";
+  /** Backend default posting accounts for this category (Quick Mode). */
+  default_debit_account_id?: number | null;
+  default_credit_account_id?: number | null;
 }
 export interface Transaction {
   id: string;
@@ -213,6 +216,14 @@ export interface TransactionInput {
 export interface AccountItem {
   id: string;
   name: string;
+  /** Chart-of-accounts code, e.g. "1101". Present when mapped from backend. */
+  code?: string;
+  /** Backend account_type (CASH, BANK, REVENUE, EXPENSE, …). Optional so
+   *  screens that only need {id,name} keep working with mock data. */
+  account_type?: string;
+  /** Group accounts are excluded by mapAccounts but kept in the type so
+   *  BackendAccount can be assigned directly where needed. */
+  is_group?: boolean;
 }
 /* ------------------------------------------------------------------ */
 /* Backend contract types (Go JSON at /api/v1) — mapped to UI types.  */

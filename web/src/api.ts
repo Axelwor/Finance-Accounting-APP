@@ -393,7 +393,12 @@ function readRefreshToken(): string | null {
 function mapAccounts(raw: BackendAccount[]): AccountItem[] {
   return raw
     .filter((account) => account.is_active && !account.is_group)
-    .map((account) => ({ id: String(account.id), name: account.name }));
+    .map((account) => ({
+      id: String(account.id),
+      name: account.name,
+      code: account.code,
+      account_type: account.account_type,
+    }));
 }
 
 /** GET /categories -> Category {id, name, kind}. */
@@ -404,6 +409,8 @@ function mapCategories(raw: BackendCategory[]): Category[] {
       id: String(category.id),
       name: category.name,
       kind: category.direction === "IN" ? "money-in" : "money-out",
+      default_debit_account_id: category.default_debit_account_id,
+      default_credit_account_id: category.default_credit_account_id,
     }));
 }
 

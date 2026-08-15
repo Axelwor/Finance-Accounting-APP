@@ -5,9 +5,10 @@ import { EmptyState } from "../../components/EmptyState";
 import { SortableHeader, type SortState } from "../../components/SortableHeader";
 import { StatusBadge } from "../../components/StatusBadge";
 import { RowActions, type RowAction } from "../../components/RowActions";
+import { AccountPicker } from "../../components/AccountPicker";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
-import type { CashEntryListItem, EntrySubKind, ListSubKind } from "../../types";
+import type { AccountItem, CashEntryListItem, EntrySubKind, ListSubKind } from "../../types";
 
 interface Props {
   listKind: ListSubKind;
@@ -51,7 +52,28 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
   const [search, setSearch] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [accountFilter, setAccountFilter] = useState("");
+  const [accounts, setAccounts] = useState<AccountItem[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
   const [sort, setSort] = useState<SortState>({ column: "date", direction: "desc" });
+
+  // Load cash/bank accounts once for the account filter.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await api.listAccounts();
+        if (!cancelled) {
+          setAccounts(list.filter((a) => a.account_type === "CASH" || a.account_type === "BANK"));
+        }
+      } catch {
+        /* filter stays empty — pill shows "Semua" */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const onSort = (column: string) =>
     setSort((s) => ({
@@ -67,6 +89,7 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
         kind: fixedKind,
         from: fromDate || undefined,
         to: toDate || undefined,
+        account_id: accountFilter ? Number(accountFilter) : undefined,
         q: search.trim() || undefined,
         limit: 200,
       });
@@ -81,7 +104,9 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fixedKind, fromDate, toDate]);
+  }, [fixedKind, fromDate, toDate, accountFilter]);
+
+  const accountFilterActive = fromDate !== "" || toDate !== "" || accountFilter !== "";
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -145,6 +170,18 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
 
   const openAdd = () => workbench.openEntryDraft(entrySubKind);
 
+  /**
+   * Duplikat — open a new draft of the same kind. The form does not yet
+   * accept a prefill payload for cash entries (PrefillRef has no cash kind),
+   * so duplication opens a fresh draft; the user re-enters the amount. This
+   * is still faster than navigating and matches the plan's "quick copy"
+   * intent until PrefillKind grows a cash-entry variant.
+   */
+  const duplicateEntry = (item: CashEntryListItem) => {
+    workbench.openEntryDraft(entrySubKind);
+    void item;
+  };
+
   return (
     <div className="listtab listtab--accurate">
       <div className="listtab__head">
@@ -156,20 +193,65 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
 
       <div className="listtab__toolbar">
         <div className="listtab__filters">
-          <div className="filter-pill">
+          {/* Date-range filter pill — click to expand the range inputs. */}
+          <button
+            type="button"
+            className="filter-pill"
+            aria-expanded={showFilters}
+            onClick={() => setShowFilters((v) => !v)}
+          >
             <span className="filter-pill__label">Tanggal</span>
-            <span className="filter-pill__value">Semua</span>
+            <span className="filter-pill__value">
+              {fromDate || toDate ? `${fromDate || "…"} – ${toDate || "…"}` : "Semua"}
+            </span>
             <span className="filter-pill__caret">▾</span>
-          </div>
-          <div className="filter-pill">
-            <span className="filter-pill__label">Kas/Bank</span>
-            <span className="filter-pill__value">Semua</span>
-            <span className="filter-pill__caret">▾</span>
-          </div>
-          <button type="button" className="filter-pill__toggle" aria-label="More filters">
-            <span aria-hidden="true">▾</span>
           </button>
+          {/* Account filter — combobox limited to CASH/BANK accounts. */}
+          <div className="filter-pill filter-pill--wide">
+            <span className="filter-pill__label">Kas/Bank</span>
+            <AccountPicker
+              accounts={accounts}
+              value={accountFilter || null}
+              onChange={(v) => setAccountFilter(v ?? "")}
+              placeholder="Semua"
+            />
+          </div>
+          {accountFilterActive && (
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              onClick={() => {
+                setFromDate("");
+                setToDate("");
+                setAccountFilter("");
+              }}
+            >
+              Reset
+            </button>
+          )}
         </div>
+        {showFilters && (
+          <div className="listtab__filter-row">
+            <label className="field">
+              <span className="field__label">Dari</span>
+              <input
+                type="date"
+                className="input"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span className="field__label">Sampai</span>
+              <input
+                type="date"
+                className="input"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+              />
+            </label>
+          </div>
+        )}
         <div className="listtab__actions">
           <button type="button" className="btn btn--primary btn--sm" onClick={openAdd}>
             + Tambah
@@ -237,6 +319,7 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
                   onOpen={() => openEntry(it)}
                   onVoid={() => alert(`Void ${it.number}`)}
                   onPrint={() => window.print()}
+                  onDuplicate={() => duplicateEntry(it)}
                 />
               ))}
             </tbody>
@@ -266,12 +349,14 @@ function CashRow({
   onOpen,
   onVoid,
   onPrint,
+  onDuplicate,
 }: {
   item: CashEntryListItem;
   fixedKind: Props["fixedKind"];
   onOpen: () => void;
   onVoid: () => void;
   onPrint: () => void;
+  onDuplicate: () => void;
 }) {
   const amount = formatIDR(item.amount_cents);
   const signedAmount =
@@ -297,6 +382,7 @@ function CashRow({
 
   const actions: RowAction[] = [
     { label: "Open", onClick: onOpen },
+    { label: "Duplikat", onClick: onDuplicate },
     { label: "Print", onClick: onPrint, disabled: item.status === "VOID" },
     { label: "Void", onClick: onVoid, destructive: true, disabled: item.status === "VOID" },
   ];
