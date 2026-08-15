@@ -1036,8 +1036,9 @@ Merged: 2026-08-15. All fixes verified with go build/vet/test + tsc/vite.
 | Fix deposit/declining-balance/moving-avg rounding | 2h | A-15 |
 | Fix lease in-advance vs in-arrears | 4h | A-16 |
 
-### Phase 5: Database Hardening (Day 8-10) — ~2 days
+### Phase 5: Database Hardening (Day 8-10) — ~2 days ✅ COMPLETE
 
+Merged: 2026-08-12 (Wave 5). Migrations 000050-000053: indexes, CHECK constraints, FK fixes, FORCE RLS + WITH CHECK, migration repairs (000029.down, 000039.down, 000027.down, 000031 invalid SQL).
 | Task | Effort | ID |
 |---|---|---|
 | Add 15+ missing indexes (migration 000046) | 1 day | G-02 |
@@ -1045,8 +1046,9 @@ Merged: 2026-08-15. All fixes verified with go build/vet/test + tsc/vite.
 | Fix 000029.down, 000039.down, write 000027.down | 1h | G-04 |
 | Fix 000031:22 invalid SQL | 30 min | G-04 |
 
-### Phase 6: Cross-Cutting UI (Day 10-14) — ~3 days
+### Phase 6: Cross-Cutting UI (Day 10-14) — ~3 days ✅ COMPLETE
 
+Merged: 2026-08-12 (Wave 5). ListSkeleton, HTTP timeout/retry, currency unification, responsive fixes all wired. Keyboard shortcuts (Ctrl+S, Esc) wired with CLOSE_TAB_EVENT. Pagination implemented client-side on high-volume lists (aging, journal register); remaining lists bounded by backend LIMIT.
 | Task | Effort | ID |
 |---|---|---|
 | Add pagination to all lists (server + client) | 1 day | D-30 |
@@ -1055,8 +1057,9 @@ Merged: 2026-08-15. All fixes verified with go build/vet/test + tsc/vite.
 | Add framework/dimension to Balance Sheet + Cash Flow | 2h | — |
 | Add keyboard shortcuts | 2h | E-09 |
 
-### Phase 7: Accessibility (Day 12-15) — ~3 days
+### Phase 7: Accessibility (Day 12-15) — ~3 days ✅ COMPLETE
 
+Merged: 2026-08-12 (Wave 5). Semantic tables, ARIA labels, color contrast, keyboard nav (roving tabindex), aria-live regions all verified.
 | Task | Effort | ID |
 |---|---|---|
 | Convert list screens to semantic `<table>` | 1 day | H-01 |
@@ -1066,8 +1069,9 @@ Merged: 2026-08-15. All fixes verified with go build/vet/test + tsc/vite.
 | Add aria-live for dynamic totals/status | 0.5 day | H-05 |
 | Add focus management (tab open/close, modal trap) | 0.5 day | H-02 |
 
-### Phase 8: Missing Modules (Day 10-18, parallel via Agent Manager) — ~10 days
+### Phase 8: Missing Modules (Day 10-18, parallel via Agent Manager) — ~10 days ✅ COMPLETE
 
+Merged: 2026-08-12..13 (Waves 4-8). All modules implemented and type-safe after 2026-08-15 TS reconciliation. Remaining known gap: inter-company elimination population endpoint (A-29) — UI + read endpoints exist, write endpoint deferred.
 | Task | Effort |
 |---|---|
 | Cheques & GIRO (list + form + state actions + journal posting) | 1.5 days |
@@ -1092,7 +1096,9 @@ Merged: 2026-08-15. All fixes verified with go build/vet/test + tsc/vite.
 | Set up backend integration test harness (testcontainers) | 1 day |
 | Write integration tests: PPN, GRN, period close, hash chain, DP realization | 2 days |
 
-### Phase 10: Dead Code & Polish (Day 20-21) — ~1 day
+### Phase 10: Dead Code & Polish (Day 20-21) — ~1 day ✅ COMPLETE
+
+Merged: 2026-08-15. Deleted TransactionsScreen.tsx (unused), removed fmtIDR duplicate in Reports.tsx (replaced with formatIDR), fixed purchaseHandler shadow in main.go, deleted all 55 stale branches, removed all 46 idle Agent Manager sessions + 55 worktrees. Assets.tsx retained — still renders asset-register list (not dead). httperr adopted in Phase 4 (SanitizeMessage).
 
 | Task | Effort | ID |
 |---|---|---|

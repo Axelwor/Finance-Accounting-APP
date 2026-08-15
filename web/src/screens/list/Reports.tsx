@@ -517,10 +517,6 @@ export function ReportTab({ config }: { config: ReportConfig }) {
 
 /* ---------------------- Individual report renderers ---------------------- */
 
-function fmtIDR(cents: number): string {
-  return formatIDR(cents);
-}
-
 export function TrialBalanceReport() {
   return (
     <ReportTab
@@ -557,10 +553,10 @@ export function TrialBalanceReport() {
                       </div>
                     </div>
                     <span className={`ledger-table__amount ${r.debit_cents > 0 ? "" : "is-muted"}`}>
-                      {r.debit_cents > 0 ? fmtIDR(r.debit_cents) : "—"}
+                      {r.debit_cents > 0 ? formatIDR(r.debit_cents) : "—"}
                     </span>
                     <span className={`ledger-table__amount ${r.credit_cents > 0 ? "" : "is-muted"}`}>
-                      {r.credit_cents > 0 ? fmtIDR(r.credit_cents) : "—"}
+                      {r.credit_cents > 0 ? formatIDR(r.credit_cents) : "—"}
                     </span>
                     <span aria-hidden="true" />
                   </div>
@@ -617,9 +613,9 @@ export function ProfitLossReport() {
             <>
               <div className="entrytab__body" style={{ background: "transparent", border: 0 }}>
                 <div className="entrytab__section" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-                  <Stat label="Revenue" value={fmtIDR(r.revenue_cents ?? 0)} tone="pos" />
-                  <Stat label="Expense" value={fmtIDR(r.expense_cents ?? 0)} tone="neg" />
-                  <Stat label="Net" value={fmtIDR(Math.abs(net))} tone={isProfit ? "pos" : "neg"} suffix={isProfit ? "PROFIT" : "LOSS"} />
+                  <Stat label="Revenue" value={formatIDR(r.revenue_cents ?? 0)} tone="pos" />
+                  <Stat label="Expense" value={formatIDR(r.expense_cents ?? 0)} tone="neg" />
+                  <Stat label="Net" value={formatIDR(Math.abs(net))} tone={isProfit ? "pos" : "neg"} suffix={isProfit ? "PROFIT" : "LOSS"} />
                 </div>
               </div>
 
@@ -642,7 +638,7 @@ export function ProfitLossReport() {
                           <tr key={s.code} style={{ borderBottom: "1px solid var(--rule)" }}>
                             <td style={{ padding: "8px 12px" }}>{s.label}</td>
                             <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "var(--font-mono)" }}>
-                              {fmtIDR(s.amount_cents)}
+                              {formatIDR(s.amount_cents)}
                             </td>
                           </tr>
                         ))}
@@ -693,9 +689,9 @@ export function BalanceSheetReport() {
           return (
             <div className="entrytab__body" style={{ background: "transparent", border: 0 }}>
               <div className="entrytab__section" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
-                <Stat label="Assets" value={fmtIDR(r.asset_cents ?? 0)} tone="pos" />
-                <Stat label="Liabilities" value={fmtIDR(r.liability_cents ?? 0)} tone="neg" />
-                <Stat label="Equity" value={fmtIDR(r.equity_cents ?? 0)} tone="acc" />
+                <Stat label="Assets" value={formatIDR(r.asset_cents ?? 0)} tone="pos" />
+                <Stat label="Liabilities" value={formatIDR(r.liability_cents ?? 0)} tone="neg" />
+                <Stat label="Equity" value={formatIDR(r.equity_cents ?? 0)} tone="acc" />
                 <Stat
                   label="Balance"
                   value={balanced ? "BALANCED" : "OFF"}
@@ -745,9 +741,9 @@ export function CashFlowReport() {
           return (
             <div className="entrytab__body" style={{ background: "transparent", border: 0 }}>
               <div className="entrytab__section" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-                <Stat label="Inflow" value={fmtIDR(r.inflow_cents ?? 0)} tone="pos" />
-                <Stat label="Outflow" value={fmtIDR(r.outflow_cents ?? 0)} tone="neg" />
-                <Stat label="Net" value={fmtIDR(Math.abs(net))} tone={net >= 0 ? "pos" : "neg"} suffix={net >= 0 ? "POSITIVE" : "NEGATIVE"} />
+                <Stat label="Inflow" value={formatIDR(r.inflow_cents ?? 0)} tone="pos" />
+                <Stat label="Outflow" value={formatIDR(r.outflow_cents ?? 0)} tone="neg" />
+                <Stat label="Net" value={formatIDR(Math.abs(net))} tone={net >= 0 ? "pos" : "neg"} suffix={net >= 0 ? "POSITIVE" : "NEGATIVE"} />
               </div>
             </div>
           );

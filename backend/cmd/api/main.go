@@ -192,7 +192,6 @@ func main() {
 				router.Post("/supplier-invoices", purchaseHandler.CreateSupplierInvoice)
 				router.Post("/supplier-invoices/{id}/payments", purchaseHandler.CreateSupplierPayment)
 
-				purchaseHandler := purchase.NewHandler(pool)
 				purchaseHandler.Routes(router)
 
 				inventoryHandler := inventory.NewHandler(pool)
