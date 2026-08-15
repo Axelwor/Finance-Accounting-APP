@@ -153,7 +153,14 @@ func (service *Service) queryCashEntries(
 			COALESCE(e.reversal_of_id, 0) AS reversal_of_id,
 			COALESCE(MAX(CASE WHEN l.debit_cents > 0 THEN l.account_id END), 0) AS debit_account_id,
 			COALESCE(MAX(CASE WHEN l.credit_cents > 0 THEN l.account_id END), 0) AS credit_account_id,
-			COALESCE(MAX(CASE WHEN l.debit_cents > 0 THEN l.amount_cents END), 0) AS amount_cents
+			-- The cash amount of the entry: the cash side of the journal. For
+			-- CASH_IN/TRANSFER the cash account is debited; for CASH_OUT it is
+			-- credited. journal_lines has no amount_cents column — only
+			-- debit_cents/credit_cents — so sum the side that carries the cash.
+			COALESCE(SUM(CASE
+				WHEN e.intent_type IN ('CASH_IN', 'TRANSFER') THEN l.debit_cents
+				ELSE l.credit_cents
+			END), 0) AS amount_cents
 		FROM journal_entries e
 		JOIN journal_lines l ON l.tenant_id = e.tenant_id AND l.entry_id = e.id
 		WHERE ` + strings.Join(conditions, " AND ") + `
