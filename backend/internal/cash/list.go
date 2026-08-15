@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"finance-accounting-app/backend/internal/accounting"
 )
@@ -174,10 +175,10 @@ func (service *Service) queryCashEntries(
 		return nil, err
 	}
 	defer rows.Close()
-
 	type row struct {
 		id, debit, credit, amount                            int64
-		number, intent, date, status, description, sourceRef string
+		number, intent, status, description, sourceRef       string
+		date                                                 time.Time
 		reversalOfID                                         int64
 	}
 	out := []CashEntryListItem{}
@@ -190,11 +191,12 @@ func (service *Service) queryCashEntries(
 			ID:           r.id,
 			Number:       r.number,
 			Kind:         mapKind(r.intent),
-			EntryDate:    r.date,
+			EntryDate:    r.date.Format("2006-01-02"),
 			Status:       r.status,
 			Description:  r.description,
 			AmountCents:  r.amount,
 			Reference:    r.sourceRef,
+
 			ReversalOfID: r.reversalOfID,
 		}
 		if r.intent == string(accounting.IntentTransfer) {
