@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"finance-accounting-app/backend/internal/approval"
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/db"
 	"finance-accounting-app/backend/internal/httperr"
@@ -24,11 +25,12 @@ import (
 // middleware context (JWT claims).
 type Service struct {
 	pool *pgxpool.Pool
+	gate *approval.Gate
 }
 
 // NewHandler builds the accounting Service backed by the given pool.
 func NewHandler(pool *pgxpool.Pool) *Service {
-	return &Service{pool: pool}
+	return &Service{pool: pool, gate: approval.NewGate(pool)}
 }
 
 // ---------------------------------------------------------------------------

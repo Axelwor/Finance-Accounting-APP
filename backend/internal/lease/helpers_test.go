@@ -117,15 +117,16 @@ func TestBuildPaymentSchedule(t *testing.T) {
 		t.Errorf("total principal = %d, expected approx PV %d", totalPrincipal, pv)
 	}
 
-	// Payment dates should advance by 1 month each.
-	if schedule[0].PaymentDate.Format("2006-01") != "2025-01" {
-		t.Errorf("payment 1 date = %s, expected 2025-01", schedule[0].PaymentDate.Format("2006-01"))
+	// A-16: in-arrears convention — payment dates fall one full period after
+	// commencement. Monthly lease starting 2025-01: first payment 2025-02.
+	if schedule[0].PaymentDate.Format("2006-01") != "2025-02" {
+		t.Errorf("payment 1 date = %s, expected 2025-02", schedule[0].PaymentDate.Format("2006-01"))
 	}
-	if schedule[1].PaymentDate.Format("2006-01") != "2025-02" {
-		t.Errorf("payment 2 date = %s, expected 2025-02", schedule[1].PaymentDate.Format("2006-01"))
+	if schedule[1].PaymentDate.Format("2006-01") != "2025-03" {
+		t.Errorf("payment 2 date = %s, expected 2025-03", schedule[1].PaymentDate.Format("2006-01"))
 	}
-	if schedule[11].PaymentDate.Format("2006-01") != "2025-12" {
-		t.Errorf("payment 12 date = %s, expected 2025-12", schedule[11].PaymentDate.Format("2006-01"))
+	if schedule[11].PaymentDate.Format("2006-01") != "2026-01" {
+		t.Errorf("payment 12 date = %s, expected 2026-01", schedule[11].PaymentDate.Format("2006-01"))
 	}
 }
 
@@ -142,16 +143,17 @@ func TestBuildPaymentScheduleQuarterly(t *testing.T) {
 		t.Fatalf("expected 4 payments, got %d", len(schedule))
 	}
 
-	// Payment dates should advance by 3 months each.
-	if schedule[0].PaymentDate.Format("2006-01") != "2025-01" {
-		t.Errorf("payment 1 date = %s, expected 2025-01", schedule[0].PaymentDate.Format("2006-01"))
+	// A-16: in-arrears — quarterly lease starting 2025-01 pays Feb? No:
+	// payment 1 = start + 3 months = 2025-04, then Jul, Oct, 2026-01.
+	if schedule[0].PaymentDate.Format("2006-01") != "2025-04" {
+		t.Errorf("payment 1 date = %s, expected 2025-04", schedule[0].PaymentDate.Format("2006-01"))
 	}
-	if schedule[1].PaymentDate.Format("2006-01") != "2025-04" {
-		t.Errorf("payment 2 date = %s, expected 2025-04", schedule[1].PaymentDate.Format("2006-01"))
+	if schedule[1].PaymentDate.Format("2006-01") != "2025-07" {
+		t.Errorf("payment 2 date = %s, expected 2025-07", schedule[1].PaymentDate.Format("2006-01"))
 	}
-	// Payment 4 = start + 9 months = 2025-10 (Jan, Apr, Jul, Oct).
-	if schedule[3].PaymentDate.Format("2006-01") != "2025-10" {
-		t.Errorf("payment 4 date = %s, expected 2025-10", schedule[3].PaymentDate.Format("2006-01"))
+	// Payment 4 = start + 12 months = 2026-01 (Apr, Jul, Oct, Jan).
+	if schedule[3].PaymentDate.Format("2006-01") != "2026-01" {
+		t.Errorf("payment 4 date = %s, expected 2026-01", schedule[3].PaymentDate.Format("2006-01"))
 	}
 
 	// Total principal should equal PV (allow ±5 cents rounding per step).

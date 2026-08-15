@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/approval"
 	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/costing"
 	"finance-accounting-app/backend/internal/db"
@@ -245,6 +246,13 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 				cogsAcct:      cogsAcct.Int64,
 				costingMethod: textValue(costingMethod),
 			})
+		}
+
+		// A-30: approval gate on credit notes. If the tenant has an active
+		// "credit_note" workflow whose min_amount_cents <= total return, the
+		// CN requires an APPROVED, unconsumed approval before posting.
+		if err := service.gate.CheckAmount(request.Context(), tx, tenant, "credit_note", totalReturn); err != nil {
+			return err
 		}
 
 		// Resolve accounts.
@@ -516,6 +524,11 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 		}
 		result = *fetched
 
+		// A-30: consume the approval that authorized this credit note.
+		if err := service.gate.ConsumeApprovalByAmount(request.Context(), tx, tenant, "credit_note", totalReturn); err != nil {
+			return err
+		}
+
 		if err := audit.Log(request.Context(), tx, tenant, userID, "credit_note", cnID, audit.ActionPost, nil, map[string]any{
 			"number":                   cnNumber,
 			"total_cents":              totalReturn,
@@ -663,6 +676,9 @@ func validateCNRequest(req CreateCreditNoteRequest) (string, string) {
 func cnErrorFor(err error) (int, string, string) {
 	if errors.Is(err, httperr.ErrIdempotencyKeyReuse) {
 		return http.StatusConflict, "IDEMPOTENCY_KEY_REUSE", err.Error()
+	}
+	if errors.Is(err, approval.ErrApprovalRequired) {
+		return http.StatusConflict, "APPROVAL_REQUIRED", err.Error()
 	}
 	if isNoRows(err) {
 		return http.StatusNotFound, "INVOICE_NOT_FOUND", "invoice not found"

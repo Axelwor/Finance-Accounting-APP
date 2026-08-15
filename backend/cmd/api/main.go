@@ -341,6 +341,12 @@ func main() {
 
 	slog.Info("api listening", "addr", cfg.HTTPAddr)
 
+	// F-07: recurring-transaction scheduler. Auto-posts due recurring rows
+	// every 15 minutes; cancelled together with the server on shutdown.
+	schedCtx, cancelScheduler := context.WithCancel(context.Background())
+	defer cancelScheduler()
+	recurringHandler.StartScheduler(schedCtx, 15*time.Minute)
+
 	// Graceful shutdown: SIGINT/SIGTERM triggers a 15-second drain period
 	// so in-flight requests finish before the process exits.
 	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: router}
@@ -358,6 +364,7 @@ func main() {
 	select {
 	case err := <-shutdownErr:
 		slog.Error("server error", "error", err)
+		cancelScheduler()
 		os.Exit(1)
 	case sig := <-sigCh:
 		slog.Info("shutdown signal received", "signal", sig.String())
@@ -368,5 +375,6 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("graceful shutdown", "error", err)
 	}
+	cancelScheduler()
 	slog.Info("server stopped")
 }

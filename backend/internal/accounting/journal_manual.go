@@ -2,6 +2,7 @@ package accounting
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"finance-accounting-app/backend/internal/approval"
 	"finance-accounting-app/backend/internal/auth"
 )
 
@@ -87,6 +89,7 @@ func (service *Service) CreateManualJournal(writer http.ResponseWriter, request 
 		// active, belongs to this tenant). Account-type rules are not
 		// enforced for manual journals — the accountant owns composition.
 		lines := make([]Line, 0, len(req.Lines))
+		var totalDebit int64
 		for i, rl := range req.Lines {
 			account, loadErr := loadAccount(ctx, tx, tenant, rl.AccountID)
 			if loadErr != nil {
@@ -99,12 +102,19 @@ func (service *Service) CreateManualJournal(writer http.ResponseWriter, request 
 			if ref == "" {
 				ref = "manual-" + itoa(i+1)
 			}
+			totalDebit += rl.DebitCents
 			lines = append(lines, Line{
 				AccountID:     account.ID,
 				DebitCents:    rl.DebitCents,
 				CreditCents:   rl.CreditCents,
 				SourceLineRef: ref,
 			})
+		}
+		// A-30: approval gate on manual journals. If the tenant has an active
+		// "journal_entry" workflow whose min_amount_cents <= total debit, the
+		// posting requires an APPROVED, unconsumed approval.
+		if err := service.gate.CheckAmount(ctx, tx, tenant, "journal_entry", totalDebit); err != nil {
+			return Journal{}, err
 		}
 		return ManualJournal(ManualIntent{
 			TenantID:    tenant,
@@ -115,6 +125,10 @@ func (service *Service) CreateManualJournal(writer http.ResponseWriter, request 
 		})
 	})
 	if err != nil {
+		if errors.Is(err, approval.ErrApprovalRequired) {
+			writeError(writer, http.StatusConflict, "APPROVAL_REQUIRED", err.Error())
+			return
+		}
 		status := http.StatusInternalServerError
 		if isValidationError(err) {
 			status = http.StatusBadRequest

@@ -136,3 +136,29 @@ func pgtypeFloat(v float64) pgtype.Numeric {
 	_ = n.Scan(strings.TrimSpace(fmt.Sprintf("%g", v)))
 	return n
 }
+
+// optionalIdempotencyKey returns the Idempotency-Key header as a valid UUID
+// string, or "" when absent. Unlike cash's mandatory helper, quotations and
+// sales orders accept requests without a key (backward compatible); when a
+// key IS supplied it must be a valid UUID and guards against double submit.
+func optionalIdempotencyKey(request *http.Request) (string, error) {
+	key := strings.TrimSpace(request.Header.Get("Idempotency-Key"))
+	if key == "" {
+		return "", nil
+	}
+	var parsed pgtype.UUID
+	if err := parsed.Scan(key); err != nil {
+		return "", errors.New("Idempotency-Key must be a UUID")
+	}
+	return key, nil
+}
+
+// pgtypeUUIDOpt wraps a UUID string ("" → NULL) for inserts.
+func pgtypeUUIDOpt(key string) pgtype.UUID {
+	if key == "" {
+		return pgtype.UUID{}
+	}
+	var u pgtype.UUID
+	_ = u.Scan(key)
+	return u
+}

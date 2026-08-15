@@ -1,6 +1,8 @@
 package tax
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -322,3 +324,57 @@ func monthBounds(year, month int64) (string, string) {
 
 // ensure ctx/tx imports stay referenced as this file grows.
 var _ = (*pgx.Tx)(nil)
+
+// ValidatePPNRate enforces that a caller-supplied PPN rate (percentage) on a
+// document line matches the tenant's configured active PPN rate in tax_rates
+// for the document date. This closes the "client-supplied rate not enforced"
+// gap: previously any rate 0..100 was accepted.
+//
+// Rules:
+//   - When the tenant has no active PPN row covering the date, the supplied
+//     rate is accepted as-is (backward compatible; the tenant has not
+//     configured PPN).
+//   - When a configured rate exists:
+//       rate == configured  → accepted
+//       rate == 0           → accepted (explicitly untaxed line)
+//       otherwise           → rejected with a descriptive error
+//
+// The comparison uses a small epsilon so a NUMERIC(9,6) 11.0 and a JSON 11
+// compare equal.
+func ValidatePPNRate(ctx context.Context, tx pgx.Tx, tenantID int64, entryDate string, rate float64) error {
+	var configured float64
+	err := tx.QueryRow(ctx, `
+		SELECT rate::float8
+		FROM tax_rates
+		WHERE tenant_id = $1 AND tax_type = 'PPN' AND is_active = true
+		  AND effective_from <= $2::date
+		  AND (effective_to IS NULL OR effective_to >= $2::date)
+		ORDER BY effective_from DESC
+		LIMIT 1
+	`, tenantID, entryDate).Scan(&configured)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// No PPN configuration for this tenant/date — accept the supplied rate.
+			return nil
+		}
+		return err
+	}
+	return checkPPNRateMatches(rate, configured)
+}
+
+// checkPPNRateMatches compares a caller-supplied rate against the configured
+// active PPN rate. Pure function — unit-testable without a database.
+func checkPPNRateMatches(rate, configured float64) error {
+	if rate == 0 {
+		// Explicitly untaxed line.
+		return nil
+	}
+	diff := rate - configured
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > 0.0001 {
+		return fmt.Errorf("tax_rate %.4f does not match the active PPN rate %.4f configured for this tenant", rate, configured)
+	}
+	return nil
+}

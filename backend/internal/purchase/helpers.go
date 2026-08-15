@@ -17,12 +17,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"finance-accounting-app/backend/internal/approval"
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/httperr"
 )
 
 type Service struct {
 	pool *pgxpool.Pool
+	gate *approval.Gate
 }
 
 // Shared account codes (seeded by migration 000011).
@@ -36,7 +38,7 @@ const (
 )
 
 func NewHandler(pool *pgxpool.Pool) *Service {
-	return &Service{pool: pool}
+	return &Service{pool: pool, gate: approval.NewGate(pool)}
 }
 
 func (service *Service) Routes(router chi.Router) {
@@ -49,6 +51,7 @@ func (service *Service) Routes(router chi.Router) {
 	router.Post("/purchase-orders", service.CreatePurchaseOrder)
 	router.Get("/purchase-orders", service.ListPurchaseOrders)
 	router.Get("/purchase-orders/{id}", service.GetPurchaseOrder)
+	router.Post("/purchase-orders/{id}/cancel", service.CancelPurchaseOrder)
 
 	router.Post("/goods-received-notes", service.CreateGRN)
 	router.Get("/goods-received-notes", service.ListGRNs)

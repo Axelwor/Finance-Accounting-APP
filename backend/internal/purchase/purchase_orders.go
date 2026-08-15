@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"finance-accounting-app/backend/internal/approval"
 	"finance-accounting-app/backend/internal/db"
 )
 
@@ -24,6 +25,12 @@ const (
 	poStatusPartiallyReceived = "PARTIALLY_RECEIVED"
 	poStatusReceived          = "RECEIVED"
 	poStatusCancelled         = "CANCELLED"
+)
+
+// Sentinel errors for PO cancellation.
+var (
+	errPOAlreadyCancelled = errors.New("purchase order already cancelled")
+	errPOHasReceipts      = errors.New("purchase order has received goods")
 )
 
 type PurchaseOrderLineRequest struct {
@@ -120,6 +127,12 @@ func (service *Service) CreatePurchaseOrder(writer http.ResponseWriter, request 
 		if err != nil || !supplierActive {
 			return errors.New("supplier not found or inactive")
 		}
+		// A-30: approval gate on purchase orders. If the tenant has an active
+		// "purchase_order" workflow whose min_amount_cents <= total, the PO
+		// requires an APPROVED, unconsumed approval before it can be created.
+		if err := service.gate.CheckAmount(request.Context(), tx, tenant, "purchase_order", total); err != nil {
+			return err
+		}
 		// Allocate PO number.
 		number, err := nextDocNumber(request.Context(), tx, tenant, "PO", "PO")
 		if err != nil {
@@ -170,9 +183,17 @@ func (service *Service) CreatePurchaseOrder(writer http.ResponseWriter, request 
 		result.SupplierQuoteNumber = strings.TrimSpace(req.SupplierQuoteNumber)
 		result.SupplierQuoteDate = dateString(supplierQuoteDate)
 		result.BuyerID = req.BuyerID
+		// A-30: consume the approval that authorized this PO.
+		if err := service.gate.ConsumeApprovalByAmount(request.Context(), tx, tenant, "purchase_order", total); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, approval.ErrApprovalRequired) {
+			writeError(writer, http.StatusConflict, "APPROVAL_REQUIRED", err.Error())
+			return
+		}
 		writeError(writer, http.StatusBadRequest, "PO_CREATE_FAILED", err.Error())
 		return
 	}
@@ -270,6 +291,76 @@ func (service *Service) GetPurchaseOrder(writer http.ResponseWriter, request *ht
 	})
 	if err != nil {
 		writeError(writer, http.StatusNotFound, "PO_NOT_FOUND", err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, result)
+}
+
+// CancelPurchaseOrder handles POST /purchase-orders/{id}/cancel. A PO can be
+// cancelled only while nothing has been received against it (received_cents
+// = 0). POs with any GRN already posted must not be cancelled — the received
+// goods have hit inventory and the liability exists; void them via returns.
+func (service *Service) CancelPurchaseOrder(writer http.ResponseWriter, request *http.Request) {
+	tenant, err := tenantID(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	poID, err := pathID(chi.URLParam(request, "id"))
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	reason := strings.TrimSpace(request.URL.Query().Get("reason"))
+
+	var result *purchaseOrderResponse
+	err = db.WithTransaction(request.Context(), service.pool, func(tx pgx.Tx) error {
+		if err := withTenant(request.Context(), tx, tenant); err != nil {
+			return err
+		}
+		// Lock the PO row and check it is still cancellable.
+		var status string
+		var receivedCents int64
+		if err := tx.QueryRow(request.Context(), `
+			SELECT status, COALESCE(received_cents, 0)
+			FROM purchase_orders
+			WHERE tenant_id = $1 AND id = $2
+			FOR UPDATE
+		`, tenant, poID).Scan(&status, &receivedCents); err != nil {
+			return err
+		}
+		if status == poStatusCancelled {
+			return errPOAlreadyCancelled
+		}
+		if receivedCents > 0 {
+			return errPOHasReceipts
+		}
+		if _, err := tx.Exec(request.Context(), `
+			UPDATE purchase_orders
+			SET status = $3, notes = CASE WHEN $4 = '' THEN notes ELSE notes || ' | cancel: ' || $4 END, updated_at = now()
+			WHERE tenant_id = $1 AND id = $2
+		`, tenant, poID, poStatusCancelled, reason); err != nil {
+			return err
+		}
+		fetched, err := fetchPO(request.Context(), tx, tenant, poID)
+		if err != nil {
+			return err
+		}
+		result = fetched
+		return nil
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, errPOAlreadyCancelled):
+			writeError(writer, http.StatusConflict, "ALREADY_CANCELLED", "purchase order is already cancelled")
+		case errors.Is(err, errPOHasReceipts):
+			writeError(writer, http.StatusConflict, "PO_HAS_RECEIPTS",
+				"purchase order has received goods (GRN posted); it cannot be cancelled")
+		case errors.Is(err, pgx.ErrNoRows):
+			writeError(writer, http.StatusNotFound, "PO_NOT_FOUND", "purchase order not found")
+		default:
+			writeError(writer, http.StatusInternalServerError, "PO_CANCEL_FAILED", err.Error())
+		}
 		return
 	}
 	writeJSON(writer, http.StatusOK, result)

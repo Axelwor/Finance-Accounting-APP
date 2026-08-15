@@ -104,6 +104,12 @@ func (service *Service) CreateOrder(writer http.ResponseWriter, request *http.Re
 		writeError(writer, http.StatusBadRequest, code, message)
 		return
 	}
+	// Optional Idempotency-Key guards against double submit (M-023 pattern).
+	idem, err := optionalIdempotencyKey(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
 
 	runCreate := func() (*orderResponse, error) {
 		var result *orderResponse
@@ -111,7 +117,7 @@ func (service *Service) CreateOrder(writer http.ResponseWriter, request *http.Re
 			if err := withTenant(request.Context(), tx, tenant); err != nil {
 				return err
 			}
-			result, err = service.createOrderInTx(request.Context(), tx, tenant, req, userID(request))
+			result, err = service.createOrderInTx(request.Context(), tx, tenant, req, userID(request), idem)
 			return err
 		})
 		return result, err
@@ -139,7 +145,21 @@ func (service *Service) CreateOrder(writer http.ResponseWriter, request *http.Re
 	writeError(writer, http.StatusConflict, "ORDER_NUMBER_EXISTS", "could not allocate a unique order number")
 }
 
-func (service *Service) createOrderInTx(ctx context.Context, tx pgx.Tx, tenant int64, req CreateSalesOrderRequest, actingUser int64) (*orderResponse, error) {
+func (service *Service) createOrderInTx(ctx context.Context, tx pgx.Tx, tenant int64, req CreateSalesOrderRequest, actingUser int64, idem string) (*orderResponse, error) {
+	// Idempotent replay: same key → return the stored order.
+	if idem != "" {
+		var existingID int64
+		err := tx.QueryRow(ctx, `
+			SELECT id FROM sales_orders
+			WHERE tenant_id = $1 AND idempotency_key = $2
+		`, tenant, idem).Scan(&existingID)
+		if err == nil {
+			return service.fetchOrder(ctx, tx, tenant, existingID)
+		} else if !isNoRows(err) {
+			return nil, err
+		}
+	}
+
 	var customerName string
 	if err := tx.QueryRow(ctx, `
 		SELECT name FROM customers WHERE tenant_id = $1 AND id = $2
@@ -182,16 +202,16 @@ func (service *Service) createOrderInTx(ctx context.Context, tx pgx.Tx, tenant i
 			(tenant_id, number, quotation_id, customer_id, order_date,
 			 payment_term_id, notes, status, total_cents, dp_received_cents, created_by,
 			 customer_po_number, customer_po_date, requested_delivery_date,
-			 salesperson_id, ship_to_address, shipping_terms)
+			 salesperson_id, ship_to_address, shipping_terms, idempotency_key)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, 'CONFIRMED', $8, 0, $9,
-			$10, $11, $12, $13, $14, $15)
+			$10, $11, $12, $13, $14, $15, $16)
 		RETURNING id
 	`, tenant, number, quotationID, req.CustomerID, orderDate,
 		optionalInt8(req.PaymentTermID), textValueOptional(req.Notes), totalCents,
 		int8Nullable(actingUser),
 		textValueOptional(req.CustomerPONumber), customerPODate, requestedDeliveryDate,
 		optionalInt8(req.SalespersonID), textValueOptional(req.ShipToAddress),
-		textValueOptional(req.ShippingTerms)).Scan(&orderID)
+		textValueOptional(req.ShippingTerms), pgtypeUUIDOpt(idem)).Scan(&orderID)
 	if err != nil {
 		return nil, err
 	}

@@ -18,6 +18,7 @@ import (
 	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/db"
 	"finance-accounting-app/backend/internal/httperr"
+	"finance-accounting-app/backend/internal/tax"
 )
 
 // arAccountCode is the seeded "Accounts Receivable" account (1201).
@@ -198,6 +199,14 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 			totalDPPCents += pl.LineTotalCents
 			totalPPNCents += pl.PPNCents
 			discountTotalCents += pl.Line.DiscountCents
+		}
+
+		// PPN rate enforcement: every taxed line must match the tenant's
+		// active PPN rate from tax_rates (rate 0 = explicitly untaxed).
+		for _, pl := range lines {
+			if err := tax.ValidatePPNRate(request.Context(), tx, tenant, req.InvoiceDate, pl.Line.TaxRate); err != nil {
+				return err
+			}
 		}
 
 		// Resolve accounts.

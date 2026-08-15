@@ -13,9 +13,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/approval"
 	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/db"
 	"finance-accounting-app/backend/internal/httperr"
+	"finance-accounting-app/backend/internal/tax"
 )
 
 // Supplier invoice statuses.
@@ -156,6 +158,21 @@ func (service *Service) CreateSupplierInvoice(writer http.ResponseWriter, reques
 			return err
 		}
 		totalCents := dppCents + vatCents
+
+		// A-30: approval gate on supplier invoices. If the tenant has an
+		// active "supplier_invoice" workflow whose min_amount_cents <= total,
+		// posting requires an APPROVED, unconsumed approval.
+		if err := service.gate.CheckAmount(request.Context(), tx, tenant, "supplier_invoice", totalCents); err != nil {
+			return err
+		}
+
+		// PPN rate enforcement: every taxed line must match the tenant's
+		// active PPN rate from tax_rates (rate 0 = explicitly untaxed).
+		for _, line := range req.Lines {
+			if err := tax.ValidatePPNRate(request.Context(), tx, tenant, req.InvoiceDate, line.TaxRate); err != nil {
+				return err
+			}
+		}
 
 		// Resolve accounts.
 		uninvoicedAcctID, err := resolveAccountByCode(request.Context(), tx, tenant, uninvoicedPayableCode)
@@ -352,6 +369,11 @@ func (service *Service) CreateSupplierInvoice(writer http.ResponseWriter, reques
 		result.Status = siIssued
 		result.JournalEntryID = entryID
 
+		// A-30: consume the approval that authorized this supplier invoice.
+		if err := service.gate.ConsumeApprovalByAmount(request.Context(), tx, tenant, "supplier_invoice", totalCents); err != nil {
+			return err
+		}
+
 		if err := audit.Log(request.Context(), tx, tenant, uid, "supplier_invoice", invID, audit.ActionPost, nil, map[string]any{
 			"number":           bilNumber,
 			"supplier_id":      req.SupplierID,
@@ -369,6 +391,10 @@ func (service *Service) CreateSupplierInvoice(writer http.ResponseWriter, reques
 	if err != nil {
 		if errors.Is(err, httperr.ErrIdempotencyKeyReuse) {
 			writeError(writer, http.StatusConflict, "IDEMPOTENCY_KEY_REUSE", err.Error())
+			return
+		}
+		if errors.Is(err, approval.ErrApprovalRequired) {
+			writeError(writer, http.StatusConflict, "APPROVAL_REQUIRED", err.Error())
 			return
 		}
 		if isNoRows(err) {

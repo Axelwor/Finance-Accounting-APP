@@ -471,6 +471,12 @@ type scheduledPayment struct {
 
 // buildPaymentSchedule generates the full amortization schedule using the
 // effective interest method: interest = remaining * rate, principal = payment - interest.
+//
+// A-16: the convention is IN-ARREARS (ordinary annuity) throughout — the PV
+// formula in presentValueCents discounts end-of-period payments, so payment
+// dates must fall one full period AFTER commencement (startDate + i periods,
+// not startDate + (i-1)), and the first interest accrues over that first
+// period on the full PV. This keeps PV, dates, and interest consistent.
 func buildPaymentSchedule(startDate time.Time, frequency string, totalPayments int, paymentCents int64, rate float64, pvCents int64) []scheduledPayment {
 	schedule := make([]scheduledPayment, 0, totalPayments)
 	remaining := pvCents
@@ -490,7 +496,8 @@ func buildPaymentSchedule(startDate time.Time, frequency string, totalPayments i
 			principal += remaining
 			remaining = 0
 		}
-		payDate := startDate.AddDate(0, stepMonths*(i-1), 0)
+		// A-16: in-arrears — payment i falls i periods after commencement.
+		payDate := startDate.AddDate(0, stepMonths*i, 0)
 		schedule = append(schedule, scheduledPayment{
 			PaymentNo:               i,
 			PaymentDate:             payDate,

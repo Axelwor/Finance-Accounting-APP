@@ -122,6 +122,12 @@ func (service *Service) Create(writer http.ResponseWriter, request *http.Request
 		writeError(writer, http.StatusBadRequest, code, message)
 		return
 	}
+	// Optional Idempotency-Key guards against double submit (M-023 pattern).
+	idem, err := optionalIdempotencyKey(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
 
 	// The number is allocated inside the same transaction, so a concurrent
 	// create can still race on allocation. Retry the whole transaction a few
@@ -133,7 +139,7 @@ func (service *Service) Create(writer http.ResponseWriter, request *http.Request
 			if err := withTenant(request.Context(), tx, tenant); err != nil {
 				return err
 			}
-			quote, err := service.createInTx(request.Context(), tx, tenant, req, userID(request))
+			quote, err := service.createInTx(request.Context(), tx, tenant, req, userID(request), idem)
 			if err != nil {
 				return err
 			}
@@ -166,8 +172,23 @@ func (service *Service) Create(writer http.ResponseWriter, request *http.Request
 }
 
 // createInTx performs the quotation + lines insert inside an open transaction
-// that already has the tenant context set.
-func (service *Service) createInTx(ctx context.Context, tx pgx.Tx, tenant int64, req CreateQuotationRequest, actingUser int64) (*quotationResponse, error) {
+// that already has the tenant context set. When idem is non-empty it first
+// replays an existing quotation stored under the same idempotency key.
+func (service *Service) createInTx(ctx context.Context, tx pgx.Tx, tenant int64, req CreateQuotationRequest, actingUser int64, idem string) (*quotationResponse, error) {
+	// Idempotent replay: same key → return the stored quotation.
+	if idem != "" {
+		var existingID int64
+		err := tx.QueryRow(ctx, `
+			SELECT id FROM sales_quotations
+			WHERE tenant_id = $1 AND idempotency_key = $2
+		`, tenant, idem).Scan(&existingID)
+		if err == nil {
+			return service.fetchQuotation(ctx, tx, tenant, existingID)
+		} else if !isNoRows(err) {
+			return nil, err
+		}
+	}
+
 	// Customer must belong to the tenant (RLS guarantees visibility; the
 	// explicit check keeps a clean 404 vs a generic FK error).
 	var customerName string
@@ -200,12 +221,12 @@ func (service *Service) createInTx(ctx context.Context, tx pgx.Tx, tenant int64,
 	err = tx.QueryRow(ctx, `
 		INSERT INTO sales_quotations
 			(tenant_id, number, customer_id, quotation_date, valid_until,
-			 payment_term_id, notes, status, total_cents, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, 'DRAFT', $8, $9)
+			 payment_term_id, notes, status, total_cents, created_by, idempotency_key)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 'DRAFT', $8, $9, $10)
 		RETURNING id
 	`, tenant, number, req.CustomerID, quotationDate, validUntil,
 		optionalInt8(req.PaymentTermID), textValueOptional(req.Notes), totalCents,
-		int8Nullable(actingUser)).Scan(&quotationID)
+		int8Nullable(actingUser), pgtypeUUIDOpt(idem)).Scan(&quotationID)
 	if err != nil {
 		return nil, err
 	}

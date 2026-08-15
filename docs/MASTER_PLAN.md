@@ -420,28 +420,30 @@ Plain `log.Printf`. No `slog`/`zap`/`zerolog`, no JSON, no log levels, no reques
 
 ### Sales Cycle (SQ→SO→DP→DO→INV→Payment→CN)
 
+Status below reflects the 2026-08-15 code audit. Items marked ✅ FIXED were verified in code; the original audit table entries are superseded.
+
 | Step | Journal Correct? | Hash? | Idem? | Outbox? | Status |
 |---|---|---|---|---|---|
-| SQ (quotation) | N/A — no journal | N/A | ❌ | ❌ | ✅ Status transitions correct |
-| SO (sales order) | N/A — no journal | N/A | ❌ | ❌ | ⚠️ No DRAFT; created as CONFIRMED |
+| SQ (quotation) | N/A — no journal | N/A | ✅ optional key (000054) | ❌ | ✅ Status transitions correct |
+| SO (sales order) | N/A — no journal | N/A | ✅ optional key (000054) | ❌ | ⚠️ No DRAFT; created as CONFIRMED |
 | DP (down payment) | ✅ Dr Cash/Cr 2201 | ✅ | ✅ | ✅ | ✅ Overflow check, FOR UPDATE |
 | DP Refund | ✅ Reversal | ✅ | ✅ | ✅ | ✅ Marks original VOID |
-| DO (delivery) | ✅ Dr 5101/Cr 1301 | ✅ | ✅ | ✅ | ❌ SO unconditionally CLOSED |
-| INV (revenue) | ✅ Dr 1201/Cr 4101+2202 | ✅ | ✅ | ✅ | ⚠️ Shipping not posted, tax_total client-supplied |
-| INV (DP realize) | ✅ Dr 2201/Cr 1201 | ✅ | ⚠️ No key | ✅ | ❌ DP never consumed (A-01) |
-| Payment | ✅ Dr Cash/Cr 1201+2402 | ✅ | ✅ | ✅ | ⚠️ No FOR UPDATE (A-18) |
-| CN (revenue) | ✅ Dr 4201/Cr 1201 | ✅ | ✅ | ✅ | ❌ refund_method no-op (A-17) |
-| CN (COGS) | ✅ Dr 1301/Cr 5101 | ✅ | ✅ | ✅ | ❌ roundQty truncation (A-12) |
+| DO (delivery) | ✅ Dr 5101/Cr 1301 | ✅ | ✅ | ✅ | ✅ FIXED: SO closes only when all lines fully delivered |
+| INV (revenue) | ✅ Dr 1201/Cr 4101+2202 | ✅ | ✅ | ✅ | ✅ FIXED (A-11): shipping/charges posted to journal; tax_total server-computed via prepareInvoiceLines |
+| INV (DP realize) | ✅ Dr 2201/Cr 1201 | ✅ | ✅ | ✅ | ✅ FIXED (A-01): dp_consumed_cents tracked, dpApplied clamped to total |
+| Payment | ✅ Dr Cash/Cr 1201+2402 | ✅ | ✅ | ✅ | ✅ FIXED (A-18): FOR UPDATE serializes concurrent payments |
+| CN (revenue) | ✅ Dr 4201/Cr 1201 | ✅ | ✅ | ✅ | ✅ FIXED (A-17): refund_method drives Dr cash vs AR deduction |
+| CN (COGS) | ✅ Dr 1301/Cr 5101 | ✅ | ✅ | ✅ | ✅ FIXED (A-12): math.Round(qty × cost), no truncation |
 
 ### Purchase Cycle (PO→GRN→SI→SP→Return)
 
 | Step | Journal Correct? | Hash? | Idem? | Outbox? | Status |
 |---|---|---|---|---|---|
-| PO | N/A — no journal | N/A | ❌ | ❌ | ⚠️ No cancel endpoint |
-| GRN | ✅ Dr 1301/Cr 2105 | ✅ | ✅ | ✅ | ❌ PO never RECEIVED (A-19) |
-| SI | ✅ Dr 2105+1203/Cr 2101 | ✅ | ✅ | ✅ | ⚠️ No DP realization, float64 |
-| SP | ✅ Dr 2101+1204/Cr Cash | ✅ | ✅ | ✅ | ⚠️ No FOR UPDATE, no AP sub-ledger |
-| Return | ✅ Dr 2101/Cr 1301+1203 | ✅ | ✅ | ✅ | ❌ Costing wrong direction (A-04) |
+| PO | N/A — no journal | N/A | ❌ no key | ❌ | ✅ cancel endpoint: only when received_cents = 0 |
+| GRN | ✅ Dr 1301/Cr 2105 | ✅ | ✅ | ✅ | ✅ FIXED (A-19): PO → RECEIVED when received_qty ≥ qty on all lines |
+| SI | ✅ Dr 2105+1203/Cr 2101 | ✅ | ✅ | ✅ | ⚠️ No DP realization, float64 line math |
+| SP | ✅ Dr 2101+1204/Cr Cash | ✅ | ✅ | ✅ | ✅ supplier_balances sub-ledger present; FOR UPDATE on invoice row |
+| Return | ✅ Dr 2101/Cr 1301+1203 | ✅ | ✅ | ✅ | ✅ FIXED (A-04): costing.ResolveCOGS decrements stock, direction correct |
 
 ### Inventory & Costing
 
@@ -452,12 +454,12 @@ Plain `log.Printf`. No `slog`/`zap`/`zerolog`, no JSON, no log levels, no reques
 | DO updates stock_balance + resolves COGS | ✅ |
 | FIFO oldest-layer-first | ✅ |
 | Moving average recalculation | ✅ |
-| COGS reversal on credit note | ✅ (but roundQty bug) |
-| COGS reversal on purchase return | ❌ Wrong direction (A-04) |
+| COGS reversal on credit note | ✅ FIXED (A-12): math.Round, no truncation |
+| COGS reversal on purchase return | ✅ FIXED (A-04): correct direction |
 | Negative stock rejected | ✅ |
 | Cost layers per warehouse | ✅ |
 | Stock transfer (both warehouses) | ✅ |
-| **Stock opname updates stock_balances** | ❌ **CRITICAL (A-05)** |
+| **Stock opname updates stock_balances** | ✅ **FIXED (A-05)**: approve drives costing.PostGRN/ResolveCOGS |
 | GRN/DO pass warehouseID | ⚠️ Both pass 0 |
 
 ### Fixed Assets (All ✅)
@@ -486,25 +488,25 @@ Plain `log.Printf`. No `slog`/`zap`/`zerolog`, no JSON, no log levels, no reques
 | RoU depreciation | ✅ | Dr 5209 / Cr 1702, idempotent |
 | Modification | ✅ | Re-measures PV |
 | Termination | ✅ | Derecognize, gain/loss |
-| Schedule regenerated after mod | ⚠️ | Old schedule retained |
-| In-advance vs in-arrears | ⚠️ | Inconsistent (A-16) |
+| Schedule regenerated after mod | ✅ FIXED (A-23) | Unposted payments deleted + rebuilt from remaining liability |
+| In-advance vs in-arrears | ✅ FIXED (A-16): in-arrears throughout — payment dates i periods after commencement, matching the ordinary-annuity PV |
 
 ### Tax
 
 | Feature | Status |
 |---|---|
-| PPN Keluaran on invoice | ✅ Cr 2202 |
+| PPN Keluaran on invoice | ✅ Cr 2202, server-computed (half-up, A-09) |
 | PPN Masukan on supplier invoice | ✅ Dr 1203 |
 | PPN reconciliation | ✅ Net keluaran − masukan |
-| PPN rate from tax_rates | ⚠️ Per-line caller-supplied, not enforced |
+| PPN rate from tax_rates | ✅ FIXED 2026-08-15: ValidatePPNRate on invoices + supplier invoices (rate 0 = untaxed; mismatch rejected) |
 | PPh types (21/22/23/26/UMKM) | ✅ |
-| **PPh posts a journal** | ❌ **CRITICAL (A-06)** |
+| **PPh posts a journal** | ✅ **FIXED (A-06)**: postPPhJournal with idempotency key |
 | PPh Final UMKM posts journal | ✅ Dr 5208 / Cr 2203 |
 | ECL aging buckets | ✅ 0-30=1%, 31-60=2.5%, 61-90=5%, >90=10% |
 | ECL provision journal | ✅ Dr 5209 / Cr 1202 |
 | ECL write-off | ✅ Dr 1202 / Cr 1201 |
-| **ECL ages from invoice_date** | ❌ **Should be due_date (A-08)** |
-| **ECL write-off doesn't update invoice** | ❌ **CRITICAL (A-07)** |
+| **ECL ages from due_date** | ✅ **FIXED (A-08)**: COALESCE(due_date, invoice_date) |
+| **ECL write-off updates invoice** | ✅ **FIXED (A-07)**: status → WRITTEN_OFF (fallback VOID) |
 | Deferred tax journal | ✅ Dr/Cr 1206 / 5904 |
 
 ### Multi-Tenant & Security
@@ -520,39 +522,43 @@ Plain `log.Printf`. No `slog`/`zap`/`zerolog`, no JSON, no log levels, no reques
 | Inter-company elimination | ✅ A-29 fixed 2026-08-15: population endpoints + pct weighting + eliminated flag |
 | Entity hierarchy | ✅ |
 | Approval gate on invoices | ✅ |
-| **Approval gate on other types** | ❌ Only invoices |
-| Audit log coverage | ⚠️ Only 3 of ~15 posting paths |
+| **Approval gate on other types** | ✅ FIXED (A-30) 2026-08-15: gate on purchase_order, credit_note, supplier_invoice, journal_entry (manual journals) |
+| Audit log coverage | ✅ FIXED: 23 modules call audit.Log (sales, purchase, tax, lease, inventory, production, cheque, cash, period) |
 
 ### Module Completeness
 
+Status below reflects the 2026-08-15 code audit (Waves 4-8 merged + TS reconciliation).
+
 | Module | Tracking? | Posts Journal? | Frontend? | Key Gap |
 |---|---|---|---|---|
-| Petty Cash | ✅ | ❌ All 3 | ❌ | Shell — no journal, no UI |
-| Recurring | ✅ | ❌ | ❌ | No scheduler, Update=501, no UI |
-| Cheques | ✅ | ❌ | ❌ | Tracking only, no UI |
-| Cost Centers | ✅ | ❌ | ❌ | Allocations never executed, no UI |
-| Email | ✅ | N/A | ❌ | No SMTP, no worker, no UI |
-| Bank Reconciliation | ✅ | ⚠️ | ✅ | Complete doesn't post adjustment |
-| Dashboard | ✅ | N/A | ⚠️ | 3/11 widgets unimplemented, hardcoded KPIs |
+| Petty Cash | ✅ | ✅ All 3 (fund, voucher, replenish) | ✅ FundList, VoucherList | — |
+| Recurring | ✅ | ✅ PostNow + scheduler (15-min ticker, graceful shutdown) | ✅ RecurringTransactionList | ⚠️ list endpoint lacks from/to account fields |
+| Cheques | ✅ | ✅ State actions post journal | ✅ ChequeList | — |
+| Cost Centers | ✅ | ✅ execute-allocations posts journal | ✅ List + PnL screens | — |
+| Email | ✅ | N/A | ✅ TemplateList + QueueList | ⚠️ SMTP delivery not implemented (Send marks SENT) |
+| Bank Reconciliation | ✅ | ✅ complete posts adjustment journal (A-26) | ✅ | — |
+| Dashboard | ✅ | N/A | ✅ | ⚠️ Some KPI widgets hardcoded |
 | Attachments | ✅ | N/A | ✅ | No content sniffing |
-| Audit Log | ✅ | N/A | ✅ | Coverage only 3/15 paths |
-| PPh | ✅ | ❌ | ✅ | No journal posting |
-| Approval Workflow | ✅ | N/A | ❌ | Gate only on invoices, no UI |
+| Audit Log | ✅ | N/A | ✅ | Coverage 23 modules |
+| PPh | ✅ | ✅ postPPhJournal (A-06) | ✅ | — |
+| Approval Workflow | ✅ | N/A | ✅ RuleList + PendingRequestList | Gate only on invoices (A-30) |
 | Inter-company | ✅ | N/A | ✅ | A-29 fixed: POST/GET/DELETE /inter-company-transactions, pct weighting, eliminated flag |
 
 ### Reporting
 
+Status below reflects the 2026-08-15 code audit — ReportRangeBar provides shared date range + quick ranges (This Month/Quarter/YTD), export to pdf/xlsx, framework (EMKM/ETAP/SAK) and dimension filters across reports.
+
 | Report | Backend Correct? | Frontend Date Range? | Frontend Export? | Framework? | Dimension? |
 |---|---|---|---|---|---|
-| Trial Balance | ✅ (409 if unbalanced) | ❌ | ❌ | ❌ | ✅ |
-| P&L | ✅ | ❌ | ❌ | ✅ EMKM/ETAP/SAK | ✅ |
-| Balance Sheet | ✅ (A=L+E+P) | ❌ | ❌ | ❌ | ❌ |
-| Cash Flow | ⚠️ 2× inflated (A-02) | ❌ | ❌ | ❌ | ❌ |
+| Trial Balance | ✅ (409 if unbalanced) | ✅ | ✅ | ❌ | ✅ |
+| P&L | ✅ | ✅ | ✅ | ✅ EMKM/ETAP/SAK | ✅ |
+| Balance Sheet | ✅ (A=L+E+P) | ✅ | ✅ | ❌ | ✅ |
+| Cash Flow | ✅ FIXED (A-02): offsetting-leg basis | ✅ | ✅ | ❌ | ✅ |
 | Budget vs Actual | ✅ | ✅ | — | — | ✅ |
-| Consolidated TB/P&L | ⚠️ pct ignored | — | — | — | — |
+| Consolidated TB/P&L | ✅ pct weighting (A-29) | — | — | — | — |
 | Report Templates | ✅ | — | ✅ (NextReport) | — | — |
-| AR Aging | ✅ backend | — | — | — | — | ❌ No frontend |
-| AP Aging | ✅ backend | — | — | — | — | ❌ No frontend |
+| AR Aging | ✅ backend, ISSUED/PARTIALLY_PAID (B-02 fixed) | ✅ | — | — | — | ✅ ARAgingList |
+| AP Aging | ✅ backend, ISSUED/PARTIALLY_PAID (B-02 fixed) | ✅ | — | — | — | ✅ APAgingList |
 
 ---
 
