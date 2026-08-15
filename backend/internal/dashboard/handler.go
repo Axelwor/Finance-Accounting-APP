@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/auth"
+	"finance-accounting-app/backend/internal/httperr"
 )
 
 // ---------------------------------------------------------------------------
@@ -150,6 +151,10 @@ func (service *Service) GetLayout(w http.ResponseWriter, r *http.Request) {
 			widget.Config = json.RawMessage(config)
 		}
 		widgets = append(widgets, widget)
+	}
+	if err := rows.Err(); err != nil {
+		writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
+		return
 	}
 	if widgets == nil {
 		widgets = []Widget{}
@@ -722,6 +727,7 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 }
 
 func writeErr(w http.ResponseWriter, status int, code, message string) {
+	message = httperr.SanitizeMessage(status, code, message)
 	writeJSON(w, status, errResponse{Code: code, Message: message})
 }
 

@@ -993,7 +993,19 @@ go vet/test/build PASS.
 | Harden InvoiceForm validation | 2h | D-32 |
 | Fix responsive design | 4h | D-33 |
 
-### Phase 4: Backend Infrastructure (Day 5-9, parallel) — ~3 days
+### Phase 4: Backend Infrastructure (Day 5-9, parallel) — ~3 days ✅ COMPLETE
+
+Merged: 2026-08-15. All fixes verified with go build/vet/test + tsc/vite.
+**Changes:**
+- Graceful shutdown (signal.Notify + http.Server.Shutdown with 15s drain)
+- DB pool tuning (MaxConns=20, MinConns=2, MaxConnLifetime=30m, MaxConnIdleTime=5m, startup Ping)
+- Structured logging (log/slog JSON handler + RequestID middleware for traceability)
+- Rate limiter cleanup goroutine fix (done channel, B-10)
+- err.Error() to clients sanitized (httperr.SanitizeMessage in 28 writeErr/writeError helpers — 5xx errors return generic message, raw error logged via slog)
+- Security headers (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy) in Caddyfile
+- Backup strategy (pg_dump nightly cron sidecar in docker-compose.prod.yml, 7-day retention)
+- Dashboard rows.Err() fix (H-08 — was swallowing iteration errors)
+- Verified already-fixed: reconciliation autoMatch (single CTE+UPDATE), PO RECEIVED status (received_qty >= qty), float64 line totals (milliunit integer in lineTotalCents), lease schedule regeneration after modification
 
 | Task | Effort | ID |
 |---|---|---|

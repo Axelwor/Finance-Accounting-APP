@@ -3,7 +3,10 @@
 package middleware
 
 import (
-	"log"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"log/slog"
 	"net"
 	"net/http"
 	"runtime/debug"
@@ -13,6 +16,34 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 )
+
+type contextKey string
+
+const RequestIDKey contextKey = "request_id"
+
+// RequestID generates a short random hex ID and injects it into the request
+// context. Downstream loggers and error responses include this ID so a user
+// report can be traced to a single request.
+func RequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.Header.Get("X-Request-ID")
+		if id == "" {
+			b := make([]byte, 8)
+			_, _ = rand.Read(b)
+			id = hex.EncodeToString(b)
+		}
+		w.Header().Set("X-Request-ID", id)
+		ctx := context.WithValue(r.Context(), RequestIDKey, id)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func RequestIDFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(RequestIDKey).(string); ok {
+		return v
+	}
+	return ""
+}
 
 // ---------------------------------------------------------------------------
 // i-008: Recover — catch panics, log stack trace, return 500.
@@ -24,7 +55,13 @@ func Recover(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rv := recover(); rv != nil {
-				log.Printf("PANIC: %v\n%s", rv, debug.Stack())
+				slog.Error("panic recovered",
+					"error", rv,
+					"request_id", RequestIDFromContext(r.Context()),
+					"method", r.Method,
+					"path", r.URL.Path,
+					"stack", string(debug.Stack()),
+				)
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
 				_, _ = w.Write([]byte(`{"code":"INTERNAL_ERROR","message":"an unexpected error occurred"}`))
@@ -38,13 +75,22 @@ func Recover(next http.Handler) http.Handler {
 // i-009: RequestLogger — structured logging per request.
 // ---------------------------------------------------------------------------
 
-// RequestLogger logs method, path, status, and duration for every request.
+// RequestLogger logs method, path, status, and duration for every request
+// using structured logging (slog) with the request_id for traceability.
 func RequestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		next.ServeHTTP(ww, r)
-		log.Printf("%s %s → %d (%s)", r.Method, r.URL.Path, ww.Status(), time.Since(start).Round(time.Millisecond))
+		slog.Info("request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", ww.Status(),
+			"bytes", ww.BytesWritten(),
+			"duration_ms", time.Since(start).Milliseconds(),
+			"request_id", RequestIDFromContext(r.Context()),
+			"client_ip", clientIP(r),
+		)
 	})
 }
 
@@ -134,16 +180,25 @@ type RateLimiter struct {
 	visitors map[string]*visitor
 	max      int           // max requests per window
 	window   time.Duration // sliding window duration
+	done     chan struct{} // signals the cleanup goroutine to stop
 }
 
 // NewRateLimiter creates a rate limiter that allows max requests per window
 // per IP address.
 func NewRateLimiter(max int, window time.Duration) *RateLimiter {
-	return &RateLimiter{
+	rl := &RateLimiter{
 		visitors: make(map[string]*visitor),
 		max:      max,
 		window:   window,
+		done:     make(chan struct{}),
 	}
+	return rl
+}
+
+// Stop signals the background cleanup goroutine to exit. Call this when the
+// rate limiter is no longer needed (e.g. during graceful shutdown).
+func (rl *RateLimiter) Stop() {
+	close(rl.done)
 }
 
 // Middleware returns an http.Handler that enforces the rate limit.
@@ -153,8 +208,13 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
-		for range ticker.C {
-			rl.cleanup()
+		for {
+			select {
+			case <-rl.done:
+				return
+			case <-ticker.C:
+				rl.cleanup()
+			}
 		}
 	}()
 

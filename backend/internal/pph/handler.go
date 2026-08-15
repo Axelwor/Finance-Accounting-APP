@@ -18,6 +18,7 @@ import (
 	"finance-accounting-app/backend/internal/accounting"
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/db"
+	"finance-accounting-app/backend/internal/httperr"
 )
 
 // ---------------------------------------------------------------------------
@@ -434,6 +435,7 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 }
 
 func writeErr(w http.ResponseWriter, status int, code, message string) {
+	message = httperr.SanitizeMessage(status, code, message)
 	writeJSON(w, status, map[string]string{"code": code, "message": message})
 }
 

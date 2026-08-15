@@ -18,6 +18,7 @@ import (
 
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/db"
+	"finance-accounting-app/backend/internal/httperr"
 )
 
 type Service struct {
@@ -66,6 +67,7 @@ func writeJSON(writer http.ResponseWriter, status int, payload any) {
 }
 
 func writeError(writer http.ResponseWriter, status int, code, message string) {
+	message = httperr.SanitizeMessage(status, code, message)
 	writeJSON(writer, status, errorResponse{Code: code, Message: message})
 }
 

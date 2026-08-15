@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -46,16 +49,42 @@ import (
 )
 
 func main() {
+	// Structured logging (log/slog) — JSON in production, text on local dev.
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
 	cfg := config.Load()
 	if cfg.DatabaseURL == "" {
-		log.Fatal("DATABASE_URL is required")
+		slog.Error("DATABASE_URL is required")
+		os.Exit(1)
 	}
 
-	pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
+	// DB pool tuning: bounded connections, lifetime, idle timeout, and a
+	// startup Ping so we fail fast when the database is unreachable.
+	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("database pool: %v", err)
+		slog.Error("database config parse", "error", err)
+		os.Exit(1)
+	}
+	poolCfg.MaxConns = 20
+	poolCfg.MinConns = 2
+	poolCfg.MaxConnLifetime = 30 * time.Minute
+	poolCfg.MaxConnIdleTime = 5 * time.Minute
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolCfg)
+	if err != nil {
+		slog.Error("database pool", "error", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
+
+	// Verify connectivity at startup.
+	pingCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := pool.Ping(pingCtx); err != nil {
+		cancel()
+		slog.Error("database ping", "error", err)
+		os.Exit(1)
+	}
+	cancel()
 
 	tenantHandler := tenant.NewHandler(pool)
 	authService := auth.NewService(pool, cfg.JWTSecret)
@@ -85,6 +114,7 @@ func main() {
 	router := chi.NewRouter()
 
 	// Global middleware (applied to all routes).
+	router.Use(middleware.RequestID)             // inject X-Request-ID for traceability
 	router.Use(middleware.Recover)              // i-008: catch panics
 	router.Use(middleware.RequestLogger)        // i-009: log every request
 	router.Use(middleware.CORS(middleware.DefaultCORSConfig())) // i-010: CORS
@@ -310,6 +340,34 @@ func main() {
 		})
 	})
 
-	log.Printf("api listening on %s", cfg.HTTPAddr)
-	log.Fatal(http.ListenAndServe(cfg.HTTPAddr, router))
+	slog.Info("api listening", "addr", cfg.HTTPAddr)
+
+	// Graceful shutdown: SIGINT/SIGTERM triggers a 15-second drain period
+	// so in-flight requests finish before the process exits.
+	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: router}
+
+	shutdownErr := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			shutdownErr <- err
+		}
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case err := <-shutdownErr:
+		slog.Error("server error", "error", err)
+		os.Exit(1)
+	case sig := <-sigCh:
+		slog.Info("shutdown signal received", "signal", sig.String())
+	}
+
+	ctx, cancelShutdown := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancelShutdown()
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("graceful shutdown", "error", err)
+	}
+	slog.Info("server stopped")
 }

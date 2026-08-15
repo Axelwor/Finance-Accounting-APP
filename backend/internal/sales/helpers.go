@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/auth"
+	"finance-accounting-app/backend/internal/httperr"
 )
 
 // parseDate parses a YYYY-MM-DD string into a pgtype.Date (invalid when empty).
@@ -56,6 +57,7 @@ func writeJSON(writer http.ResponseWriter, status int, payload any) {
 }
 
 func writeError(writer http.ResponseWriter, status int, code, message string) {
+	message = httperr.SanitizeMessage(status, code, message)
 	writeJSON(writer, status, errorResponse{Code: code, Message: message})
 }
 

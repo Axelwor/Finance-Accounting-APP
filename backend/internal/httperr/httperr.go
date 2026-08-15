@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 )
 
@@ -36,6 +37,28 @@ func Write(w http.ResponseWriter, status int, code, message string, details ...m
 	w.Header().Set("X-Request-ID", requestID)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// SanitizeMessage logs the raw error message via slog (with the request_id
+// for traceability) and returns a generic message for 5xx errors. For 4xx
+// errors the original message is returned as-is — validation messages are
+// safe to show to clients and are needed for the UX.
+//
+// Usage in local writeErr helpers:
+//
+//	func writeErr(w http.ResponseWriter, status int, code, message string) {
+//	    message = httperr.SanitizeMessage(status, code, message)
+//	    writeJSON(w, status, errorResponse{Code: code, Message: message})
+//	}
+func SanitizeMessage(status int, code, message string) string {
+	if status >= 500 {
+		slog.Error("internal error returned to client",
+			"code", code,
+			"raw_message", message,
+		)
+		return "An internal error occurred. Please try again or contact support."
+	}
+	return message
 }
 
 // generateRequestID returns a short hex string (8 bytes → 16 chars).

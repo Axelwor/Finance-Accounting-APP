@@ -51,7 +51,39 @@ services:
     depends_on:
       - web
 
+  # Nightly pg_dump backup sidecar. Dumps are written to a named volume
+  # with a 7-day retention (files older than 7 days are deleted by find).
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-finance_accounting}
+      POSTGRES_USER: ${POSTGRES_USER:-finance}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        while true; do
+          echo "$$(date): starting backup"
+          PGPASSWORD=$$POSTGRES_PASSWORD pg_dump \
+            -h $$POSTGRES_HOST -U $$POSTGRES_USER $$POSTGRES_DB \
+            --no-owner --clean --if-exists \
+            | gzip > /backups/finance_$$(date +%Y%m%d_%H%M%S).sql.gz
+          # Delete backups older than 7 days
+          find /backups -name '*.sql.gz' -mtime +7 -delete
+          echo "$$(date): backup complete, sleeping 24h"
+          sleep 86400
+        done
+    volumes:
+      - backup_data:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  backup_data:

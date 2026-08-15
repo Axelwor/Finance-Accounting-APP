@@ -10,6 +10,18 @@
 
 accounting.tikuma.net {
 	encode gzip
+
+	# Security headers
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		# Cache static assets, never cache API responses
+		?Cache-Control "no-store"
+	}
+
 	handle /healthz* {
 		reverse_proxy api:8080
 	}
@@ -17,6 +29,7 @@ accounting.tikuma.net {
 		reverse_proxy api:8080
 	}
 	handle {
+		header ?Cache-Control "public, max-age=3600"
 		reverse_proxy web:80
 	}
 }

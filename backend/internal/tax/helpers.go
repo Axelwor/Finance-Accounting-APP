@@ -19,6 +19,7 @@ import (
 	"finance-accounting-app/backend/internal/accounting"
 	"finance-accounting-app/backend/internal/auth"
 	"finance-accounting-app/backend/internal/db"
+	"finance-accounting-app/backend/internal/httperr"
 )
 
 // Service exposes the tax endpoints: PPN reconciliation, PPh Final UMKM,
@@ -101,6 +102,7 @@ func writeJSON(writer http.ResponseWriter, status int, payload any) {
 }
 
 func writeError(writer http.ResponseWriter, status int, code, message string) {
+	message = httperr.SanitizeMessage(status, code, message)
 	writeJSON(writer, status, errorResponse{Code: code, Message: message})
 }
 
