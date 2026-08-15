@@ -149,6 +149,9 @@ func main() {
 			router.Get("/tenants", tenantHandler.List)
 			router.Get("/tenants/me", tenantHandler.GetMyTenant)
 
+			// Cash & bank history (read — any authenticated role).
+			router.Get("/cash-entries", cashHandler.ListCashEntries)
+
 			// --- Write operations: admin, accountant, manager, staff ---
 			router.Group(func(router chi.Router) {
 				router.Use(auth.RequireRole(auth.RoleOwner, auth.RoleAdmin, auth.RoleAccountant, auth.RoleManager, auth.RoleStaff))
