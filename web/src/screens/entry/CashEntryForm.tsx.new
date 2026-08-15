@@ -5,7 +5,7 @@ import { AccountPicker } from "../../components/AccountPicker";
 import { StaticCombobox } from "../../components/Combobox";
 import { ErrorState, FormError, LoadingState } from "../../components/ui";
 import { api, mockHelpers } from "../../api";
-import { formatIDR, formatDate } from "../../lib/format";
+import { formatIDR } from "../../lib/format";
 import type { AccountItem, Category, CounterLinePayload, EntrySubKind } from "../../types";
 
 interface Props {
@@ -443,7 +443,9 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
     const validation = validate();
     if (validation !== true) {
       setFieldErrors(validation);
-      const errMsg = Object.values(validation)[0] as string;
+      const errMsg = Array.isArray(Object.values(validation)[0]) 
+        ? Object.values(validation)[0].join(", ") 
+        : Object.values(validation)[0];
       setError(errMsg);
       return null;
     }
@@ -613,7 +615,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
             {statusLabel}
           </span>
           <span className="entrytab__number">{number}</span>
-          <span className="entrytab__date">{formatDate(date)}</span>
+          <span className="entrytab__date">{mockHelpers.formatDate(date)}</span>
         </div>
       </div>
 

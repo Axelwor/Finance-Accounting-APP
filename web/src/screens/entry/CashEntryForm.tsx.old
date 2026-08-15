@@ -83,8 +83,8 @@ function formatDigits(value: string): string {
  * │         Jumlah · No Bukti · Referensi        │  Simpan      │
  * │                                              │  Simpan&Baru │
  * │ Mode: [Cepat | Rinci]                        │  Tutup       │
- * │  Cepat  → kategori + catatan (1 baris)       │              │
- * │  Rinci → grid multi-akun + memo              │              │
+ * │  Cepat  → kategori + catatan (1 baris)       │  Balik&Ganti │
+ * │  Rinci → grid multi-akun + memo              │  (view only) │
  * │                                              │              │
  * │ Pratinjau jurnal (live, read-only)           │              │
  * └──────────────────────────────────────────────┴──────────────┘
@@ -94,6 +94,8 @@ function formatDigits(value: string): string {
  *  - One source of truth for the amount: Quick mode & single detail line
  *    sync two-way with the header amount; ≥2 lines make the grid total the
  *    master and the header shows Δ with a one-click "Samakan" fix.
+ *  - Existing entries open read-only (journals are immutable) with a
+ *    "Balik & ganti" (reverse + duplicate) action.
  *  - Save shows the real journal number from the backend response.
  *  - Save & New keeps date/cash account/counterparty/mode when the user
  *    enabled "Pertahankan header" (default on).
@@ -136,13 +138,14 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
   const [mode, setMode] = useState<FormMode>(loadMode);
   const [keepHeader, setKeepHeader] = useState(loadKeepHeader);
 
-  // ── Existing entry loading state ────────────────────────────────────────
-  const [existingLoading, setExistingLoading] = useState(false);
-  const [existingError, setExistingError] = useState<string | null>(null);
+  // ── View existing entry ─────────────────────────────────────────────────
+  const [viewing, setViewing] = useState(false);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewAmountCents, setViewAmountCents] = useState(0);
 
   const isTransfer = subKind === "cash-transfer";
   const isMoneyIn = subKind === "money-in";
-  const readOnly = savedJournal !== null;
+  const readOnly = viewing || savedJournal !== null;
 
   const cashOptions = useMemo(
     () => accounts.filter((a) => a.account_type === "CASH" || a.account_type === "BANK"),
@@ -163,7 +166,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
     return map;
   }, [accounts]);
 
-  // ── Data loading (accounts + categories) ────────────────────────────────
+  // ── Data loading (accounts + categories; existing entry when editing) ───
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -190,14 +193,14 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
     };
   }, [subKind]);
 
-  // ── Load existing entry data (if entryId provided) ───────────────────────
+  /** Full journal entry with lines when viewing an existing entry. */
+  const [journalLines, setJournalLines] = useState<{account_id: string; debit_cents: number; credit_cents: number; account_name: string}[]>([]);
+
+  // Load an existing entry for the read-only view.
   useEffect(() => {
     if (!entryId) return;
-    
     let cancelled = false;
-    setExistingLoading(true);
-    setExistingError(null);
-    
+    setViewLoading(true);
     (async () => {
       try {
         // First get list to confirm entry exists and fetch basic fields
@@ -207,80 +210,76 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
           limit: 5,
         });
         if (cancelled) return;
-        
-        const match = items.find(
-          (it) => String(it.id) === String(entryId) || it.number === String(entryId)
-        ) ?? items[0];
-        
+        const match =
+          items.find((it) => String(it.id) === String(entryId) || it.number === String(entryId)) ??
+          items[0];
         if (!match) {
-          setExistingError("Entri tidak ditemukan.");
-          setExistingLoading(false);
+          setLoadError("Entri tidak ditemukan.");
+          setViewLoading(false);
           return;
         }
-        
-        // Populate header fields
+        setViewing(true);
         setNumber(match.number);
         setDate(match.entry_date);
         setDescription(match.description);
-        
-        // Set cash account based on entry kind
-        if (isTransfer && match.from_account_id) {
+        setCashAccount(String(match.cash_account_id ?? ""));
+        if (match.kind === "transfer" && match.from_account_id) {
           setCashAccount(String(match.from_account_id));
           setCounterAccount(String(match.to_account_id ?? ""));
-        } else {
-          setCashAccount(String(match.cash_account_id ?? ""));
         }
+        setViewAmountCents(match.amount_cents);
         
-        // Now fetch the full journal entry with lines
+        // Now fetch the full entry with lines for display
         const journalId = match.id;
+        console.log('Fetching journal entry with ID:', journalId, 'Type:', typeof journalId); // DEBUG
         if (!journalId) {
-          setExistingError("Entri tidak memiliki ID.");
-          setExistingLoading(false);
+          setLoadError("Entri tidak memiliki ID untuk dimuat.");
+          setViewLoading(false);
           return;
         }
         
         const fullEntry = await api.getJournalEntry(journalId);
-        if (cancelled || !fullEntry || !fullEntry.lines || fullEntry.lines.length === 0) {
-          if (!cancelled) {
-            setExistingError(fullEntry?.lines ? "No lines found" : "Entry not found");
-          }
-          setExistingLoading(false);
+        console.log('API response:', fullEntry); // DEBUG
+        if (cancelled || !fullEntry) {
+          const msg = cancelled ? "Cancelled" : "Entry not found in backend";
+          console.warn(msg, "| Response:", fullEntry); // DEBUG
+          if (!cancelled) setLoadError("Gagal memuat rincian entri (tidak ditemukan).");
+          setViewLoading(false);
           return;
         }
         
-        // Transform and populate counter lines
-        const transformedLines: CounterLine[] = fullEntry.lines.map((l, idx) => ({
-          id: `existing-${idx}`,
-          accountId: String(l.account_id),
-          amount: l.debit_cents > 0 
-            ? l.debit_cents.toString() 
-            : l.credit_cents.toString(),
-          memo: l.description ?? ""
-        }));
-        
-        setCounterLines(transformedLines);
-        
-        // Clear loading/error since success
-        setExistingLoading(false);
-        
-      } catch (err) {
-        if (!cancelled) {
-          setExistingError(err instanceof Error ? err.message : "Gagal memuat entri.");
+        if (!fullEntry.lines || fullEntry.lines.length === 0) {
+          console.warn("No lines found for this entry"); // DEBUG
+          setLoadError("Rincian entri kosong.");
+          setViewLoading(false);
+          return;
         }
-        setExistingLoading(false);
+        
+        // Transform lines to local format
+        const transformedLines = fullEntry.lines.map(l => ({
+          account_id: String(l.account_id),
+          debit_cents: l.debit_cents ?? 0,
+          credit_cents: l.credit_cents ?? 0,
+          account_name: l.account_name || `#${l.account_id}`
+        }));
+        console.log('Transformed lines:', transformedLines); // DEBUG
+        setJournalLines(transformedLines);
+      } catch (err) {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : "Gagal memuat entri.");
+      } finally {
+        if (!cancelled) setViewLoading(false);
       }
     })();
-    
     return () => {
       cancelled = true;
     };
-  }, [entryId, isTransfer, isMoneyIn]);
+  }, [entryId]);
 
   // ── Unsaved tracking ────────────────────────────────────────────────────
   useEffect(() => {
     if (!readOnly) workbench.markUnsaved(tabId, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabId, date, number, description, cashAccount, counterAccount, counterLines, amountDisplay, mode, categoryId, note, keepHeader, workbench]);
+  }, [tabId, date, number, description, cashAccount, counterAccount, counterLines, amountDisplay]);
 
   // ── Amount sync (single source of truth) ────────────────────────────────
   const cashAmountCents = useMemo(() => parseCents(amountDisplay), [amountDisplay]);
@@ -443,12 +442,11 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
     const validation = validate();
     if (validation !== true) {
       setFieldErrors(validation);
-      const errMsg = Object.values(validation)[0] as string;
-      setError(errMsg);
+      setError(Object.values(validation)[0]);
       return null;
     }
-    setError(null);
     setFieldErrors({});
+    setError(null);
     setSaving(true);
     try {
       const desc = composedDescription();
@@ -502,25 +500,11 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
       return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Gagal menyimpan.";
-      setError(message);
+      setError(mapBackendError(message));
       return null;
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleSave = async () => {
-    await doSave();
-  };
-
-  const handleSaveAndNew = async () => {
-    const result = await doSave();
-    if (result) resetForNew();
-  };
-
-  const handleSaveAndClose = async () => {
-    const result = await doSave();
-    if (result) workbench.close(tabId);
   };
 
   /** Reset for the next entry. keepHeader=true retains date, cash account,
@@ -547,11 +531,49 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
     workbench.markUnsaved(tabId, true);
   };
 
-  const counterpartyLabel = (isMoneyIn: boolean): string => {
-    return isMoneyIn ? "Diterima dari" : "Dibayar kepada";
+  const handleSave = async () => {
+    await doSave();
   };
 
-  // ── Submit handlers ────────────────────────────────────────────────────
+  const handleSaveAndNew = async () => {
+    const result = await doSave();
+    if (result) resetForNew();
+  };
+
+  const handleSaveAndClose = async () => {
+    const result = await doSave();
+    if (result) workbench.close(tabId);
+  };
+
+  /** View mode: reverse the journal then open a prefilled draft. */
+  const handleReverseAndReplace = async () => {
+    if (!savedJournal && !entryId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const items = await api.listCashEntries({
+        kind: isTransfer ? "transfer" : isMoneyIn ? "money-in" : "money-out",
+        q: String(entryId ?? number),
+        limit: 5,
+      });
+      const match =
+        items.find((it) => it.number === String(entryId ?? number)) ?? items[0];
+      // CashEntryListItem.id IS the journal entry id (the list is built from
+      // journal_entries), so reverseCash can take it directly.
+      if (match?.id) {
+        await api.reverseCash(match.id);
+        toast.success(`Jurnal ${match.number} dibalik. Draft baru disiapkan dari data lama.`);
+      } else {
+        toast.error("Entri asli tidak ditemukan untuk dibalik.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal membalik jurnal.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     void handleSave();
@@ -585,24 +607,18 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
       : subKind === "money-out"
         ? "Pengeluaran Kas Lainnya"
         : "Transfer Kas/Bank";
-  const statusLabel = readOnly ? (savedJournal ? "POSTED" : "VIEW") : "DRAFT";
+  const statusLabel = readOnly ? (savedJournal ? "POSTED" : viewing ? "POSTED" : "DRAFT") : "DRAFT";
 
   const hasData = isTransfer
     ? amountDisplay.trim() !== "" && cashAccount !== "" && counterAccount !== ""
     : amountDisplay.trim() !== "" || counterLines.some((l) => l.accountId !== "" || l.amount.trim() !== "");
 
-  const anyChanged = useMemo(() => {
-    if (savedJournal) return false; // POSTED -> never change
-    if (!entryId) return true; // Draft mode -> always can save
-    
-    // Editing existing: check if anything changed from original
-    // For now, assume any interaction = changed
-    return true;
-  }, [savedJournal, entryId]);
+  const cashFieldLabel = isTransfer ? "Dari akun" : isMoneyIn ? "Masuk ke" : "Keluar dari";
+  const partyLabel = counterpartyLabel(isMoneyIn);
 
   // ── Render ──────────────────────────────────────────────────────────────
-  if (loading) return <LoadingState label="Loading masters..." />;
-  if (loadError) return <ErrorState message={loadError} onRetry={() => window.location.reload()} />;
+  if (loading) return <LoadingState label="Memuat akun…" />;
+  if (loadError && accounts.length === 0) return <ErrorState message={loadError} onRetry={() => window.location.reload()} />;
 
   return (
     <form className="entrytab entrytab--accurate" onSubmit={handleSubmit} noValidate>
@@ -619,11 +635,6 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
 
       <div className="entrytab__body">
         <div className="entrytab__main">
-          {/* Existing entry loading error */}
-          {existingError && !readOnly && (
-            <FormError message={existingError} />
-          )}
-
           {/* Success panel replaces the form after save. */}
           {savedJournal ? (
             <div className="entrytab__saved" role="status">
@@ -640,6 +651,10 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                 </button>
               </div>
             </div>
+          ) : null}
+
+          {savedJournal ? null : viewLoading ? (
+            <LoadingState label="Memuat entri…" />
           ) : (
             <>
               <div className="entrytab__header-grid">
@@ -661,7 +676,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                   </label>
                   {!isTransfer && (
                     <label className="field">
-                      <span className="field__label">{counterpartyLabel(isMoneyIn)}</span>
+                      <span className="field__label">{partyLabel}</span>
                       <input
                         className="input"
                         value={counterparty}
@@ -672,7 +687,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                     </label>
                   )}
                   <label className="field">
-                    <span className="field__label">{isTransfer ? "Dari akun" : isMoneyIn ? "Masuk ke" : "Keluar dari"} *</span>
+                    <span className="field__label">{cashFieldLabel} *</span>
                     <AccountPicker
                       accounts={accounts}
                       value={cashAccount || null}
@@ -758,7 +773,46 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                 </div>
               </div>
 
-              {/* Quick mode: category + note row */}
+              {/* Mode switch — hidden for transfers (no category/grid needed). */}
+              {!isTransfer && !readOnly && (
+                <div className="entrytab__mode" role="tablist" aria-label="Mode input">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={mode === "quick"}
+                    className={`btn btn--sm ${mode === "quick" ? "btn--primary" : "btn--secondary"}`}
+                    onClick={() => {
+                      setMode("quick");
+                      try {
+                        localStorage.setItem(LS_MODE, "quick");
+                      } catch { /* ignore */ }
+                    }}
+                  >
+                    Mode Cepat
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={mode === "detail"}
+                    className={`btn btn--sm ${mode === "detail" ? "btn--primary" : "btn--secondary"}`}
+                    onClick={() => {
+                      setMode("detail");
+                      try {
+                        localStorage.setItem(LS_MODE, "detail");
+                      } catch { /* ignore */ }
+                    }}
+                  >
+                    Mode Rinci
+                  </button>
+                  {categories.length === 0 && mode === "quick" && (
+                    <span className="entrytab__mode-hint">
+                      Belum ada kategori — gunakan Mode Rinci.
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Quick mode: category + note. */}
               {!isTransfer && mode === "quick" && !readOnly && (
                 <div className="entrytab__quick">
                   <label className="field">
@@ -785,11 +839,11 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                 </div>
               )}
 
-              {/* Detail grid (Rinci mode, and Quick mode's counter account display) */}
-              {!isTransfer && (mode === "detail" || mode === "quick") && !readOnly && (
+              {/* Detail grid (Rinci mode, and Quick mode's read-only view of the counter account). */}
+              {!isTransfer && (mode === "detail" || readOnly) && (
                 <div className="entrytab__detail">
                   <div className="entrytab__detail-title">
-                    {mode === "detail" ? "Rincian alokasi *" : "Detail transaksi"}
+                    {mode === "detail" && !readOnly ? "Rincian alokasi *" : "Rincian alokasi"}
                   </div>
                   <div className="detail-grid">
                     <div className="detail-grid__head">
@@ -873,7 +927,11 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                       </div>
                     )}
                   </div>
-                  {mode === "detail" && amountOverride && counterTotalCents !== cashAmountCents && (
+                  <div className="entrytab__total">
+                    <span className="entrytab__total-label">Total rincian</span>
+                    <span className="entrytab__total-value">{formatIDR(counterTotalCents)}</span>
+                  </div>
+                  {amountOverride && counterTotalCents !== cashAmountCents && (
                     <div className="entrytab__delta" role="alert">
                       ⚠ Selisih {formatIDR(Math.abs(counterTotalCents - cashAmountCents))}{" "}
                       <button type="button" className="btn btn--secondary btn--sm" onClick={matchAmountToTotal}>
@@ -881,14 +939,34 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                       </button>
                     </div>
                   )}
-                  {mode === "detail" && fieldErrors.grid && <FormError message={fieldErrors.grid} />}
+                  {fieldErrors.grid && <FormError message={fieldErrors.grid} />}
                 </div>
               )}
 
-              {/* Live journal preview */}
+              {/* Journal preview — live (quick/detail modes) or actual lines (view-only) */}
               <div className="entrytab__preview" aria-label="Pratinjau jurnal">
-                <div className="entrytab__preview-title">{readOnly ? "Rincian jurnal" : "Pratinjau jurnal"}</div>
-                {journalPreview.length === 0 ? (
+                <div className="entrytab__preview-title">{viewing ? "Rincian jurnal" : "Pratinjau jurnal"}</div>
+                {viewing && journalLines.length > 0 ? (
+                  <>
+                    <table className="entrytab__preview-table">
+                      <tbody>
+                        {journalLines.map((line, i) => {
+                          const hasDebit = line.debit_cents > 0;
+                          return (
+                            <tr key={i}>
+                              <td className="entrytab__preview-side">{hasDebit ? "Dr" : "Cr"}</td>
+                              <td>{line.account_name || `#${line.account_id}`}</td>
+                              <td className="right">{formatIDR(hasDebit ? line.debit_cents : line.credit_cents)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <div className={`entrytab__preview-balance ${true ? "is-positive" : "is-negative"}`}>
+                      ✓ Balance
+                    </div>
+                  </>
+                ) : journalPreview.length === 0 ? (
                   <div className="entrytab__preview-empty">Isi form untuk melihat pratinjau jurnal.</div>
                 ) : (
                   <table className="entrytab__preview-table">
@@ -903,9 +981,6 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                     </tbody>
                   </table>
                 )}
-                <div className={`entrytab__preview-balance ${previewBalanced ? "is-positive" : "is-negative"}`}>
-                  {previewBalanced ? "✓ Balance" : `Δ ${formatIDR(Math.abs(previewDr - previewCr))}`}
-                </div>
               </div>
 
               {error && <FormError message={error} />}
@@ -962,21 +1037,19 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
           )}
           {readOnly && (
             <>
-              {savedJournal && (
-                <div className="action-rail__number" title="Nomor jurnal backend">
-                  {savedJournal.number}
-                </div>
-              )}
-              {entryId && !savedJournal && (
+              <div className="action-rail__number" title="Nomor jurnal backend">
+                {savedJournal ? savedJournal.number : number}
+              </div>
+              {viewing && (
                 <button
                   type="button"
                   className="action-rail__btn action-rail__btn--secondary"
-                  onClick={() => alert("Fitur 'Balik & Ganti' akan segera hadir.")}
-                  title="Reverse entry dan buka draft baru"
+                  onClick={handleReverseAndReplace}
                   disabled={saving}
+                  title="Balik jurnal lalu buka draft baru dari data lama"
                 >
                   <ReverseIcon />
-                  <span>{saving ? "Memproses…" : "Balik &amp; Ganti"}</span>
+                  <span>{saving ? "Memproses…" : "Balik & Ganti"}</span>
                 </button>
               )}
               <button
@@ -1005,6 +1078,10 @@ function mapBackendError(message: string): string {
     return "Total rincian tidak sama dengan jumlah. Samakan kedua nilai lalu simpan.";
   }
   return message;
+}
+
+function counterpartyLabel(isMoneyIn: boolean): string {
+  return isMoneyIn ? "Diterima dari" : "Dibayar kepada";
 }
 
 function draftNumber(subKind: EntrySubKind): string {
@@ -1046,7 +1123,10 @@ function CloseIcon() {
 function ReverseIcon() {
   return (
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <path d="M4 12a8 8 0 0 1 14-5l2-2v6h-6l2-2a6 6 0 0 0-10 3M20 12a8 8 0 0 1-8 8l-2 2v-6h6l-2 2a6 6 0 0 0 10-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+      <path d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+      <path d="M4 5v4h4" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M20 12a8 8 0 0 1-8 8" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+      <path d="M20 19v-4h-4" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
