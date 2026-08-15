@@ -517,7 +517,7 @@ Status below reflects the 2026-08-15 code audit. Items marked ✅ FIXED were ver
 | Tenant switcher | ✅ |
 | Registration creates tenant + membership | ✅ |
 | JWT tenant_id used everywhere | ✅ |
-| RBAC (6 roles) | ⚠️ Coarse — accountant/manager/staff identical |
+| RBAC (6 roles) | ⚠️ OPEN BUSINESS DECISION: 2 enforcement tiers exist (write: owner/admin/accountant/manager/staff; admin-only: period close, unlock, account deactivate; viewer = read-only by exclusion). Splitting accountant/manager/staff requires a documented role-permission matrix from the business owner — no matrix defined in ARCHITECTURE/API_CONTRACT yet |
 | 2FA (RFC 6238) | ✅ Fully compliant, ±30s tolerance |
 | Inter-company elimination | ✅ A-29 fixed 2026-08-15: population endpoints + pct weighting + eliminated flag |
 | Entity hierarchy | ✅ |
@@ -532,12 +532,12 @@ Status below reflects the 2026-08-15 code audit (Waves 4-8 merged + TS reconcili
 | Module | Tracking? | Posts Journal? | Frontend? | Key Gap |
 |---|---|---|---|---|
 | Petty Cash | ✅ | ✅ All 3 (fund, voucher, replenish) | ✅ FundList, VoucherList | — |
-| Recurring | ✅ | ✅ PostNow + scheduler (15-min ticker, graceful shutdown) | ✅ RecurringTransactionList | ⚠️ list endpoint lacks from/to account fields |
+| Recurring | ✅ | ✅ PostNow + scheduler (15-min ticker, graceful shutdown) | ✅ RecurringTransactionList | ✅ list returns from/to account + payment_description (edit mode fills) |
 | Cheques | ✅ | ✅ State actions post journal | ✅ ChequeList | — |
 | Cost Centers | ✅ | ✅ execute-allocations posts journal | ✅ List + PnL screens | — |
-| Email | ✅ | N/A | ✅ TemplateList + QueueList | ⚠️ SMTP delivery not implemented (Send marks SENT) |
+| Email | ✅ | N/A | ✅ TemplateList + QueueList | ✅ SMTP worker: net/smtp + STARTTLS, env-config (SMTP_HOST/PORT/USER/PASS/FROM/INTERVAL), retry w/ max_retries, PENDING→SENDING→SENT/FAILED claim w/ SKIP LOCKED, disabled no-op when SMTP_HOST empty |
 | Bank Reconciliation | ✅ | ✅ complete posts adjustment journal (A-26) | ✅ | — |
-| Dashboard | ✅ | N/A | ✅ | ⚠️ Some KPI widgets hardcoded |
+| Dashboard | ✅ | N/A | ✅ | ✅ 8 widget types query real data (cash, P&L, AR/AP aging, low stock, recent txns, period status, outstanding invoices); frontend KPIs from /reports/* + /aging/ar + widget data with honest 0 fallbacks |
 | Attachments | ✅ | N/A | ✅ | No content sniffing |
 | Audit Log | ✅ | N/A | ✅ | Coverage 23 modules |
 | PPh | ✅ | ✅ postPPhJournal (A-06) | ✅ | — |

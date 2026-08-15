@@ -347,6 +347,10 @@ func main() {
 	defer cancelScheduler()
 	recurringHandler.StartScheduler(schedCtx, 15*time.Minute)
 
+	// SMTP delivery worker for the email queue. Disabled (no-op, one log
+	// line) unless SMTP_HOST is configured in the environment.
+	emailHandler.StartSMTPWorker(schedCtx, email.SMTPConfigFromEnv())
+
 	// Graceful shutdown: SIGINT/SIGTERM triggers a 15-second drain period
 	// so in-flight requests finish before the process exits.
 	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: router}

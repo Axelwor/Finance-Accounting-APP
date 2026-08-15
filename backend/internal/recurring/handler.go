@@ -117,7 +117,8 @@ func (service *Service) List(writer http.ResponseWriter, request *http.Request) 
 	activeOnly := request.URL.Query().Get("active") == "true"
 	query := `
 		SELECT id, code, name, description, intent_type, frequency, next_date, end_date,
-		       last_posted_date, amount_cents, is_active
+		       last_posted_date, amount_cents, is_active,
+		       from_account_id, to_account_id, COALESCE(payment_description, '')
 		FROM recurring_transactions
 		WHERE tenant_id = $1`
 	args := []any{tenantID}
@@ -134,17 +135,20 @@ func (service *Service) List(writer http.ResponseWriter, request *http.Request) 
 	defer rows.Close()
 
 	type item struct {
-		ID             int64  `json:"id"`
-		Code           string `json:"code"`
-		Name           string `json:"name"`
-		Description    string `json:"description"`
-		IntentType     string `json:"intent_type"`
-		Frequency      string `json:"frequency"`
-		NextDate       string `json:"next_date"`
-		EndDate        string `json:"end_date,omitempty"`
-		LastPostedDate string `json:"last_posted_date,omitempty"`
-		AmountCents    int64  `json:"amount_cents"`
-		IsActive       bool   `json:"is_active"`
+		ID                int64  `json:"id"`
+		Code              string `json:"code"`
+		Name              string `json:"name"`
+		Description       string `json:"description"`
+		IntentType        string `json:"intent_type"`
+		Frequency         string `json:"frequency"`
+		NextDate          string `json:"next_date"`
+		EndDate           string `json:"end_date,omitempty"`
+		LastPostedDate    string `json:"last_posted_date,omitempty"`
+		AmountCents       int64  `json:"amount_cents"`
+		IsActive          bool   `json:"is_active"`
+		FromAccountID     int64  `json:"from_account_id"`
+		ToAccountID       int64  `json:"to_account_id"`
+		PaymentDescription string `json:"payment_description,omitempty"`
 	}
 	var items []item
 	for rows.Next() {
@@ -152,7 +156,8 @@ func (service *Service) List(writer http.ResponseWriter, request *http.Request) 
 		var nextDate, endDate, lastPosted time.Time
 		var desc string
 		if err := rows.Scan(&it.ID, &it.Code, &it.Name, &desc, &it.IntentType, &it.Frequency,
-			&nextDate, &endDate, &lastPosted, &it.AmountCents, &it.IsActive); err != nil {
+			&nextDate, &endDate, &lastPosted, &it.AmountCents, &it.IsActive,
+			&it.FromAccountID, &it.ToAccountID, &it.PaymentDescription); err != nil {
 			writeJSON(writer, http.StatusInternalServerError, errBody{"SCAN_FAILED", err.Error()})
 			return
 		}
