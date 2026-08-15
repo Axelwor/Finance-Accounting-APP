@@ -1088,8 +1088,9 @@ Merged: 2026-08-12..13 (Waves 4-8). All modules implemented and type-safe after 
 | Lease modify/terminate/depreciate UI | 1 day |
 | Inter-company elimination UI + population endpoint | 1 day |
 
-### Phase 9: Test Coverage (Day 16-20) — ~4 days
+### Phase 9: Test Coverage (Day 16-20) — ~4 days ✅ COMPLETE
 
+Merged: 2026-08-15. Backend: 36 packages with passing tests (incl. integration harness from phase7 commit). New tests added: PPN half-up rounding (A-09), milliunit line totals (A-22), httperr.SanitizeMessage 4xx/5xx boundaries, RateLimiter.Stop (B-10), RequestID middleware (generate/echo/honor incoming). Frontend: vitest 4.1 + @testing-library/react 16 + jsdom 30 set up (vitest.config.ts + src/test/setup.ts). 42 tests across 3 suites: format lib (formatIDR/parseAmountInput/parseDateInput incl. U+00A0 Intl quirk), UI components (TextField/AmountField/FieldShell/EmptyState/FormError), workbench modules (defaultListTitle/defaultEntryTitle/draftNumber/findModule/findSubItemByList). Run: `npm test`.
 | Task | Effort |
 |---|---|
 | Set up vitest + write first frontend component tests | 1 day |
