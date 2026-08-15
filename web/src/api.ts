@@ -171,6 +171,8 @@ import type {
   CreateEntityHierarchyInput,
   ConsolidatedTrialBalanceResult,
   ConsolidatedProfitLossResult,
+  InterCompanyTransaction,
+  CreateInterCompanyTxInput,
   ReportTemplate,
   CreateReportTemplateInput,
   ChequeListItem,
@@ -2507,6 +2509,34 @@ export const api = {
     } catch {
       return { revenue_cents: 0, expense_cents: 0, profit_cents: 0, elimination_cents: 0, consolidated_tenant_ids: [] };
     }
+  },
+
+  // -- Inter-company Transactions (A-29) --
+
+  /** Register an inter-company transaction (POST /inter-company-transactions). */
+  async createInterCompanyTx(input: CreateInterCompanyTxInput): Promise<InterCompanyTransaction> {
+    return http<InterCompanyTransaction>("/inter-company-transactions", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** List inter-company transactions (GET /inter-company-transactions). */
+  async listInterCompanyTx(params?: { tx_type?: string; eliminated?: boolean }): Promise<InterCompanyTransaction[]> {
+    const q = new URLSearchParams();
+    if (params?.tx_type) q.set("tx_type", params.tx_type);
+    if (params?.eliminated !== undefined) q.set("eliminated", String(params.eliminated));
+    const qs = q.toString();
+    return http<InterCompanyTransaction[]>(`/inter-company-transactions${qs ? `?${qs}` : ""}`, { auth: true });
+  },
+
+  /** Delete a registered inter-company transaction (DELETE /inter-company-transactions/{id}). */
+  async deleteInterCompanyTx(id: number): Promise<{ deleted: boolean; id: number }> {
+    return http(`/inter-company-transactions/${id}`, {
+      method: "DELETE",
+      auth: true,
+    });
   },
 
   // -- Report Templates (US-090A) --

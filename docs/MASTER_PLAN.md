@@ -517,7 +517,7 @@ Plain `log.Printf`. No `slog`/`zap`/`zerolog`, no JSON, no log levels, no reques
 | JWT tenant_id used everywhere | ✅ |
 | RBAC (6 roles) | ⚠️ Coarse — accountant/manager/staff identical |
 | 2FA (RFC 6238) | ✅ Fully compliant, ±30s tolerance |
-| Inter-company elimination | ⚠️ No population endpoint, pct ignored |
+| Inter-company elimination | ✅ A-29 fixed 2026-08-15: population endpoints + pct weighting + eliminated flag |
 | Entity hierarchy | ✅ |
 | Approval gate on invoices | ✅ |
 | **Approval gate on other types** | ❌ Only invoices |
@@ -538,7 +538,7 @@ Plain `log.Printf`. No `slog`/`zap`/`zerolog`, no JSON, no log levels, no reques
 | Audit Log | ✅ | N/A | ✅ | Coverage only 3/15 paths |
 | PPh | ✅ | ❌ | ✅ | No journal posting |
 | Approval Workflow | ✅ | N/A | ❌ | Gate only on invoices, no UI |
-| Inter-company | ⚠️ | N/A | ⚠️ | No population endpoint, pct ignored |
+| Inter-company | ✅ | N/A | ✅ | A-29 fixed: POST/GET/DELETE /inter-company-transactions, pct weighting, eliminated flag |
 
 ### Reporting
 
@@ -1071,7 +1071,7 @@ Merged: 2026-08-12 (Wave 5). Semantic tables, ARIA labels, color contrast, keybo
 
 ### Phase 8: Missing Modules (Day 10-18, parallel via Agent Manager) — ~10 days ✅ COMPLETE
 
-Merged: 2026-08-12..13 (Waves 4-8). All modules implemented and type-safe after 2026-08-15 TS reconciliation. Remaining known gap: inter-company elimination population endpoint (A-29) — UI + read endpoints exist, write endpoint deferred.
+Merged: 2026-08-12..13 (Waves 4-8). All modules implemented and type-safe after 2026-08-15 TS reconciliation. A-29 inter-company population endpoint implemented 2026-08-15: POST/GET/DELETE /inter-company-transactions (consolidation-group validation, journal-entry ownership check, eliminated rows immutable), consolidation_pct now weights child balances in consolidated TB + P&L, eliminated flag persisted on match, matching logic extracted to pure matchEliminationPairs with 12 unit tests.
 | Task | Effort |
 |---|---|
 | Cheques & GIRO (list + form + state actions + journal posting) | 1.5 days |

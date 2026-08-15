@@ -75,6 +75,11 @@ func (service *Service) Routes(router chi.Router) {
 	router.Post("/entity-hierarchy", service.CreateEntityHierarchy)
 	router.Get("/entity-hierarchy", service.ListEntityHierarchy)
 
+	// A-29: inter-company transaction population endpoints.
+	router.Post("/inter-company-transactions", service.CreateInterCompanyTx)
+	router.Get("/inter-company-transactions", service.ListInterCompanyTx)
+	router.Delete("/inter-company-transactions/{id}", service.DeleteInterCompanyTx)
+
 	router.Get("/consolidated-reports/trial-balance", service.ConsolidatedTrialBalance)
 	router.Get("/consolidated-reports/profit-loss", service.ConsolidatedProfitLoss)
 }

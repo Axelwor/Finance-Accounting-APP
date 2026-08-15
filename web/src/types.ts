@@ -1968,6 +1968,42 @@ export interface ConsolidatedProfitLossResult {
   consolidated_tenant_ids: number[];
 }
 /* ------------------------------------------------------------------ */
+/* Inter-company Transactions (A-29)                                   */
+/* ------------------------------------------------------------------ */
+
+export type InterCompanyTxType =
+  | "SALE"
+  | "PURCHASE"
+  | "LOAN"
+  | "INTEREST"
+  | "DIVIDEND"
+  | "MANAGEMENT_FEE";
+
+/** Registered inter-company transaction pending elimination. */
+export interface InterCompanyTransaction {
+  id: number;
+  tenant_id: number;
+  counterparty_tenant_id: number;
+  counterparty_name?: string;
+  tx_type: InterCompanyTxType;
+  journal_entry_id?: number | null;
+  amount_cents: number;
+  tx_date: string;
+  description?: string;
+  eliminated: boolean;
+  created_at: string;
+}
+
+/** Input for registering an inter-company transaction. */
+export interface CreateInterCompanyTxInput {
+  counterparty_tenant_id: number;
+  tx_type: InterCompanyTxType;
+  journal_entry_id?: number;
+  amount_cents: number;
+  tx_date: string;
+  description?: string;
+}
+/* ------------------------------------------------------------------ */
 /* Report Templates (US-090A)                                         */
 /* ------------------------------------------------------------------ */
 export type ReportTemplateDocumentType =

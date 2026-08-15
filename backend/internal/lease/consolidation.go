@@ -167,7 +167,7 @@ func (service *Service) ConsolidatedTrialBalance(writer http.ResponseWriter, req
 	}
 
 	tenantIDs := service.collectConsolidationTenants(request.Context(), tenant)
-	result, err := service.fetchConsolidatedTrialBalance(request.Context(), tenantIDs)
+	result, err := service.fetchConsolidatedTrialBalance(request.Context(), tenant, tenantIDs)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
 		return
@@ -175,7 +175,7 @@ func (service *Service) ConsolidatedTrialBalance(writer http.ResponseWriter, req
 	writeJSON(writer, http.StatusOK, result)
 }
 
-func (service *Service) fetchConsolidatedTrialBalance(ctx context.Context, tenantIDs []int64) (consolidatedTrialBalanceResult, error) {
+func (service *Service) fetchConsolidatedTrialBalance(ctx context.Context, parentTenantID int64, tenantIDs []int64) (consolidatedTrialBalanceResult, error) {
 	result := consolidatedTrialBalanceResult{
 		Rows:                []consolidatedTrialBalanceRow{},
 		ConsolidatedTenants: tenantIDs,
@@ -184,18 +184,24 @@ func (service *Service) fetchConsolidatedTrialBalance(ctx context.Context, tenan
 		return result, nil
 	}
 
+	// A-29: child balances are weighted by consolidation_pct from the entity
+	// hierarchy (parent = 100%). The pct scales debit and credit equally, so
+	// each tenant's books stay internally balanced after weighting.
 	rows, err := service.pool.Query(ctx, `
 		SELECT a.id, a.code, a.name, a.report_group,
-		       COALESCE(SUM(jl.debit_cents), 0), COALESCE(SUM(jl.credit_cents), 0)
+		       COALESCE(SUM(ROUND(jl.debit_cents  * COALESCE(eh.consolidation_pct, 1.0))), 0)::bigint,
+		       COALESCE(SUM(ROUND(jl.credit_cents * COALESCE(eh.consolidation_pct, 1.0))), 0)::bigint
 		FROM accounts a
 		LEFT JOIN journal_lines jl
 		       ON jl.tenant_id = ANY($1) AND jl.account_id = a.id
 		LEFT JOIN journal_entries je
 		       ON je.tenant_id = ANY($1) AND je.id = jl.entry_id AND je.status = 'POSTED'
+		LEFT JOIN entity_hierarchy eh
+		       ON eh.tenant_id = jl.tenant_id AND eh.parent_tenant_id = $2
 		WHERE a.tenant_id = ANY($1) AND a.is_group = false
 		GROUP BY a.id, a.code, a.name, a.report_group
 		ORDER BY a.code
-	`, tenantIDs)
+	`, tenantIDs, parentTenantID)
 	if err != nil {
 		return result, err
 	}
@@ -255,7 +261,7 @@ func (service *Service) ConsolidatedProfitLoss(writer http.ResponseWriter, reque
 	}
 
 	tenantIDs := service.collectConsolidationTenants(request.Context(), tenant)
-	result, err := service.fetchConsolidatedProfitLoss(request.Context(), tenantIDs)
+	result, err := service.fetchConsolidatedProfitLoss(request.Context(), tenant, tenantIDs)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
 		return
@@ -263,23 +269,26 @@ func (service *Service) ConsolidatedProfitLoss(writer http.ResponseWriter, reque
 	writeJSON(writer, http.StatusOK, result)
 }
 
-func (service *Service) fetchConsolidatedProfitLoss(ctx context.Context, tenantIDs []int64) (consolidatedProfitLossResult, error) {
+func (service *Service) fetchConsolidatedProfitLoss(ctx context.Context, parentTenantID int64, tenantIDs []int64) (consolidatedProfitLossResult, error) {
 	result := consolidatedProfitLossResult{ConsolidatedTenants: tenantIDs}
 	if len(tenantIDs) == 0 {
 		return result, nil
 	}
 
+	// A-29: child revenue/expense weighted by consolidation_pct (parent = 100%).
 	rows, err := service.pool.Query(ctx, `
-		SELECT a.report_group, COALESCE(SUM(CASE
+		SELECT a.report_group, COALESCE(SUM(ROUND((CASE
 			WHEN a.report_group IN ('revenue') THEN jl.credit_cents - jl.debit_cents
-			ELSE jl.debit_cents - jl.credit_cents END), 0)
+			ELSE jl.debit_cents - jl.credit_cents END)
+			* COALESCE(eh.consolidation_pct, 1.0))), 0)::bigint
 		FROM journal_lines jl
 		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
 		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+		LEFT JOIN entity_hierarchy eh ON eh.tenant_id = jl.tenant_id AND eh.parent_tenant_id = $2
 		WHERE jl.tenant_id = ANY($1) AND je.status = 'POSTED'
 		  AND a.report_group IN ('revenue', 'expense')
 		GROUP BY a.report_group
-	`, tenantIDs)
+	`, tenantIDs, parentTenantID)
 	if err != nil {
 		return result, err
 	}
@@ -353,15 +362,6 @@ func (service *Service) computeEliminations(ctx context.Context, tenantIDs []int
 	}
 	defer rows.Close()
 
-	type icTx struct {
-		id                   int64
-		tenantID             int64
-		counterpartyTenantID int64
-		txType               string
-		journalEntryID       int64
-		amountCents          int64
-		used                 bool
-	}
 	var txs []icTx
 	for rows.Next() {
 		var t icTx
@@ -371,62 +371,102 @@ func (service *Service) computeEliminations(ctx context.Context, tenantIDs []int
 		}
 		txs = append(txs, t)
 	}
-
-	// i-006: elimination pairing rules. Each tx_type pairs with its mirror
-	// direction: SALE(A→B)↔PURCHASE(B→A), LOAN(A→B)↔LOAN(B→A),
-	// INTEREST(A→B)↔INTEREST(B→A), DIVIDEND(A→B)↔DIVIDEND(B→A).
-	pairType := map[string]string{
-		"SALE":     "PURCHASE",
-		"LOAN":     "LOAN",
-		"INTEREST": "INTEREST",
-		"DIVIDEND": "DIVIDEND",
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
-	// Match each transaction with its counterparty mirror of the same amount.
+	pairs := matchEliminationPairs(txs)
+	if len(pairs) == 0 {
+		return nil, nil
+	}
+
 	var elimEntries []eliminationEntry
-	for i, sale := range txs {
-		if sale.used {
+	var matchedIDs []int64
+	for _, p := range pairs {
+		matchedIDs = append(matchedIDs, p[0].id, p[1].id)
+		// Collect journal lines from both entries.
+		for _, entryID := range []int64{p[0].journalEntryID, p[1].journalEntryID} {
+			lines, err := service.pool.Query(ctx, `
+				SELECT account_id, debit_cents, credit_cents
+				FROM journal_lines
+				WHERE entry_id = $1 AND (debit_cents > 0 OR credit_cents > 0)
+			`, entryID)
+			if err != nil {
+				return nil, err
+			}
+			for lines.Next() {
+				var e eliminationEntry
+				if err := lines.Scan(&e.accountID, &e.debit, &e.credit); err != nil {
+					lines.Close()
+					return nil, err
+				}
+				elimEntries = append(elimEntries, e)
+			}
+			lines.Close()
+		}
+	}
+	// A-29: persist the eliminated flag so each matched pair is eliminated
+	// exactly once. Best-effort — a failure to update must not break the
+	// report, so the error is swallowed (the next run retries the match).
+	_, _ = service.pool.Exec(ctx, `
+		UPDATE inter_company_transactions
+		SET eliminated = true
+		WHERE id = ANY($1)
+	`, matchedIDs)
+	return elimEntries, nil
+}
+
+// icTx is one inter-company transaction row loaded for elimination matching.
+type icTx struct {
+	id                   int64
+	tenantID             int64
+	counterpartyTenantID int64
+	txType               string
+	journalEntryID       int64
+	amountCents          int64
+	used                 bool
+}
+
+// eliminationPairType maps each tx_type to the tx_type of its mirror
+// counterparty leg (i-006): SALE(A→B)↔PURCHASE(B→A), LOAN↔LOAN,
+// INTEREST↔INTEREST, DIVIDEND↔DIVIDEND. MANAGEMENT_FEE has no mirror and is
+// never auto-eliminated.
+var eliminationPairType = map[string]string{
+	"SALE":     "PURCHASE",
+	"LOAN":     "LOAN",
+	"INTEREST": "INTEREST",
+	"DIVIDEND": "DIVIDEND",
+}
+
+// matchEliminationPairs pairs each transaction with its counterparty mirror:
+// opposite directions between the same two tenants and the same amount. Each
+// transaction participates in at most one pair (strict 1:1). It is a pure
+// function over the loaded rows so it can be unit-tested without a database.
+func matchEliminationPairs(txs []icTx) [][2]icTx {
+	var pairs [][2]icTx
+	for i := range txs {
+		if txs[i].used {
 			continue
 		}
-		wantType, ok := pairType[sale.txType]
+		wantType, ok := eliminationPairType[txs[i].txType]
 		if !ok {
 			continue
 		}
 		for j := range txs {
-			purchase := &txs[j]
-			if purchase.used || purchase.txType != wantType {
+			if i == j || txs[j].used || txs[j].txType != wantType {
 				continue
 			}
-			if purchase.tenantID == sale.counterpartyTenantID &&
-				purchase.counterpartyTenantID == sale.tenantID &&
-				purchase.amountCents == sale.amountCents {
-				purchase.used = true
+			if txs[j].tenantID == txs[i].counterpartyTenantID &&
+				txs[j].counterpartyTenantID == txs[i].tenantID &&
+				txs[j].amountCents == txs[i].amountCents {
 				txs[i].used = true
-				// Collect journal lines from both entries.
-				for _, entryID := range []int64{sale.journalEntryID, purchase.journalEntryID} {
-					lines, err := service.pool.Query(ctx, `
-						SELECT account_id, debit_cents, credit_cents
-						FROM journal_lines
-						WHERE entry_id = $1 AND (debit_cents > 0 OR credit_cents > 0)
-					`, entryID)
-					if err != nil {
-						return nil, err
-					}
-					for lines.Next() {
-						var e eliminationEntry
-						if err := lines.Scan(&e.accountID, &e.debit, &e.credit); err != nil {
-							lines.Close()
-							return nil, err
-						}
-						elimEntries = append(elimEntries, e)
-					}
-					lines.Close()
-				}
+				txs[j].used = true
+				pairs = append(pairs, [2]icTx{txs[i], txs[j]})
 				break
 			}
 		}
 	}
-	return elimEntries, nil
+	return pairs
 }
 
 // collectConsolidationTenants returns the parent tenant + all its children.
