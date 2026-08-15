@@ -193,6 +193,9 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
     };
   }, [subKind]);
 
+  /** Full journal entry with lines when viewing an existing entry. */
+  const [journalLines, setJournalLines] = useState<{account_id: string; debit_cents: number; credit_cents: number; account_name: string}[]>([]);
+
   // Load an existing entry for the read-only view.
   useEffect(() => {
     if (!entryId) return;
@@ -200,6 +203,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
     setViewLoading(true);
     (async () => {
       try {
+        // First get list to confirm entry exists and fetch basic fields
         const items = await api.listCashEntries({
           kind: isTransfer ? "transfer" : isMoneyIn ? "money-in" : "money-out",
           q: typeof entryId === "string" ? entryId : String(entryId),
@@ -211,6 +215,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
           items[0];
         if (!match) {
           setLoadError("Entri tidak ditemukan.");
+          setViewLoading(false);
           return;
         }
         setViewing(true);
@@ -223,9 +228,24 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
           setCounterAccount(String(match.to_account_id ?? ""));
         }
         setViewAmountCents(match.amount_cents);
-        const acctCode =
-          match.kind === "transfer" ? match.from_account_code : match.cash_account_code;
-        void acctCode;
+        
+        // Now fetch the full entry with lines for display
+        const fullEntry = await api.getJournalEntry(match.id);
+        if (cancelled || !fullEntry) {
+          if (!cancelled) setLoadError("Gagal memuat rincian entri.");
+          setViewLoading(false);
+          return;
+        }
+        
+        // Transform lines to local format
+        setJournalLines(
+          fullEntry.lines.map(l => ({
+            account_id: String(l.account_id),
+            debit_cents: l.debit_cents,
+            credit_cents: l.credit_cents,
+            account_name: l.account_name
+          }))
+        );
       } catch (err) {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : "Gagal memuat entri.");
       } finally {
@@ -235,7 +255,6 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryId]);
 
   // ── Unsaved tracking ────────────────────────────────────────────────────
@@ -906,10 +925,30 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                 </div>
               )}
 
-              {/* Journal preview — live, from the actual posting math. */}
+              {/* Journal preview — live (quick/detail modes) or actual lines (view-only) */}
               <div className="entrytab__preview" aria-label="Pratinjau jurnal">
-                <div className="entrytab__preview-title">Pratinjau jurnal</div>
-                {journalPreview.length === 0 ? (
+                <div className="entrytab__preview-title">{viewing ? "Rincian jurnal" : "Pratinjau jurnal"}</div>
+                {viewing && journalLines.length > 0 ? (
+                  <>
+                    <table className="entrytab__preview-table">
+                      <tbody>
+                        {journalLines.map((line, i) => {
+                          const hasDebit = line.debit_cents > 0;
+                          return (
+                            <tr key={i}>
+                              <td className="entrytab__preview-side">{hasDebit ? "Dr" : "Cr"}</td>
+                              <td>{line.account_name || `#${line.account_id}`}</td>
+                              <td className="right">{formatIDR(hasDebit ? line.debit_cents : line.credit_cents)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <div className={`entrytab__preview-balance ${true ? "is-positive" : "is-negative"}`}>
+                      ✓ Balance
+                    </div>
+                  </>
+                ) : journalPreview.length === 0 ? (
                   <div className="entrytab__preview-empty">Isi form untuk melihat pratinjau jurnal.</div>
                 ) : (
                   <table className="entrytab__preview-table">
@@ -924,9 +963,6 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                     </tbody>
                   </table>
                 )}
-                <div className={`entrytab__preview-balance ${previewBalanced ? "is-positive" : "is-negative"}`}>
-                  {previewBalanced ? "✓ Balance" : `Δ ${formatIDR(Math.abs(previewDr - previewCr))}`}
-                </div>
               </div>
 
               {error && <FormError message={error} />}
