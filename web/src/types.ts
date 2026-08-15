@@ -62,7 +62,12 @@ export type ListSubKind =
   | "ap-aging"
   | "warehouse-list"
   | "email-templates"
-  | "email-queue";
+  | "email-queue"
+  | "cost-center-list"
+  | "cost-center-pnl"
+  | "petty-cash-funds"
+  | "petty-cash-vouchers"
+  | "recurring-transactions";
 
 /** The currency code used throughout the app. */
 export type CurrencyCode = "IDR";
@@ -105,7 +110,13 @@ export type EntrySubKind =
   | "cheque-entry"
   | "warehouse-entry"
   | "email-templates"
-  | "email-template-entry";
+  | "email-template-entry"
+  | "cost-center-entry"
+  | "cost-center-allocation-entry"
+  | "pc-fund-entry"
+  | "pc-voucher-entry"
+  | "pc-replenish-entry"
+  | "recurring-transaction-entry";
 export interface Business {
   id: string;
   name: string;
@@ -2158,14 +2169,197 @@ export interface CreateEmailTemplateInput {
 /** Email queue item - queued or sent email notification. */
 export interface EmailQueueItem {
   id: number;
-  tenant_id: number;
-  template_id: number;
-  recipient_email: string;
+  tenant_id?: number;
+  template_id?: number | null;
+  to_email: string;
+  cc_email?: string;
+  bcc_email?: string;
   subject: string;
+  body_html?: string;
+  body_text?: string;
   status: "PENDING" | "SENT" | "FAILED";
-  trigger_event: EmailTriggerEvent;
+  retry_count?: number;
+  max_retries?: number;
+  last_error?: string;
   sent_at?: string;
-  error_message?: string;
+  entity_type?: string;
+  entity_id?: number | null;
+  trigger_event?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Cost Center (Wave 4)                                               */
+/* ------------------------------------------------------------------ */
+
+/** Cost center master record (matches backend CostCenterResponse). */
+export interface CostCenter {
+  id: number;
+  code: string;
+  name: string;
+  center_type: "COST" | "PROFIT" | "INVESTMENT";
+  parent_id: number | null;
+  manager_user_id: number | null;
+  is_active: boolean;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** List item for cost center tree views. */
+export interface CostCenterListItem extends CostCenter {
+  total_allocated_cents?: number;
+}
+
+/** Input for creating a cost center. */
+export interface CreateCostCenterInput {
+  code: string;
+  name: string;
+  center_type: "COST" | "PROFIT" | "INVESTMENT";
+  parent_id?: number | null;
+  manager_user_id?: number | null;
+  is_active?: boolean;
+  description?: string;
+}
+
+/** Input for updating a cost center. */
+export interface UpdateCostCenterInput {
+  name?: string;
+  center_type?: "COST" | "PROFIT" | "INVESTMENT";
+  parent_id?: number | null;
+  manager_user_id?: number | null;
+  is_active?: boolean;
+  description?: string;
+}
+
+/** Cost center allocation record. */
+export interface CostCenterAllocation {
+  id: number;
+  source_cost_center_id: number;
+  target_cost_center_id: number;
+  allocation_percentage: number;
+  allocation_basis: string;
+  is_active: boolean;
   created_at: string;
 }
-/** End of file. Added email templates types 2026-08-12 Wave 6b. */
+
+/** Input for creating an allocation. */
+export interface CreateAllocationInput {
+  source_cost_center_id: number;
+  target_cost_center_id: number;
+  allocation_percentage: number;
+  allocation_basis: string;
+  is_active?: boolean;
+}
+
+/** P&L result for a cost center over a date range. */
+export interface CostCenterPnLResult {
+  cost_center_id: number;
+  revenue_cents: number;
+  expense_cents: number;
+  net_cents: number;
+  line_count: number;
+}
+
+/* ------------------------------------------------------------------ */
+/* Petty Cash (Wave 4)                                                */
+/* ------------------------------------------------------------------ */
+
+/** Petty cash fund master record. */
+export interface PettyCashFund {
+  id: number;
+  code: string;
+  name: string;
+  cash_account_id: number;
+  imprest_amount_cents: number;
+  is_active: boolean;
+}
+
+/** Input for creating a petty cash fund. */
+export interface CreatePettyCashFundInput {
+  code: string;
+  name: string;
+  cash_account_id: number;
+  imprest_amount_cents: number;
+  payment_account_code?: string;
+}
+
+/** Petty cash voucher record. */
+export interface PettyCashVoucher {
+  id: number;
+  fund_id: number;
+  number: string;
+  voucher_date: string;
+  amount_cents: number;
+  description: string;
+  recipient?: string;
+  status: string;
+}
+
+/** Input for creating a petty cash voucher. */
+export interface CreatePettyCashVoucherInput {
+  fund_id: number;
+  voucher_date: string;
+  amount_cents: number;
+  expense_account_id: number;
+  description: string;
+  recipient?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Recurring Transactions (Wave 4)                                    */
+/* ------------------------------------------------------------------ */
+
+export type RecurringIntentType = "CASH_IN" | "CASH_OUT" | "TRANSFER" | "MANUAL_JOURNAL";
+export type RecurringFrequency = "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
+
+/** Recurring transaction list item. */
+export interface RecurringTransactionListItem {
+  id: number;
+  code: string;
+  name: string;
+  description: string;
+  intent_type: string;
+  frequency: RecurringFrequency;
+  next_date: string;
+  end_date?: string;
+  last_posted_date?: string;
+  amount_cents: number;
+  is_active: boolean;
+  from_account_id?: number;
+  to_account_id?: number;
+  payment_description?: string;
+}
+
+/** Input for creating a recurring transaction. */
+export interface CreateRecurringTransactionInput {
+  code: string;
+  name: string;
+  description?: string;
+  intent_type: RecurringIntentType;
+  frequency: RecurringFrequency;
+  next_date: string;
+  end_date?: string;
+  amount_cents: number;
+  from_account_id?: number;
+  to_account_id?: number;
+  payment_description?: string;
+}
+
+/** Result from posting a recurring transaction now. */
+export interface PostRecurringResult {
+  id: number;
+  code: string;
+  name: string;
+  intent_type: string;
+  amount_cents: number;
+  from_account_id: number;
+  to_account_id: number;
+  description: string;
+  posted_at: string;
+  next_date: string;
+  posted_by: number;
+  journal_entry_id: number;
+  journal_number: string;
+}

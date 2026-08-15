@@ -43,3 +43,21 @@ export function parseAmountInput(text: string): number {
   if (!clean) return 0;
   return parseInt(clean, 10);
 }
+
+/** Alias for formatIDR — used by recurring/cost-center modules. */
+export function fmtCurrencyIDR(value: number): string {
+  return formatIDR(value);
+}
+
+/** Alias for formatDate — used by recurring module (IDR locale label). */
+export function fmtDateIDR(date: string): string {
+  return formatDate(date);
+}
+
+/** Parse a yyyy-mm-dd date input into a Date, or null when empty/invalid. */
+export function parseDateInput(text: string): Date | null {
+  if (!text) return null;
+  const [year, month, day] = text.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}

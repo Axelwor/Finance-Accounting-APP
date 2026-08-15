@@ -174,7 +174,8 @@ export function DashboardScreen() {
 
   useEffect(() => {
     void load();
-  }, [load, retryKey, transactions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retryKey]); // Only reload when retryKey changes (manual retry)
 
   const businessName = business?.name || user?.businessName || "Your business";
   const todayStamp = useTodayStamp();

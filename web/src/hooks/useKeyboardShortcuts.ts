@@ -1,5 +1,8 @@
 import { useEffect, useRef } from "react";
 
+/** Custom event name dispatched to request closing the active tab. */
+export const CLOSE_TAB_EVENT = "app:close-tab";
+
 type Handler = (e: KeyboardEvent) => void;
 type Shortcuts = Record<string, Handler>;
 

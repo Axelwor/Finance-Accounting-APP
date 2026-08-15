@@ -58,6 +58,14 @@ const PARTY_LABEL: Record<EntrySubKind, string> = {
   "approval-rule-entry": "Approval Rule",
   "cheque-entry": "Cheque/GIRO",
   "warehouse-entry": "Warehouses",
+  "email-templates": "Email Templates",
+  "email-template-entry": "Email Template",
+  "cost-center-entry": "Cost Center",
+  "cost-center-allocation-entry": "Cost Center Allocation",
+  "pc-fund-entry": "Petty Cash Fund",
+  "pc-voucher-entry": "Petty Cash Voucher",
+  "pc-replenish-entry": "Petty Cash Replenish",
+  "recurring-transaction-entry": "Recurring Transaction",
 };
 
 const HEADER_TITLE: Record<EntrySubKind, string> = {
@@ -97,6 +105,14 @@ const HEADER_TITLE: Record<EntrySubKind, string> = {
   "approval-rule-entry": "Approval Rule",
   "cheque-entry": "Cheque/GIRO",
   "warehouse-entry": "Warehouses",
+  "email-templates": "Email Templates",
+  "email-template-entry": "Email Template",
+  "cost-center-entry": "Cost Center",
+  "cost-center-allocation-entry": "Cost Center Allocation",
+  "pc-fund-entry": "Petty Cash Fund",
+  "pc-voucher-entry": "Petty Cash Voucher",
+  "pc-replenish-entry": "Petty Cash Replenish",
+  "recurring-transaction-entry": "Recurring Transaction",
 };
 
 const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
@@ -136,6 +152,14 @@ const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
   "lease-contract-entry": { label: "Lease details" },
   "lease-payment-schedule": { label: "Schedule" },
   "rp-editor": { label: "Template YAML" },
+  "email-templates": { label: "Template list" },
+  "email-template-entry": { label: "Template body" },
+  "cost-center-entry": { label: "Cost center info" },
+  "cost-center-allocation-entry": { label: "Allocation lines" },
+  "pc-fund-entry": { label: "Fund info" },
+  "pc-voucher-entry": { label: "Voucher lines" },
+  "pc-replenish-entry": { label: "Replenish amount" },
+  "recurring-transaction-entry": { label: "Schedule info" },
 };
 
 /**

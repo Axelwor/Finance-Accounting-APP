@@ -23,7 +23,7 @@ export function PettyCashFundForm({ tabId, entryId, initialTitle }: Props) {
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState<{ id: number; code: string; message: string } | null>(null);
+  const [saved, setSaved] = useState<{ id: number; code: string; journal_number: string } | null>(null);
 
   useEffect(() => {
     api.listAccounts().then(setAccounts).catch(() => {});

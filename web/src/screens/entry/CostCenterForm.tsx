@@ -89,7 +89,7 @@ export function CostCenterForm({ tabId, entryId, initialTitle }: Props) {
         center_type: centerType,
         parent_id: parentId,
         is_active: isActive,
-        description: description.trim() || null,
+        description: description.trim() || undefined,
       };
 
       if (entryId) {
@@ -98,7 +98,7 @@ export function CostCenterForm({ tabId, entryId, initialTitle }: Props) {
           center_type: centerType,
           parent_id: parentId,
           is_active: isActive,
-          description: description.trim() || null,
+          description: description.trim() || undefined,
         };
         await api.updateCostCenter(Number(entryId), updateInput);
         setSuccess("Cost center updated successfully.");
@@ -134,15 +134,13 @@ export function CostCenterForm({ tabId, entryId, initialTitle }: Props) {
           <EmptyState
             title="Success"
             message={success}
-            actionLabel="Done"
-            onAction={() => void workbench.activate(tabId)}
+            action={<Button variant="primary" onClick={() => void workbench.activate(tabId)}>Done</Button>}
           />
         ) : null}
 
         <div style={{ display: "grid", gap: 16 }}>
           <FieldShell
             label="Code"
-            required
             error={error && !code.trim() ? "Code is required." : undefined}
           >
             <input
@@ -155,7 +153,7 @@ export function CostCenterForm({ tabId, entryId, initialTitle }: Props) {
             />
           </FieldShell>
 
-          <FieldShell label="Name" required>
+          <FieldShell label="Name">
             <input
               type="text"
               value={name}
@@ -166,7 +164,7 @@ export function CostCenterForm({ tabId, entryId, initialTitle }: Props) {
             />
           </FieldShell>
 
-          <FieldShell label="Type" required>
+          <FieldShell label="Type">
             <select
               value={centerType}
               onChange={(e) => setCenterType(e.target.value as typeof centerType)}

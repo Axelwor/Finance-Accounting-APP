@@ -25,7 +25,7 @@ export function PettyCashReplenishForm({ tabId, entryId }: Props) {
   } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState<{ id: number; message: string } | null>(null);
+  const [saved, setSaved] = useState<{ fund_id: number; journal_number: string; replenish_amount_cents: number } | null>(null);
 
   useEffect(() => {
     Promise.all([api.listPettyCashFunds(), api.listAccounts()]).then(([fundsData, accountsData]) => {
@@ -84,7 +84,7 @@ export function PettyCashReplenishForm({ tabId, entryId }: Props) {
 
     setSaving(true);
     try {
-      const result = await api.replenishPettyCashFund(selectedFundId, cashAccountId);
+      const result = await api.replenishPettyCashFund(selectedFundId);
       setSaved(result);
       workbench.replaceDraft(tabId, `${fundDetails.fund.id} - Replenished`, "CREATED");
       window.setTimeout(() => {

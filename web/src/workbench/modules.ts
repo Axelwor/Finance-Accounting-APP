@@ -271,6 +271,18 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Email Templates";
     case "email-queue":
       return "Email Queue";
+    case "cost-center-list":
+      return "Cost Centers";
+    case "cost-center-pnl":
+      return "Cost Center P&L";
+    case "petty-cash-funds":
+      return "Petty Cash Funds";
+    case "petty-cash-vouchers":
+      return "Petty Cash Vouchers";
+    case "recurring-transactions":
+      return "Recurring Transactions";
+    default:
+      return listKind;
   }
 }
 

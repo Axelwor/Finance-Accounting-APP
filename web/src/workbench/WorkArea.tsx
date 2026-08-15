@@ -106,7 +106,9 @@ export function WorkArea() {
 
   // App-wide keyboard shortcuts (Ctrl/Cmd+S, Esc). Active only while the
   // work area is mounted, i.e. inside the shell.
-  useKeyboardShortcuts();
+  useKeyboardShortcuts({
+    Escape: () => document.dispatchEvent(new CustomEvent(CLOSE_TAB_EVENT)),
+  });
 
   // Esc dispatches "app:close-tab": close the active nested child, or fall
   // back to the active top-level tab. The dashboard is pinned and ignored.

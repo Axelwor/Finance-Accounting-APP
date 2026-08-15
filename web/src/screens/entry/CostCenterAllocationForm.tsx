@@ -157,13 +157,12 @@ export function CostCenterAllocationForm({ tabId, initialTitle }: Props) {
           <EmptyState
             title="Success"
             message={success}
-            actionLabel="Done"
-            onAction={() => void workbench.activate(tabId)}
+            action={<Button variant="primary" onClick={() => void workbench.activate(tabId)}>Done</Button>}
           />
         ) : (
           <>
             <div style={{ display: "grid", gap: 16 }}>
-              <FieldShell label="Source Cost Center" required>
+              <FieldShell label="Source Cost Center">
                 <select
                   value={sourceId ?? ""}
                   onChange={(e) => setSourceId(e.target.value ? Number(e.target.value) : null)}

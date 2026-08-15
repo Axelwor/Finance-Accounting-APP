@@ -10,7 +10,6 @@ interface Props {
 }
 
 export function WarehouseStockList({ warehouseId, warehouseName, onBack }: Props) {
-  const workbench = useWorkbench();
   const [items, setItems] = useState<WarehouseStockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

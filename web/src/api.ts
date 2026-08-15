@@ -178,6 +178,20 @@ import type {
   EmailTemplate,
   CreateEmailTemplateInput,
   EmailQueueItem,
+  CostCenter,
+  CostCenterListItem,
+  CreateCostCenterInput,
+  UpdateCostCenterInput,
+  CostCenterAllocation,
+  CreateAllocationInput,
+  CostCenterPnLResult,
+  PettyCashFund,
+  CreatePettyCashFundInput,
+  PettyCashVoucher,
+  CreatePettyCashVoucherInput,
+  RecurringTransactionListItem,
+  CreateRecurringTransactionInput,
+  PostRecurringResult,
 } from "./types";
 
 /** Reconciliation detail returned by the reconcile endpoints. */
@@ -2711,12 +2725,16 @@ export const api = {
     return http<EmailTemplate[]>("/email/templates", { auth: true });
   },
 
-  /** Send queued email immediately (POST /email/queue/send). */
+  /** List email queue items (GET /email/queue). */
+  async listEmailQueue(): Promise<EmailQueueItem[]> {
+    return http<EmailQueueItem[]>("/email/queue", { auth: true });
+  },
+
+  /** Send queued email immediately (POST /email/queue/{id}/send). */
   async sendEmail(id: number): Promise<void> {
-    return http("/email/queue/send", {
+    return http(`/email/queue/${id}/send`, {
       method: "POST",
       auth: true,
-      body: JSON.stringify({ id }),
     });
   },
 
@@ -2782,6 +2800,132 @@ export const api = {
       }
     },
 
+  /* ---------------------------------------------------------------- */
+  /* Cost Center (Wave 4)                                             */
+  /* ---------------------------------------------------------------- */
+
+  /** List cost centers (GET /cost-centers). */
+  async listCostCenters(): Promise<CostCenterListItem[]> {
+    return http<CostCenterListItem[]>("/cost-centers", { auth: true });
+  },
+
+  /** Get a cost center by ID (GET /cost-centers/{id}). */
+  async getCostCenter(id: number): Promise<CostCenter> {
+    return http<CostCenter>(`/cost-centers/${id}`, { auth: true });
+  },
+
+  /** Create a cost center (POST /cost-centers). */
+  async createCostCenter(input: CreateCostCenterInput): Promise<CostCenter> {
+    return http<CostCenter>("/cost-centers", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Update a cost center (PUT /cost-centers/{id}). */
+  async updateCostCenter(id: number, input: UpdateCostCenterInput): Promise<CostCenter> {
+    return http<CostCenter>(`/cost-centers/${id}`, {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Create an allocation between cost centers (POST /cost-centers/{id}/allocations). */
+  async createAllocation(sourceCostCenterId: number, input: CreateAllocationInput): Promise<CostCenterAllocation> {
+    return http<CostCenterAllocation>(`/cost-centers/${sourceCostCenterId}/allocations`, {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Get P&L for a cost center over a date range (GET /cost-centers/{id}/pnl). */
+  async getCostCenterPnL(id: number, startDate: string, endDate: string): Promise<CostCenterPnLResult> {
+    return http<CostCenterPnLResult>(
+      `/cost-centers/${id}/pnl?start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`,
+      { auth: true },
+    );
+  },
+
+  /* ---------------------------------------------------------------- */
+  /* Petty Cash (Wave 4)                                              */
+  /* ---------------------------------------------------------------- */
+
+  /** List petty cash funds (GET /petty-cash/funds). */
+  async listPettyCashFunds(): Promise<PettyCashFund[]> {
+    return http<PettyCashFund[]>("/petty-cash/funds", { auth: true });
+  },
+
+  /** Create a petty cash fund (POST /petty-cash/funds). */
+  async createPettyCashFund(input: CreatePettyCashFundInput): Promise<{ id: number; code: string; name: string; cash_account_id: number; imprest_amount_cents: number; journal_entry_id: number; journal_number: string }> {
+    return http("/petty-cash/funds", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** List petty cash vouchers, optionally filtered by fund (GET /petty-cash/vouchers?fund_id=N). */
+  async listPettyCashVouchers(fundId?: number): Promise<PettyCashVoucher[]> {
+    const query = fundId ? `?fund_id=${fundId}` : "";
+    return http<PettyCashVoucher[]>(`/petty-cash/vouchers${query}`, { auth: true });
+  },
+
+  /** Create a petty cash voucher (POST /petty-cash/vouchers). */
+  async createPettyCashVoucher(input: CreatePettyCashVoucherInput): Promise<{ id: number; number: string; fund_id: number; voucher_date: string; amount_cents: number; expense_account_id: number; description: string; status: string; journal_entry_id: number; journal_number: string }> {
+    return http("/petty-cash/vouchers", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Replenish a petty cash fund to its imprest amount (POST /petty-cash/funds/{id}/replenish). */
+  async replenishPettyCashFund(fundId: number, paymentAccountCode?: string): Promise<{ fund_id: number; fund_name: string; replenish_amount_cents: number; journal_entry_id: number; journal_number: string }> {
+    return http(`/petty-cash/funds/${fundId}/replenish`, {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify({ payment_account_code: paymentAccountCode ?? "" }),
+    });
+  },
+
+  /* ---------------------------------------------------------------- */
+  /* Recurring Transactions (Wave 4)                                   */
+  /* ---------------------------------------------------------------- */
+
+  /** List recurring transactions, optionally active-only (GET /recurring?active=true). */
+  async listRecurring(activeOnly?: boolean): Promise<RecurringTransactionListItem[]> {
+    const query = activeOnly === true ? "?active=true" : "";
+    return http<RecurringTransactionListItem[]>(`/recurring${query}`, { auth: true });
+  },
+
+  /** Create a recurring transaction (POST /recurring). */
+  async createRecurring(input: CreateRecurringTransactionInput): Promise<{ id: number; code: string; name: string }> {
+    return http("/recurring", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Post a recurring transaction now (POST /recurring/{id}/post). */
+  async postRecurring(id: number): Promise<PostRecurringResult> {
+    return http<PostRecurringResult>(`/recurring/${id}/post`, {
+      method: "POST",
+      auth: true,
+    });
+  },
+
+  /** Deactivate a recurring transaction (DELETE /recurring/{id}). */
+  async deactivateRecurring(id: number): Promise<void> {
+    return http(`/recurring/${id}`, {
+      method: "DELETE",
+      auth: true,
+    });
+  },
+
 
    /** Access token for protected API calls (used later). */
    getAccessToken,
@@ -2795,6 +2939,5 @@ export const mockHelpers = {
 
 export type {
   CurrencyCode,
-  ListEmailQueueItem,
   EmailQueueItem,
 }

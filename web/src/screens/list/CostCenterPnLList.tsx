@@ -133,8 +133,7 @@ export function CostCenterPnLList() {
           <EmptyState
             title="No cost centers yet"
             message="Create cost centers first to see their P&L performance."
-            actionLabel="+ New Cost Center"
-            onAction={() => workbench.openEntryDraft("cost-center-entry")}
+            action={<button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("cost-center-entry")}>+ New Cost Center</button>}
           />
         ) : error ? (
           <ErrorState message={error} onRetry={() => void handleLoad()} />

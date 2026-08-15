@@ -166,7 +166,7 @@ function TreeCostCenterRow({ node, allItems, level }: TreeCostCenterRowProps) {
         <span>{CENTER_TYPE_LABEL[node.center_type] ?? node.center_type}</span>
         <span>{node.parent_id != null ? findParentCode(node.parent_id) : "-"}</span>
         <span style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}>
-          {formatIDR(node.total_allocated_cents)}
+          {formatIDR(node.total_allocated_cents ?? 0)}
         </span>
         <div style={{ marginLeft: 8, display: "flex", gap: 4 }}>
           <button

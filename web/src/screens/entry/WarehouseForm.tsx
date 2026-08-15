@@ -94,36 +94,29 @@ export function WarehouseForm({ tabId, entryId, initialTitle }: Props) {
           <div className="grid-col-2">
             <TextField
               label="Code *"
-              id="warehouse-code"
               value={code}
-              onChange={(e) => setCode(e.target.value)}
-              required
+              onChange={setCode}
               placeholder="e.g., WH-001"
             />
             <TextField
               label="Name *"
-              id="warehouse-name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
+              onChange={setName}
               placeholder="e.g., Main Warehouse"
             />
           </div>
 
           <TextareaField
             label="Address"
-            id="warehouse-address"
             value={address}
-            onChange={(e) => setAddress(e.target.value)}
+            onChange={setAddress}
             placeholder="Street address..."
-            rows={3}
           />
 
           <TextField
             label="City"
-            id="warehouse-city"
             value={city}
-            onChange={(e) => setCity(e.target.value)}
+            onChange={setCity}
             placeholder="City"
           />
 

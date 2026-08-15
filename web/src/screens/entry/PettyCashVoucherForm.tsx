@@ -33,7 +33,7 @@ export function PettyCashVoucherForm({ tabId, entryId }: Props) {
   const [fundDetails, setFundDetails] = useState<FundDetails | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState<{ id: number; number: string; amount_cents: number; message: string } | null>(null);
+  const [saved, setSaved] = useState<{ id: number; number: string; journal_number: string } | null>(null);
 
   useEffect(() => {
     Promise.all([api.listPettyCashFunds(), api.listAccounts()]).then(([fundsData, accountsData]) => {

@@ -122,17 +122,17 @@ export function EmailQueueList() {
               {filtered.map((item) => (
                 <tr key={item.id}>
                   <td>{item.subject}</td>
-                  <td>{item.recipient_email}</td>
-                  <td>{formatTrigger(item.trigger_event)}</td>
+                  <td>{item.to_email}</td>
+                  <td>{formatTrigger(item.trigger_event ?? "")}</td>
                   <td>
                     <span className={getStatusBadgeClass(item.status)}>
                       {item.status === "SENT" && item.sent_at
                         ? `Sent ${new Date(item.sent_at).toLocaleString()}`
                         : formatStatus(item.status)}
                     </span>
-                    {item.error_message && (
+                    {item.last_error && (
                       <div style={{ fontSize: "12px", color: "var(--neg)", marginTop: "4px" }}>
-                        Error: {item.error_message}
+                        Error: {item.last_error}
                       </div>
                     )}
                   </td>
