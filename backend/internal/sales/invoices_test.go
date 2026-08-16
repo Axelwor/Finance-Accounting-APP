@@ -65,12 +65,12 @@ func TestPrepareInvoiceLinesTotal(t *testing.T) {
 // below, so truncation and half-up produce different results.
 func TestPrepareInvoiceLinesPPNHalfUp(t *testing.T) {
 	tests := []struct {
-		name          string
-		qty           float64
+		name           string
+		qty            float64
 		unitPriceCents int64
-		taxRate       float64
-		wantDPP       int64
-		wantPPN       int64
+		taxRate        float64
+		wantDPP        int64
+		wantPPN        int64
 	}{
 		{
 			// 100,005 * 11% = 11,000.55 → half-up 11,001 (truncate would give 11,000)

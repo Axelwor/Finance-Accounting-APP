@@ -94,10 +94,10 @@ func TestBucketDateConsistency(t *testing.T) {
 // identity the running balance rolls up.
 func TestNetCents(t *testing.T) {
 	tests := []struct {
-		name        string
-		inflow      int64
-		outflow     int64
-		wantNet     int64
+		name    string
+		inflow  int64
+		outflow int64
+		wantNet int64
 	}{
 		{name: "zero bucket", inflow: 0, outflow: 0, wantNet: 0},
 		{name: "pure inflow", inflow: 500000, outflow: 0, wantNet: 500000},

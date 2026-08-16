@@ -28,11 +28,11 @@ import (
 func straightLineAsset(cost, salvage int64, lifeMonths int) assetRow {
 	return assetRow{
 		AcquisitionCostCents: cost,
-		SalvageValueCents:     salvage,
-		UsefulLifeMonths:      lifeMonths,
-		DepreciationMethod:    methodStraightLine,
-		BookValueCents:        cost,
-		AccumDepCents:         0,
+		SalvageValueCents:    salvage,
+		UsefulLifeMonths:     lifeMonths,
+		DepreciationMethod:   methodStraightLine,
+		BookValueCents:       cost,
+		AccumDepCents:        0,
 	}
 }
 
@@ -93,10 +93,10 @@ func TestComputeDepreciation_StraightLine_TableDriven(t *testing.T) {
 
 func TestMonthlyDepreciation_EqualsAnnualDividedBy12(t *testing.T) {
 	tests := []struct {
-		name     string
-		cost     int64
-		salvage  int64
-		lifeYrs  int
+		name       string
+		cost       int64
+		salvage    int64
+		lifeYrs    int
 		wantAnnual int64
 	}{
 		{"5yr", 10_000_000, 1_000_000, 5, 1_800_000},
@@ -166,9 +166,9 @@ func TestAccumulatedDepreciation_MonthByMonth(t *testing.T) {
 	asset := straightLineAsset(10_000_000, 1_000_000, 60)
 
 	tests := []struct {
-		months     int
-		wantAccum  int64
-		wantBook   int64
+		months    int
+		wantAccum int64
+		wantBook  int64
 	}{
 		{0, 0, 10_000_000},
 		{1, 150_000, 9_850_000},
@@ -240,7 +240,7 @@ func TestDisposal_GainLoss_TableDriven(t *testing.T) {
 		{"gain_large", 1_000_000, 200_000, 1_500_000, 700_000, 0},
 		{"loss_2000", 10_000, 3_000, 5_000, 0, 2_000},
 		{"loss_partial", 50_000, 10_000, 20_000, 0, 20_000},
-		{"break_even", 10_000, 3_000, 7_000, 0, 0}, // proceeds == book value
+		{"break_even", 10_000, 3_000, 7_000, 0, 0},             // proceeds == book value
 		{"loss_fully_depreciated", 10_000, 9_000, 0, 0, 1_000}, // NBV=salvage(1000), scrapped for 0
 	}
 
@@ -308,8 +308,8 @@ func TestFullyDepreciatedAsset(t *testing.T) {
 		lifeYrs int
 	}{
 		{"canonical_5yr", 10_000_000, 1_000_000, 5}, // 9M / 60 = 150,000 exact
-		{"zero_salvage_4yr", 48_000_000, 0, 4},       // 48M / 48 = 1,000,000 exact
-		{"3yr_even", 42_000_000, 6_000_000, 3},       // 36M / 36 = 1,000,000 exact
+		{"zero_salvage_4yr", 48_000_000, 0, 4},      // 48M / 48 = 1,000,000 exact
+		{"3yr_even", 42_000_000, 6_000_000, 3},      // 36M / 36 = 1,000,000 exact
 	}
 
 	for _, tc := range tests {
@@ -669,9 +669,9 @@ func TestComputeDepreciation_DecliningBalance(t *testing.T) {
 	// book_value * rate (rate as a float fraction, e.g. 0.25).
 	asset := assetRow{
 		AcquisitionCostCents: 10_000_000,
-		BookValueCents:        10_000_000,
-		DepreciationMethod:    methodDecliningBalance,
-		Rate:                  0.25,
+		BookValueCents:       10_000_000,
+		DepreciationMethod:   methodDecliningBalance,
+		Rate:                 0.25,
 	}
 	if got := computeDepreciation(asset); got != 2_500_000 {
 		t.Fatalf("declining balance depreciation = %d, want %d", got, 2_500_000)
@@ -716,9 +716,9 @@ func TestValidDate(t *testing.T) {
 	}{
 		{"2026-01-15", true},
 		{"2026-12-31", true},
-		{"2026-1-5", false},    // non-zero-padded
-		{"15-01-2026", false},  // wrong order
-		{"2026/01/15", false},  // wrong separator
+		{"2026-1-5", false},   // non-zero-padded
+		{"15-01-2026", false}, // wrong order
+		{"2026/01/15", false}, // wrong separator
 		{"", false},
 		{"   ", false},
 		{"2026-13-01", false}, // invalid month

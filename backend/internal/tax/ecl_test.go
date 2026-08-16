@@ -8,69 +8,69 @@ import (
 // TestECL_BucketAssignment validates correct bucket assignment by aging days.
 func TestECL_BucketAssignment(t *testing.T) {
 	tests := []struct {
-		name         string
-		ageDays      int
+		name           string
+		ageDays        int
 		expectedBucket string
-		expectedRate float64
+		expectedRate   float64
 	}{
 		{
-			name:         "In-term - 0-30 days",
-			ageDays:      15,
+			name:           "In-term - 0-30 days",
+			ageDays:        15,
 			expectedBucket: "0-30",
-			expectedRate: 1.0,
+			expectedRate:   1.0,
 		},
 		{
-			name:         "In-term - day 30 boundary",
-			ageDays:      30,
+			name:           "In-term - day 30 boundary",
+			ageDays:        30,
 			expectedBucket: "0-30",
-			expectedRate: 1.0,
+			expectedRate:   1.0,
 		},
 		{
-			name:         "Overdue - 31-60 days",
-			ageDays:      45,
+			name:           "Overdue - 31-60 days",
+			ageDays:        45,
 			expectedBucket: "31-60",
-			expectedRate: 2.5,
+			expectedRate:   2.5,
 		},
 		{
-			name:         "Overdue - day 60 boundary",
-			ageDays:      60,
+			name:           "Overdue - day 60 boundary",
+			ageDays:        60,
 			expectedBucket: "31-60",
-			expectedRate: 2.5,
+			expectedRate:   2.5,
 		},
 		{
-			name:         "Seriously overdue - 61-90 days",
-			ageDays:      75,
+			name:           "Seriously overdue - 61-90 days",
+			ageDays:        75,
 			expectedBucket: "61-90",
-			expectedRate: 5.0,
+			expectedRate:   5.0,
 		},
 		{
-			name:         "Seriously overdue - day 90 boundary",
-			ageDays:      90,
+			name:           "Seriously overdue - day 90 boundary",
+			ageDays:        90,
 			expectedBucket: "61-90",
-			expectedRate: 5.0,
+			expectedRate:   5.0,
 		},
 		{
-			name:         "Doubtful - >90 days",
-			ageDays:      91,
+			name:           "Doubtful - >90 days",
+			ageDays:        91,
 			expectedBucket: ">90",
-			expectedRate: 10.0,
+			expectedRate:   10.0,
 		},
 		{
-			name:         "Very doubtful - 180 days",
-			ageDays:      180,
+			name:           "Very doubtful - 180 days",
+			ageDays:        180,
 			expectedBucket: ">90",
-			expectedRate: 10.0,
+			expectedRate:   10.0,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			bucket, rate := getECLBucket(tt.ageDays)
-			
+
 			if bucket != tt.expectedBucket {
 				t.Errorf("bucket = %q, want %q", bucket, tt.expectedBucket)
 			}
-			
+
 			if rate != tt.expectedRate {
 				t.Errorf("rate = %.1f%%, want %.1f%%", rate*100, tt.expectedRate*100)
 			}
@@ -81,46 +81,46 @@ func TestECL_BucketAssignment(t *testing.T) {
 // TestECL_AgeCalculation validates age calculation from due date.
 func TestECL_AgeCalculation(t *testing.T) {
 	tests := []struct {
-		name          string
-		dueDateStr    string
-		asOfDateStr   string
-		expectedDays  int
-		description   string
+		name         string
+		dueDateStr   string
+		asOfDateStr  string
+		expectedDays int
+		description  string
 	}{
 		{
-			name:          "Exact match - zero days old",
-			dueDateStr:    "2024-01-01",
-			asOfDateStr:   "2024-01-01",
-			expectedDays:  0,
-			description:   "same date should be 0 days",
+			name:         "Exact match - zero days old",
+			dueDateStr:   "2024-01-01",
+			asOfDateStr:  "2024-01-01",
+			expectedDays: 0,
+			description:  "same date should be 0 days",
 		},
 		{
-			name:          "One day overdue",
-			dueDateStr:    "2024-01-01",
-			asOfDateStr:   "2024-01-02",
-			expectedDays:  1,
-			description:   "one day difference",
+			name:         "One day overdue",
+			dueDateStr:   "2024-01-01",
+			asOfDateStr:  "2024-01-02",
+			expectedDays: 1,
+			description:  "one day difference",
 		},
 		{
-			name:          "30 days exactly",
-			dueDateStr:    "2024-01-01",
-			asOfDateStr:   "2024-01-31",
-			expectedDays:  30,
-			description:   "30 days in January",
+			name:         "30 days exactly",
+			dueDateStr:   "2024-01-01",
+			asOfDateStr:  "2024-01-31",
+			expectedDays: 30,
+			description:  "30 days in January",
 		},
 		{
-			name:          "Crosses month boundary",
-			dueDateStr:    "2024-01-15",
-			asOfDateStr:   "2024-02-15",
-			expectedDays:  31,
-			description:   "Jan has 31 days",
+			name:         "Crosses month boundary",
+			dueDateStr:   "2024-01-15",
+			asOfDateStr:  "2024-02-15",
+			expectedDays: 31,
+			description:  "Jan has 31 days",
 		},
 		{
-			name:          "Future due date - negative to zero",
-			dueDateStr:    "2024-02-01",
-			asOfDateStr:   "2024-01-15",
-			expectedDays:  0,
-			description:   "future dates should clamp to 0",
+			name:         "Future due date - negative to zero",
+			dueDateStr:   "2024-02-01",
+			asOfDateStr:  "2024-01-15",
+			expectedDays: 0,
+			description:  "future dates should clamp to 0",
 		},
 	}
 
@@ -137,16 +137,16 @@ func TestECL_AgeCalculation(t *testing.T) {
 // TestECL_ProvisionAggregation validates total provision calculation.
 func TestECL_ProvisionAggregation(t *testing.T) {
 	tests := []struct {
-		name           string
-		buckets        []eclBucketTest
-		expectedTotal  int64
-		description    string
+		name          string
+		buckets       []eclBucketTest
+		expectedTotal int64
+		description   string
 	}{
 		{
-			name: "Single bucket full provision",
-			buckets: []eclBucketTest{{balanceCents: 100000, ratePct: 1.0}},
+			name:          "Single bucket full provision",
+			buckets:       []eclBucketTest{{balanceCents: 100000, ratePct: 1.0}},
 			expectedTotal: 1000,
-			description: "1% of 100k",
+			description:   "1% of 100k",
 		},
 		{
 			name: "Multiple buckets weighted",
@@ -156,7 +156,7 @@ func TestECL_ProvisionAggregation(t *testing.T) {
 				{balanceCents: 20000, ratePct: 5.0},
 			},
 			expectedTotal: 2250, // 500 + 750 + 1000
-			description: "weighted average",
+			description:   "weighted average",
 		},
 		{
 			name: "High aging bucket dominant",
@@ -165,7 +165,7 @@ func TestECL_ProvisionAggregation(t *testing.T) {
 				{balanceCents: 50000, ratePct: 10.0},
 			},
 			expectedTotal: 5100, // 100 + 5000
-			description: ">90 days dominates",
+			description:   ">90 days dominates",
 		},
 	}
 
@@ -182,32 +182,32 @@ func TestECL_ProvisionAggregation(t *testing.T) {
 // TestECL_CustomRatesOverride validates custom rate configuration.
 func TestECL_CustomRatesOverride(t *testing.T) {
 	tests := []struct {
-		name            string
-		overrideRates   map[string]float64
-		testDays        int
-		expectedRate    float64
-		description     string
+		name          string
+		overrideRates map[string]float64
+		testDays      int
+		expectedRate  float64
+		description   string
 	}{
 		{
-			name: "Custom rate for 0-30",
+			name:          "Custom rate for 0-30",
 			overrideRates: map[string]float64{"0-30": 2.0},
-			testDays: 15,
-			expectedRate: 2.0,
-			description: "override affects matched bucket",
+			testDays:      15,
+			expectedRate:  2.0,
+			description:   "override affects matched bucket",
 		},
 		{
-			name: "Custom rate ignores other buckets",
+			name:          "Custom rate ignores other buckets",
 			overrideRates: map[string]float64{"0-30": 2.0},
-			testDays: 50,
-			expectedRate: 2.5,
-			description: "unmatched buckets use defaults",
+			testDays:      50,
+			expectedRate:  2.5,
+			description:   "unmatched buckets use defaults",
 		},
 		{
-			name: "All rates overridden",
+			name:          "All rates overridden",
 			overrideRates: map[string]float64{"0-30": 0.5, "31-60": 1.0, "61-90": 3.0, ">90": 15.0},
-			testDays: 100,
-			expectedRate: 15.0,
-			description: "fully custom rates",
+			testDays:      100,
+			expectedRate:  15.0,
+			description:   "fully custom rates",
 		},
 	}
 

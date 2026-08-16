@@ -121,8 +121,8 @@ func TestValidateWorkflow(t *testing.T) {
 			wantError: "INVALID_REQUEST",
 		},
 		{
-			name: "both missing",
-			request: CreateWorkflowRequest{},
+			name:      "both missing",
+			request:   CreateWorkflowRequest{},
 			wantError: "INVALID_REQUEST",
 		},
 	}

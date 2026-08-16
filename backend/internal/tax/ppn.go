@@ -335,9 +335,9 @@ var _ = (*pgx.Tx)(nil)
 //     rate is accepted as-is (backward compatible; the tenant has not
 //     configured PPN).
 //   - When a configured rate exists:
-//       rate == configured  → accepted
-//       rate == 0           → accepted (explicitly untaxed line)
-//       otherwise           → rejected with a descriptive error
+//     rate == configured  → accepted
+//     rate == 0           → accepted (explicitly untaxed line)
+//     otherwise           → rejected with a descriptive error
 //
 // The comparison uses a small epsilon so a NUMERIC(9,6) 11.0 and a JSON 11
 // compare equal.

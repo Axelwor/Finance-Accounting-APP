@@ -234,20 +234,20 @@ func TestValidatePPh(t *testing.T) {
 			wantError: "",
 		},
 		{
-			name:      "pph_type PPH21 accepted",
-			mutate:    func(req *CreatePPhRequest) { req.PphType = "PPH21" },
+			name:   "pph_type PPH21 accepted",
+			mutate: func(req *CreatePPhRequest) { req.PphType = "PPH21" },
 		},
 		{
-			name:      "pph_type PPH22 accepted",
-			mutate:    func(req *CreatePPhRequest) { req.PphType = "PPH22" },
+			name:   "pph_type PPH22 accepted",
+			mutate: func(req *CreatePPhRequest) { req.PphType = "PPH22" },
 		},
 		{
-			name:      "pph_type PPH26 accepted",
-			mutate:    func(req *CreatePPhRequest) { req.PphType = "PPH26" },
+			name:   "pph_type PPH26 accepted",
+			mutate: func(req *CreatePPhRequest) { req.PphType = "PPH26" },
 		},
 		{
-			name:      "pph_type PPH_FINAL_UMKM accepted",
-			mutate:    func(req *CreatePPhRequest) { req.PphType = "PPH_FINAL_UMKM" },
+			name:   "pph_type PPH_FINAL_UMKM accepted",
+			mutate: func(req *CreatePPhRequest) { req.PphType = "PPH_FINAL_UMKM" },
 		},
 		{
 			name:      "zero dpp rejected",
@@ -275,12 +275,12 @@ func TestValidatePPh(t *testing.T) {
 			wantError: "INVALID_REQUEST",
 		},
 		{
-			name:      "rate exactly 100 accepted",
-			mutate:    func(req *CreatePPhRequest) { req.RatePercent = 100.0 },
+			name:   "rate exactly 100 accepted",
+			mutate: func(req *CreatePPhRequest) { req.RatePercent = 100.0 },
 		},
 		{
-			name:      "rate just above zero accepted",
-			mutate:    func(req *CreatePPhRequest) { req.RatePercent = 0.5 },
+			name:   "rate just above zero accepted",
+			mutate: func(req *CreatePPhRequest) { req.RatePercent = 0.5 },
 		},
 		{
 			name:      "missing calculation_date",

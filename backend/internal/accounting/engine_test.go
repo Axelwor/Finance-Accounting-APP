@@ -305,12 +305,12 @@ func TestGoldenGroupAccountRejected(t *testing.T) {
 func TestGoldenTransferSameAccount(t *testing.T) {
 	acct := testAccount(1101, AccountCash)
 	_, err := Transfer(TransferIntent{
-		TenantID:     1,
-		SourceRef:    "SAME",
-		EntryDate:    "2026-08-06",
-		FromAccount:  acct,
-		ToAccount:    acct, // same account
-		AmountCents:  100,
+		TenantID:    1,
+		SourceRef:   "SAME",
+		EntryDate:   "2026-08-06",
+		FromAccount: acct,
+		ToAccount:   acct, // same account
+		AmountCents: 100,
 	})
 	// The engine may or may not check same-account — if it does, verify error.
 	// If it doesn't, at least verify the journal is balanced.
@@ -324,12 +324,12 @@ func TestGoldenTransferSameAccount(t *testing.T) {
 // §33.2: Transfer with non-cash account must be rejected.
 func TestGoldenTransferNonCash(t *testing.T) {
 	_, err := Transfer(TransferIntent{
-		TenantID:     1,
-		SourceRef:    "NONCASH",
-		EntryDate:    "2026-08-06",
-		FromAccount:  testAccount(4101, AccountRevenue), // not cash
-		ToAccount:    testAccount(1101, AccountCash),
-		AmountCents:  100,
+		TenantID:    1,
+		SourceRef:   "NONCASH",
+		EntryDate:   "2026-08-06",
+		FromAccount: testAccount(4101, AccountRevenue), // not cash
+		ToAccount:   testAccount(1101, AccountCash),
+		AmountCents: 100,
 	})
 	if err == nil {
 		t.Fatal("expected error for transfer with non-cash from account")
@@ -357,10 +357,10 @@ func TestGoldenCounterLinesSumMismatch(t *testing.T) {
 // §33.2: Hash is deterministic — same input always produces same hash.
 func TestGoldenHashDeterministic(t *testing.T) {
 	j := Journal{
-		TenantID:    1,
-		SourceRef:   "DET",
-		IntentType:  IntentCashIn,
-		EntryDate:   "2026-08-06",
+		TenantID:     1,
+		SourceRef:    "DET",
+		IntentType:   IntentCashIn,
+		EntryDate:    "2026-08-06",
 		PreviousHash: "genesis",
 		Lines: []Line{
 			{AccountID: 1101, DebitCents: 500, SourceLineRef: "1"},
@@ -380,10 +380,10 @@ func TestGoldenHashDeterministic(t *testing.T) {
 // §33.2: Different lines produce different hashes.
 func TestGoldenHashDifferentForDifferentLines(t *testing.T) {
 	j1 := Journal{
-		TenantID:    1,
-		SourceRef:   "A",
-		IntentType:  IntentCashIn,
-		EntryDate:   "2026-08-06",
+		TenantID:     1,
+		SourceRef:    "A",
+		IntentType:   IntentCashIn,
+		EntryDate:    "2026-08-06",
 		PreviousHash: "genesis",
 		Lines: []Line{
 			{AccountID: 1101, DebitCents: 500, SourceLineRef: "1"},

@@ -21,18 +21,28 @@ import (
 // ---------------------------------------------------------------------------
 
 // Widget types supported by the system.
+//
+// The kpi_* identifiers are the compact KPI-card variants seeded by default
+// on the VPS and allowed by the dashboard_widgets CHECK constraint. The
+// *_summary/*_snapshot identifiers are the detailed widget variants. The
+// GetWidgetData switch dispatches both families to the same fetcher where the
+// data shape overlaps, so a layout may use either spelling.
 const (
-	WidgetCashBalance       = "cash_balance"
-	WidgetARAging           = "ar_aging_summary"
-	WidgetAPAging           = "ap_aging_summary"
-	WidgetPLSnapshot        = "pl_snapshot"
-	WidgetBudgetVsActual    = "budget_vs_actual"
-	WidgetRevenueByCustomer = "revenue_by_customer"
-	WidgetLowStock          = "low_stock_alert"
-	WidgetRecentTxns        = "recent_transactions"
+	WidgetCashBalance         = "kpi_cash"
+	WidgetKPIAR               = "kpi_ar"
+	WidgetKPIAP               = "kpi_ap"
+	WidgetKPIPL               = "kpi_pl"
+	WidgetKPILowStock         = "kpi_low_stock"
+	WidgetARAging             = "ar_aging_summary"
+	WidgetAPAging             = "ap_aging_summary"
+	WidgetPLSnapshot          = "pl_snapshot"
+	WidgetBudgetVsActual      = "budget_vs_actual"
+	WidgetRevenueByCustomer   = "revenue_by_customer"
+	WidgetLowStock            = "low_stock_alert"
+	WidgetRecentTxns          = "recent_transactions"
 	WidgetOutstandingInvoices = "outstanding_invoices"
-	WidgetTaxSummary        = "tax_summary"
-	WidgetPeriodStatus      = "period_status"
+	WidgetTaxSummary          = "tax_summary"
+	WidgetPeriodStatus        = "period_status"
 )
 
 type Service struct {
@@ -63,19 +73,24 @@ type DashboardLayout struct {
 }
 
 type Widget struct {
-	ID        int64   `json:"id"`
-	WidgetType string  `json:"widget_type"`
-	Title     string  `json:"title"`
-	Config    json.RawMessage `json:"config,omitempty"`
-	Position  int     `json:"position"`
-	ColSpan   int     `json:"col_span"`
-	RowSpan   int     `json:"row_span"`
+	ID         int64           `json:"id"`
+	WidgetType string          `json:"widget_type"`
+	Title      string          `json:"title"`
+	Config     json.RawMessage `json:"config,omitempty"`
+	Position   int             `json:"position"`
+	ColSpan    int             `json:"col_span"`
+	RowSpan    int             `json:"row_span"`
+	LayoutID   int64           `json:"layout_id,omitempty"`
 }
 
 // knownWidgetTypes lists every supported widget type constant. Used for
 // membership validation. Kept in sync with the Widget* constants above.
 var knownWidgetTypes = map[string]bool{
 	WidgetCashBalance:         true,
+	WidgetKPIAR:               true,
+	WidgetKPIAP:               true,
+	WidgetKPIPL:               true,
+	WidgetKPILowStock:         true,
 	WidgetARAging:             true,
 	WidgetAPAging:             true,
 	WidgetPLSnapshot:          true,
@@ -128,7 +143,7 @@ func (service *Service) GetLayout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := service.pool.Query(r.Context(), `
-		SELECT id, widget_type, title, config, position, col_span, row_span
+		SELECT id, widget_type, title, config_json, position, col_span, row_span, layout_id
 		FROM dashboard_widgets
 		WHERE tenant_id = $1 AND user_id = $2
 		ORDER BY position
@@ -143,7 +158,7 @@ func (service *Service) GetLayout(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var widget Widget
 		var config []byte
-		if err := rows.Scan(&widget.ID, &widget.WidgetType, &widget.Title, &config, &widget.Position, &widget.ColSpan, &widget.RowSpan); err != nil {
+		if err := rows.Scan(&widget.ID, &widget.WidgetType, &widget.Title, &config, &widget.Position, &widget.ColSpan, &widget.RowSpan, &widget.LayoutID); err != nil {
 			writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
 			return
 		}
@@ -169,22 +184,57 @@ func (service *Service) GetLayout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (service *Service) seedDefaultWidgets(ctx context.Context, tenantID, userID int64) []Widget {
+	// Resolve (or create) the user's active dashboard_layouts row so the
+	// layout_id NOT NULL FK is satisfied on insert.
+	layoutID := service.ensureDefaultLayout(ctx, tenantID, userID)
+
 	defaults := []Widget{
-		{WidgetType: WidgetCashBalance, Title: "Cash Balance", Position: 0, ColSpan: 3, RowSpan: 1},
-		{WidgetType: WidgetPLSnapshot, Title: "P&L Snapshot", Position: 1, ColSpan: 3, RowSpan: 1},
-		{WidgetType: WidgetARAging, Title: "AR Aging", Position: 2, ColSpan: 3, RowSpan: 1},
-		{WidgetType: WidgetAPAging, Title: "AP Aging", Position: 3, ColSpan: 3, RowSpan: 1},
-		{WidgetType: WidgetLowStock, Title: "Low Stock Alert", Position: 4, ColSpan: 2, RowSpan: 1},
-		{WidgetType: WidgetPeriodStatus, Title: "Period Status", Position: 5, ColSpan: 2, RowSpan: 1},
+		{WidgetType: WidgetCashBalance, Title: "Cash Balance", Position: 0, ColSpan: 3, RowSpan: 1, LayoutID: layoutID},
+		{WidgetType: WidgetPLSnapshot, Title: "P&L Snapshot", Position: 1, ColSpan: 3, RowSpan: 1, LayoutID: layoutID},
+		{WidgetType: WidgetKPIAR, Title: "AR Summary", Position: 2, ColSpan: 3, RowSpan: 1, LayoutID: layoutID},
+		{WidgetType: WidgetKPIAP, Title: "AP Summary", Position: 3, ColSpan: 3, RowSpan: 1, LayoutID: layoutID},
+		{WidgetType: WidgetLowStock, Title: "Low Stock Alert", Position: 4, ColSpan: 2, RowSpan: 1, LayoutID: layoutID},
+		{WidgetType: WidgetPeriodStatus, Title: "Period Status", Position: 5, ColSpan: 2, RowSpan: 1, LayoutID: layoutID},
 	}
 	for i := range defaults {
 		_, _ = service.pool.Exec(ctx, `
-			INSERT INTO dashboard_widgets (tenant_id, user_id, widget_type, title, position, col_span, row_span)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
-		`, tenantID, userID, defaults[i].WidgetType, defaults[i].Title,
+			INSERT INTO dashboard_widgets (tenant_id, user_id, layout_id, widget_type, title, position, col_span, row_span)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`, tenantID, userID, layoutID, defaults[i].WidgetType, defaults[i].Title,
 			defaults[i].Position, defaults[i].ColSpan, defaults[i].RowSpan)
 	}
 	return defaults
+}
+
+// ensureDefaultLayout returns the id of the user's active dashboard_layouts
+// row, creating a default row when none exists. The layout row is required
+// because dashboard_widgets.layout_id is NOT NULL with a FK back to it.
+func (service *Service) ensureDefaultLayout(ctx context.Context, tenantID, userID int64) int64 {
+	var layoutID int64
+	err := service.pool.QueryRow(ctx, `
+		SELECT id FROM dashboard_layouts
+		WHERE tenant_id = $1 AND user_id = $2 AND is_active = TRUE
+		ORDER BY id DESC LIMIT 1
+	`, tenantID, userID).Scan(&layoutID)
+	if err == nil && layoutID > 0 {
+		return layoutID
+	}
+	// No active layout — create one.
+	err = service.pool.QueryRow(ctx, `
+		INSERT INTO dashboard_layouts (tenant_id, user_id, name, is_active)
+		VALUES ($1, $2, 'Default', TRUE)
+		ON CONFLICT (tenant_id, user_id, name) DO UPDATE SET is_active = TRUE
+		RETURNING id
+	`, tenantID, userID).Scan(&layoutID)
+	if err != nil || layoutID == 0 {
+		// Last resort: pick any layout for this tenant+user.
+		_ = service.pool.QueryRow(ctx, `
+			SELECT id FROM dashboard_layouts
+			WHERE tenant_id = $1 AND user_id = $2
+			ORDER BY id DESC LIMIT 1
+		`, tenantID, userID).Scan(&layoutID)
+	}
+	return layoutID
 }
 
 type SaveLayoutRequest struct {
@@ -218,6 +268,7 @@ func (service *Service) SaveLayout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	layoutID := service.ensureDefaultLayout(r.Context(), tenantID, userID)
 	for i, widget := range req.Widgets {
 		pos := widget.Position
 		if pos == 0 {
@@ -232,9 +283,9 @@ func (service *Service) SaveLayout(w http.ResponseWriter, r *http.Request) {
 			rowSpan = 1
 		}
 		_, err := service.pool.Exec(r.Context(), `
-			INSERT INTO dashboard_widgets (tenant_id, user_id, widget_type, title, config, position, col_span, row_span)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		`, tenantID, userID, widget.WidgetType, widget.Title,
+			INSERT INTO dashboard_widgets (tenant_id, user_id, layout_id, widget_type, title, config_json, position, col_span, row_span)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`, tenantID, userID, layoutID, widget.WidgetType, widget.Title,
 			[]byte(widget.Config), pos, colSpan, rowSpan)
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
@@ -268,12 +319,12 @@ func (service *Service) ListWidgets(w http.ResponseWriter, r *http.Request) {
 }
 
 type AddWidgetRequest struct {
-	WidgetType string  `json:"widget_type"`
-	Title     string  `json:"title"`
-	Config    json.RawMessage `json:"config,omitempty"`
-	Position  int     `json:"position"`
-	ColSpan   int     `json:"col_span"`
-	RowSpan   int     `json:"row_span"`
+	WidgetType string          `json:"widget_type"`
+	Title      string          `json:"title"`
+	Config     json.RawMessage `json:"config,omitempty"`
+	Position   int             `json:"position"`
+	ColSpan    int             `json:"col_span"`
+	RowSpan    int             `json:"row_span"`
 }
 
 func (service *Service) AddWidget(w http.ResponseWriter, r *http.Request) {
@@ -298,13 +349,14 @@ func (service *Service) AddWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.ColSpan, req.RowSpan = normalizeWidgetGrid(req.ColSpan, req.RowSpan)
+	layoutID := service.ensureDefaultLayout(r.Context(), tenantID, userID)
 
 	var id int64
 	err := service.pool.QueryRow(r.Context(), `
-		INSERT INTO dashboard_widgets (tenant_id, user_id, widget_type, title, config, position, col_span, row_span)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO dashboard_widgets (tenant_id, user_id, layout_id, widget_type, title, config_json, position, col_span, row_span)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id
-	`, tenantID, userID, req.WidgetType, req.Title,
+	`, tenantID, userID, layoutID, req.WidgetType, req.Title,
 		[]byte(req.Config), req.Position, req.ColSpan, req.RowSpan).Scan(&id)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "WIDGET_CREATE_FAILED", err.Error())
@@ -346,7 +398,7 @@ func (service *Service) UpdateWidget(w http.ResponseWriter, r *http.Request) {
 
 	_, err = service.pool.Exec(r.Context(), `
 		UPDATE dashboard_widgets
-		SET title = $3, config = $4, position = $5, col_span = $6, row_span = $7, updated_at = now()
+		SET title = $3, config_json = $4, position = $5, col_span = $6, row_span = $7, updated_at = now()
 		WHERE tenant_id = $1 AND user_id = $2 AND id = $8
 	`, tenantID, userID, req.Title, []byte(req.Config), req.Position, req.ColSpan, req.RowSpan, widgetID)
 	if err != nil {
@@ -413,17 +465,18 @@ func (service *Service) GetWidgetData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Dispatch to the appropriate data fetcher.
+	// Dispatch to the appropriate data fetcher. The kpi_* aliases map to the
+	// same fetcher as their detailed sibling so a layout may use either.
 	switch widgetType {
 	case WidgetCashBalance:
 		service.fetchCashBalanceData(w, r, tenantID)
-	case WidgetPLSnapshot:
+	case WidgetPLSnapshot, WidgetKPIPL:
 		service.fetchPLSnapshotData(w, r, tenantID)
-	case WidgetARAging:
+	case WidgetARAging, WidgetKPIAR:
 		service.fetchARAgingData(w, r, tenantID)
-	case WidgetAPAging:
+	case WidgetAPAging, WidgetKPIAP:
 		service.fetchAPAgingData(w, r, tenantID)
-	case WidgetLowStock:
+	case WidgetLowStock, WidgetKPILowStock:
 		service.fetchLowStockData(w, r, tenantID)
 	case WidgetRecentTxns:
 		service.fetchRecentTxnsData(w, r, tenantID)
@@ -431,6 +484,8 @@ func (service *Service) GetWidgetData(w http.ResponseWriter, r *http.Request) {
 		service.fetchPeriodStatusData(w, r, tenantID)
 	case WidgetOutstandingInvoices:
 		service.fetchOutstandingInvoicesData(w, r, tenantID)
+	case WidgetTaxSummary:
+		service.fetchTaxSummaryData(w, r, tenantID)
 	default:
 		writeJSON(w, http.StatusOK, map[string]any{
 			"widget_type": widgetType,
@@ -483,43 +538,46 @@ func (service *Service) fetchPLSnapshotData(w http.ResponseWriter, r *http.Reque
 }
 
 func (service *Service) fetchARAgingData(w http.ResponseWriter, r *http.Request, tenantID int64) {
+	// Age by due_date (not invoice_date) so "current" means not yet overdue.
+	// Inline date diff replaces the missing invoice_age_days() SQL function.
 	rows, err := service.pool.Query(r.Context(), `
 		SELECT bucket, COALESCE(SUM(amount_cents), 0) as total
 		FROM (
 			SELECT
 			  CASE
-			    WHEN COALESCE(invoice_age_days(i.invoice_date, CURRENT_DATE), 0) <= 0 THEN 'current'
-			    WHEN COALESCE(invoice_age_days(i.invoice_date, CURRENT_DATE), 0) <= 30 THEN '1-30'
-			    WHEN COALESCE(invoice_age_days(i.invoice_date, CURRENT_DATE), 0) <= 60 THEN '31-60'
-			    WHEN COALESCE(invoice_age_days(i.invoice_date, CURRENT_DATE), 0) <= 90 THEN '61-90'
+			    WHEN GREATEST(CURRENT_DATE - i.due_date, 0) <= 0 THEN 'current'
+			    WHEN GREATEST(CURRENT_DATE - i.due_date, 0) <= 30 THEN '1-30'
+			    WHEN GREATEST(CURRENT_DATE - i.due_date, 0) <= 60 THEN '31-60'
+			    WHEN GREATEST(CURRENT_DATE - i.due_date, 0) <= 90 THEN '61-90'
 			    ELSE '90+'
 			  END AS bucket,
 			  i.receivable_cents AS amount_cents
 			FROM invoices i
-			WHERE i.tenant_id = $1 AND i.status IN ('POSTED', 'PARTIALLY_PAID')
+			WHERE i.tenant_id = $1 AND i.status IN ('ISSUED', 'PARTIALLY_PAID')
 			  AND i.receivable_cents > 0
 		) sub
 		GROUP BY bucket
 	`, tenantID)
 	if err != nil {
-		// Fallback: simple count if function doesn't exist yet.
+		// Fallback: simple total if the bucket query fails.
 		var totalReceivable int64
 		_ = service.pool.QueryRow(r.Context(), `
 			SELECT COALESCE(SUM(receivable_cents), 0)
 			FROM invoices
-			WHERE tenant_id = $1 AND status IN ('POSTED', 'PARTIALLY_PAID')
+			WHERE tenant_id = $1 AND status IN ('ISSUED', 'PARTIALLY_PAID')
 			  AND receivable_cents > 0
 		`, tenantID).Scan(&totalReceivable)
 		writeJSON(w, http.StatusOK, map[string]any{
-			"widget_type":      WidgetARAging,
-			"total_cents":      totalReceivable,
-			"buckets":          []any{},
+			"widget_type": WidgetARAging,
+			"total_cents": totalReceivable,
+			"buckets":     []any{},
 		})
 		return
 	}
 	defer rows.Close()
 
 	buckets := []map[string]any{}
+	var grandTotal int64
 	for rows.Next() {
 		var bucket string
 		var total int64
@@ -528,6 +586,7 @@ func (service *Service) fetchARAgingData(w http.ResponseWriter, r *http.Request,
 			return
 		}
 		buckets = append(buckets, map[string]any{"bucket": bucket, "total_cents": total})
+		grandTotal += total
 	}
 	if err := rows.Err(); err != nil {
 		writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
@@ -536,22 +595,71 @@ func (service *Service) fetchARAgingData(w http.ResponseWriter, r *http.Request,
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"widget_type": WidgetARAging,
+		"total_cents": grandTotal,
 		"buckets":     buckets,
 	})
 }
 
 func (service *Service) fetchAPAgingData(w http.ResponseWriter, r *http.Request, tenantID int64) {
-	var totalPayable int64
-	_ = service.pool.QueryRow(r.Context(), `
-		SELECT COALESCE(SUM(receivable_cents), 0)
-		FROM supplier_invoices
-		WHERE tenant_id = $1 AND status IN ('POSTED', 'PARTIALLY_PAID')
-		  AND receivable_cents > 0
-	`, tenantID).Scan(&totalPayable)
+	// Age by due_date. supplier_invoices uses payable_cents (not receivable_cents)
+	// and status values ISSUED/PARTIALLY_PAID (not POSTED).
+	rows, err := service.pool.Query(r.Context(), `
+		SELECT bucket, COALESCE(SUM(amount_cents), 0) as total
+		FROM (
+			SELECT
+			  CASE
+			    WHEN GREATEST(CURRENT_DATE - si.due_date, 0) <= 0 THEN 'current'
+			    WHEN GREATEST(CURRENT_DATE - si.due_date, 0) <= 30 THEN '1-30'
+			    WHEN GREATEST(CURRENT_DATE - si.due_date, 0) <= 60 THEN '31-60'
+			    WHEN GREATEST(CURRENT_DATE - si.due_date, 0) <= 90 THEN '61-90'
+			    ELSE '90+'
+			  END AS bucket,
+			  si.payable_cents AS amount_cents
+			FROM supplier_invoices si
+			WHERE si.tenant_id = $1 AND si.status IN ('ISSUED', 'PARTIALLY_PAID')
+			  AND si.payable_cents > 0
+		) sub
+		GROUP BY bucket
+	`, tenantID)
+	if err != nil {
+		// Fallback: simple total.
+		var totalPayable int64
+		_ = service.pool.QueryRow(r.Context(), `
+			SELECT COALESCE(SUM(payable_cents), 0)
+			FROM supplier_invoices
+			WHERE tenant_id = $1 AND status IN ('ISSUED', 'PARTIALLY_PAID')
+			  AND payable_cents > 0
+		`, tenantID).Scan(&totalPayable)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"widget_type": WidgetAPAging,
+			"total_cents": totalPayable,
+			"buckets":     []any{},
+		})
+		return
+	}
+	defer rows.Close()
+
+	buckets := []map[string]any{}
+	var grandTotal int64
+	for rows.Next() {
+		var bucket string
+		var total int64
+		if err := rows.Scan(&bucket, &total); err != nil {
+			writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
+			return
+		}
+		buckets = append(buckets, map[string]any{"bucket": bucket, "total_cents": total})
+		grandTotal += total
+	}
+	if err := rows.Err(); err != nil {
+		writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"widget_type":  WidgetAPAging,
-		"total_cents":  totalPayable,
+		"widget_type": WidgetAPAging,
+		"total_cents": grandTotal,
+		"buckets":     buckets,
 	})
 }
 
@@ -602,10 +710,16 @@ func (service *Service) fetchLowStockData(w http.ResponseWriter, r *http.Request
 }
 
 func (service *Service) fetchRecentTxnsData(w http.ResponseWriter, r *http.Request, tenantID int64) {
+	// Include total_debit_cents as the entry amount so the frontend can show
+	// a nominal per row without a second round-trip to /journal-entries.
 	rows, err := service.pool.Query(r.Context(), `
-		SELECT je.number, je.entry_date::text, je.description, je.intent_type, je.status
+		SELECT je.number, je.entry_date::text, COALESCE(je.description, ''),
+		       COALESCE(je.intent_type, ''), je.status,
+		       COALESCE(SUM(jl.debit_cents), 0)
 		FROM journal_entries je
-		WHERE je.tenant_id = $1
+		LEFT JOIN journal_lines jl ON jl.tenant_id = je.tenant_id AND jl.entry_id = je.id
+		WHERE je.tenant_id = $1 AND je.status = 'POSTED'
+		GROUP BY je.id, je.number, je.entry_date, je.description, je.intent_type, je.status, je.created_at
 		ORDER BY je.created_at DESC
 		LIMIT 10
 	`, tenantID)
@@ -621,16 +735,18 @@ func (service *Service) fetchRecentTxnsData(w http.ResponseWriter, r *http.Reque
 	txns := []map[string]any{}
 	for rows.Next() {
 		var number, entryDate, description, intentType, status string
-		if err := rows.Scan(&number, &entryDate, &description, &intentType, &status); err != nil {
+		var totalDebit int64
+		if err := rows.Scan(&number, &entryDate, &description, &intentType, &status, &totalDebit); err != nil {
 			writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
 			return
 		}
 		txns = append(txns, map[string]any{
-			"number":      number,
-			"entry_date":  entryDate,
-			"description": description,
-			"intent_type": intentType,
-			"status":      status,
+			"number":            number,
+			"entry_date":        entryDate,
+			"description":       description,
+			"intent_type":       intentType,
+			"status":            status,
+			"total_debit_cents": totalDebit,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -692,12 +808,12 @@ func (service *Service) fetchOutstandingInvoicesData(w http.ResponseWriter, r *h
 			return
 		}
 		invoices = append(invoices, map[string]any{
-			"number":            number,
-			"customer_name":     customerName,
-			"invoice_date":      invoiceDate,
-			"due_date":          dueDate,
-			"receivable_cents":  receivableCents,
-			"status":            status,
+			"number":           number,
+			"customer_name":    customerName,
+			"invoice_date":     invoiceDate,
+			"due_date":         dueDate,
+			"receivable_cents": receivableCents,
+			"status":           status,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -708,6 +824,31 @@ func (service *Service) fetchOutstandingInvoicesData(w http.ResponseWriter, r *h
 	writeJSON(w, http.StatusOK, map[string]any{
 		"widget_type": WidgetOutstandingInvoices,
 		"invoices":    invoices,
+	})
+}
+
+// fetchTaxSummaryData returns PPN keluaran (output VAT, account 2202 credits)
+// and PPN masukan (input VAT, account 1203 debits) and the net payable.
+// Mirrors the tax.PPNSummary shape but is self-contained so the dashboard
+// widget dispatch does not need to import the tax package.
+func (service *Service) fetchTaxSummaryData(w http.ResponseWriter, r *http.Request, tenantID int64) {
+	var ppnKeluaran, ppnMasukan int64
+	_ = service.pool.QueryRow(r.Context(), `
+		SELECT
+		  COALESCE(SUM(CASE WHEN a.code = '2202' THEN jl.credit_cents - jl.debit_cents ELSE 0 END), 0),
+		  COALESCE(SUM(CASE WHEN a.code = '1203' THEN jl.debit_cents - jl.credit_cents ELSE 0 END), 0)
+		FROM journal_lines jl
+		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
+		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
+		  AND a.code IN ('2202', '1203')
+	`, tenantID).Scan(&ppnKeluaran, &ppnMasukan)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"widget_type":        WidgetTaxSummary,
+		"ppn_keluaran_cents": ppnKeluaran,
+		"ppn_masukan_cents":  ppnMasukan,
+		"net_ppn_cents":      ppnKeluaran - ppnMasukan,
 	})
 }
 

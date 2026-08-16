@@ -181,6 +181,57 @@ export interface DashboardSummary {
   lowStock: number;
   recentTransactions: Transaction[];
 }
+
+/** One row in the GET /aging/ar or /aging/ap summary. */
+export interface AgingRow {
+  party_id: number;
+  party_name: string;
+  invoice_number: string;
+  invoice_date: string;
+  due_date: string;
+  outstanding_cents: number;
+  bucket: string;
+  days_overdue: number;
+}
+
+/** Shape of GET /aging/ar and /aging/ap (internal/aging/handler.go). */
+export interface AgingSummary {
+  as_of_date: string;
+  total_cents: number;
+  current_cents: number;
+  bucket_1_30_cents: number;
+  bucket_31_60_cents: number;
+  bucket_61_90_cents: number;
+  bucket_90_plus_cents: number;
+  rows: AgingRow[];
+}
+
+/** Shape of GET /ppn/summary (internal/tax/ppn.go). */
+export interface PPNSummary {
+  from_date: string;
+  to_date: string;
+  ppn_keluaran_cents: number;
+  ppn_masukan_cents: number;
+  net_ppn_cents: number;
+}
+
+/** Low-stock item from the dashboard widget data endpoint. */
+export interface LowStockItem {
+  code?: string;
+  name?: string;
+  qty_on_hand?: number;
+  min_stock_qty?: number;
+}
+
+/** Period status from the dashboard widget data endpoint. */
+export interface PeriodStatusData {
+  widget_type?: string;
+  period_id?: number;
+  status?: string;
+  period_start?: string;
+  period_end?: string;
+}
+
 export interface ApiError {
   code: string;
   message: string;

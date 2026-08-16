@@ -197,12 +197,12 @@ func computeFIFOCOGS(layers []fifoLayerTest, qty float64, fallbackAvgCost int64)
 			take = remaining
 		}
 
-		cogs += int64(math.Round(take*float64(l.unitCostCents)))
+		cogs += int64(math.Round(take * float64(l.unitCostCents)))
 		remaining -= take
 	}
 
 	if remaining > 0 {
-		cogs += int64(math.Round(remaining*float64(fallbackAvgCost)))
+		cogs += int64(math.Round(remaining * float64(fallbackAvgCost)))
 	}
 
 	return cogs

@@ -313,10 +313,10 @@ func TestECLProvisionRounding(t *testing.T) {
 func TestECLTotalProvision(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name           string
-		balances       map[string]int64 // label -> balance cents
-		wantTotal      int64
-		wantPerBucket  map[string]int64
+		name          string
+		balances      map[string]int64 // label -> balance cents
+		wantTotal     int64
+		wantPerBucket map[string]int64
 	}{
 		{
 			name: "one receivable per bucket",
@@ -338,7 +338,7 @@ func TestECLTotalProvision(t *testing.T) {
 		{
 			name: "only current (0-30) receivables",
 			balances: map[string]int64{
-				"0-30": 500_000,
+				"0-30":  500_000,
 				"31-60": 0,
 				"61-90": 0,
 				">90":   0,
@@ -526,10 +526,10 @@ func TestPPNRateCalculation(t *testing.T) {
 		{"11% of 10,000", 10_000, 1_100},
 		{"11% of 1,000", 1_000, 110},
 		{"11% of 100", 100, 11},
-		{"11% of 10", 10, 1},     // 1.1 -> rounds to 1
-		{"11% of 5", 5, 1},       // 0.55 -> rounds up to 1 (half-up)
-		{"11% of 4", 4, 0},       // 0.44 -> rounds to 0
-		{"zero DPP", 0, 0},       // guarded by percentageRound
+		{"11% of 10", 10, 1}, // 1.1 -> rounds to 1
+		{"11% of 5", 5, 1},   // 0.55 -> rounds up to 1 (half-up)
+		{"11% of 4", 4, 0},   // 0.44 -> rounds to 0
+		{"zero DPP", 0, 0},   // guarded by percentageRound
 		{"negative DPP", -1000, 0},
 		{"large DPP 1 billion", 1_000_000_000, 110_000_000},
 	}
@@ -580,11 +580,11 @@ func TestPPNReversalCreditNote(t *testing.T) {
 	const ppnRatePct = 11.0
 
 	tests := []struct {
-		name            string
-		originalDPP     int64
-		creditNoteDPP   int64 // reversal amount (positive, subtracted)
-		wantKeluaran    int64
-		wantNet         int64 // keluaran - masukan (masukan=0 here)
+		name          string
+		originalDPP   int64
+		creditNoteDPP int64 // reversal amount (positive, subtracted)
+		wantKeluaran  int64
+		wantNet       int64 // keluaran - masukan (masukan=0 here)
 	}{
 		{
 			name:          "full reversal cancels keluaran",
@@ -702,10 +702,10 @@ func TestPPhFinalUMKMRate(t *testing.T) {
 		{"0.5% of 100,000", 100_000, 500},
 		{"0.5% of 10,000", 10_000, 50},
 		{"0.5% of 1,000", 1_000, 5},
-		{"0.5% of 100", 100, 1},     // 0.5 -> rounds up to 1 (half-up)
-		{"0.5% of 50", 50, 0},       // 0.25 -> rounds to 0
-		{"0.5% of 150", 150, 1},     // 0.75 -> rounds to 1
-		{"0.5% of 200", 200, 1},     // 1.0 exact
+		{"0.5% of 100", 100, 1}, // 0.5 -> rounds up to 1 (half-up)
+		{"0.5% of 50", 50, 0},   // 0.25 -> rounds to 0
+		{"0.5% of 150", 150, 1}, // 0.75 -> rounds to 1
+		{"0.5% of 200", 200, 1}, // 1.0 exact
 		{"zero revenue", 0, 0},
 		{"negative revenue", -1000, 0},
 	}
@@ -739,10 +739,10 @@ func TestPPhFinalUMKMRate075(t *testing.T) {
 		{"0.75% of 1,000,000", 1_000_000, 7_500},
 		{"0.75% of 100,000", 100_000, 750},
 		{"0.75% of 10,000", 10_000, 75},
-		{"0.75% of 1,000", 1_000, 8},    // 7.5 -> rounds up to 8 (half-up)
-		{"0.75% of 100", 100, 1},        // 0.75 -> rounds to 1
-		{"0.75% of 400", 400, 3},        // 3.0 exact
-		{"0.75% of 133", 133, 1},        // 0.9975 -> rounds to 1
+		{"0.75% of 1,000", 1_000, 8}, // 7.5 -> rounds up to 8 (half-up)
+		{"0.75% of 100", 100, 1},     // 0.75 -> rounds to 1
+		{"0.75% of 400", 400, 3},     // 3.0 exact
+		{"0.75% of 133", 133, 1},     // 0.9975 -> rounds to 1
 		{"zero revenue", 0, 0},
 	}
 	for _, tc := range tests {
@@ -765,11 +765,11 @@ func TestPPhFinalNetRevenue(t *testing.T) {
 	t.Parallel()
 	const pphFinalRatePct = 0.5
 	tests := []struct {
-		name          string
-		salesCents    int64
-		returnsCents  int64
-		wantRevenue   int64
-		wantTax       int64
+		name         string
+		salesCents   int64
+		returnsCents int64
+		wantRevenue  int64
+		wantTax      int64
 	}{
 		{
 			name:         "no returns",
@@ -857,11 +857,11 @@ func TestValidatePPhFinalRequest(t *testing.T) {
 func TestDeferredTaxFormula(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name        string
-		tempDiff    int64
-		taxRatePct  float64
-		wantCents   int64
-		wantDir     string
+		name       string
+		tempDiff   int64
+		taxRatePct float64
+		wantCents  int64
+		wantDir    string
 	}{
 		{"positive diff 22% => ASSET", 1_000_000, 22.0, 220_000, "ASSET"},
 		{"positive diff 22% small", 100_000, 22.0, 22_000, "ASSET"},
@@ -945,13 +945,13 @@ func TestValidateDeferredTax(t *testing.T) {
 func TestPercentageRound(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name  string
-		base  int64
-		rate  float64
-		want  int64
+		name string
+		base int64
+		rate float64
+		want int64
 	}{
 		{"exact integer result", 1_000_000, 0.11, 110_000},
-		{"half rounds up", 100, 0.005, 1},     // 0.5 -> 1
+		{"half rounds up", 100, 0.005, 1},             // 0.5 -> 1
 		{"just below half rounds down", 99, 0.005, 0}, // 0.495 -> 0
 		{"zero base", 0, 0.11, 0},
 		{"negative base", -1000, 0.11, 0},
@@ -977,7 +977,7 @@ func TestPercentageRound(t *testing.T) {
 func TestAbs64(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name string
+		name  string
 		input int64
 		want  int64
 	}{
@@ -1006,9 +1006,9 @@ func TestAbs64(t *testing.T) {
 func TestFormatPercent(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name  string
-		rate  float64
-		want  string
+		name string
+		rate float64
+		want string
 	}{
 		{"integer rate 11", 11.0, "11.0"},
 		{"integer rate 22", 22.0, "22.0"},
@@ -1052,7 +1052,7 @@ func TestValidDate(t *testing.T) {
 		{"2026-13-01", false}, // invalid month
 		{"2026-01-32", false}, // invalid day
 		{"not-a-date", false},
-		{"2026-1-1", false},   // not zero-padded
+		{"2026-1-1", false}, // not zero-padded
 	}
 	for _, tc := range tests {
 		tc := tc
@@ -1078,9 +1078,9 @@ func TestNormalizeDate(t *testing.T) {
 		{"  2026-01-31  ", "2026-01-31"}, // trimmed
 		{"", ""},                         // blank -> open bound
 		{"   ", ""},
-		{"2026/01/31", ""},               // wrong format -> ""
+		{"2026/01/31", ""}, // wrong format -> ""
 		{"invalid", ""},
-		{"2026-01-32", ""},               // invalid day
+		{"2026-01-32", ""}, // invalid day
 	}
 	for _, tc := range tests {
 		tc := tc
@@ -1221,9 +1221,9 @@ func TestParseInt(t *testing.T) {
 func TestOptionalNote(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name  string
-		note  string
-		want  string
+		name string
+		note string
+		want string
 	}{
 		{"empty", "", ""},
 		{"whitespace only", "   ", ""},
@@ -1249,32 +1249,32 @@ func TestOptionalNote(t *testing.T) {
 func TestAccountCodeConstants(t *testing.T) {
 	t.Parallel()
 	codes := map[string]string{
-		"ppnKeluaranCode":         ppnKeluaranCode,         // 2202 VAT Payable
-		"ppnMasukanCode":          ppnMasukanCode,          // 1203 Input VAT
-		"salesCode":               salesCode,               // 4101 Sales Revenue
-		"cashCode":                cashCode,                // 1101 Cash
-		"arAccountCode":           arAccountCode,           // 1201 Accounts Receivable
-		"pphPayableAccountCode":   pphPayableAccountCode,   // 2203 Income Tax Payable
-		"pphExpenseAccountCode":   pphExpenseAccountCode,   // 5208 Income Tax Expense
-		"allowanceAccountCode":    allowanceAccountCode,    // 1202 Allowance for Doubtful Accts
-		"badDebtExpenseCode":      badDebtExpenseCode,      // 5209 Bad Debt Expense
-		"badDebtRecoveryCode":     badDebtRecoveryCode,     // 4906 Bad Debt Recovery
-		"deferredTaxAssetCode":    deferredTaxAssetCode,    // 1206 Deferred Tax Asset
-		"deferredTaxExpenseCode":  deferredTaxExpenseCode,  // 5904 Deferred Tax Expense
+		"ppnKeluaranCode":        ppnKeluaranCode,        // 2202 VAT Payable
+		"ppnMasukanCode":         ppnMasukanCode,         // 1203 Input VAT
+		"salesCode":              salesCode,              // 4101 Sales Revenue
+		"cashCode":               cashCode,               // 1101 Cash
+		"arAccountCode":          arAccountCode,          // 1201 Accounts Receivable
+		"pphPayableAccountCode":  pphPayableAccountCode,  // 2203 Income Tax Payable
+		"pphExpenseAccountCode":  pphExpenseAccountCode,  // 5208 Income Tax Expense
+		"allowanceAccountCode":   allowanceAccountCode,   // 1202 Allowance for Doubtful Accts
+		"badDebtExpenseCode":     badDebtExpenseCode,     // 5209 Bad Debt Expense
+		"badDebtRecoveryCode":    badDebtRecoveryCode,    // 4906 Bad Debt Recovery
+		"deferredTaxAssetCode":   deferredTaxAssetCode,   // 1206 Deferred Tax Asset
+		"deferredTaxExpenseCode": deferredTaxExpenseCode, // 5904 Deferred Tax Expense
 	}
 	want := map[string]string{
-		"ppnKeluaranCode":         "2202",
-		"ppnMasukanCode":          "1203",
-		"salesCode":               "4101",
-		"cashCode":                "1101",
-		"arAccountCode":           "1201",
-		"pphPayableAccountCode":   "2203",
-		"pphExpenseAccountCode":   "5208",
-		"allowanceAccountCode":    "1202",
-		"badDebtExpenseCode":      "5209",
-		"badDebtRecoveryCode":     "4906",
-		"deferredTaxAssetCode":    "1206",
-		"deferredTaxExpenseCode":  "5904",
+		"ppnKeluaranCode":        "2202",
+		"ppnMasukanCode":         "1203",
+		"salesCode":              "4101",
+		"cashCode":               "1101",
+		"arAccountCode":          "1201",
+		"pphPayableAccountCode":  "2203",
+		"pphExpenseAccountCode":  "5208",
+		"allowanceAccountCode":   "1202",
+		"badDebtExpenseCode":     "5209",
+		"badDebtRecoveryCode":    "4906",
+		"deferredTaxAssetCode":   "1206",
+		"deferredTaxExpenseCode": "5904",
 	}
 	for name, code := range codes {
 		name, code := name, code

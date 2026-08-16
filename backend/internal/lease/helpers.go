@@ -24,12 +24,12 @@ import (
 
 // Shared account codes (seeded by migration 000024 / 000026 / auth.seedDefaultCOA).
 const (
-	rouAssetAccountCode            = "1701" // Right-of-Use Asset
-	accumRouDepAccountCode         = "1702" // Accumulated RoU Depreciation
-	leaseLiabilityAccountCode      = "2301" // Lease Liability
-	interestExpenseAccountCode     = "5906" // Interest Expense
-	rouDepreciationExpenseCode     = "5209" // RoU Depreciation Expense
-	cashAccountCode                = "1101" // Cash (default payment counter)
+	rouAssetAccountCode        = "1701" // Right-of-Use Asset
+	accumRouDepAccountCode     = "1702" // Accumulated RoU Depreciation
+	leaseLiabilityAccountCode  = "2301" // Lease Liability
+	interestExpenseAccountCode = "5906" // Interest Expense
+	rouDepreciationExpenseCode = "5209" // RoU Depreciation Expense
+	cashAccountCode            = "1101" // Cash (default payment counter)
 )
 
 // Lease statuses (stored in lease_contracts.status).
@@ -41,8 +41,8 @@ const (
 
 // Intent types for lease journal entries.
 const (
-	intentLeaseInitial     = "LEASE_INITIAL"
-	intentLeasePayment     = "LEASE_PAYMENT"
+	intentLeaseInitial      = "LEASE_INITIAL"
+	intentLeasePayment      = "LEASE_PAYMENT"
 	intentLeaseDepreciation = "LEASE_DEPRECIATION"
 )
 

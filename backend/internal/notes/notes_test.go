@@ -15,7 +15,7 @@ import (
 
 // jsonMarshal / jsonUnmarshal are thin wrappers over encoding/json used by the
 // struct round-trip tests so the call sites stay short.
-func jsonMarshal(v any) ([]byte, error)  { return json.Marshal(v) }
+func jsonMarshal(v any) ([]byte, error)   { return json.Marshal(v) }
 func jsonUnmarshal(b []byte, v any) error { return json.Unmarshal(b, v) }
 
 // ---------------------------------------------------------------------------
@@ -371,14 +371,14 @@ func TestDueDateReminders_DaysAheadQueryParsing(t *testing.T) {
 		want  int
 		valid bool
 	}{
-		{"", 0, false},            // empty -> default path
-		{"7", 7, true},            // valid
-		{"0", 0, true},            // zero is valid (>= 0)
-		{"30", 30, true},          // valid larger window
-		{"-1", 0, false},          // negative -> fallback
-		{"abc", 0, false},         // non-numeric -> fallback
-		{"3.5", 0, false},         // float -> fallback
-		{" 7 ", 0, false},         // unparsed whitespace -> Atoi fails
+		{"", 0, false},    // empty -> default path
+		{"7", 7, true},    // valid
+		{"0", 0, true},    // zero is valid (>= 0)
+		{"30", 30, true},  // valid larger window
+		{"-1", 0, false},  // negative -> fallback
+		{"abc", 0, false}, // non-numeric -> fallback
+		{"3.5", 0, false}, // float -> fallback
+		{" 7 ", 0, false}, // unparsed whitespace -> Atoi fails
 	}
 	for _, tc := range tests {
 		daysAhead := 7

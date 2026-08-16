@@ -40,13 +40,13 @@ const (
 
 // CreditNoteLineRequest is one line of a create-CN request.
 type CreditNoteLineRequest struct {
-	ItemID         int64   `json:"item_id"`
-	InvoiceLineID  int64   `json:"invoice_line_id"`
-	DeliveryOrderID int64  `json:"delivery_order_id,omitempty"` // A-13: Reference to original DO for cost lookup
-	Qty            float64 `json:"qty"`
-	UnitPriceCents int64   `json:"unit_price_cents"`
-	UnitCostCents  int64   `json:"unit_cost_cents"` // A-13 fallback if DO not found; resolved from DO if delivery_order_id provided
-	Description    string  `json:"description"`
+	ItemID          int64   `json:"item_id"`
+	InvoiceLineID   int64   `json:"invoice_line_id"`
+	DeliveryOrderID int64   `json:"delivery_order_id,omitempty"` // A-13: Reference to original DO for cost lookup
+	Qty             float64 `json:"qty"`
+	UnitPriceCents  int64   `json:"unit_price_cents"`
+	UnitCostCents   int64   `json:"unit_cost_cents"` // A-13 fallback if DO not found; resolved from DO if delivery_order_id provided
+	Description     string  `json:"description"`
 }
 
 // CreateCreditNoteRequest is the POST /credit-notes body.

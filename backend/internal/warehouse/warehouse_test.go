@@ -81,8 +81,8 @@ func TestValidateWarehouse(t *testing.T) {
 			wantError: "INVALID_REQUEST",
 		},
 		{
-			name: "both missing",
-			request: CreateWarehouseRequest{},
+			name:      "both missing",
+			request:   CreateWarehouseRequest{},
 			wantError: "INVALID_REQUEST",
 		},
 	}

@@ -40,8 +40,8 @@ import (
 	"finance-accounting-app/backend/internal/purchase"
 	"finance-accounting-app/backend/internal/reconciliation"
 	"finance-accounting-app/backend/internal/recurring"
-	"finance-accounting-app/backend/internal/reports"
 	"finance-accounting-app/backend/internal/reporting"
+	"finance-accounting-app/backend/internal/reports"
 	"finance-accounting-app/backend/internal/sales"
 	"finance-accounting-app/backend/internal/tax"
 	"finance-accounting-app/backend/internal/tenant"
@@ -114,11 +114,11 @@ func main() {
 	router := chi.NewRouter()
 
 	// Global middleware (applied to all routes).
-	router.Use(middleware.RequestID)             // inject X-Request-ID for traceability
-	router.Use(middleware.Recover)              // i-008: catch panics
-	router.Use(middleware.RequestLogger)        // i-009: log every request
+	router.Use(middleware.RequestID)                            // inject X-Request-ID for traceability
+	router.Use(middleware.Recover)                              // i-008: catch panics
+	router.Use(middleware.RequestLogger)                        // i-009: log every request
 	router.Use(middleware.CORS(middleware.DefaultCORSConfig())) // i-010: CORS
-	router.Use(middleware.Timeout(60 * time.Second)) // i-011: per-request timeout
+	router.Use(middleware.Timeout(60 * time.Second))            // i-011: per-request timeout
 
 	// Rate limiter for auth endpoints (M-027: prevent brute-force).
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)
@@ -213,55 +213,55 @@ func main() {
 				budgetHandler.Routes(router)
 
 				leaseHandler := lease.NewHandler(pool)
-			leaseHandler.Routes(router)
+				leaseHandler.Routes(router)
 
-			reconciliationHandler := reconciliation.NewHandler(pool)
-			reconciliationHandler.Routes(router)
+				reconciliationHandler := reconciliation.NewHandler(pool)
+				reconciliationHandler.Routes(router)
 
-			notesHandler := notes.NewHandler(pool)
-			notesHandler.Routes(router)
+				notesHandler := notes.NewHandler(pool)
+				notesHandler.Routes(router)
 
-			auditHandler := audit.NewHandler(pool, cfg.StorageRoot)
-			auditHandler.Routes(router)
+				auditHandler := audit.NewHandler(pool, cfg.StorageRoot)
+				auditHandler.Routes(router)
 
-			// F-07: Recurring Transactions
-			recurringHandler.Routes(router)
+				// F-07: Recurring Transactions
+				recurringHandler.Routes(router)
 
-			// F-08: Petty Cash (Imprest)
-			pettyCashHandler.Routes(router)
+				// F-08: Petty Cash (Imprest)
+				pettyCashHandler.Routes(router)
 
-			// F-02: Multi-Warehouse
-			warehouseHandler.Routes(router)
+				// F-02: Multi-Warehouse
+				warehouseHandler.Routes(router)
 
-			// F-03: Approval Workflow
-			approvalHandler.Routes(router)
+				// F-03: Approval Workflow
+				approvalHandler.Routes(router)
 
-			// F-12: PPh (Withholding Tax)
-			pphHandler.Routes(router)
+				// F-12: PPh (Withholding Tax)
+				pphHandler.Routes(router)
 
-			// F-14: Giro & Cheque Management
-			chequeHandler.Routes(router)
+				// F-14: Giro & Cheque Management
+				chequeHandler.Routes(router)
 
-			// F-09: Cost/Profit Center
-			costCenterHandler.Routes(router)
+				// F-09: Cost/Profit Center
+				costCenterHandler.Routes(router)
 
-			// F-15: Email Notification (write — templates + queue)
-			emailHandler.Routes(router)
+				// F-15: Email Notification (write — templates + queue)
+				emailHandler.Routes(router)
 
-			// N-01..N-10: Report Templates (CRUD)
-			router.Get("/reports/templates", reportsHandler.ListTemplates)
-			router.Post("/reports/templates", reportsHandler.CreateTemplate)
-			router.Get("/reports/templates/{id}", reportsHandler.GetTemplate)
-			router.Put("/reports/templates/{id}", reportsHandler.UpdateTemplate)
-			router.Delete("/reports/templates/{id}", reportsHandler.DeleteTemplate)
-			router.Post("/reports/templates/{id}/render", reportsHandler.RenderReport)
+				// N-01..N-10: Report Templates (CRUD)
+				router.Get("/reports/templates", reportsHandler.ListTemplates)
+				router.Post("/reports/templates", reportsHandler.CreateTemplate)
+				router.Get("/reports/templates/{id}", reportsHandler.GetTemplate)
+				router.Put("/reports/templates/{id}", reportsHandler.UpdateTemplate)
+				router.Delete("/reports/templates/{id}", reportsHandler.DeleteTemplate)
+				router.Post("/reports/templates/{id}/render", reportsHandler.RenderReport)
 
-			// D-01..D-02: Dashboard widget CRUD (write)
-			router.Put("/dashboard/layout", dashboardHandler.SaveLayout)
-			router.Post("/dashboard/widgets", dashboardHandler.AddWidget)
-			router.Put("/dashboard/widgets/{id}", dashboardHandler.UpdateWidget)
-			router.Delete("/dashboard/widgets/{id}", dashboardHandler.DeleteWidget)
-		})
+				// D-01..D-02: Dashboard widget CRUD (write)
+				router.Put("/dashboard/layout", dashboardHandler.SaveLayout)
+				router.Post("/dashboard/widgets", dashboardHandler.AddWidget)
+				router.Put("/dashboard/widgets/{id}", dashboardHandler.UpdateWidget)
+				router.Delete("/dashboard/widgets/{id}", dashboardHandler.DeleteWidget)
+			})
 
 			// --- Admin only: period close/unlock, account deactivation ---
 			router.Group(func(router chi.Router) {

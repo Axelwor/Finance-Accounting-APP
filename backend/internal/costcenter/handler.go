@@ -58,11 +58,11 @@ type UpdateCostCenterRequest struct {
 
 // CreateAllocationRequest is the JSON body for POST /cost-centers/{id}/allocations.
 type CreateAllocationRequest struct {
-	SourceCostCenterID    int64   `json:"source_cost_center_id"`
-	TargetCostCenterID    int64   `json:"target_cost_center_id"`
-	AllocationPercentage  float64 `json:"allocation_percentage"`
-	AllocationBasis       string  `json:"allocation_basis"`
-	IsActive              *bool   `json:"is_active"`
+	SourceCostCenterID   int64   `json:"source_cost_center_id"`
+	TargetCostCenterID   int64   `json:"target_cost_center_id"`
+	AllocationPercentage float64 `json:"allocation_percentage"`
+	AllocationBasis      string  `json:"allocation_basis"`
+	IsActive             *bool   `json:"is_active"`
 }
 
 type CostCenterResponse struct {
@@ -79,21 +79,21 @@ type CostCenterResponse struct {
 }
 
 type AllocationResponse struct {
-	ID                    int64     `json:"id"`
-	SourceCostCenterID    int64     `json:"source_cost_center_id"`
-	TargetCostCenterID    int64     `json:"target_cost_center_id"`
-	AllocationPercentage  float64   `json:"allocation_percentage"`
-	AllocationBasis       string    `json:"allocation_basis"`
-	IsActive              bool      `json:"is_active"`
-	CreatedAt             time.Time `json:"created_at"`
+	ID                   int64     `json:"id"`
+	SourceCostCenterID   int64     `json:"source_cost_center_id"`
+	TargetCostCenterID   int64     `json:"target_cost_center_id"`
+	AllocationPercentage float64   `json:"allocation_percentage"`
+	AllocationBasis      string    `json:"allocation_basis"`
+	IsActive             bool      `json:"is_active"`
+	CreatedAt            time.Time `json:"created_at"`
 }
 
 type PnLResponse struct {
-	CostCenterID   int64 `json:"cost_center_id"`
-	RevenueCents   int64 `json:"revenue_cents"`
-	ExpenseCents   int64 `json:"expense_cents"`
-	NetCents       int64 `json:"net_cents"`
-	LineCount      int   `json:"line_count"`
+	CostCenterID int64 `json:"cost_center_id"`
+	RevenueCents int64 `json:"revenue_cents"`
+	ExpenseCents int64 `json:"expense_cents"`
+	NetCents     int64 `json:"net_cents"`
+	LineCount    int   `json:"line_count"`
 }
 
 func (s *Service) Routes(r chi.Router) {
@@ -728,12 +728,12 @@ func (s *Service) ExecuteAllocations(w http.ResponseWriter, r *http.Request) {
 		}
 
 		journal := accounting.Journal{
-			TenantID:   tid,
-			SourceRef:  fmt.Sprintf("CC-ALLOC-%d", sourceID),
-			IntentType: accounting.IntentType("COST_CENTER_ALLOCATION"),
-			EntryDate:  periodEnd,
+			TenantID:    tid,
+			SourceRef:   fmt.Sprintf("CC-ALLOC-%d", sourceID),
+			IntentType:  accounting.IntentType("COST_CENTER_ALLOCATION"),
+			EntryDate:   periodEnd,
 			Description: fmt.Sprintf("Cost center allocation: %s (%s..%s)", sourceCode, periodStart, periodEnd),
-			Lines:      lines,
+			Lines:       lines,
 		}
 
 		entryID, number, lineIDs, err := postAllocationJournal(r.Context(), tx, tid, uid, idem, journal)
@@ -1005,8 +1005,8 @@ func normalizeAllocationBasis(basis string) string {
 // validCenterTypes returns the set of recognized center type codes.
 func validCenterTypes() map[string]bool {
 	return map[string]bool{
-		"COST":      true,
-		"PROFIT":    true,
+		"COST":       true,
+		"PROFIT":     true,
 		"INVESTMENT": true,
 	}
 }

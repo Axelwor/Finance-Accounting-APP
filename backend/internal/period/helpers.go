@@ -2,8 +2,8 @@ package period
 
 import (
 	"encoding/json"
-	"net/http"
 	"finance-accounting-app/backend/internal/httperr"
+	"net/http"
 )
 
 type errorResponse struct {

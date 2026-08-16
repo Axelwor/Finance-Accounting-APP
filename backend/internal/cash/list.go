@@ -176,10 +176,10 @@ func (service *Service) queryCashEntries(
 	}
 	defer rows.Close()
 	type row struct {
-		id, debit, credit, amount                            int64
-		number, intent, status, description, sourceRef       string
-		date                                                 time.Time
-		reversalOfID                                         int64
+		id, debit, credit, amount                      int64
+		number, intent, status, description, sourceRef string
+		date                                           time.Time
+		reversalOfID                                   int64
 	}
 	out := []CashEntryListItem{}
 	for rows.Next() {
@@ -188,14 +188,14 @@ func (service *Service) queryCashEntries(
 			return nil, err
 		}
 		item := CashEntryListItem{
-			ID:           r.id,
-			Number:       r.number,
-			Kind:         mapKind(r.intent),
-			EntryDate:    r.date.Format("2006-01-02"),
-			Status:       r.status,
-			Description:  r.description,
-			AmountCents:  r.amount,
-			Reference:    r.sourceRef,
+			ID:          r.id,
+			Number:      r.number,
+			Kind:        mapKind(r.intent),
+			EntryDate:   r.date.Format("2006-01-02"),
+			Status:      r.status,
+			Description: r.description,
+			AmountCents: r.amount,
+			Reference:   r.sourceRef,
 
 			ReversalOfID: r.reversalOfID,
 		}

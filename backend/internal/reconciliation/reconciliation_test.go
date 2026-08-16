@@ -476,7 +476,7 @@ func TestStatementLine_MatchStatusStrings(t *testing.T) {
 		wantDir  string // direction on the matched journal line
 		positive bool
 	}{
-		{5000, "DEBIT", true},   // deposit -> bank debit
+		{5000, "DEBIT", true},    // deposit -> bank debit
 		{-5000, "CREDIT", false}, // withdrawal -> bank credit
 	}
 	for _, c := range cases {

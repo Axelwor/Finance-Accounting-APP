@@ -112,8 +112,8 @@ func TestCNRefundMethodJournalCreditSide(t *testing.T) {
 	// This tests that each method maps to the correct target.
 	testCases := []struct {
 		method     string
-		wantCred   int64 // account ID mock
-		wantSource string  // source line ref format
+		wantCred   int64  // account ID mock
+		wantSource string // source line ref format
 	}{
 		{method: "deduct", wantCred: 1201, wantSource: "cr_deduct"},
 		{method: "refund", wantCred: 1101, wantSource: "cr_refund"},

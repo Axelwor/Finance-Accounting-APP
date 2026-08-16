@@ -34,6 +34,9 @@ import type {
   Category,
   CurrencyCode,
   DashboardSummary,
+  AgingSummary,
+  LowStockItem,
+  PeriodStatusData,
   LoginInput,
   OnboardingInput,
   OpeningBalance,
@@ -829,6 +832,94 @@ export const api = {
       return fallback();
     } catch {
       return fallback();
+    }
+  },
+
+  /**
+   * Dashboard AR aging from GET /aging/ar. Returns the backend's
+   * agingSummary shape (total_cents + per-bucket breakdown + rows).
+   * Distinct from getARAging() which returns the legacy AgingReport shape
+   * used by the list screens. Throws on failure.
+   */
+  async getDashboardARAging(): Promise<AgingSummary> {
+    return http<AgingSummary>("/aging/ar", { auth: true });
+  },
+
+  /**
+   * Dashboard AP aging from GET /aging/ap. Same shape as AR.
+   */
+  async getDashboardAPAging(): Promise<AgingSummary> {
+    return http<AgingSummary>("/aging/ap", { auth: true });
+  },
+
+  /**
+   * Dashboard PPN summary from GET /ppn/summary (no date range — current
+   * period). Distinct from getPPNSummary(from, to) which is used by the
+   * reconciliation screen. Returns null on failure.
+   */
+  async getDashboardPPNSummary(): Promise<PPNSummary | null> {
+    try {
+      return await http<PPNSummary>("/ppn/summary", { auth: true });
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Recent journal entries from GET /journal-entries?limit=N. Each row
+   * carries total_debit_cents so the dashboard can show a nominal without
+   * a second round-trip.
+   */
+  async listRecentJournalEntries(limit = 8): Promise<JournalEntryListItem[]> {
+    const res = await http<{ entries?: JournalEntryListItem[] } | JournalEntryListItem[]>(
+      `/journal-entries?limit=${limit}`,
+      { auth: true },
+    );
+    if (Array.isArray(res)) return res;
+    return res?.entries ?? [];
+  },
+
+  /**
+   * Low-stock items from the dashboard widget data endpoint. Resolves the
+   * widget id via /dashboard/layout, then fetches /dashboard/widgets/{id}/data.
+   * Returns [] on any failure (never throws).
+   */
+  async getLowStockItems(): Promise<LowStockItem[]> {
+    try {
+      const layout = await http<{ widgets?: { id: number; widget_type: string }[] }>(
+        "/dashboard/layout",
+        { auth: true },
+      );
+      const widget = (layout?.widgets ?? []).find((w) => w.widget_type === "low_stock_alert");
+      if (!widget?.id) return [];
+      const data = await http<{ items?: LowStockItem[] }>(
+        `/dashboard/widgets/${widget.id}/data`,
+        { auth: true },
+      );
+      return data?.items ?? [];
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Period status from the dashboard widget data endpoint. Resolves the
+   * widget id via /dashboard/layout, then fetches /dashboard/widgets/{id}/data.
+   * Returns null on failure (never throws).
+   */
+  async getPeriodStatus(): Promise<PeriodStatusData | null> {
+    try {
+      const layout = await http<{ widgets?: { id: number; widget_type: string }[] }>(
+        "/dashboard/layout",
+        { auth: true },
+      );
+      const widget = (layout?.widgets ?? []).find((w) => w.widget_type === "period_status");
+      if (!widget?.id) return null;
+      return await http<PeriodStatusData>(`/dashboard/widgets/${widget.id}/data`, {
+        auth: true,
+      });
+    } catch {
+      return null;
     }
   },
 

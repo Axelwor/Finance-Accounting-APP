@@ -14,7 +14,7 @@ import (
 
 // Sentinel errors for the inter-company transaction endpoints.
 var (
-	errICTXEntryNotFound    = errors.New("journal entry not found for tenant")
+	errICTXEntryNotFound     = errors.New("journal entry not found for tenant")
 	errICTXAlreadyEliminated = errors.New("inter-company transaction already eliminated")
 )
 
@@ -39,11 +39,11 @@ var (
 
 // validICTxTypes mirrors the CHECK constraint on inter_company_transactions.
 var validICTxTypes = map[string]bool{
-	"SALE":          true,
-	"PURCHASE":      true,
-	"LOAN":          true,
-	"INTEREST":      true,
-	"DIVIDEND":      true,
+	"SALE":           true,
+	"PURCHASE":       true,
+	"LOAN":           true,
+	"INTEREST":       true,
+	"DIVIDEND":       true,
 	"MANAGEMENT_FEE": true,
 }
 

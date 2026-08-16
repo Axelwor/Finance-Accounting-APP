@@ -19,6 +19,10 @@ import (
 // verify that isKnownWidgetType accepts every one of them.
 var validWidgetTypes = []string{
 	WidgetCashBalance,
+	WidgetKPIAR,
+	WidgetKPIAP,
+	WidgetKPIPL,
+	WidgetKPILowStock,
 	WidgetARAging,
 	WidgetAPAging,
 	WidgetPLSnapshot,
@@ -41,7 +45,7 @@ func TestValidateWidgetType(t *testing.T) {
 		widgetType string
 		want       bool
 	}{
-		{name: "cash_balance passes", widgetType: WidgetCashBalance, want: true},
+		{name: "kpi_cash passes", widgetType: WidgetCashBalance, want: true},
 		{name: "ar_aging_summary passes", widgetType: WidgetARAging, want: true},
 		{name: "ap_aging_summary passes", widgetType: WidgetAPAging, want: true},
 		{name: "pl_snapshot passes", widgetType: WidgetPLSnapshot, want: true},
@@ -98,7 +102,7 @@ func TestIsKnownWidgetType(t *testing.T) {
 		in   string
 		want bool
 	}{
-		{name: "cash_balance", in: WidgetCashBalance, want: true},
+		{name: "kpi_cash", in: WidgetCashBalance, want: true},
 		{name: "ar_aging_summary", in: WidgetARAging, want: true},
 		{name: "ap_aging_summary", in: WidgetAPAging, want: true},
 		{name: "pl_snapshot", in: WidgetPLSnapshot, want: true},
@@ -109,7 +113,7 @@ func TestIsKnownWidgetType(t *testing.T) {
 		{name: "outstanding_invoices", in: WidgetOutstandingInvoices, want: true},
 		{name: "tax_summary", in: WidgetTaxSummary, want: true},
 		{name: "period_status", in: WidgetPeriodStatus, want: true},
-		{name: "typo of cash_balance rejected", in: "cash-bal", want: false},
+		{name: "typo of kpi_cash rejected", in: "cash-bal", want: false},
 		{name: "case variant rejected (constants are lowercase)", in: "Cash_Balance", want: false},
 		{name: "trailing space rejected", in: WidgetCashBalance + " ", want: false},
 		{name: "leading space rejected", in: " " + WidgetCashBalance, want: false},
@@ -189,6 +193,10 @@ func TestWidgetConstants_DistinctAndNonEmpty(t *testing.T) {
 func TestWidgetConstants_MatchExpectedStrings(t *testing.T) {
 	want := map[string]string{
 		"WidgetCashBalance":         WidgetCashBalance,
+		"WidgetKPIAR":               WidgetKPIAR,
+		"WidgetKPIAP":               WidgetKPIAP,
+		"WidgetKPIPL":               WidgetKPIPL,
+		"WidgetKPILowStock":         WidgetKPILowStock,
 		"WidgetARAging":             WidgetARAging,
 		"WidgetAPAging":             WidgetAPAging,
 		"WidgetPLSnapshot":          WidgetPLSnapshot,
@@ -201,7 +209,11 @@ func TestWidgetConstants_MatchExpectedStrings(t *testing.T) {
 		"WidgetPeriodStatus":        WidgetPeriodStatus,
 	}
 	expectedStrings := map[string]string{
-		"WidgetCashBalance":         "cash_balance",
+		"WidgetCashBalance":         "kpi_cash",
+		"WidgetKPIAR":               "kpi_ar",
+		"WidgetKPIAP":               "kpi_ap",
+		"WidgetKPIPL":               "kpi_pl",
+		"WidgetKPILowStock":         "kpi_low_stock",
 		"WidgetARAging":             "ar_aging_summary",
 		"WidgetAPAging":             "ap_aging_summary",
 		"WidgetPLSnapshot":          "pl_snapshot",

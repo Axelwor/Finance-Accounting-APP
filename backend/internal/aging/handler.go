@@ -45,14 +45,14 @@ type agingRow struct {
 }
 
 type agingSummary struct {
-	AsOfDate           string    `json:"as_of_date"`
-	TotalCents         int64     `json:"total_cents"`
-	CurrentCents       int64     `json:"current_cents"`
-	Bucket130Cents     int64     `json:"bucket_1_30_cents"`
-	Bucket3160Cents    int64     `json:"bucket_31_60_cents"`
-	Bucket6190Cents    int64     `json:"bucket_61_90_cents"`
-	Bucket90PlusCents  int64     `json:"bucket_90_plus_cents"`
-	Rows               []agingRow `json:"rows"`
+	AsOfDate          string     `json:"as_of_date"`
+	TotalCents        int64      `json:"total_cents"`
+	CurrentCents      int64      `json:"current_cents"`
+	Bucket130Cents    int64      `json:"bucket_1_30_cents"`
+	Bucket3160Cents   int64      `json:"bucket_31_60_cents"`
+	Bucket6190Cents   int64      `json:"bucket_61_90_cents"`
+	Bucket90PlusCents int64      `json:"bucket_90_plus_cents"`
+	Rows              []agingRow `json:"rows"`
 }
 
 func (service *Service) ARAging(writer http.ResponseWriter, request *http.Request) {

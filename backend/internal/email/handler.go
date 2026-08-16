@@ -54,15 +54,15 @@ type UpdateTemplateRequest struct {
 // (Subject + BodyHTML) must be supplied; the template path resolves subject &
 // body from the template.
 type EnqueueRequest struct {
-	TemplateID  *int64  `json:"template_id"`
-	ToEmail     string  `json:"to_email"`
-	CCEmail     *string `json:"cc_email"`
-	BCCEmail    *string `json:"bcc_email"`
-	Subject     *string `json:"subject"`
-	BodyHTML    *string `json:"body_html"`
-	BodyText    *string `json:"body_text"`
-	EntityType  *string `json:"entity_type"`
-	EntityID    *int64  `json:"entity_id"`
+	TemplateID *int64  `json:"template_id"`
+	ToEmail    string  `json:"to_email"`
+	CCEmail    *string `json:"cc_email"`
+	BCCEmail   *string `json:"bcc_email"`
+	Subject    *string `json:"subject"`
+	BodyHTML   *string `json:"body_html"`
+	BodyText   *string `json:"body_text"`
+	EntityType *string `json:"entity_type"`
+	EntityID   *int64  `json:"entity_id"`
 }
 
 type TemplateResponse struct {
@@ -79,23 +79,23 @@ type TemplateResponse struct {
 }
 
 type QueueResponse struct {
-	ID          int64          `json:"id"`
-	TemplateID  *int64         `json:"template_id"`
-	ToEmail     string         `json:"to_email"`
-	CCEmail     string         `json:"cc_email"`
-	BCCEmail    string         `json:"bcc_email"`
-	Subject     string         `json:"subject"`
-	BodyHTML    string         `json:"body_html"`
-	BodyText    string         `json:"body_text"`
-	Status      string         `json:"status"`
-	RetryCount  int            `json:"retry_count"`
-	MaxRetries  int            `json:"max_retries"`
-	LastError   string         `json:"last_error"`
-	SentAt      *time.Time     `json:"sent_at"`
-	EntityType  string         `json:"entity_type"`
-	EntityID    *int64         `json:"entity_id"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
+	ID         int64      `json:"id"`
+	TemplateID *int64     `json:"template_id"`
+	ToEmail    string     `json:"to_email"`
+	CCEmail    string     `json:"cc_email"`
+	BCCEmail   string     `json:"bcc_email"`
+	Subject    string     `json:"subject"`
+	BodyHTML   string     `json:"body_html"`
+	BodyText   string     `json:"body_text"`
+	Status     string     `json:"status"`
+	RetryCount int        `json:"retry_count"`
+	MaxRetries int        `json:"max_retries"`
+	LastError  string     `json:"last_error"`
+	SentAt     *time.Time `json:"sent_at"`
+	EntityType string     `json:"entity_type"`
+	EntityID   *int64     `json:"entity_id"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
 func (s *Service) Routes(r chi.Router) {

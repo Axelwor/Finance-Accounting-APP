@@ -30,22 +30,22 @@ func NewHandler(pool *pgxpool.Pool) *Service {
 }
 
 type CreateWorkflowRequest struct {
-	EntityType      string `json:"entity_type"`
-	MinAmountCents  int64  `json:"min_amount_cents"`
-	ApproverRole    string `json:"approver_role"`
+	EntityType     string `json:"entity_type"`
+	MinAmountCents int64  `json:"min_amount_cents"`
+	ApproverRole   string `json:"approver_role"`
 }
 
 type ApprovalRequestResponse struct {
-	ID            int64     `json:"id"`
-	EntityType    string    `json:"entity_type"`
-	EntityID      int64     `json:"entity_id"`
-	EntityNumber  string    `json:"entity_number"`
-	RequestedBy   int64     `json:"requested_by"`
-	RequestedAt   time.Time `json:"requested_at"`
-	Status        string    `json:"status"`
-	ApprovedBy    int64     `json:"approved_by,omitempty"`
-	ApprovedAt    time.Time `json:"approved_at,omitempty"`
-	RejectionReason string  `json:"rejection_reason,omitempty"`
+	ID              int64     `json:"id"`
+	EntityType      string    `json:"entity_type"`
+	EntityID        int64     `json:"entity_id"`
+	EntityNumber    string    `json:"entity_number"`
+	RequestedBy     int64     `json:"requested_by"`
+	RequestedAt     time.Time `json:"requested_at"`
+	Status          string    `json:"status"`
+	ApprovedBy      int64     `json:"approved_by,omitempty"`
+	ApprovedAt      time.Time `json:"approved_at,omitempty"`
+	RejectionReason string    `json:"rejection_reason,omitempty"`
 }
 
 func (s *Service) Routes(r chi.Router) {
@@ -199,10 +199,10 @@ func (s *Service) SubmitRequest(w http.ResponseWriter, r *http.Request) {
 
 	if !requiresApproval {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"entity_type": req.EntityType,
-			"entity_id":   req.EntityID,
+			"entity_type":       req.EntityType,
+			"entity_id":         req.EntityID,
 			"approval_required": false,
-			"message":     "no approval required for this amount",
+			"message":           "no approval required for this amount",
 		})
 		return
 	}
@@ -342,10 +342,10 @@ func (s *Service) Approve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":         id,
-		"status":     "APPROVED",
+		"id":          id,
+		"status":      "APPROVED",
 		"approved_by": uid,
-		"message":    "entity approved — you may now post the journal entry",
+		"message":     "entity approved — you may now post the journal entry",
 	})
 }
 
@@ -379,10 +379,10 @@ func (s *Service) Reject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":        id,
-		"status":    "REJECTED",
-		"reason":    req.Reason,
-		"message":   "entity rejected",
+		"id":      id,
+		"status":  "REJECTED",
+		"reason":  req.Reason,
+		"message": "entity rejected",
 	})
 }
 

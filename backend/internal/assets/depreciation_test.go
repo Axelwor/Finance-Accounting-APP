@@ -8,11 +8,11 @@ import (
 // TestDepreciation_StraightLine validates straight-line depreciation calculation.
 func TestDepreciation_StraightLine(t *testing.T) {
 	tests := []struct {
-		name            string
-		costCents       int64
-		salvageCents    int64
+		name             string
+		costCents        int64
+		salvageCents     int64
 		usefulLifeMonths int
-		expectedMonthly int64
+		expectedMonthly  int64
 	}{
 		{
 			name:             "Standard straight-line",
@@ -26,7 +26,7 @@ func TestDepreciation_StraightLine(t *testing.T) {
 			costCents:        1000000,
 			salvageCents:     0,
 			usefulLifeMonths: 24,
-			expectedMonthly:  41667,  // 1000000/24 = 41666.67
+			expectedMonthly:  41667, // 1000000/24 = 41666.67
 		},
 		{
 			name:             "Equal cost and salvage",
@@ -58,38 +58,38 @@ func TestDepreciation_StraightLine(t *testing.T) {
 // TestDepreciation_DecliningBalance validates declining balance method.
 func TestDepreciation_DecliningBalance(t *testing.T) {
 	tests := []struct {
-		name         string
-		bookValue    int64
-		rate         float64
-		expectedDep  int64
-		description  string
+		name        string
+		bookValue   int64
+		rate        float64
+		expectedDep int64
+		description string
 	}{
 		{
-			name:         "Standard declining balance",
-			bookValue:    1000000,
-			rate:         0.20, // 20%
-			expectedDep:  200000,
-			description:  "20% of book value",
+			name:        "Standard declining balance",
+			bookValue:   1000000,
+			rate:        0.20, // 20%
+			expectedDep: 200000,
+			description: "20% of book value",
 		},
 		{
-			name:         "Small rate",
-			bookValue:    500000,
-			rate:         0.05, // 5%
-			expectedDep:  25000,
-			description:  "5% of book value",
+			name:        "Small rate",
+			bookValue:   500000,
+			rate:        0.05, // 5%
+			expectedDep: 25000,
+			description: "5% of book value",
 		},
 		{
-			name:         "Large rate",
-			bookValue:    800000,
-			rate:         0.30, // 30%
-			expectedDep:  240000,
-			description:  "30% of book value",
+			name:        "Large rate",
+			bookValue:   800000,
+			rate:        0.30, // 30%
+			expectedDep: 240000,
+			description: "30% of book value",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name+"-"+tt.description, func(t *testing.T) {
-			dep := int64(math.Round(float64(tt.bookValue)*tt.rate))
+			dep := int64(math.Round(float64(tt.bookValue) * tt.rate))
 			if dep != tt.expectedDep {
 				t.Errorf("depreciation = %d, want %d", dep, tt.expectedDep)
 			}
@@ -107,37 +107,37 @@ func TestDepreciation_DecliningBalance(t *testing.T) {
 // TestDepreciation_UnitsOfProduction validates units of production method.
 func TestDepreciation_UnitsOfProduction(t *testing.T) {
 	tests := []struct {
-		name          string
-		costCents     int64
-		salvageCents  int64
-		unitsTotal    int64
-		unitsUsed     int64
-		expectedDep   int64
-		description   string
+		name         string
+		costCents    int64
+		salvageCents int64
+		unitsTotal   int64
+		unitsUsed    int64
+		expectedDep  int64
+		description  string
 	}{
 		{
-			name:          "Full capacity usage",
-			costCents:     1000000,
-			salvageCents:  200000,
-			unitsTotal:    10000,
-			unitsUsed:     10000,
-			expectedDep:   800000, // (1000000-200000)/10000 * 10000
+			name:         "Full capacity usage",
+			costCents:    1000000,
+			salvageCents: 200000,
+			unitsTotal:   10000,
+			unitsUsed:    10000,
+			expectedDep:  800000, // (1000000-200000)/10000 * 10000
 		},
 		{
-			name:          "Partial usage",
-			costCents:     1000000,
-			salvageCents:  200000,
-			unitsTotal:    10000,
-			unitsUsed:     5000,
-			expectedDep:   400000, // half of depreciable base
+			name:         "Partial usage",
+			costCents:    1000000,
+			salvageCents: 200000,
+			unitsTotal:   10000,
+			unitsUsed:    5000,
+			expectedDep:  400000, // half of depreciable base
 		},
 		{
-			name:          "No units used",
-			costCents:     1000000,
-			salvageCents:  0,
-			unitsTotal:    5000,
-			unitsUsed:     0,
-			expectedDep:   0,
+			name:         "No units used",
+			costCents:    1000000,
+			salvageCents: 0,
+			unitsTotal:   5000,
+			unitsUsed:    0,
+			expectedDep:  0,
 		},
 	}
 
@@ -151,7 +151,7 @@ func TestDepreciation_UnitsOfProduction(t *testing.T) {
 				return
 			}
 
-			dep := int64(math.Round(depreciableBase*float64(tt.unitsUsed)/float64(tt.unitsTotal)))
+			dep := int64(math.Round(depreciableBase * float64(tt.unitsUsed) / float64(tt.unitsTotal)))
 			if dep != tt.expectedDep {
 				t.Errorf("units of production depreciation = %d, want %d", dep, tt.expectedDep)
 			}
@@ -207,8 +207,8 @@ func TestDepreciation_ResidualAbsorption(t *testing.T) {
 			}
 
 			monthlyDep := int64(math.Round(depreciableBase / float64(tt.usefulLifeMonths)))
-			remainingDepreciable := float64(tt.costCents - tt.salvageCents) - float64(tt.accumDepCents)
-			
+			remainingDepreciable := float64(tt.costCents-tt.salvageCents) - float64(tt.accumDepCents)
+
 			var currentDep int64
 			if remainingDepreciable <= 0 {
 				currentDep = 0
@@ -224,7 +224,7 @@ func TestDepreciation_ResidualAbsorption(t *testing.T) {
 
 			newBookValue := tt.costCents - tt.accumDepCents - currentDep
 			if newBookValue < tt.salvageCents {
-				t.Logf("warning: new book value %.0f would be below salvage %.0f", 
+				t.Logf("warning: new book value %.0f would be below salvage %.0f",
 					float64(newBookValue), float64(tt.salvageCents))
 			}
 		})

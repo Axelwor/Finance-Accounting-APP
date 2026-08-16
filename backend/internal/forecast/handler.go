@@ -47,12 +47,12 @@ type forecastBucket struct {
 }
 
 type forecastResponse struct {
-	StartingBalanceCents int64           `json:"starting_balance_cents"`
-	HorizonDays          int             `json:"horizon_days"`
+	StartingBalanceCents int64            `json:"starting_balance_cents"`
+	HorizonDays          int              `json:"horizon_days"`
 	Buckets              []forecastBucket `json:"buckets"`
-	TotalInflowCents     int64           `json:"total_inflow_cents"`
-	TotalOutflowCents   int64           `json:"total_outflow_cents"`
-	EndingBalanceCents  int64           `json:"ending_balance_cents"`
+	TotalInflowCents     int64            `json:"total_inflow_cents"`
+	TotalOutflowCents    int64            `json:"total_outflow_cents"`
+	EndingBalanceCents   int64            `json:"ending_balance_cents"`
 }
 
 func (s *Service) GetCashFlowForecast(w http.ResponseWriter, r *http.Request) {
@@ -88,8 +88,8 @@ func (s *Service) GetCashFlowForecast(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Get expected AR inflows (unpaid invoices by due_date)
 	type arFlow struct {
-		dueDate  time.Time
-		amount   int64
+		dueDate time.Time
+		amount  int64
 	}
 	arFlows := []arFlow{}
 	rows, err := s.pool.Query(ctx, `
@@ -233,8 +233,8 @@ func (s *Service) GetCashFlowForecast(w http.ResponseWriter, r *http.Request) {
 		HorizonDays:          horizon,
 		Buckets:              buckets,
 		TotalInflowCents:     totalIn,
-		TotalOutflowCents:   totalOut,
-		EndingBalanceCents:  endingBalance(startingBalance, totalIn, totalOut),
+		TotalOutflowCents:    totalOut,
+		EndingBalanceCents:   endingBalance(startingBalance, totalIn, totalOut),
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -279,4 +279,3 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
 }
-

@@ -141,7 +141,7 @@ func TestRateLimiter_WindowExpiry(t *testing.T) {
 }
 
 func TestTimeout_CompletesInTime(t *testing.T) {
-	handler := Timeout(100*time.Millisecond)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := Timeout(100 * time.Millisecond)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	rr := httptest.NewRecorder()

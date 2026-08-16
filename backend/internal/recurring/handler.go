@@ -135,19 +135,19 @@ func (service *Service) List(writer http.ResponseWriter, request *http.Request) 
 	defer rows.Close()
 
 	type item struct {
-		ID                int64  `json:"id"`
-		Code              string `json:"code"`
-		Name              string `json:"name"`
-		Description       string `json:"description"`
-		IntentType        string `json:"intent_type"`
-		Frequency         string `json:"frequency"`
-		NextDate          string `json:"next_date"`
-		EndDate           string `json:"end_date,omitempty"`
-		LastPostedDate    string `json:"last_posted_date,omitempty"`
-		AmountCents       int64  `json:"amount_cents"`
-		IsActive          bool   `json:"is_active"`
-		FromAccountID     int64  `json:"from_account_id"`
-		ToAccountID       int64  `json:"to_account_id"`
+		ID                 int64  `json:"id"`
+		Code               string `json:"code"`
+		Name               string `json:"name"`
+		Description        string `json:"description"`
+		IntentType         string `json:"intent_type"`
+		Frequency          string `json:"frequency"`
+		NextDate           string `json:"next_date"`
+		EndDate            string `json:"end_date,omitempty"`
+		LastPostedDate     string `json:"last_posted_date,omitempty"`
+		AmountCents        int64  `json:"amount_cents"`
+		IsActive           bool   `json:"is_active"`
+		FromAccountID      int64  `json:"from_account_id"`
+		ToAccountID        int64  `json:"to_account_id"`
 		PaymentDescription string `json:"payment_description,omitempty"`
 	}
 	var items []item

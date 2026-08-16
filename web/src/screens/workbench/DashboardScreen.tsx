@@ -4,9 +4,19 @@ import { useAppState } from "../../state";
 import { useWorkbench } from "../../workbench/state";
 import { ErrorState, LoadingState } from "../../components/ui";
 import { PeriodCard } from "../../components/period";
-import { TransactionRow } from "../../components/transactions";
+import { KpiCard } from "../../components/dashboard/KpiCard";
+import { AgingChart } from "../../components/dashboard/AgingChart";
+import { RecentTxnsWidget } from "../../components/dashboard/RecentTxnsWidget";
+import { LowStockWidget } from "../../components/dashboard/LowStockWidget";
+import { TaxSummaryWidget } from "../../components/dashboard/TaxSummaryWidget";
 import { formatIDR } from "../../lib/format";
-import type { DashboardSummary } from "../../types";
+import type {
+  AgingSummary,
+  JournalEntryListItem,
+  LowStockItem,
+  PeriodStatusData,
+  PPNSummary,
+} from "../../types";
 
 /** Today's date, formatted for the greeting header (computed once per mount). */
 function useTodayStamp(): string {
@@ -22,185 +32,98 @@ function useTodayStamp(): string {
   );
 }
 
-function Spark({ values, tone }: { values: number[]; tone: "pos" | "neg" | "acc" }) {
-  // Flat CSS-gradient bar when there is not enough data for a real line.
-  // Replaces the previous Math.sin() drift — no fabricated shape.
-  if (values.length < 2) {
-    const cls = tone === "neg" ? "spark spark--neg spark--flat" : tone === "acc" ? "spark spark--acc spark--flat" : "spark spark--flat";
-    return <div className={cls} aria-hidden="true" />;
-  }
-  const width = 220;
-  const height = 28;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const stepX = width / (values.length - 1);
-  const path = values
-    .map((v, i) => {
-      const x = i * stepX;
-      const y = height - ((v - min) / range) * height;
-      return `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(" ");
-  const cls = tone === "neg" ? "spark spark--neg" : tone === "acc" ? "spark spark--acc" : "spark";
-  return (
-    <div className={cls}>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-hidden="true">
-        <path d={path} />
-      </svg>
-    </div>
-  );
-}
-
-/** Small inline chart icon (keeps the dashboard free of icon dependencies). */
-function ChartIcon() {
-  return (
-    <svg
-      className="status-cell__icon"
-      width="14"
-      height="14"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M2 12 L6 7 L9 10 L14 4" />
-      <path d="M2 14 L14 14" opacity="0.4" />
-    </svg>
-  );
-}
-
-function StatusCell({
-  label,
-  value,
-  delta,
-  deltaTone,
-  tone,
-  spark,
-  sparkTone,
-  lead,
-  meta,
-  onDetails,
-}: {
-  label: string;
-  value: string;
-  delta: string;
-  deltaTone: "pos" | "neg" | "neutral";
-  tone: "pos" | "neg" | "acc" | "warn" | "neutral";
-  spark?: number[];
-  sparkTone?: "pos" | "neg" | "acc";
-  lead?: boolean;
-  meta: string;
-  /** Click handler for the "View details" link; when omitted, no link is shown. */
-  onDetails?: () => void;
-}) {
-  const dotClass =
-    tone === "pos" ? "" : tone === "neg" ? "dot--neg" : tone === "warn" ? "dot--warn" : tone === "acc" ? "dot--acc" : "";
-  const valueCls =
-    tone === "pos" ? "is-positive" : tone === "neg" ? "is-negative" : tone === "warn" ? "is-warning" : "";
-  return (
-    <div className={`status-cell${lead ? " status-cell--lead" : ""}`}>
-      <div className="status-cell__label">
-        <ChartIcon />
-        <span className={`dot ${dotClass}`} aria-hidden="true" />
-        <span>{label}</span>
-      </div>
-      <p className={`status-cell__value${valueCls ? " " + valueCls : ""}`}>{value}</p>
-      <div className="status-cell__delta">
-        <span>{delta}</span>
-        <strong className={`is-${deltaTone}`}>{meta}</strong>
-      </div>
-      {spark && sparkTone ? <Spark values={spark} tone={sparkTone} /> : null}
-      {onDetails ? (
-        <button type="button" className="status-cell__details" onClick={onDetails}>
-          View details
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function KpiRow({
-  label,
-  note,
-  value,
-  tone,
-  dotTone,
-}: {
-  label: string;
-  note: string;
-  value: string;
-  tone: "pos" | "neg" | "muted";
-  dotTone: "pos" | "neg" | "warn" | "neutral";
-}) {
-  const dotCls =
-    dotTone === "pos" ? "is-pos" : dotTone === "neg" ? "is-neg" : dotTone === "warn" ? "is-warn" : "";
-  const valueCls = tone ? ` is-${tone}` : "";
-  return (
-    <div className="kpi-list__row">
-      <div className="kpi-list__label">
-        <span className="kpi-list__label-title">{label}</span>
-        <span className="kpi-list__label-note">{note}</span>
-      </div>
-      <span className={`kpi-list__value${valueCls}`}>{value}</span>
-      <span className={`kpi-list__dot ${dotCls}`} aria-hidden="true" />
-    </div>
-  );
+interface WidgetBundle<T> {
+  data: T | null;
+  error: boolean;
 }
 
 /**
  * Dashboard content. Rendered inside the workbench as the default tab.
- * Owns no chrome — page head lives on the tab pill + section heads.
+ *
+ * The dashboard fetches each widget independently via Promise.allSettled so
+ * one failing endpoint never collapses the whole screen — the affected card
+ * shows an empty state while the rest keep working.
  */
 export function DashboardScreen() {
   const workbench = useWorkbench();
   const { user, business, transactions } = useAppState();
-  const [data, setData] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  // Per-widget state — each can fail independently.
+  const [cashBalance, setCashBalance] = useState<number | null>(null);
+  const [profitLoss, setProfitLoss] = useState<number | null>(null);
+  const [arAging, setArAging] = useState<AgingSummary | null>(null);
+  const [apAging, setApAging] = useState<AgingSummary | null>(null);
+  const [recentTxns, setRecentTxns] = useState<JournalEntryListItem[]>([]);
+  const [lowStock, setLowStock] = useState<LowStockItem[]>([]);
+  const [ppn, setPpn] = useState<PPNSummary | null>(null);
+  const [period, setPeriod] = useState<PeriodStatusData | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
+    setLoading(true);
     try {
-      const summary = await api.getDashboard();
-      setData(summary);
+      const results = await Promise.allSettled([
+        api.getDashboard(), // cashBalance + profitLoss (existing aggregated call)
+        api.getDashboardARAging(),
+        api.getDashboardAPAging(),
+        api.listRecentJournalEntries(8),
+        api.getLowStockItems(),
+        api.getDashboardPPNSummary(),
+        api.getPeriodStatus(),
+      ]);
+
+      // getDashboard returns the cash + P&L summary.
+      const dashResult = results[0].status === "fulfilled" ? results[0].value : null;
+      setCashBalance(dashResult ? dashResult.cashAndBankBalance : null);
+      setProfitLoss(dashResult ? dashResult.monthlyProfitLoss : null);
+
+      setArAging(results[1].status === "fulfilled" ? results[1].value : null);
+      setApAging(results[2].status === "fulfilled" ? results[2].value : null);
+      setRecentTxns(results[3].status === "fulfilled" ? results[3].value : []);
+      setLowStock(results[4].status === "fulfilled" ? results[4].value : []);
+      setPpn(results[5].status === "fulfilled" ? results[5].value : null);
+      setPeriod(results[6].status === "fulfilled" ? results[6].value : null);
+
+      // If the aggregate dashboard call rejected entirely, surface a soft
+      // error banner but keep the widget cards rendering their own states.
+      if (results[0].status === "rejected" && results.every((r) => r.status === "rejected")) {
+        setError("Failed to load the dashboard. Try again.");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load the dashboard. Try again.");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [retryKey]); // Only reload when retryKey changes (manual retry)
+  }, [retryKey]);
 
   const businessName = business?.name || user?.businessName || "Your business";
   const todayStamp = useTodayStamp();
-  const recent = data?.recentTransactions ?? [];
 
-  // Real cash trend: build a sparkline from the recent transactions the
-  // backend actually returned (running balance). When there is not enough
-  // data, Spark renders a flat gradient bar — no fabricated Math.sin() drift.
+  // Sparkline: running balance from recent transactions (real backend data).
   const spark = useMemo<number[]>(() => {
-    if (!data || recent.length < 2) return [];
+    if (recentTxns.length < 2) return [];
     const running: number[] = [];
     let acc = 0;
-    // Oldest first so the line reads left-to-right over time.
-    for (const trx of [...recent].reverse()) {
-      acc += trx.kind === "money-in" ? trx.amount : trx.kind === "money-out" ? -trx.amount : 0;
+    for (const trx of [...recentTxns].reverse()) {
+      acc += trx.total_debit_cents;
       running.push(acc);
     }
-    // Anchor the end of the sparkline to the real reported balance so the
-    // final point reflects the backend figure, not the local sample.
-    if (running.length) running[running.length - 1] = data.cashAndBankBalance;
+    // Anchor the last point to the real reported balance.
+    if (running.length && cashBalance !== null) {
+      running[running.length - 1] = cashBalance * 100;
+    }
     return running;
-  }, [data, recent]);
+  }, [recentTxns, cashBalance]);
 
-  // Real entries trend: count of transactions per day over the last 14 days
-  // from the local store. No synthetic drift — flat zero when empty.
+  // Sparkline: entries per day over 14 days from the local store.
   const entriesSpark = useMemo<number[]>(() => {
     if (transactions.length === 0) return [];
     const days = 14;
@@ -217,6 +140,9 @@ export function DashboardScreen() {
     }
     return buckets;
   }, [transactions]);
+
+  const arTotal = arAging?.total_cents ?? 0;
+  const apTotal = apAging?.total_cents ?? 0;
 
   return (
     <div className="dashboard">
@@ -252,137 +178,124 @@ export function DashboardScreen() {
 
       {error ? (
         <ErrorState message={error} onRetry={() => setRetryKey((k) => k + 1)} />
-      ) : !data ? (
+      ) : loading ? (
         <LoadingState label="Loading dashboard..." />
       ) : (
-        <>
-          <section className="status-rail" aria-label="Position overview">
-            <StatusCell
-              lead
-              label="Cash & Bank"
-              value={formatIDR(data.cashAndBankBalance)}
-              delta="Cash and accounts combined"
-              deltaTone={data.cashAndBankBalance >= 0 ? "pos" : "neg"}
-              tone={data.cashAndBankBalance >= 0 ? "pos" : "neg"}
-              spark={spark}
-              sparkTone={data.cashAndBankBalance >= 0 ? "pos" : "neg"}
-              meta="End of day"
-              onDetails={() => workbench.openList("cash-other-payment")}
-            />
-            <StatusCell
-              label="MTD P&amp;L"
-              value={formatIDR(data.monthlyProfitLoss)}
-              delta="Month to date"
-              deltaTone={data.monthlyProfitLoss >= 0 ? "pos" : "neg"}
-              tone={data.monthlyProfitLoss >= 0 ? "pos" : "neg"}
-              spark={entriesSpark}
-              sparkTone="acc"
-              meta="vs last cycle"
-              onDetails={() => workbench.openList("cash-other-payment")}
-            />
-            <StatusCell
-              label="Open bills"
-              value={String(data.dueBills)}
-              delta="Receivables awaiting payment"
-              deltaTone={data.dueBills > 0 ? "neg" : "neutral"}
-              tone={data.dueBills > 0 ? "warn" : "neutral"}
-              meta={data.dueBills > 0 ? "Action needed" : "Clear"}
-              onDetails={() => workbench.openList("sales-invoice")}
-            />
-            <StatusCell
-              label="Low stock"
-              value={String(data.lowStock)}
-              delta="Items below reorder point"
-              deltaTone={data.lowStock > 0 ? "neg" : "neutral"}
-              tone={data.lowStock > 0 ? "warn" : "neutral"}
-              meta={data.lowStock > 0 ? "Restock" : "Stable"}
-              onDetails={() => workbench.openList("inventory-items")}
-            />
-          </section>
-
-          <section className="section">
-            <div className="section-head">
-              <h2 className="section-head__title">
-                <span className="dot dot--pos" aria-hidden="true" />
-                Latest entries
-              </h2>
-              <span className="section-head__meta">{recent.length} total — top 5 shown</span>
-              {recent.length > 5 ? (
-                <button
-                  type="button"
-                  className="section-head__action"
-                  onClick={() => workbench.openList("cash-other-payment")}
-                >
-                  View ledger
-                </button>
-              ) : null}
+        <div className="dashboard-grid">
+          {/* KPI row — 4 cards */}
+          <div className="dashboard-grid__cell dashboard-grid__cell--span-4">
+            <div className="kpi-grid">
+              <KpiCard
+                lead
+                label="Cash & Bank"
+                value={cashBalance !== null ? formatIDR(cashBalance) : "—"}
+                delta="Cash and accounts combined"
+                deltaTone={cashBalance !== null && cashBalance >= 0 ? "pos" : "neg"}
+                tone={cashBalance !== null && cashBalance >= 0 ? "pos" : "neg"}
+                spark={spark}
+                sparkTone={cashBalance !== null && cashBalance >= 0 ? "pos" : "neg"}
+                meta="End of day"
+                onDetails={() => workbench.openList("cash-other-payment")}
+              />
+              <KpiCard
+                label="MTD P&L"
+                value={profitLoss !== null ? formatIDR(profitLoss) : "—"}
+                delta="Month to date"
+                deltaTone={profitLoss !== null && profitLoss >= 0 ? "pos" : "neg"}
+                tone={profitLoss !== null && profitLoss >= 0 ? "pos" : "neg"}
+                spark={entriesSpark}
+                sparkTone="acc"
+                meta="vs last cycle"
+                onDetails={() => workbench.openList("cash-other-payment")}
+              />
+              <KpiCard
+                label="AR Outstanding"
+                value={formatIDR(arTotal)}
+                delta="Receivables awaiting payment"
+                deltaTone={arTotal > 0 ? "neg" : "neutral"}
+                tone={arTotal > 0 ? "warn" : "neutral"}
+                meta={arTotal > 0 ? "Action needed" : "Clear"}
+                onDetails={() => workbench.openList("sales-invoice")}
+              />
+              <KpiCard
+                label="AP Outstanding"
+                value={formatIDR(apTotal)}
+                delta="Payables awaiting payment"
+                deltaTone={apTotal > 0 ? "neg" : "neutral"}
+                tone={apTotal > 0 ? "warn" : "neutral"}
+                meta={apTotal > 0 ? "Due soon" : "Clear"}
+                onDetails={() => workbench.openList("cash-other-payment")}
+              />
             </div>
+          </div>
 
-            {recent.length === 0 ? (
-              <div className="empty-state">
-                <h3 className="empty-state__title">No entries in the book yet</h3>
-                <p className="empty-state__message">
-                  Start with your first money in or money out. The dashboard updates as you rule each line.
+          {/* Main row: recent transactions (8) + quick actions/period (4) */}
+          <div className="dashboard-grid__cell dashboard-grid__cell--span-8">
+            <RecentTxnsWidget
+              transactions={recentTxns}
+              onOpenLedger={() => workbench.openList("cash-other-payment")}
+            />
+          </div>
+          <div className="dashboard-grid__cell dashboard-grid__cell--span-4">
+            <div className="dashboard-widget">
+              <div className="dashboard-widget__head">
+                <h2 className="dashboard-widget__title">Book period</h2>
+                <span className="dashboard-widget__meta">
+                  {period?.status ?? "—"}
+                </span>
+              </div>
+              {period?.period_start ? (
+                <p className="dashboard-widget__sub">
+                  {period.period_start} → {period.period_end}
                 </p>
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={() => workbench.openEntryDraft("money-in")}
-                >
-                  Record first entry
-                </button>
-              </div>
-            ) : (
-              <div className="ledger-table">
-                <div className="ledger-table__head">
-                  <span>Date</span>
-                  <span>Description</span>
-                  <span>Category</span>
-                  <span className="right">Amount</span>
-                  <span aria-hidden="true" />
-                </div>
-                {recent.slice(0, 5).map((t) => (
-                  <TransactionRow key={t.id} transaction={t} />
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="section">
-            <div className="section-head">
-              <h2 className="section-head__title">
-                <span className="dot dot--acc" aria-hidden="true" />
-                Indicators
-              </h2>
-              <span className="section-head__meta">Sourced from the same ledger</span>
+              ) : null}
+              <PeriodCard />
             </div>
-            <div className="kpi-list">
-              <KpiRow
-                label="This month's P&amp;L"
-                note="Income minus expense"
-                value={formatIDR(data.monthlyProfitLoss)}
-                tone={data.monthlyProfitLoss >= 0 ? "pos" : "neg"}
-                dotTone={data.monthlyProfitLoss >= 0 ? "pos" : "neg"}
-              />
-              <KpiRow
-                label="Open receivables"
-                note="Bills waiting to be collected"
-                value={String(data.dueBills)}
-                tone={data.dueBills > 0 ? "neg" : "muted"}
-                dotTone={data.dueBills > 0 ? "neg" : "neutral"}
-              />
-              <KpiRow
-                label="Items below reorder point"
-                note="Counted at the last inventory check"
-                value={String(data.lowStock)}
-                tone={data.lowStock > 0 ? "neg" : "muted"}
-                dotTone={data.lowStock > 0 ? "warn" : "neutral"}
-              />
-            </div>
-          </section>
+          </div>
 
-          <PeriodCard />
-        </>
+          {/* Aging row: AR (6) + AP (6) */}
+          <div className="dashboard-grid__cell dashboard-grid__cell--span-6">
+            <AgingChart data={arAging} title="AR Aging" />
+          </div>
+          <div className="dashboard-grid__cell dashboard-grid__cell--span-6">
+            <AgingChart data={apAging} title="AP Aging" />
+          </div>
+
+          {/* Bottom row: low stock (4) + PPN (4) + P&L breakdown placeholder (4) */}
+          <div className="dashboard-grid__cell dashboard-grid__cell--span-4">
+            <LowStockWidget
+              items={lowStock}
+              onOpenInventory={() => workbench.openList("inventory-items")}
+            />
+          </div>
+          <div className="dashboard-grid__cell dashboard-grid__cell--span-4">
+            <TaxSummaryWidget data={ppn} />
+          </div>
+          <div className="dashboard-grid__cell dashboard-grid__cell--span-4">
+            <div className="dashboard-widget">
+              <div className="dashboard-widget__head">
+                <h2 className="dashboard-widget__title">P&L breakdown</h2>
+                <span className="dashboard-widget__meta">MTD</span>
+              </div>
+              <ul className="tax-list">
+                <li className="tax-list__row">
+                  <span className="tax-list__label">Net profit</span>
+                  <span
+                    className={`tax-list__value${profitLoss !== null && profitLoss >= 0 ? " is-positive" : " is-negative"}`}
+                  >
+                    {profitLoss !== null ? formatIDR(profitLoss) : "—"}
+                  </span>
+                </li>
+                <li className="tax-list__row">
+                  <span className="tax-list__label">Cash position</span>
+                  <span className="tax-list__value">
+                    {cashBalance !== null ? formatIDR(cashBalance) : "—"}
+                  </span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

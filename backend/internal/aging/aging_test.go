@@ -62,16 +62,16 @@ func TestBuildAgingSummary(t *testing.T) {
 		wantRowsNonNil bool
 	}{
 		{
-			name:             "nil rows becomes empty slice",
-			rows:             nil,
-			wantTotal:        0,
-			wantCurrent:      0,
-			want130:          0,
-			want3160:         0,
-			want6190:         0,
-			want90Plus:       0,
-			wantRowCount:     0,
-			wantRowsNonNil:   true,
+			name:           "nil rows becomes empty slice",
+			rows:           nil,
+			wantTotal:      0,
+			wantCurrent:    0,
+			want130:        0,
+			want3160:       0,
+			want6190:       0,
+			want90Plus:     0,
+			wantRowCount:   0,
+			wantRowsNonNil: true,
 		},
 		{
 			name:           "empty rows",

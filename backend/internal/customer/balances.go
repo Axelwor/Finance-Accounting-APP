@@ -21,11 +21,11 @@ type customerBalanceRow struct {
 }
 
 type arBalancesResponse struct {
-	Balances      []customerBalanceRow `json:"balances"`
-	TotalARCents  int64                `json:"total_ar_cents"`
-	GLARCents     int64                `json:"gl_ar_cents"`
-	DiffCents     int64                `json:"diff_cents"`
-	Reconciled    bool                 `json:"reconciled"`
+	Balances     []customerBalanceRow `json:"balances"`
+	TotalARCents int64                `json:"total_ar_cents"`
+	GLARCents    int64                `json:"gl_ar_cents"`
+	DiffCents    int64                `json:"diff_cents"`
+	Reconciled   bool                 `json:"reconciled"`
 }
 
 const arAccountCode = "1201"

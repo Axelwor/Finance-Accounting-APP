@@ -382,5 +382,6 @@ func validateDateRange(fromDate, toDate string) error {
 // and ledger/register handlers). The _ guard keeps unused-import checks off
 // during incremental edits.
 var _ = auth.TenantIDFromContext
+
 // Note: this unused import guard was removed in audit session (m-004).
 // The db package is still used via db.New() elsewhere, but not needed here.

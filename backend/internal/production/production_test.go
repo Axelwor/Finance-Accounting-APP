@@ -78,10 +78,10 @@ func TestAccountCodesAreNumeric(t *testing.T) {
 
 func TestCostAccumulation(t *testing.T) {
 	cases := []struct {
-		name              string
-		material, labor   int64
-		overhead          int64
-		expectedTotal     int64
+		name            string
+		material, labor int64
+		overhead        int64
+		expectedTotal   int64
 	}{
 		{"all zero", 0, 0, 0, 0},
 		{"material only", 10000, 0, 0, 10000},
@@ -111,10 +111,10 @@ func TestCostAccumulation(t *testing.T) {
 
 func TestProductionVianceCalculation(t *testing.T) {
 	cases := []struct {
-		name           string
-		actualCost     int64
-		standardCost   int64
-		qty            int64
+		name             string
+		actualCost       int64
+		standardCost     int64
+		qty              int64
 		expectedVariance int64
 	}{
 		{"zero variance", 10000, 5000, 2, 0},
@@ -749,9 +749,9 @@ func TestCostTypeValidation(t *testing.T) {
 
 func TestIntegerCostMath(t *testing.T) {
 	cases := []struct {
-		qty            float64
-		unitCostCents  int64
-		expectedTotal  int64
+		qty           float64
+		unitCostCents int64
+		expectedTotal int64
 	}{
 		{1, 10000, 10000},
 		{2, 5000, 10000},
@@ -1022,12 +1022,12 @@ func TestVarianceJournalLines_Loss(t *testing.T) {
 	varianceLossAccountID := int64(200)
 
 	journalLines := []struct {
-		AccountID  int64
+		AccountID   int64
 		DebitCents  int64
 		CreditCents int64
 	}{
-		{wipAccountID, 0, 10000},            // Cr WIP (completion)
-		{150, 10000, 0},                     // Dr FG (completion)
+		{wipAccountID, 0, 10000},             // Cr WIP (completion)
+		{150, 10000, 0},                      // Dr FG (completion)
 		{varianceLossAccountID, variance, 0}, // Dr Loss
 		{wipAccountID, 0, variance},          // Cr WIP (variance)
 	}
@@ -1060,8 +1060,8 @@ func TestVarianceJournalLines_Gain(t *testing.T) {
 	}{
 		{wipAccountID, 0, 10000},
 		{150, 10000, 0},
-		{wipAccountID, gain, 0},                  // Dr WIP (variance)
-		{varianceGainAccountID, 0, gain},         // Cr Gain
+		{wipAccountID, gain, 0},          // Dr WIP (variance)
+		{varianceGainAccountID, 0, gain}, // Cr Gain
 	}
 	var totalDebit, totalCredit int64
 	for _, l := range journalLines {
@@ -1084,7 +1084,7 @@ func TestVarianceJournalLines_ZeroVariance(t *testing.T) {
 		DebitCents  int64
 		CreditCents int64
 	}{
-		{150, totalCost, 0},        // Dr FG
+		{150, totalCost, 0},          // Dr FG
 		{wipAccountID, 0, totalCost}, // Cr WIP
 	}
 
