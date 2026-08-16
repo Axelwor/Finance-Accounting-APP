@@ -34,7 +34,9 @@ export function AgingChart({ data, title }: { data: AgingBuckets | null; title: 
         <span className={`aging-chart__total${total > 0 ? " is-warn" : ""}`}>{formatIDR(total)}</span>
       </div>
       {total === 0 ? (
-        <p className="aging-chart__empty">No outstanding receivables.</p>
+        <p className="aging-chart__empty">
+          No outstanding {title.startsWith("AR") ? "receivables" : "payables"}.
+        </p>
       ) : (
         <div className="aging-chart__bars">
           {buckets.map((b) => {

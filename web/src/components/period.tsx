@@ -36,34 +36,25 @@ export function PeriodCard() {
   const processing = busy !== null;
 
   return (
-    <section className="section">
-      <div className="section-head">
-        <h2 className="section-head__title">
-          <span className="dot dot--acc" aria-hidden="true" />
-          Book period
-        </h2>
-        <span className="section-head__meta">CLOSE / REOPEN</span>
+    <div className="period-stamp">
+      <p className="period-stamp__desc">
+        Close the books when a period ends, or reopen when a correction is needed. The closing journal moves the period's profit into retained earnings.
+      </p>
+      <div className="quick-actions">
+        <Button variant="primary" disabled={processing} onClick={() => void run("close")}>
+          {busy === "close" ? "Closing..." : "Close books"}
+        </Button>
+        <Button variant="secondary" disabled={processing} onClick={() => void run("reopen")}>
+          {busy === "reopen" ? "Reopening..." : "Reopen period"}
+        </Button>
       </div>
-      <div className="period-stamp">
-        <p className="period-stamp__desc">
-          Close the books when a period ends, or reopen when a correction is needed. The closing journal moves the period's profit into retained earnings.
-        </p>
-        <div className="quick-actions">
-          <Button variant="primary" disabled={processing} onClick={() => void run("close")}>
-            {busy === "close" ? "Closing..." : "Close books"}
-          </Button>
-          <Button variant="secondary" disabled={processing} onClick={() => void run("reopen")}>
-            {busy === "reopen" ? "Reopening..." : "Reopen period"}
-          </Button>
-        </div>
 
-        {result ? (
-          <p className="period-stamp__status" role="status">
-            Period #{result.period_id} {result.status === "CLOSED" ? "closed" : "reopened"} - journal <code>{result.number}</code> posted
-          </p>
-        ) : null}
-        <FormError message={error} />
-      </div>
-    </section>
+      {result ? (
+        <p className="period-stamp__status" role="status">
+          Period #{result.period_id} {result.status === "CLOSED" ? "closed" : "reopened"} - journal <code>{result.number}</code> posted
+        </p>
+      ) : null}
+      <FormError message={error} />
+    </div>
   );
 }
