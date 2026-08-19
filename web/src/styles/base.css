@@ -1,20 +1,22 @@
 /* ============================================================
-   Ledgerly — Material Design 3 (Material You) system
-   Dynamic color via @material/material-color-utilities.
-   Roboto (plain) + Roboto Flex (brand/display). Tabular nums for
-   numeric columns. Airy M3 default spacing.
+   Ledgerly — Material Design 3
+   Rebuilt from scratch on the M3 spec: Roboto type scale, 4dp
+   spacing grid, tonal surfaces, state layers, shape scale.
 
-   Token layering:
-   1. m3-tokens.css  — static generated tokens (fallback)
-   2. #m3-dynamic-theme <style> — runtime generated (user source color)
+   Layers:
+   1. m3-tokens.css        — generated color tokens (static fallback)
+   2. #m3-dynamic-theme    — runtime tokens (user source color)
+   3. this file            — shell, navigation, work area
    ============================================================ */
 
 @import "./m3-tokens.css";
 
+/* ------------------------------------------------------------
+   Static tokens: typefaces, shape, spacing, motion, elevation,
+   state layers, and semantic color extensions (M3 has no
+   success/warning roles).
+   ------------------------------------------------------------ */
 :root {
-  /* Custom (non-standard) semantic extensions of the M3 scheme.
-     M3 has no success/warning roles; these keep green=positive and
-     amber=warning semantics while following M3 dark-mode conventions. */
   --md-sys-color-success: #1e7e34;
   --md-sys-color-on-success: #ffffff;
   --md-sys-color-success-container: #a3f2b4;
@@ -24,11 +26,9 @@
   --md-sys-color-warning-container: #ffdcbe;
   --md-sys-color-on-warning-container: #2e1500;
 
-  /* Typeface refs (M3 2021 baseline: Roboto plain + Roboto Flex brand) */
   --md-ref-typeface-plain: "Roboto", "Segoe UI", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --md-ref-typeface-brand: "Roboto Flex", "Roboto", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
 
-  /* M3 shape scale (static) */
   --md-sys-shape-corner-none: 0px;
   --md-sys-shape-corner-extra-small: 4px;
   --md-sys-shape-corner-small: 8px;
@@ -37,7 +37,6 @@
   --md-sys-shape-corner-extra-large: 28px;
   --md-sys-shape-corner-full: 9999px;
 
-  /* M3 airy spacing (4/8/12/16/24/32/48/64) */
   --md-sys-spacing-1: 4px;
   --md-sys-spacing-2: 8px;
   --md-sys-spacing-3: 12px;
@@ -47,69 +46,39 @@
   --md-sys-spacing-7: 48px;
   --md-sys-spacing-8: 64px;
 
-  /* Motion (M3 easing + durations) */
   --md-sys-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
-  --md-sys-motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
-  --md-sys-motion-easing-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
   --md-sys-motion-easing-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
-  --md-sys-motion-duration-short-2: 100ms;
-  --md-sys-motion-duration-short-3: 150ms;
   --md-sys-motion-duration-short-4: 200ms;
-  --md-sys-motion-duration-medium-1: 250ms;
   --md-sys-motion-duration-medium-2: 300ms;
-  --md-sys-motion-duration-medium-3: 350ms;
-  --md-sys-motion-duration-medium-4: 400ms;
-  --md-sys-motion-duration-long-1: 450ms;
-  --md-sys-motion-duration-long-2: 500ms;
-  --md-sys-motion-duration-extra-long-1: 700ms;
-  --md-sys-motion-duration-extra-long-2: 800ms;
 
-  /* State layers (M3 interaction states, opacity on color) */
   --md-sys-state-hover-opacity: 0.08;
-  --md-sys-state-focus-opacity: 0.12;
   --md-sys-state-press-opacity: 0.12;
-  --md-sys-state-dragged-opacity: 0.16;
 
-  /* Elevation (M3) */
   --md-sys-elevation-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.30), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
   --md-sys-elevation-2: 0px 1px 2px 0px rgba(0, 0, 0, 0.30), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
   --md-sys-elevation-3: 0px 4px 8px 3px rgba(0, 0, 0, 0.15), 0px 1px 3px 0px rgba(0, 0, 0, 0.30);
-  --md-sys-elevation-4: 0px 6px 10px 4px rgba(0, 0, 0, 0.15), 0px 2px 3px 0px rgba(0, 0, 0, 0.30);
-  --md-sys-elevation-5: 0px 8px 12px 6px rgba(0, 0, 0, 0.15), 0px 4px 4px 0px rgba(0, 0, 0, 0.30);
-}
 
-[data-theme="dark"] {
-  /* Custom semantic extensions — dark variants */
-  --md-sys-color-success: #87d37e;
-  --md-sys-color-on-success: #003910;
-  --md-sys-color-success-container: #00531f;
-  --md-sys-color-on-success-container: #a3f2b4;
-  --md-sys-color-warning: #ffb95c;
-  --md-sys-color-on-warning: #4a2800;
-  --md-sys-color-warning-container: #6a3e00;
-  --md-sys-color-on-warning-container: #ffdcbe;
-}
-
-/* ============================================================
-   Base styles — M3 tokens applied directly (alias layer removed).
-   ============================================================ */
-
-:root {
-    font-family: var(--md-ref-typeface-plain);
-  color: var(--md-sys-color-on-surface-variant);
+  font-family: var(--md-ref-typeface-plain);
+  color: var(--md-sys-color-on-surface);
   background: var(--md-sys-color-surface);
-  font-feature-settings: "tnum", "ss01", "cv11";
+  font-feature-settings: "tnum";
   -webkit-font-smoothing: antialiased;
 }
 
+/* ------------------------------------------------------------
+   Reset
+   ------------------------------------------------------------ */
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
   min-width: 320px;
-  background: var(--md-sys-color-surface);
-  color: var(--md-sys-color-on-surface-variant);
   min-height: 100vh;
+  font-family: var(--md-ref-typeface-plain);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--md-sys-color-on-surface);
+  background: var(--md-sys-color-surface);
 }
 
 h1, h2, h3, h4, p, ul, ol, figure { margin: 0; padding: 0; }
@@ -128,9 +97,9 @@ button { cursor: pointer; }
   outline: 2px solid var(--md-sys-color-primary);
   outline-offset: 2px;
 }
-::selection { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-surface); }
+::selection { background: var(--md-sys-color-primary-container); }
 
-.sr-only {
+.sr-only, .visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -143,121 +112,626 @@ button { cursor: pointer; }
 }
 
 /* ------------------------------------------------------------
-   M3 button density + semantic color variants.
-   Applied by the m3 Button/IconButton wrappers via class names.
+   App shell — navigation rail + top app bar + tabs + work area
    ------------------------------------------------------------ */
-
-/* Density: sm = 32px, xs = 28px (default container height is 40px). */
-.m3-button--sm {
-  --md-filled-button-container-height: 32px;
-  --md-outlined-button-container-height: 32px;
-  --md-filled-tonal-button-container-height: 32px;
-  --md-text-button-container-height: 32px;
-  --md-filled-button-label-text-size: 0.8125rem;
-  --md-outlined-button-label-text-size: 0.8125rem;
-  --md-filled-tonal-button-label-text-size: 0.8125rem;
-  --md-text-button-label-text-size: 0.8125rem;
-  --md-filled-button-label-text-line-height: 1.125rem;
-  --md-outlined-button-label-text-line-height: 1.125rem;
-  --md-filled-tonal-button-label-text-line-height: 1.125rem;
-  --md-text-button-label-text-line-height: 1.125rem;
-  --md-filled-button-leading-space: 16px;
-  --md-filled-button-trailing-space: 16px;
-  --md-outlined-button-leading-space: 16px;
-  --md-outlined-button-trailing-space: 16px;
-  --md-filled-tonal-button-leading-space: 16px;
-  --md-filled-tonal-button-trailing-space: 16px;
-  --md-text-button-leading-space: 12px;
-  --md-text-button-trailing-space: 12px;
-}
-.m3-button--xs {
-  --md-filled-button-container-height: 28px;
-  --md-outlined-button-container-height: 28px;
-  --md-filled-tonal-button-container-height: 28px;
-  --md-text-button-container-height: 28px;
-  --md-filled-button-label-text-size: 0.75rem;
-  --md-outlined-button-label-text-size: 0.75rem;
-  --md-filled-tonal-button-label-text-size: 0.75rem;
-  --md-text-button-label-text-size: 0.75rem;
-  --md-filled-button-label-text-line-height: 1rem;
-  --md-outlined-button-label-text-line-height: 1rem;
-  --md-filled-tonal-button-label-text-line-height: 1rem;
-  --md-text-button-label-text-line-height: 1rem;
-  --md-filled-button-leading-space: 12px;
-  --md-filled-button-trailing-space: 12px;
-  --md-outlined-button-leading-space: 12px;
-  --md-outlined-button-trailing-space: 12px;
-  --md-filled-tonal-button-leading-space: 12px;
-  --md-filled-tonal-button-trailing-space: 12px;
-  --md-text-button-leading-space: 8px;
-  --md-text-button-trailing-space: 8px;
+.app, .app-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--md-sys-color-surface);
 }
 
-/* Semantic: destructive actions use error tokens on every variant. */
-.m3-button--danger.md-outlined-button {
-  --md-outlined-button-label-text-color: var(--md-sys-color-error);
-  --md-outlined-button-hover-label-text-color: var(--md-sys-color-error);
-  --md-outlined-button-focus-label-text-color: var(--md-sys-color-error);
-  --md-outlined-button-pressed-label-text-color: var(--md-sys-color-error);
-  --md-outlined-button-outline-color: var(--md-sys-color-error);
-  --md-outlined-button-hover-state-layer-color: var(--md-sys-color-error);
-  --md-outlined-button-pressed-state-layer-color: var(--md-sys-color-error);
-}
-.m3-button--danger.md-filled-button {
-  --md-filled-button-container-color: var(--md-sys-color-error);
-  --md-filled-button-label-text-color: var(--md-sys-color-on-error);
-  --md-filled-button-hover-label-text-color: var(--md-sys-color-on-error);
-  --md-filled-button-focus-label-text-color: var(--md-sys-color-on-error);
-  --md-filled-button-pressed-label-text-color: var(--md-sys-color-on-error);
-  --md-filled-button-hover-state-layer-color: var(--md-sys-color-on-error);
-  --md-filled-button-pressed-state-layer-color: var(--md-sys-color-on-error);
-}
-.m3-button--danger.md-text-button {
-  --md-text-button-label-text-color: var(--md-sys-color-error);
-  --md-text-button-hover-label-text-color: var(--md-sys-color-error);
-  --md-text-button-focus-label-text-color: var(--md-sys-color-error);
-  --md-text-button-pressed-label-text-color: var(--md-sys-color-error);
-  --md-text-button-hover-state-layer-color: var(--md-sys-color-error);
-  --md-text-button-pressed-state-layer-color: var(--md-sys-color-error);
-}
-.m3-button--danger.md-filled-tonal-button {
-  --md-filled-tonal-button-container-color: var(--md-sys-color-error-container);
-  --md-filled-tonal-button-label-text-color: var(--md-sys-color-on-error-container);
-  --md-filled-tonal-button-hover-label-text-color: var(--md-sys-color-on-error-container);
-  --md-filled-tonal-button-focus-label-text-color: var(--md-sys-color-on-error-container);
-  --md-filled-tonal-button-pressed-label-text-color: var(--md-sys-color-on-error-container);
-  --md-filled-tonal-button-hover-state-layer-color: var(--md-sys-color-on-error-container);
-  --md-filled-tonal-button-pressed-state-layer-color: var(--md-sys-color-on-error-container);
+.app-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Semantic: positive actions use success tokens. */
-.m3-button--success.md-filled-button {
-  --md-filled-button-container-color: var(--md-sys-color-success);
-  --md-filled-button-label-text-color: var(--md-sys-color-on-success);
-  --md-filled-button-hover-label-text-color: var(--md-sys-color-on-success);
-  --md-filled-button-focus-label-text-color: var(--md-sys-color-on-success);
-  --md-filled-button-pressed-label-text-color: var(--md-sys-color-on-success);
-  --md-filled-button-hover-state-layer-color: var(--md-sys-color-on-success);
-  --md-filled-button-pressed-state-layer-color: var(--md-sys-color-on-success);
-}
-.m3-button--success.md-outlined-button {
-  --md-outlined-button-label-text-color: var(--md-sys-color-success);
-  --md-outlined-button-hover-label-text-color: var(--md-sys-color-success);
-  --md-outlined-button-focus-label-text-color: var(--md-sys-color-success);
-  --md-outlined-button-pressed-label-text-color: var(--md-sys-color-success);
-  --md-outlined-button-outline-color: var(--md-sys-color-success);
-  --md-outlined-button-hover-state-layer-color: var(--md-sys-color-success);
-  --md-outlined-button-pressed-state-layer-color: var(--md-sys-color-success);
+.app-main__inner {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Icon button density: sm = 32px state layer + 20px icon, xs = 28px + 18px. */
-md-icon-button.m3-icon-button--sm {
-  --md-icon-button-state-layer-width: 32px;
-  --md-icon-button-state-layer-height: 32px;
-  --md-icon-button-icon-size: 20px;
+/* Top app bar — 64dp, surface, brand on the left. */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--md-sys-spacing-4);
+  height: 64px;
+  padding: 0 var(--md-sys-spacing-5);
+  background: var(--md-sys-color-surface);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  flex: none;
 }
-md-icon-button.m3-icon-button--xs {
-  --md-icon-button-state-layer-width: 28px;
-  --md-icon-button-state-layer-height: 28px;
-  --md-icon-button-icon-size: 18px;
+
+.topbar__brand { display: flex; align-items: center; }
+.brand { display: inline-flex; align-items: center; gap: var(--md-sys-spacing-3); }
+.brand__mark {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-primary);
+  flex: none;
+}
+.brand__name {
+  font-family: var(--md-ref-typeface-brand);
+  font-size: 1.375rem;   /* title-large */
+  font-weight: 500;
+  line-height: 1.75rem;
+  color: var(--md-sys-color-on-surface);
+}
+
+.topbar__business {
+  display: flex;
+  align-items: center;
+  margin-left: var(--md-sys-spacing-4);
+  min-width: 0;
+}
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--md-sys-spacing-1);
+  margin-left: auto;
+}
+
+/* Navigation rail — 80dp, icon destinations with labels. */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  width: 80px;
+  flex: none;
+  background: var(--md-sys-color-surface-container);
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+}
+
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--md-sys-spacing-3) 0;
+}
+
+.sidebar__rail {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--md-sys-spacing-1);
+  padding: 0 var(--md-sys-spacing-2) var(--md-sys-spacing-2);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.rail-item { position: relative; }
+
+.rail-item__btn {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 56px;
+  padding: var(--md-sys-spacing-1);
+  border-radius: var(--md-sys-shape-corner-full);
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  transition:
+    background-color var(--md-sys-motion-duration-short-4) var(--md-sys-motion-easing-standard),
+    color var(--md-sys-motion-duration-short-4) var(--md-sys-motion-easing-standard);
+}
+
+.rail-item__btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short-4) var(--md-sys-motion-easing-standard);
+  pointer-events: none;
+}
+.rail-item__btn:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+.rail-item__btn:active::before { opacity: var(--md-sys-state-press-opacity); }
+
+.rail-item.is-active > .rail-item__btn {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+.rail-item.is-open > .rail-item__btn { color: var(--md-sys-color-primary); }
+
+.rail-item__icon {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex: none;
+}
+.rail-item__icon svg {
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+}
+
+/* M3 nav rail item label — always visible, label-small. */
+.rail-item__label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1rem;
+  letter-spacing: 0.05em;
+  text-align: center;
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Flyout menu — M3 menu surface. */
+.rail-flyout {
+  position: absolute;
+  top: 0;
+  left: calc(100% + var(--md-sys-spacing-2));
+  min-width: 260px;
+  background: var(--md-sys-color-surface-container);
+  border-radius: var(--md-sys-shape-corner-small);
+  padding: var(--md-sys-spacing-2);
+  display: none;
+  z-index: 30;
+  box-shadow: var(--md-sys-elevation-2);
+}
+.rail-flyout::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -8px;
+  width: 8px;
+}
+.rail-flyout.is-open { display: block; }
+
+.rail-flyout__title {
+  font-size: 0.6875rem;   /* label-small */
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--md-sys-color-on-surface-variant);
+  padding: var(--md-sys-spacing-2) var(--md-sys-spacing-3) var(--md-sys-spacing-1);
+}
+
+.rail-flyout__items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rail-flyout__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--md-sys-spacing-2);
+  min-height: 48px;
+  padding: 0 var(--md-sys-spacing-4);
+  border-radius: var(--md-sys-shape-corner-full);
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  font-size: 0.875rem;   /* label-large-ish row */
+  text-align: left;
+  transition: background-color var(--md-sys-motion-duration-short-4) var(--md-sys-motion-easing-standard);
+}
+.rail-flyout__item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short-4) var(--md-sys-motion-easing-standard);
+  pointer-events: none;
+}
+.rail-flyout__item:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+
+.rail-flyout__badge {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--md-sys-color-on-warning-container);
+  background: var(--md-sys-color-warning-container);
+  border-radius: var(--md-sys-shape-corner-full);
+  padding: 2px 8px;
+}
+
+.sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: var(--md-sys-spacing-2);
+  left: var(--md-sys-spacing-2);
+  z-index: 35;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: var(--md-sys-elevation-1);
+}
+.sidebar-toggle svg {
+  width: 24px;
+  height: 24px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+}
+
+.sidebar-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  background: rgba(0, 0, 0, 0.32);
+}
+
+/* ------------------------------------------------------------
+   Tab strips — M3 primary tabs pattern.
+   Top strip: module tabs. Nested strip: module children.
+   ------------------------------------------------------------ */
+.tabstrip {
+  flex: none;
+  background: var(--md-sys-color-surface);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  min-height: 48px;
+  display: flex;
+}
+
+.tabstrip__inner {
+  display: flex;
+  align-items: stretch;
+  min-height: 48px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  flex: 1;
+}
+
+/* Top-level tab pill: browser-style tab with close button,
+   M3 primary-tab visual language (48dp, primary indicator). */
+.tabpill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--md-sys-spacing-2);
+  padding: 0 var(--md-sys-spacing-3);
+  min-width: 140px;
+  max-width: 280px;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--md-sys-color-outline-variant);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  color: var(--md-sys-color-on-surface-variant);
+  position: relative;
+  cursor: pointer;
+  transition:
+    color var(--md-sys-motion-duration-short-4) var(--md-sys-motion-easing-standard),
+    background-color var(--md-sys-motion-duration-short-4) var(--md-sys-motion-easing-standard);
+}
+.tabpill:hover { color: var(--md-sys-color-on-surface); }
+
+.tabpill.is-active {
+  color: var(--md-sys-color-primary);
+  border-bottom-color: var(--md-sys-color-primary);
+}
+
+.tabpill__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tabpill.is-unsaved .tabpill__title::after {
+  content: " •";
+  color: var(--md-sys-color-warning);
+}
+
+.tabpill__close {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--md-sys-shape-corner-full);
+  color: var(--md-sys-color-on-surface-variant);
+  background: transparent;
+  position: relative;
+  transition: background-color var(--md-sys-motion-duration-short-4) var(--md-sys-motion-easing-standard);
+}
+.tabpill__close::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short-4) var(--md-sys-motion-easing-standard);
+  pointer-events: none;
+}
+.tabpill__close:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+
+/* Nested tab strip — items inside an open module. */
+.nested-tabstrip {
+  flex: none;
+  background: var(--md-sys-color-surface);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  padding: 0 var(--md-sys-spacing-4);
+  display: flex;
+  align-items: stretch;
+  min-height: 48px;
+}
+
+.nested-tabstrip__inner {
+  display: flex;
+  align-items: stretch;
+  gap: var(--md-sys-spacing-1);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  flex: 1;
+}
+
+/* Icon-only list tab (first tab in every module). */
+.nested-icon-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 0 var(--md-sys-spacing-2);
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: var(--md-sys-shape-corner-small) var(--md-sys-shape-corner-small) 0 0;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  position: relative;
+  transition: color var(--md-sys-motion-duration-short-4) var(--md-sys-motion-easing-standard);
+}
+.nested-icon-tab::before {
+  content: "";
+  position: absolute;
+  inset: 4px 2px;
+  border-radius: var(--md-sys-shape-corner-extra-small);
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short-4) var(--md-sys-motion-easing-standard);
+  pointer-events: none;
+}
+.nested-icon-tab:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+.nested-icon-tab.is-active {
+  color: var(--md-sys-color-primary);
+  border-bottom-color: var(--md-sys-color-primary);
+}
+
+/* Entry tab pill with title + unsaved dot + close. */
+.nested-tabpill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--md-sys-spacing-2);
+  padding: 0 var(--md-sys-spacing-2) 0 var(--md-sys-spacing-3);
+  margin-bottom: -1px;
+  border-bottom: 3px solid transparent;
+  border-radius: var(--md-sys-shape-corner-small) var(--md-sys-shape-corner-small) 0 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  color: var(--md-sys-color-on-surface-variant);
+  position: relative;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--md-sys-motion-duration-short-4) var(--md-sys-motion-easing-standard);
+}
+.nested-tabpill::before {
+  content: "";
+  position: absolute;
+  inset: 6px 2px;
+  border-radius: var(--md-sys-shape-corner-extra-small);
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short-4) var(--md-sys-motion-easing-standard);
+  pointer-events: none;
+}
+.nested-tabpill:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+.nested-tabpill.is-active {
+  color: var(--md-sys-color-primary);
+  border-bottom-color: var(--md-sys-color-primary);
+}
+
+.nested-tabpill__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+.nested-tabpill__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-warning);
+  flex: none;
+}
+.nested-tabpill__close {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--md-sys-shape-corner-full);
+  color: var(--md-sys-color-on-surface-variant);
+  background: transparent;
+  position: relative;
+}
+.nested-tabpill__close::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short-4) var(--md-sys-motion-easing-standard);
+  pointer-events: none;
+}
+.nested-tabpill__close:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+.nested-tabpill__close:hover { color: var(--md-sys-color-on-surface); }
+
+.nested-tabstrip__add {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: transparent;
+  color: var(--md-sys-color-primary);
+  font-size: 1.125rem;
+  line-height: 1;
+  position: relative;
+  flex: none;
+}
+.nested-tabstrip__add::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity var(--md-sys-motion-duration-short-4) var(--md-sys-motion-easing-standard);
+  pointer-events: none;
+}
+.nested-tabstrip__add:hover::before { opacity: var(--md-sys-state-hover-opacity); }
+
+/* ------------------------------------------------------------
+   Work area + module content
+   ------------------------------------------------------------ */
+.workarea {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--md-sys-color-surface);
+}
+.workarea--empty {
+  align-items: center;
+  justify-content: center;
+  padding: var(--md-sys-spacing-7);
+}
+
+.workarea__inner {
+  padding: var(--md-sys-spacing-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--md-sys-spacing-5);
+  flex: 1;
+  min-height: 0;
+}
+
+.workarea__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--md-sys-spacing-7);
+}
+
+.module-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.module-content__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--md-sys-spacing-5);
+}
+.module-content__pane { min-height: 0; }
+
+/* ------------------------------------------------------------
+   Page head — screen title + actions (used by dashboard etc.)
+   ------------------------------------------------------------ */
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--md-sys-spacing-4);
+}
+.page-head__left { display: flex; flex-direction: column; gap: var(--md-sys-spacing-1); min-width: 0; }
+.page-title {
+  font-family: var(--md-ref-typeface-brand);
+  font-size: 1.375rem;   /* title-large */
+  font-weight: 500;
+  line-height: 1.75rem;
+  color: var(--md-sys-color-on-surface);
+}
+.page-title__sub {
+  font-size: 0.875rem;   /* body-medium */
+  line-height: 1.25rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.page-sub {
+  font-size: 0.875rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.page-head__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--md-sys-spacing-2);
+  font-size: 0.75rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.page-head__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--md-sys-spacing-2);
+  flex: none;
+}
+
+/* ------------------------------------------------------------
+   Responsive — modal nav drawer on small screens
+   ------------------------------------------------------------ */
+@media (max-width: 960px) {
+  .app-shell { display: block; }
+  .sidebar { display: none; }
+  .tabstrip { display: none; }
+  .app-main { display: flex; }
+  .sidebar-toggle { display: inline-flex; }
+  .sidebar.is-open {
+    display: flex;
+    position: fixed;
+    inset: 64px auto 0 0;
+    width: 280px;
+    z-index: 30;
+    background: var(--md-sys-color-surface-container);
+    box-shadow: var(--md-sys-elevation-2);
+  }
+  .sidebar-scrim.is-visible { display: block; }
+  .sidebar__rail .rail-flyout {
+    position: static;
+    box-shadow: none;
+    padding: var(--md-sys-spacing-1) 0 var(--md-sys-spacing-1) var(--md-sys-spacing-5);
+    min-width: 0;
+  }
+  .rail-item__label { display: block; }
+  .workarea__inner, .module-content__body { padding: var(--md-sys-spacing-4); }
 }

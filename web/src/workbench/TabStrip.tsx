@@ -48,9 +48,6 @@ function TabPill({ tab }: { tab: Tab }) {
 
   return (
     <md-primary-tab active={isActive} className={`tabpill${isActive ? " is-active" : ""}`}>
-      <span className={`tabpill__kind tabpill__kind--${isDashboard ? "home" : "module"}`}>
-        {isDashboard ? "HOME" : "MENU"}
-      </span>
       <span className="tabpill__title" title={label}>
         {label}
       </span>
