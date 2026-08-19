@@ -4,9 +4,11 @@ import { useToast } from "../../components/Toast";
 import { AccountPicker } from "../../components/AccountPicker";
 import { StaticCombobox } from "../../components/Combobox";
 import { ErrorState, FormError, LoadingState } from "../../components/ui";
+import { TextField as M3TextField } from "../../components/m3/TextField";
 import { api, mockHelpers } from "../../api";
 import { formatIDR, formatDate } from "../../lib/format";
 import type { AccountItem, Category, CounterLinePayload, EntrySubKind } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -629,15 +631,27 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
             <div className="entrytab__saved" role="status">
               <div className="entrytab__saved-title">✓ Tersimpan — Jurnal {savedJournal.number}</div>
               <div className="entrytab__saved-actions">
-                <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.activate(tabId)}>
+                <Button
+                  variant="filled"
+                  size="sm"
+                  onClick={() => workbench.activate(tabId)}
+                >
                   Lihat daftar
-                </button>
-                <button type="button" className="btn btn--secondary btn--sm" onClick={resetForNew}>
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="sm"
+                  onClick={resetForNew}
+                >
                   Entri baru
-                </button>
-                <button type="button" className="btn btn--secondary btn--sm" onClick={() => workbench.close(tabId)}>
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="sm"
+                  onClick={() => workbench.close(tabId)}
+                >
                   Tutup tab
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
@@ -662,11 +676,11 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                   {!isTransfer && (
                     <label className="field">
                       <span className="field__label">{counterpartyLabel(isMoneyIn)}</span>
-                      <input
-                        className="input"
+                      <M3TextField
+                        className={`input-m3${fieldErrors.counterparty ? " input--error" : ""}`}
+                        label={isMoneyIn ? "Nama pemberi dana" : "Nama penerima"}
                         value={counterparty}
-                        onChange={(e) => setCounterparty(e.target.value)}
-                        placeholder={isMoneyIn ? "Nama pemberi dana" : "Nama penerima"}
+                        onInput={(e) => setCounterparty((e.target as HTMLInputElement).value)}
                         disabled={readOnly}
                       />
                     </label>
@@ -863,9 +877,13 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                     {!readOnly && (
                       <div className="detail-grid__row detail-grid__row--add">
                         <div>
-                          <button type="button" className="btn btn--secondary btn--sm" onClick={addCounter}>
+                          <Button
+                            variant="outlined"
+                            size="sm"
+                            onClick={addCounter}
+                          >
                             + Tambah baris
-                          </button>
+                          </Button>
                         </div>
                         <div />
                         <div />
@@ -876,9 +894,13 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                   {mode === "detail" && amountOverride && counterTotalCents !== cashAmountCents && (
                     <div className="entrytab__delta" role="alert">
                       ⚠ Selisih {formatIDR(Math.abs(counterTotalCents - cashAmountCents))}{" "}
-                      <button type="button" className="btn btn--secondary btn--sm" onClick={matchAmountToTotal}>
+                      <Button
+                        variant="outlined"
+                        size="sm"
+                        onClick={matchAmountToTotal}
+                      >
                         Samakan ke total rincian
-                      </button>
+                      </Button>
                     </div>
                   )}
                   {mode === "detail" && fieldErrors.grid && <FormError message={fieldErrors.grid} />}

@@ -4,6 +4,7 @@ import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { ProductionJobListItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 const JOB_STATUS_TONE: Record<string, string> = {
   OPEN: "is-muted",
@@ -37,12 +38,20 @@ export function ProductionJobList() {
       <div className="listtab__toolbar">
         <div className="listtab__filters" />
         <div className="listtab__actions">
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.openEntryDraft("production-job-entry")}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={() => workbench.openEntryDraft("production-job-entry")}
+          >
             + New Job
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -54,9 +63,9 @@ export function ProductionJobList() {
             title="No production jobs yet"
             message="Create a production job to track costs (material, labor, overhead) into Work in Progress, then complete it to move the accumulated cost into Finished Goods."
             action={
-              <button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("production-job-entry")}>
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("production-job-entry")}>
                 + New Job
-              </button>
+              </Button>
             }
           />
         ) : (

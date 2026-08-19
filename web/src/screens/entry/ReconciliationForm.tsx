@@ -4,6 +4,7 @@ import { EmptyState, FormError, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR, formatDate } from "../../lib/format";
 import type { BankStatement, BankReconciliation as Reconciliation } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -207,14 +208,14 @@ export function ReconciliationForm({ tabId, entryId, initialTitle }: Props) {
                               {linked.entry_number} · {linked.entry_date}
                             </small>
                           )}
-                          <button
-                            type="button"
-                            className="btn btn--ghost btn--sm"
+                          <Button
+                            variant="text"
+                            size="sm"
                             disabled={busy || reconStatus !== "DRAFT"}
                             onClick={() => unmatchLine(line.id)}
                           >
                             Unmatch
-                          </button>
+                          </Button>
                         </>
                       ) : (
                         <span className="kind-mark is-muted">unmatched</span>

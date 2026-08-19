@@ -4,6 +4,7 @@ import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { SupplierInvoiceListItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 const SI_STATUS_TONE: Record<string, string> = {
   ISSUED: "",
@@ -55,16 +56,21 @@ export function SupplierInvoiceList() {
           </div>
         </div>
         <div className="listtab__actions">
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
+          <Button
+            variant="filled"
+            size="sm"
             onClick={() => workbench.openEntryDraft("supplier-invoice-entry")}
           >
             + New Tagihan
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload" title="Reload">
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+            title="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
         </div>
       </div>
 
@@ -76,13 +82,9 @@ export function SupplierInvoiceList() {
             title="No supplier invoices yet"
             message="Create your first supplier invoice (Tagihan) to reclassify uninvoiced payables."
             action={
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => workbench.openEntryDraft("supplier-invoice-entry")}
-              >
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("supplier-invoice-entry")}>
                 New Tagihan
-              </button>
+              </Button>
             }
           />
         ) : (

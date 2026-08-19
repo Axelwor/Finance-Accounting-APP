@@ -346,7 +346,7 @@ export function ItemForm({ tabId, entryId, initialTitle }: Props) {
       <div className="entrytab__body">
         <div className="entrytab__main">
           {isEdit && (
-            <p style={{ margin: 0, fontSize: "var(--text-xs)", color: "var(--ink-muted)" }}>
+            <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--md-sys-color-outline)" }}>
               Read-only — the item update endpoint is not available yet. Use Deactivate on the action rail
               if this item is no longer in use.
             </p>
@@ -494,7 +494,7 @@ export function ItemForm({ tabId, entryId, initialTitle }: Props) {
                 />
               </>
             ) : (
-              <p style={{ gridColumn: "1 / -1", margin: 0, fontSize: "var(--text-xs)", color: "var(--ink-muted)" }}>
+              <p style={{ gridColumn: "1 / -1", margin: 0, fontSize: "0.75rem", color: "var(--md-sys-color-outline)" }}>
                 Services are not stocked and carry no inventory, COGS, or costing method.
               </p>
             )}

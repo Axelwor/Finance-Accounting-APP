@@ -130,12 +130,22 @@ func (service *Service) Register(writer http.ResponseWriter, request *http.Reque
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue token")
 		return
 	}
+	// Issue a refresh token alongside the access token so the new session can
+	// survive access-token expiry (and so /auth/switch-tenant, which requires
+	// a refresh token, works right after onboarding creates the tenant).
+	refreshToken, familyID, err := service.issueRefreshToken(request.Context(), userID, tenantID, RoleAdmin, request.RemoteAddr, request.UserAgent())
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue refresh token")
+		return
+	}
 	writeJSON(writer, http.StatusCreated, map[string]any{
-		"id":           userID,
-		"email":        req.Email,
-		"tenant_id":    tenantID,
-		"role":         RoleAdmin,
-		"access_token": accessToken,
+		"id":            userID,
+		"email":         req.Email,
+		"tenant_id":     tenantID,
+		"role":          RoleAdmin,
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+		"family_id":     familyID,
 	})
 }
 

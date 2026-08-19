@@ -4,6 +4,7 @@ import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { LeaseContractListItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 const LEASE_STATUS_TONE: Record<string, string> = {
   ACTIVE: "is-positive",
@@ -39,12 +40,20 @@ export function LeaseContractList() {
       <div className="listtab__toolbar">
         <div className="listtab__filters" />
         <div className="listtab__actions">
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.openEntryDraft("lease-contract-entry")}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={() => workbench.openEntryDraft("lease-contract-entry")}
+          >
             + New Lease
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -56,9 +65,9 @@ export function LeaseContractList() {
             title="No lease contracts yet"
             message="Register a lease to automatically recognise the right-of-use asset (1701) and lease liability (2301) at present value."
             action={
-              <button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("lease-contract-entry")}>
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("lease-contract-entry")}>
                 New Lease Contract
-              </button>
+              </Button>
             }
           />
         ) : (

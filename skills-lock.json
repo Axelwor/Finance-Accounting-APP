@@ -7,6 +7,126 @@
       "skillPath": "skills/taste-skill/SKILL.md",
       "computedHash": "6d838b246d0e35d0b53f4f23f98ba7a1dd561937e64f7d0c7553b0928e376c3e"
     },
+    "license-chooser": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/license-chooser/SKILL.md",
+      "computedHash": "e0058e12d4a9438c551d73f1bededc2ccdff81ac6b137f275031a7d2bd8f9ea4"
+    },
+    "m3-web-android": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/m3-web-android/SKILL.md",
+      "computedHash": "df1ecac21f85e6ae70b628fb9c90fa1d144254950b76ce77988bbb001e59ba97"
+    },
+    "m3-web-angular": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/m3-web-angular/SKILL.md",
+      "computedHash": "f036246d2a0ceb59faf82b1d868e7173e6445489bcf015baa164b3252382af2d"
+    },
+    "m3-web-flutter": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/m3-web-flutter/SKILL.md",
+      "computedHash": "7faee83355e23a1aa4f1dfd9db79579b0da28e0fd94e140f97e6e5853130620d"
+    },
+    "m3-web-ink": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/m3-web-ink/SKILL.md",
+      "computedHash": "0c72bc75accd56a65f511983bb4253bfee653e12c012c8a19d034decdfb2c148"
+    },
+    "m3-web-react": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/m3-web-react/SKILL.md",
+      "computedHash": "9d6167646ded475d5704691d1bccffebb01f0601cd37241cfa9cbc427308499f"
+    },
+    "m3-web-svelte": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/m3-web-svelte/SKILL.md",
+      "computedHash": "9b56e7793c5628a17f0e995882f29f14e5b676534299a1dabea9888ab1c830df"
+    },
+    "m3-web-tailwind": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/m3-web-tailwind/SKILL.md",
+      "computedHash": "cc2eb89cb781f0dbcef98039a299f53c6273305098275e04f468b4d4c1a452d2"
+    },
+    "m3-web-vanilla": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/m3-web-vanilla/SKILL.md",
+      "computedHash": "9be49c0c2349cd1f3e216d348e187cd713807038f42ad5e4fea865521cf1a283"
+    },
+    "m3-web-vue": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/m3-web-vue/SKILL.md",
+      "computedHash": "9a2a59c5ffe3394fb51c1cf293b1eb9408a4a2c8ac74c0727f53a18a3bd01e47"
+    },
+    "m3-web-webcomponents": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/m3-web-webcomponents/SKILL.md",
+      "computedHash": "23cd9e9846b2024a6270e4aaa459131fe0af98b2756b21dfde2cd2c51f021fb7"
+    },
+    "material-design-3-color": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/material-design-3-color/SKILL.md",
+      "computedHash": "7aea2839ffeaf0f80401fb40c9f102b0a5967a996b3e9b95a249265e4418989e"
+    },
+    "material-design-3-components": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/material-design-3-components/SKILL.md",
+      "computedHash": "bb76bff6da9ff964da5bfbf507fa2d16565098665e169baf9a0bb75b1002f507"
+    },
+    "material-design-3-guide": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/material-design-3-guide/SKILL.md",
+      "computedHash": "f6f94d3d1e708a3b41b461505e2eb9377d80ae6dfa4df496d2152bb8d98648d7"
+    },
+    "material-design-3-icons": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/material-design-3-icons/SKILL.md",
+      "computedHash": "891ad59f7e8cd63ffeedc77f780b903e729035de7f7e4c874731b1b227f7ec46"
+    },
+    "material-design-3-layout": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/material-design-3-layout/SKILL.md",
+      "computedHash": "7f15306458bf1b54f2a41728d0f04df404ac5ba425057a3ab3ecd21581b34dfc"
+    },
+    "material-design-3-motion": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/material-design-3-motion/SKILL.md",
+      "computedHash": "830bee85e28591a84cb5cf58893230cff6c1cff945d3d84085d864af9da5e954"
+    },
+    "material-design-3-shape": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/material-design-3-shape/SKILL.md",
+      "computedHash": "c095c3bac66d665a5213ba0240b5dd8c9d204546a6837dd025150a9ddbaddb72"
+    },
+    "material-design-3-typography": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/material-design-3-typography/SKILL.md",
+      "computedHash": "cb32a8df938cdd08e125c81d128b6e648541140d521bf9187aa6099980c33b00"
+    },
+    "material-theme-builder": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/material-theme-builder/SKILL.md",
+      "computedHash": "552fd6debd4beacbbe52b5ebdf9046e0ccc9f6fee4c13600d33ce32ea5a3fdb5"
+    },
     "ponytail": {
       "source": "DietrichGebert/ponytail",
       "sourceType": "github",
@@ -42,6 +162,12 @@
       "sourceType": "github",
       "skillPath": "skills/ponytail-review/SKILL.md",
       "computedHash": "4646594fcd75455533f7ff1425f4f1c5ba0fa65f88241bf262b1c4fc275f049a"
+    },
+    "skill-creator": {
+      "source": "shelbeely/Shelbeely-Agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/skill-creator/SKILL.md",
+      "computedHash": "a096b9af85c9d954374ebe3f7a23b5b7737ed3f35fe2a8f5893742c4e00dba1c"
     }
   }
 }

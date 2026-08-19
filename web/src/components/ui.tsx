@@ -1,7 +1,20 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { Button as M3Button } from "./m3/Button";
+import "@material/web/progress/circular-progress.js";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+/**
+ * Legacy variant names → M3 button variants.
+ * (21 call sites use the old API; Fase 5-6 migrate them directly.)
+ */
+const VARIANT_MAP = {
+  primary: "filled",
+  secondary: "outlined",
+  ghost: "text",
+  danger: "tonal",
+} as const;
+
+export type ButtonVariant = keyof typeof VARIANT_MAP;
 
 interface ButtonProps {
   type?: "button" | "submit";
@@ -13,7 +26,10 @@ interface ButtonProps {
   children: ReactNode;
 }
 
-/** Button with link support (to) and clear keyboard focus. */
+/**
+ * Button with link support (to) and clear keyboard focus.
+ * Backward-compat wrapper over the M3 Button (md-filled/outlined/text/tonal).
+ */
 export function Button({
   type = "button",
   variant = "primary",
@@ -23,26 +39,17 @@ export function Button({
   to,
   children,
 }: ButtonProps) {
-  const className = [
-    "btn",
-    `btn--${variant}`,
-    fullWidth ? "btn--full" : "",
-    disabled ? "is-disabled" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  if (to) {
-    return (
-      <Link className={className} to={to} aria-disabled={disabled}>
-        {children}
-      </Link>
-    );
-  }
   return (
-    <button type={type} className={className} disabled={disabled} onClick={onClick}>
+    <M3Button
+      type={type}
+      variant={VARIANT_MAP[variant]}
+      fullWidth={fullWidth}
+      disabled={disabled}
+      onClick={onClick}
+      to={to}
+    >
       {children}
-    </button>
+    </M3Button>
   );
 }
 
@@ -288,11 +295,12 @@ export function FormError({ message }: { message: string | null }) {
   );
 }
 
-/** Loading status for whole data pages (dashboard, lists, etc.). */
+/** Loading status for whole data pages (dashboard, lists, etc.) — M3
+ *  circular progress indicator. */
 export function LoadingState({ label = "Loading console..." }: { label?: string }) {
   return (
     <div className="loading-state" role="status" aria-live="polite">
-      <span className="loading-state__spinner" aria-hidden="true" />
+      <md-circular-progress indeterminate aria-hidden="true" style={{ width: 24, height: 24 }} />
       <span>{label}</span>
     </div>
   );

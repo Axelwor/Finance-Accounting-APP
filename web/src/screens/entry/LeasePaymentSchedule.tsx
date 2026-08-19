@@ -3,6 +3,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { LeaseContract } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -84,14 +85,14 @@ export function LeasePaymentSchedule({ tabId, leaseId }: Props) {
                 {p.posted ? (
                   <span className="kind-mark is-positive">Posted</span>
                 ) : (
-                  <button
-                    type="button"
-                    className="btn btn--primary btn--sm"
+                  <Button
+                    variant="filled"
+                    size="sm"
                     disabled={postingNo === p.payment_no}
                     onClick={() => void handlePost(p.payment_no)}
                   >
                     {postingNo === p.payment_no ? "Posting..." : "Post"}
-                  </button>
+                  </Button>
                 )}
               </span>
             </div>

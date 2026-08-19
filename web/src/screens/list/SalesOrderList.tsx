@@ -4,6 +4,7 @@ import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { SalesOrderListItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 const SO_STATUS_TONE: Record<string, string> = {
   CONFIRMED: "",
@@ -52,16 +53,20 @@ export function SalesOrderList() {
           </div>
         </div>
         <div className="listtab__actions">
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
+          <Button
+            variant="filled"
+            size="sm"
             onClick={() => workbench.openEntryDraft("sales-order-entry")}
           >
             + New Order
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -74,13 +79,9 @@ export function SalesOrderList() {
             title="No sales orders yet"
             message="Convert a quotation into an order, or create one from scratch. An order locks price and quantity — it posts no journal until a down payment is received."
             action={
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => workbench.openEntryDraft("sales-order-entry")}
-              >
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("sales-order-entry")}>
                 New Sales Order
-              </button>
+              </Button>
             }
           />
         ) : (

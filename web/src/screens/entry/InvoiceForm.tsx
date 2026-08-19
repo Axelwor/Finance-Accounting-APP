@@ -11,6 +11,7 @@ import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
 import type { Customer, Item, InvoiceLineInput, SalesOrderListItem, InvoicePayment, CreatePaymentInput, Invoice } from "../../types";
 import type { PrefillRef } from "../../workbench/types";
 import { AttachmentPanel } from "../../components/AttachmentPanel";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -491,9 +492,13 @@ export function InvoiceForm({ tabId, entryId, initialTitle, prefill }: Props) {
               {!isExisting && (
                 <div className="detail-grid__row detail-grid__row--add">
                   <div>
-                    <button type="button" className="btn btn--secondary btn--sm" onClick={() => setLines((cur) => [...cur, seedLine()])}>
+                    <Button
+                      variant="outlined"
+                      size="sm"
+                      onClick={() => setLines((cur) => [...cur, seedLine()])}
+                    >
                       + Add item
-                    </button>
+                    </Button>
                   </div>
                   <div />
                   <div />
@@ -513,7 +518,7 @@ export function InvoiceForm({ tabId, entryId, initialTitle, prefill }: Props) {
             <span className="entrytab__total-label">PPN {taxRate > 0 ? `(${taxRate}%)` : ""}</span>
             <span className="entrytab__total-value">{formatIDR(isExisting ? (taxTotal ?? ppnCents) : ppnCents)}</span>
           </div>
-          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--accent)", paddingTop: 8 }}>
+          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 8 }}>
             <span className="entrytab__total-label">Total</span>
             <span className="entrytab__total-value">{formatIDR(isExisting ? total : totalCents)}</span>
           </div>
@@ -525,7 +530,7 @@ export function InvoiceForm({ tabId, entryId, initialTitle, prefill }: Props) {
             </div>
           )}
           {isExisting && (
-            <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--accent)", paddingTop: 8 }}>
+            <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 8 }}>
               <span className="entrytab__total-label">Receivable</span>
               <span className="entrytab__total-value">{formatIDR(receivable)}</span>
             </div>
@@ -556,7 +561,7 @@ export function InvoiceForm({ tabId, entryId, initialTitle, prefill }: Props) {
           )}
 
           {isExisting && (
-            <div ref={paymentsRef} style={{ marginTop: 16, borderTop: "2px solid var(--accent)", paddingTop: 12 }}>
+            <div ref={paymentsRef} style={{ marginTop: 16, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 12 }}>
               <div className="entrytab__detail-title" style={{ marginBottom: 8 }}>
                 Payments — Received: <strong>{formatIDR(payments.reduce((s, p) => s + p.ar_applied_cents, 0))}</strong> / Receivable: <strong>{formatIDR(receivable)}</strong>
               </div>
@@ -608,9 +613,14 @@ export function InvoiceForm({ tabId, entryId, initialTitle, prefill }: Props) {
                   </div>
                   <div />
                   <div style={{ display: "flex", alignItems: "flex-end" }}>
-                    <button type="button" className="btn btn--primary btn--sm" onClick={() => void handlePostPayment()} disabled={postingPay}>
+                    <Button
+                      variant="filled"
+                      size="sm"
+                      onClick={() => void handlePostPayment()}
+                      disabled={postingPay}
+                    >
                       {postingPay ? "Posting..." : "Receive Payment"}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}

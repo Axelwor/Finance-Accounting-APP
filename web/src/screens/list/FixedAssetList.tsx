@@ -4,6 +4,7 @@ import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { FixedAssetListItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 const ASSET_STATUS_TONE: Record<string, string> = {
   ACTIVE: "is-positive",
@@ -42,21 +43,20 @@ export function FixedAssetList() {
       <div className="listtab__toolbar">
         <div className="listtab__filters" />
         <div className="listtab__actions">
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
+          <Button
+            variant="filled"
+            size="sm"
             onClick={() => workbench.openEntryDraft("fixed-assets-entry")}
           >
             + New Asset
-          </button>
-          <button
-            type="button"
-            className="btn btn--icon btn--sm"
+          </Button>
+          <IconButton
+            size="sm"
             onClick={() => void load()}
-            aria-label="Reload"
+            label="Reload"
           >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -68,13 +68,9 @@ export function FixedAssetList() {
             title="No fixed assets yet"
             message="Register a fixed asset to begin tracking depreciation, revaluation, and disposal (PSAK 16). Acquisition posts Dr Fixed Assets / Cr Cash."
             action={
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => workbench.openEntryDraft("fixed-assets-entry")}
-              >
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("fixed-assets-entry")}>
                 New Asset
-              </button>
+              </Button>
             }
           />
         ) : (

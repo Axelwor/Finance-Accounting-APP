@@ -3,6 +3,7 @@ import { Button, EmptyState, ErrorState, LoadingState } from "../../components/u
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { PPNReconciliationResult, PPNReconciliationRecord, PPNSummary } from "../../types";
+import { Button as M3Button } from "../../components/m3";
 
 /**
  * PPN Reconciliation (US-080).
@@ -90,7 +91,11 @@ export function PPNReconciliation() {
               ))}
             </select>
           </label>
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => void load()}>Reload</button>
+          <M3Button
+            variant="outlined"
+            size="sm"
+            onClick={() => void load()}
+          >Reload</M3Button>
         </div>
       </div>
 
@@ -143,17 +148,17 @@ export function PPNReconciliation() {
               )}
             </section>
 
-            <section style={{ borderTop: "1px solid var(--rule)", paddingTop: 16 }}>
+            <section style={{ borderTop: "1px solid var(--md-sys-color-outline-variant)", paddingTop: 16 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                 <Button onClick={() => void handleFile()} disabled={filing}>
                   {filing ? "Filing..." : "File Reconciliation"}
                 </Button>
-                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                <span style={{ fontSize: 13, color: "var(--md-sys-color-on-surface-variant)" }}>
                   Files the SPT Masa PPN record for {monthLabel} as FILED.
                 </span>
               </div>
               {fileMsg ? (
-                <p style={{ marginTop: 8, fontSize: 13, color: filedRecord ? "var(--pos)" : "var(--neg)" }}>{fileMsg}</p>
+                <p style={{ marginTop: 8, fontSize: 13, color: filedRecord ? "var(--md-sys-color-success)" : "var(--md-sys-color-error)" }}>{fileMsg}</p>
               ) : null}
             </section>
           </div>
@@ -168,7 +173,7 @@ export function PPNReconciliation() {
 
 function PPNStat({ label, value, tone, note }: { label: string; value: string; tone: "pos" | "neg" | "acc"; note: string }) {
   return (
-    <div className="kpi-list__row" style={{ background: "var(--surface-panel)", border: "1px solid var(--rule)", borderRadius: "var(--radius-sm)" }}>
+    <div className="kpi-list__row" style={{ background: "var(--md-sys-color-surface-container-lowest)", border: "1px solid var(--md-sys-color-outline-variant)", borderRadius: "var(--md-sys-shape-corner-extra-small)" }}>
       <div className="kpi-list__label">
         <span className="kpi-list__label-title">{label}</span>
         <span className="kpi-list__label-note">{note}</span>

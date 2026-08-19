@@ -135,7 +135,7 @@ export function TransactionFormScreen() {
             <span className="page-title__sep">/</span>
             <span className="page-title__sub">new entry</span>
           </h1>
-          <p className="page-head__meta" style={{ marginTop: "var(--space-2)", textTransform: "none", letterSpacing: 0, color: "var(--ink-tertiary)" }}>
+          <p className="page-head__meta" style={{ marginTop: "var(--md-sys-spacing-2)", textTransform: "none", letterSpacing: 0, color: "var(--md-sys-color-outline)" }}>
             {meta.sub}
           </p>
         </div>

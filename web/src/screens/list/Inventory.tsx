@@ -4,6 +4,7 @@ import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { Item } from "../../types";
+import { Button } from "../../components/m3";
 
 export function InventoryItemsList() {
   const workbench = useWorkbench();
@@ -28,9 +29,13 @@ export function InventoryItemsList() {
       <div className="listtab__toolbar">
         <div className="listtab__filters" />
         <div className="listtab__actions">
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.openEntryDraft("inventory-item")}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={() => workbench.openEntryDraft("inventory-item")}
+          >
             + New Item
-          </button>
+          </Button>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -42,9 +47,9 @@ export function InventoryItemsList() {
             title="No items yet"
             message="Add goods or service items to start creating quotations, orders, and invoices."
             action={
-              <button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("inventory-item")}>
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("inventory-item")}>
                 New Item
-              </button>
+              </Button>
             }
           />
         ) : (
@@ -80,7 +85,7 @@ export function InventoryItemsList() {
                     {belowReorder && (
                       <span
                         className="kind-mark"
-                        style={{ color: "var(--warning)", background: "var(--warning-soft)", marginRight: "6px", borderRadius: "4px", padding: "0 4px" }}
+                        style={{ color: "var(--md-sys-color-warning)", background: "var(--md-sys-color-warning-container)", marginRight: "6px", borderRadius: "4px", padding: "0 4px" }}
                         title={`Stock ${it.qty_on_hand} below reorder point ${it.reorder_point}`}
                       >
                         ⚠

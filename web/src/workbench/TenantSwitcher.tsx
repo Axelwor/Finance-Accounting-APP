@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { useAppState } from "../state";
 import type { Tenant } from "../types";
+import { Button } from "../components/m3";
 
 /**
  * Tenant (book) switcher shown in the top bar. Lists every book the user
@@ -68,16 +69,17 @@ export function TenantSwitcher() {
 
   return (
     <div className="tenant-switcher" ref={rootRef}>
-      <button
-        type="button"
-        className="btn btn--ghost btn--sm tenant-switcher__toggle"
+      <Button
+        variant="text"
+        size="sm"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         title="Switch or add a business"
+        className="tenant-switcher__toggle"
       >
         {business?.name || "Your business"} ▾
-      </button>
+      </Button>
 
       {open && (
         <div className="tenant-switcher__menu" role="menu">
@@ -123,22 +125,22 @@ export function TenantSwitcher() {
                 disabled={busy}
               />
               <div className="tenant-switcher__form-actions">
-                <button
-                  type="button"
-                  className="btn btn--primary btn--sm"
+                <Button
+                  variant="filled"
+                  size="sm"
                   onClick={handleCreate}
                   disabled={busy || !newName.trim()}
                 >
                   {busy ? "Creating…" : "Create"}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--sm"
+                </Button>
+                <Button
+                  variant="text"
+                  size="sm"
                   onClick={() => setCreating(false)}
                   disabled={busy}
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </div>
           )}

@@ -3,6 +3,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { BudgetListItem, BudgetVsActualResult } from "../../types";
+import { Button } from "../../components/m3";
 
 const MONTH_LABELS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -88,13 +89,13 @@ export function BudgetVsActual() {
               ))
             )}
           </select>
-          <button
-            type="button"
-            className="btn btn--secondary btn--sm"
+          <Button
+            variant="outlined"
+            size="sm"
             onClick={() => (selectedId !== null ? void loadReport(selectedId) : void loadBudgets())}
           >
             Reload
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -154,9 +155,9 @@ export function BudgetVsActual() {
                     const variance = row.variance_cents;
                     const over = variance > 0;
                     return (
-                      <tr key={`${row.account_id}-${row.month}-${idx}`} style={{ borderBottom: "1px solid var(--rule)" }}>
+                      <tr key={`${row.account_id}-${row.month}-${idx}`} style={{ borderBottom: "1px solid var(--md-sys-color-outline-variant)" }}>
                         <td style={{ padding: "8px 12px" }}>
-                          <span style={{ fontFamily: "var(--font-mono)", marginRight: 8 }}>{row.account_code}</span>
+                          <span style={{ fontFamily: "var(--md-ref-typeface-plain)", marginRight: 8 }}>{row.account_code}</span>
                           {row.account_name}
                         </td>
                         <td style={{ padding: "8px 12px" }}>{MONTH_LABELS[row.month - 1] ?? row.month}</td>
@@ -166,7 +167,7 @@ export function BudgetVsActual() {
                           style={{
                             padding: "8px 12px",
                             textAlign: "right",
-                            color: over ? "var(--neg)" : "var(--pos)",
+                            color: over ? "var(--md-sys-color-error)" : "var(--md-sys-color-success)",
                             fontWeight: 600,
                           }}
                         >
@@ -178,7 +179,7 @@ export function BudgetVsActual() {
                   })}
                 </tbody>
                 <tfoot>
-                  <tr style={{ borderTop: "2px solid var(--rule)" }}>
+                  <tr style={{ borderTop: "2px solid var(--md-sys-color-outline-variant)" }}>
                     <td colSpan={2} style={{ padding: "8px 12px", fontWeight: 600 }}>
                       Total
                     </td>
@@ -221,7 +222,7 @@ function BudgetStat({
   return (
     <div
       className="kpi-list__row"
-      style={{ background: "var(--surface-panel)", border: "1px solid var(--rule)", borderRadius: "var(--radius-sm)" }}
+      style={{ background: "var(--md-sys-color-surface-container-lowest)", border: "1px solid var(--md-sys-color-outline-variant)", borderRadius: "var(--md-sys-shape-corner-extra-small)" }}
     >
       <div className="kpi-list__label">
         <span className="kpi-list__label-title">{label}</span>

@@ -4,6 +4,7 @@ import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { SupplierInvoiceListItem, SupplierPayment } from "../../types";
+import { Button } from "../../components/m3";
 
 function StatusBadge({ status }: { status: string }) {
   const cls =
@@ -33,7 +34,7 @@ export function PurchaseInvoiceList() {
 
   if (rows === null) return <LoadingState />;
   if (rows.length === 0)
-    return <EmptyState title="Purchase Invoices" message="No supplier invoices yet." action={<button className="btn btn--primary" onClick={() => workbench.openEntryDraft("supplier-invoice-entry")}>+ New Invoice</button>} />;
+    return <EmptyState title="Purchase Invoices" message="No supplier invoices yet." action={<Button variant="filled" onClick={() => workbench.openEntryDraft("supplier-invoice-entry")}>+ New Invoice</Button>} />;
 
   return (
     <div className="listtab listtab--accurate">
@@ -42,9 +43,9 @@ export function PurchaseInvoiceList() {
           <h2 className="listtab__title">Purchase Invoices</h2>
           <p className="listtab__desc">Supplier invoices / bills (Tagihan)</p>
         </div>
-        <button className="btn btn--primary" onClick={() => workbench.openEntryDraft("supplier-invoice-entry")}>
+        <Button variant="filled" onClick={() => workbench.openEntryDraft("supplier-invoice-entry")}>
           + New Invoice
-        </button>
+        </Button>
       </div>
       <div className="listtab__body">
         <div className="ledger-table">
@@ -62,9 +63,9 @@ export function PurchaseInvoiceList() {
               className="ledger-table__row ledger-table__row--clickable"
               onClick={() => workbench.openEntryExisting("supplier-invoice-entry", r.id, r.number, r.status)}
             >
-              <span style={{ fontFamily: "var(--font-mono)" }}>{r.number}</span>
+              <span style={{ fontFamily: "var(--md-ref-typeface-plain)" }}>{r.number}</span>
               <span>{r.supplier_name ?? `Supplier #${r.supplier_id}`}</span>
-              <span style={{ fontFamily: "var(--font-mono)" }}>{r.invoice_date}</span>
+              <span style={{ fontFamily: "var(--md-ref-typeface-plain)" }}>{r.invoice_date}</span>
               <span className="ledger-table__amount right">{formatIDR(r.total_cents)}</span>
               <span className="ledger-table__amount right">{formatIDR(r.payable_cents)}</span>
               <StatusBadge status={r.status} />
@@ -98,7 +99,7 @@ export function PurchasePaymentList() {
 
   if (rows === null) return <LoadingState />;
   if (rows.length === 0)
-    return <EmptyState title="Purchase Payments" message="No payments yet. Pay supplier invoices from the Purchase Invoice screen." action={<button className="btn btn--primary" onClick={() => workbench.openEntryDraft("supplier-invoice-entry")}>+ New Payment</button>} />;
+    return <EmptyState title="Purchase Payments" message="No payments yet. Pay supplier invoices from the Purchase Invoice screen." action={<Button variant="filled" onClick={() => workbench.openEntryDraft("supplier-invoice-entry")}>+ New Payment</Button>} />;
 
   const totalPaid = rows.reduce((s, r) => s + (r.total_cents - r.payable_cents), 0);
 
@@ -109,9 +110,9 @@ export function PurchasePaymentList() {
           <h2 className="listtab__title">Purchase Payments</h2>
           <p className="listtab__desc">Payments made to suppliers (Bayar)</p>
         </div>
-        <button className="btn btn--primary" onClick={() => workbench.openEntryDraft("supplier-invoice-entry")}>
+        <Button variant="filled" onClick={() => workbench.openEntryDraft("supplier-invoice-entry")}>
           + New Payment
-        </button>
+        </Button>
       </div>
       <div className="listtab__body">
         <div className="ledger-table">
@@ -131,9 +132,9 @@ export function PurchasePaymentList() {
                 className="ledger-table__row ledger-table__row--clickable"
                 onClick={() => workbench.openEntryExisting("supplier-invoice-entry", r.id, r.number, r.status)}
               >
-                <span style={{ fontFamily: "var(--font-mono)" }}>{r.number}</span>
+                <span style={{ fontFamily: "var(--md-ref-typeface-plain)" }}>{r.number}</span>
                 <span>{r.supplier_name ?? `Supplier #${r.supplier_id}`}</span>
-                <span style={{ fontFamily: "var(--font-mono)" }}>{r.invoice_date}</span>
+                <span style={{ fontFamily: "var(--md-ref-typeface-plain)" }}>{r.invoice_date}</span>
                 <span className="ledger-table__amount right">{formatIDR(r.total_cents)}</span>
                 <span className="ledger-table__amount right">{formatIDR(paidAmount)}</span>
                 <StatusBadge status={r.status} />

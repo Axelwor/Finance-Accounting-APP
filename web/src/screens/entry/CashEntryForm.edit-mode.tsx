@@ -7,6 +7,7 @@ import { ErrorState, FormError, LoadingState } from "../../components/ui";
 import { api, mockHelpers } from "../../api";
 import { formatIDR, formatDate } from "../../lib/format";
 import type { AccountItem, Category, CounterLinePayload, EntrySubKind } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -640,15 +641,27 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
             <div className="entrytab__saved" role="status">
               <div className="entrytab__saved-title">✓ Tersimpan — Jurnal {savedJournal.number}</div>
               <div className="entrytab__saved-actions">
-                <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.activate(tabId)}>
+                <Button
+                  variant="filled"
+                  size="sm"
+                  onClick={() => workbench.activate(tabId)}
+                >
                   Lihat daftar
-                </button>
-                <button type="button" className="btn btn--secondary btn--sm" onClick={resetForNew}>
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="sm"
+                  onClick={resetForNew}
+                >
                   Entri baru
-                </button>
-                <button type="button" className="btn btn--secondary btn--sm" onClick={() => workbench.close(tabId)}>
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="sm"
+                  onClick={() => workbench.close(tabId)}
+                >
                   Tutup tab
-                </button>
+                </Button>
               </div>
             </div>
           ) : null}
@@ -776,11 +789,9 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
               {/* Mode switch — hidden for transfers (no category/grid needed). */}
               {!isTransfer && !readOnly && (
                 <div className="entrytab__mode" role="tablist" aria-label="Mode input">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={mode === "quick"}
-                    className={`btn btn--sm ${mode === "quick" ? "btn--primary" : "btn--secondary"}`}
+                  <Button
+                    variant={mode === "quick" ? "filled" : "outlined"}
+                    size="sm"
                     onClick={() => {
                       setMode("quick");
                       try {
@@ -789,12 +800,10 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                     }}
                   >
                     Mode Cepat
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={mode === "detail"}
-                    className={`btn btn--sm ${mode === "detail" ? "btn--primary" : "btn--secondary"}`}
+                  </Button>
+                  <Button
+                    variant={mode === "detail" ? "filled" : "outlined"}
+                    size="sm"
                     onClick={() => {
                       setMode("detail");
                       try {
@@ -803,7 +812,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                     }}
                   >
                     Mode Rinci
-                  </button>
+                  </Button>
                   {categories.length === 0 && mode === "quick" && (
                     <span className="entrytab__mode-hint">
                       Belum ada kategori — gunakan Mode Rinci.
@@ -917,9 +926,13 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                     {!readOnly && (
                       <div className="detail-grid__row detail-grid__row--add">
                         <div>
-                          <button type="button" className="btn btn--secondary btn--sm" onClick={addCounter}>
+                          <Button
+                            variant="outlined"
+                            size="sm"
+                            onClick={addCounter}
+                          >
                             + Tambah baris
-                          </button>
+                          </Button>
                         </div>
                         <div />
                         <div />
@@ -934,9 +947,13 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                   {amountOverride && counterTotalCents !== cashAmountCents && (
                     <div className="entrytab__delta" role="alert">
                       ⚠ Selisih {formatIDR(Math.abs(counterTotalCents - cashAmountCents))}{" "}
-                      <button type="button" className="btn btn--secondary btn--sm" onClick={matchAmountToTotal}>
+                      <Button
+                        variant="outlined"
+                        size="sm"
+                        onClick={matchAmountToTotal}
+                      >
                         Samakan ke total rincian
-                      </button>
+                      </Button>
                     </div>
                   )}
                   {fieldErrors.grid && <FormError message={fieldErrors.grid} />}

@@ -2491,7 +2491,18 @@ export const api = {
         auth: true,
         body: JSON.stringify({ name: business.name, slug: slugify(business.name) }),
       });
-      if (tenant.id > 0) business.id = String(tenant.id);
+      if (tenant.id > 0) {
+        business.id = String(tenant.id);
+        // Re-bind the session to the new tenant so the JWT carries its id —
+        // otherwise tenant-scoped calls like /opening-balances below run with
+        // tenant_id 0 and fail with "tenant context is required".
+        await api.switchTenant({
+          id: String(tenant.id),
+          name: tenant.name,
+          slug: tenant.slug,
+          role: "owner",
+        });
+      }
       const opening = await buildOpeningBalance(input);
       if (opening) {
         // Surface opening-balance posting errors to the caller instead of

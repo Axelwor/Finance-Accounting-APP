@@ -4,11 +4,12 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { BudgetListItem } from "../../types";
+import { Button } from "../../components/m3";
 
 const STATUS_TONE: Record<string, string> = {
-  DRAFT: "var(--warn)",
-  APPROVED: "var(--pos)",
-  CLOSED: "var(--neg)",
+  DRAFT: "var(--md-sys-color-warning)",
+  APPROVED: "var(--md-sys-color-success)",
+  CLOSED: "var(--md-sys-color-error)",
 };
 
 /**
@@ -48,16 +49,20 @@ export function BudgetList() {
           <small>Anggaran per dimensi &amp; tahun fiskal</small>
         </div>
         <div className="listtab__toolbar">
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => void load()}>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={() => void load()}
+          >
             Reload
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
+          </Button>
+          <Button
+            variant="filled"
+            size="sm"
             onClick={() => workbench.openEntryDraft("budget-entry")}
           >
             + New Budget
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -89,27 +94,27 @@ export function BudgetList() {
                   <td style={{ fontWeight: 600 }}>{b.name}</td>
                   <td>{b.fiscal_year}</td>
                   <td>
-                    <span style={{ color: STATUS_TONE[b.status] ?? "var(--text)", fontWeight: 600, fontSize: "12px" }}>
+                    <span style={{ color: STATUS_TONE[b.status] ?? "var(--md-sys-color-on-surface)", fontWeight: 600, fontSize: "12px" }}>
                       {b.status}
                     </span>
                   </td>
                   <td>{b.line_count}</td>
-                  <td style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}>{formatIDR(b.total_cents)}</td>
+                  <td style={{ textAlign: "right", fontFamily: "var(--md-ref-typeface-plain)" }}>{formatIDR(b.total_cents)}</td>
                   <td style={{ display: "flex", gap: 6 }}>
-                    <button
-                      type="button"
-                      className="btn btn--secondary btn--sm"
+                    <Button
+                      variant="outlined"
+                      size="sm"
                       onClick={() => workbench.openEntryExisting("budget-entry", b.id, b.name, b.status)}
                     >
                       Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--secondary btn--sm"
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="sm"
                       onClick={() => workbench.openList("budget-vs-actual")}
                     >
                       vs Actual
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}

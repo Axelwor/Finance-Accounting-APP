@@ -9,6 +9,7 @@ import { openPrintWindow } from "../../lib/print";
 import { draftNumber } from "../../workbench/modules";
 import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
 import type { Supplier, Item, PurchaseOrderLineInput } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -322,9 +323,13 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
           </div>
 
           {!isExisting && (
-            <button type="button" className="btn btn--ghost" onClick={addLine} style={{ marginTop: 8 }}>
+            <Button
+              variant="text"
+              onClick={addLine}
+              style={{ marginTop: 8 }}
+            >
               + Add line
-            </button>
+            </Button>
           )}
 
           <div className="entrytab__total">
@@ -335,7 +340,7 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
             <span className="entrytab__total-label">PPN {taxRate > 0 ? `(${taxRate}%)` : ""}</span>
             <span className="entrytab__total-value">{formatIDR(ppnCents)}</span>
           </div>
-          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--accent)", paddingTop: 8 }}>
+          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 8 }}>
             <span className="entrytab__total-label">Total</span>
             <span className="entrytab__total-value">{formatIDR(totalCents)}</span>
           </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { ApprovalRule, CreateApprovalRuleInput } from "../../types";
+import { Button } from "../../components/m3";
 
 const ENTITY_TYPE_LABEL: Record<string, string> = {
   "sales-invoice": "Sales Invoice",
@@ -119,13 +120,21 @@ export function ApprovalRuleList() {
           <small>Configure approval workflows by entity type and amount</small>
         </div>
         <div className="listtab__toolbar">
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => void load()}>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={() => void load()}
+          >
             Reload
-          </button>
+          </Button>
           {!showForm ? (
-            <button type="button" className="btn btn--primary btn--sm" onClick={() => setShowForm(true)}>
+            <Button
+              variant="filled"
+              size="sm"
+              onClick={() => setShowForm(true)}
+            >
               + New Rule
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
@@ -175,20 +184,24 @@ export function ApprovalRuleList() {
               />
             </div>
             {formError ? (
-              <p style={{ color: "var(--neg)", margin: "8px 0 0" }}>{formError}</p>
+              <p style={{ color: "var(--md-sys-color-error)", margin: "8px 0 0" }}>{formError}</p>
             ) : null}
             <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-              <button
-                type="button"
-                className="btn btn--primary btn--sm"
+              <Button
+                variant="filled"
+                size="sm"
                 disabled={saving}
                 onClick={() => void handleSave()}
               >
                 {saving ? "Saving..." : editingId ? "Update" : "Create"}
-              </button>
-              <button type="button" className="btn btn--secondary btn--sm" onClick={resetForm}>
+              </Button>
+              <Button
+                variant="outlined"
+                size="sm"
+                onClick={resetForm}
+              >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
@@ -213,23 +226,24 @@ export function ApprovalRuleList() {
                 {items.map((rule) => (
                   <tr key={rule.id}>
                     <td>{ENTITY_TYPE_LABEL[rule.entity_type] ?? rule.entity_type}</td>
-                    <td style={{ fontFamily: "var(--font-mono)" }}>{formatAmount(rule.min_amount_cents)}</td>
+                    <td style={{ fontFamily: "var(--md-ref-typeface-plain)" }}>{formatAmount(rule.min_amount_cents)}</td>
                     <td>{rule.approver_account_id}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="btn btn--sm btn--secondary"
+                      <Button
+                        variant="outlined"
+                        size="sm"
                         onClick={() => editRule(rule)}
                       >
                         Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--sm btn--danger"
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        size="sm"
+                        danger
                         onClick={() => deleteRule(rule.id)}
                       >
                         Delete
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}

@@ -3,6 +3,7 @@ import { ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { PPhFinalResult } from "../../types";
+import { Button } from "../../components/m3";
 
 interface CashAccount {
   id: number;
@@ -122,9 +123,13 @@ export function PPhFinalCalculator() {
                 ))}
               </select>
             </label>
-            <button type="button" className="btn btn--primary" onClick={() => void calculate()} disabled={loading}>
+            <Button
+              variant="filled"
+              onClick={() => void calculate()}
+              disabled={loading}
+            >
               {loading ? "Calculating..." : "Calculate & Accrue"}
-            </button>
+            </Button>
           </div>
         </section>
 
@@ -194,16 +199,15 @@ export function PPhFinalCalculator() {
                   )}
                 </select>
               </label>
-              <button
-                type="button"
-                className="btn btn--primary"
+              <Button
+                variant="filled"
                 onClick={() => void pay()}
                 disabled={paying || result.payable_balance_cents <= 0 || cashAccounts.length === 0}
               >
                 {paying ? "Settling..." : "Settle Payable (Dr 2203 / Cr Cash)"}
-              </button>
+              </Button>
             </div>
-            {payError ? <p style={{ marginTop: 8, fontSize: 13, color: "var(--neg)" }}>{payError}</p> : null}
+            {payError ? <p style={{ marginTop: 8, fontSize: 13, color: "var(--md-sys-color-error)" }}>{payError}</p> : null}
           </div>
         ) : (
           <div className="workarea__placeholder">

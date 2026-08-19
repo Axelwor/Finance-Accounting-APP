@@ -7,6 +7,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { RowActions, type RowAction } from "../../components/RowActions";
 import { api } from "../../api";
 import type { Customer } from "../../types";
+import { Button } from "../../components/m3";
 
 type SortableColumn = "code" | "name" | "price_level" | "group" | "phone" | "status";
 
@@ -104,9 +105,13 @@ export function CustomerList() {
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search customers"
           />
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.openEntryDraft("customer-entry")}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={() => workbench.openEntryDraft("customer-entry")}
+          >
             + New Customer
-          </button>
+          </Button>
           <span className="listtab__count">{sorted.length}</span>
         </div>
       </div>
@@ -116,9 +121,9 @@ export function CustomerList() {
             entity="customer"
             filtered={customers.length > 0}
             action={
-              <button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("customer-entry")}>
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("customer-entry")}>
                 + New Customer
-              </button>
+              </Button>
             }
           />
         ) : (

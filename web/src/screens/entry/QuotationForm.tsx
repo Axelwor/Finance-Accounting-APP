@@ -9,6 +9,7 @@ import { openPrintWindow } from "../../lib/print";
 import { draftNumber } from "../../workbench/modules";
 import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
 import type { Customer, Item, QuotationLineInput } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -354,9 +355,13 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
               {!isSaved && (
                 <div className="detail-grid__row detail-grid__row--add">
                   <div>
-                    <button type="button" className="btn btn--secondary btn--sm" onClick={() => setLines((cur) => [...cur, seedLine()])}>
+                    <Button
+                      variant="outlined"
+                      size="sm"
+                      onClick={() => setLines((cur) => [...cur, seedLine()])}
+                    >
                       + Add item
-                    </button>
+                    </Button>
                   </div>
                   <div />
                   <div />
@@ -376,7 +381,7 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
             <span className="entrytab__total-label">PPN {taxRate > 0 ? `(${taxRate}%)` : ""}</span>
             <span className="entrytab__total-value">{formatIDR(ppnCents)}</span>
           </div>
-          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--accent)", paddingTop: 8 }}>
+          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 8 }}>
             <span className="entrytab__total-label">Total</span>
             <span className="entrytab__total-value">{formatIDR(totalCents)}</span>
           </div>

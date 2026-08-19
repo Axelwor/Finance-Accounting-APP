@@ -6,6 +6,7 @@ import type {
   ConsolidatedTrialBalanceResult,
   ConsolidatedProfitLossResult,
 } from "../../types";
+import { Button } from "../../components/m3";
 
 type ReportKind = "trial-balance" | "profit-loss";
 
@@ -51,24 +52,28 @@ export function ConsolidatedReport({ initialKind = "trial-balance" }: { initialK
         </div>
         <div className="listtab__toolbar">
           <div className="listtab__filters">
-            <button
-              type="button"
-              className={`btn btn--sm ${kind === "trial-balance" ? "btn--primary" : "btn--secondary"}`}
+            <Button
+              variant={kind === "trial-balance" ? "filled" : "outlined"}
+              size="sm"
               onClick={() => setKind("trial-balance")}
             >
               Trial Balance
-            </button>
-            <button
-              type="button"
-              className={`btn btn--sm ${kind === "profit-loss" ? "btn--primary" : "btn--secondary"}`}
+            </Button>
+            <Button
+              variant={kind === "profit-loss" ? "filled" : "outlined"}
+              size="sm"
               onClick={() => setKind("profit-loss")}
             >
               Profit & Loss
-            </button>
+            </Button>
           </div>
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => void load()}>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={() => void load()}
+          >
             Reload
-          </button>
+          </Button>
         </div>
       </div>
       <div className="listtab__body">
@@ -109,20 +114,20 @@ export function ConsolidatedReport({ initialKind = "trial-balance" }: { initialK
           )
         ) : pl ? (
           <div className="kpi-list">
-            <div className="kpi-list__row" style={{ background: "var(--surface-panel)", border: "1px solid var(--rule)", borderRadius: "var(--radius-sm)" }}>
+            <div className="kpi-list__row" style={{ background: "var(--md-sys-color-surface-container-lowest)", border: "1px solid var(--md-sys-color-outline-variant)", borderRadius: "var(--md-sys-shape-corner-extra-small)" }}>
               <div className="kpi-list__label"><span className="kpi-list__label-title">Revenue</span></div>
               <span className="kpi-list__value is-pos">{formatIDR(pl.revenue_cents)}</span>
             </div>
-            <div className="kpi-list__row" style={{ background: "var(--surface-panel)", border: "1px solid var(--rule)", borderRadius: "var(--radius-sm)" }}>
+            <div className="kpi-list__row" style={{ background: "var(--md-sys-color-surface-container-lowest)", border: "1px solid var(--md-sys-color-outline-variant)", borderRadius: "var(--md-sys-shape-corner-extra-small)" }}>
               <div className="kpi-list__label"><span className="kpi-list__label-title">Expenses</span></div>
               <span className="kpi-list__value is-neg">{formatIDR(pl.expense_cents)}</span>
             </div>
-            <div className="kpi-list__row" style={{ background: "var(--surface-panel)", border: "1px solid var(--rule)", borderRadius: "var(--radius-sm)" }}>
+            <div className="kpi-list__row" style={{ background: "var(--md-sys-color-surface-container-lowest)", border: "1px solid var(--md-sys-color-outline-variant)", borderRadius: "var(--md-sys-shape-corner-extra-small)" }}>
               <div className="kpi-list__label"><span className="kpi-list__label-title">Net Profit</span></div>
               <span className={`kpi-list__value ${pl.profit_cents >= 0 ? "is-pos" : "is-neg"}`}>{formatIDR(pl.profit_cents)}</span>
             </div>
             {pl.elimination_cents > 0 && (
-              <div className="kpi-list__row" style={{ background: "var(--surface-panel)", border: "1px solid var(--rule)", borderRadius: "var(--radius-sm)" }}>
+              <div className="kpi-list__row" style={{ background: "var(--md-sys-color-surface-container-lowest)", border: "1px solid var(--md-sys-color-outline-variant)", borderRadius: "var(--md-sys-shape-corner-extra-small)" }}>
                 <div className="kpi-list__label"><span className="kpi-list__label-title">Inter-company Eliminated</span></div>
                 <span className="kpi-list__value">{formatIDR(pl.elimination_cents)}</span>
               </div>

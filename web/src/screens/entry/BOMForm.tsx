@@ -5,6 +5,7 @@ import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import type { Item, BOM, BOMLineInput, ProductionCostType } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -202,9 +203,13 @@ export function BOMForm({ tabId, entryId, initialTitle }: Props) {
             ))}
           </div>
           {!isExisting && (
-            <button type="button" className="btn btn--ghost" onClick={addLine} style={{ marginTop: 8 }}>
+            <Button
+              variant="text"
+              onClick={addLine}
+              style={{ marginTop: 8 }}
+            >
               + Add line
-            </button>
+            </Button>
           )}
 
           <div className="entrytab__total">

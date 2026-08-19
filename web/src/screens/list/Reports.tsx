@@ -5,6 +5,7 @@ import { formatIDR } from "../../lib/format";
 import { showToast } from "../../lib/toast";
 import { useAppState } from "../../state";
 import type { Dimension, ListSubKind, ReportFrameworkRecord, ReportFramework } from "../../types";
+import { Button } from "../../components/m3";
 
 /* --------------------------- Date range helpers --------------------------- */
 
@@ -255,22 +256,22 @@ function ExportButtons({
 
   return (
     <>
-      <button
-        type="button"
-        className="btn btn--secondary btn--sm"
+      <Button
+        variant="outlined"
+        size="sm"
         disabled={busy !== null}
         onClick={() => void run("pdf")}
       >
         {busy === "pdf" ? "Exporting..." : "Export PDF"}
-      </button>
-      <button
-        type="button"
-        className="btn btn--secondary btn--sm"
+      </Button>
+      <Button
+        variant="outlined"
+        size="sm"
         disabled={busy !== null}
         onClick={() => void run("xlsx")}
       >
         {busy === "xlsx" ? "Exporting..." : "Export Excel"}
-      </button>
+      </Button>
     </>
   );
 }
@@ -494,9 +495,13 @@ export function ReportTab({ config }: { config: ReportConfig }) {
             framework={config.exportFramework}
             dimensionIds={config.exportDimensionIds}
           />
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => void load()}>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={() => void load()}
+          >
             Reload
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -546,7 +551,7 @@ export function TrialBalanceReport() {
               ) : (
                 rows.map((r, i) => (
                   <div className="ledger-table__row" key={i}>
-                    <span className="ledger-table__date" style={{ fontFamily: "var(--font-mono)" }}>{r.account_code}</span>
+                    <span className="ledger-table__date" style={{ fontFamily: "var(--md-ref-typeface-plain)" }}>{r.account_code}</span>
                     <div className="ledger-table__desc">
                       <div className="ledger-table__desc-text">
                         <span className="ledger-table__desc-title">{r.account_name}</span>
@@ -635,9 +640,9 @@ export function ProfitLossReport() {
                       </thead>
                       <tbody>
                         {sections.map((s) => (
-                          <tr key={s.code} style={{ borderBottom: "1px solid var(--rule)" }}>
+                          <tr key={s.code} style={{ borderBottom: "1px solid var(--md-sys-color-outline-variant)" }}>
                             <td style={{ padding: "8px 12px" }}>{s.label}</td>
-                            <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "var(--font-mono)" }}>
+                            <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "var(--md-ref-typeface-plain)" }}>
                               {formatIDR(s.amount_cents)}
                             </td>
                           </tr>
@@ -755,7 +760,7 @@ export function CashFlowReport() {
 
 function Stat({ label, value, tone, suffix }: { label: string; value: string; tone: "pos" | "neg" | "acc"; suffix?: string }) {
   return (
-    <div className="kpi-list__row" style={{ background: "var(--surface-panel)", border: "1px solid var(--rule)", borderRadius: "var(--radius-sm)" }}>
+    <div className="kpi-list__row" style={{ background: "var(--md-sys-color-surface-container-lowest)", border: "1px solid var(--md-sys-color-outline-variant)", borderRadius: "var(--md-sys-shape-corner-extra-small)" }}>
       <div className="kpi-list__label">
         <span className="kpi-list__label-title">{label}</span>
         {suffix ? <span className="kpi-list__label-note">{suffix}</span> : null}

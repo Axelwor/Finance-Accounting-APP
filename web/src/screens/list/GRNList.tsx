@@ -4,6 +4,7 @@ import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { GoodsReceivedNoteListItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 const GRN_STATUS_TONE: Record<string, string> = {
   RECEIVED: "is-positive",
@@ -39,12 +40,20 @@ export function GRNList() {
       <div className="listtab__toolbar">
         <div className="listtab__filters" />
         <div className="listtab__actions">
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.openEntryDraft("grn-entry")}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={() => workbench.openEntryDraft("grn-entry")}
+          >
             + New GRN
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -56,9 +65,9 @@ export function GRNList() {
             title="No goods received yet"
             message="Receive goods against a purchase order. Each GRN posts a journal (Dr Inventory / Cr Accrued Payables) and records stock movements."
             action={
-              <button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("grn-entry")}>
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("grn-entry")}>
                 New GRN
-              </button>
+              </Button>
             }
           />
         ) : (

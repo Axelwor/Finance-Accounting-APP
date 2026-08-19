@@ -4,6 +4,7 @@ import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { QuotationListItem, InvoiceListItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 /* ---------------------- Sales Invoice (real backend) ---------------------- */
 
@@ -29,13 +30,17 @@ export function SalesInvoiceList() {
       </div>
       <div className="listtab__toolbar">
         <div className="listtab__actions">
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.openEntryDraft("sales-invoice")}>+ New Invoice</button>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={() => workbench.openEntryDraft("sales-invoice")}
+          >+ New Invoice</Button>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
       <div className="listtab__body">
         {loading ? <LoadingState label="Loading invoices..." /> : items.length === 0 ? (
-          <EmptyState title="No invoices yet" message="Issue an invoice to recognize revenue and receivables." action={<button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("sales-invoice")}>New Invoice</button>} />
+          <EmptyState title="No invoices yet" message="Issue an invoice to recognize revenue and receivables." action={<Button variant="filled" onClick={() => workbench.openEntryDraft("sales-invoice")}>New Invoice</Button>} />
         ) : (
           <div className="ledger-table">
             <div className="ledger-table__head">
@@ -161,16 +166,20 @@ export function QuotationList() {
           </div>
         </div>
         <div className="listtab__actions">
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
+          <Button
+            variant="filled"
+            size="sm"
             onClick={() => workbench.openEntryDraft("sales-quotation-entry")}
           >
             + New Quotation
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -183,13 +192,9 @@ export function QuotationList() {
             title="No quotations yet"
             message="Send a sales offer to a customer. A quotation is a commitment — it posts no journal."
             action={
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => workbench.openEntryDraft("sales-quotation-entry")}
-              >
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("sales-quotation-entry")}>
                 New Quotation
-              </button>
+              </Button>
             }
           />
         ) : (

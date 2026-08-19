@@ -3,6 +3,7 @@ import { useWorkbench } from "../../workbench/state";
 import { api } from "../../api";
 import { REPORT_TEMPLATE_TYPES } from "../../types";
 import type { CreateReportTemplateInput, ReportTemplateDocumentType } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -183,18 +184,37 @@ export function ReportTemplateEditor({ tabId, entryId, initialTitle }: Props) {
           </div>
         </div>
         <div className="entrytab__actions">
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => templateId != null && void refreshPreview(templateId)} disabled={previewing || templateId == null}>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={() => templateId != null && void refreshPreview(templateId)}
+            disabled={previewing || templateId == null}
+          >
             {previewing ? "Rendering..." : "Refresh Preview"}
-          </button>
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => void handleDownloadPdf()}>
+          </Button>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={() => void handleDownloadPdf()}
+          >
             Download PDF
-          </button>
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => void handleSaveAsNew()} disabled={saving}>
+          </Button>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={() => void handleSaveAsNew()}
+            disabled={saving}
+          >
             Save As New
-          </button>
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => void handleSave()} disabled={saving}>
+          </Button>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={() => void handleSave()}
+            disabled={saving}
+          >
             {saving ? "Saving..." : "Save"}
-          </button>
+          </Button>
         </div>
       </div>
 

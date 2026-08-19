@@ -4,6 +4,7 @@ import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { PurchaseOrderListItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 const PO_STATUS_TONE: Record<string, string> = {
   CONFIRMED: "",
@@ -40,12 +41,20 @@ export function PurchaseOrderList() {
       <div className="listtab__toolbar">
         <div className="listtab__filters" />
         <div className="listtab__actions">
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.openEntryDraft("purchase-order-entry")}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={() => workbench.openEntryDraft("purchase-order-entry")}
+          >
             + New PO
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -57,9 +66,9 @@ export function PurchaseOrderList() {
             title="No purchase orders yet"
             message="Create a purchase order to order goods from a supplier. PO is a commitment only — no journal is posted until goods are received (GRN)."
             action={
-              <button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("purchase-order-entry")}>
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("purchase-order-entry")}>
                 New Purchase Order
-              </button>
+              </Button>
             }
           />
         ) : (

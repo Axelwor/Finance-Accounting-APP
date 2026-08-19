@@ -5,6 +5,7 @@ import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import type { Item, StockOpname, StockOpnameLineInput } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -175,9 +176,13 @@ export function StockOpnameForm({ tabId, entryId, initialTitle }: Props) {
                   </div>
                 ))}
               </div>
-              <button type="button" className="btn btn--ghost" onClick={addLine} style={{ marginTop: 8 }}>
+              <Button
+                variant="text"
+                onClick={addLine}
+                style={{ marginTop: 8 }}
+              >
                 + Add line
-              </button>
+              </Button>
 
               <div className="entrytab__total">
                 <span className="entrytab__total-label">Total Adjustment (counted × cost)</span>

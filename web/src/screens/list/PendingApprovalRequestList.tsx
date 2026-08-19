@@ -4,6 +4,7 @@ import { api } from "../../api";
 import type { ApprovalRequest } from "../../types";
 import { ApprovalActions } from "../../components/ApprovalActions";
 import { formatIDR } from "../../lib/format";
+import { Button } from "../../components/m3";
 
 export function PendingApprovalRequestList() {
   const [items, setItems] = useState<ApprovalRequest[]>([]);
@@ -71,13 +72,13 @@ export function PendingApprovalRequestList() {
           <small>Review and approve/reject pending transactions</small>
         </div>
         <div className="listtab__toolbar">
-          <button
-            type="button"
-            className="btn btn--secondary btn--sm"
+          <Button
+            variant="outlined"
+            size="sm"
             onClick={() => void load()}
           >
             Reload
-          </button>
+          </Button>
           <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px" }}>
             <input
               type="checkbox"
@@ -114,17 +115,17 @@ export function PendingApprovalRequestList() {
                     <td>
                       <strong>{request.entity_type}</strong> #{request.entity_id}
                       <br />
-                      <small style={{ color: "var(--muted)" }}>{formatStatus(request.status)}</small>
+                      <small style={{ color: "var(--md-sys-color-on-surface-variant)" }}>{formatStatus(request.status)}</small>
                     </td>
-                    <td style={{ fontFamily: "var(--font-mono)", fontWeight: "500" }}>
+                    <td style={{ fontFamily: "var(--md-ref-typeface-plain)", fontWeight: "500" }}>
                       {formatIDR(request.amount_cents / 100)}
                     </td>
                     <td>{request.requested_by || "Unknown"}</td>
                     <td>{new Date(request.requested_at).toLocaleString()}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="btn btn--sm btn--secondary"
+                      <Button
+                        variant="outlined"
+                        size="sm"
                         onClick={() => {
                           setSelectedRequest(request);
                           setShowHistoryModal(true);
@@ -132,7 +133,7 @@ export function PendingApprovalRequestList() {
                         title="View History"
                       >
                         📜
-                      </button>
+                      </Button>
                       <ApprovalActions
                         request={request}
                         onSuccess={handleApproveSuccess}
@@ -180,10 +181,10 @@ export function PendingApprovalRequestList() {
                         </ul>
                       </div>
                     ) : (
-                      <p style={{ color: "var(--muted)" }}>No approval history yet.</p>
+                      <p style={{ color: "var(--md-sys-color-on-surface-variant)" }}>No approval history yet.</p>
                     )}
                     {(selectedRequest.approved_at || selectedRequest.rejected_at) && (
-                      <div style={{ marginTop: "16px", borderTop: "1px solid var(--border)", paddingTop: "12px" }}>
+                      <div style={{ marginTop: "16px", borderTop: "1px solid var(--md-sys-color-outline-variant)", paddingTop: "12px" }}>
                         {selectedRequest.approved_at && (
                           <div>
                             <strong>Approved:</strong> {new Date(selectedRequest.approved_at).toLocaleString()}
@@ -195,7 +196,7 @@ export function PendingApprovalRequestList() {
                             <strong>Rejected:</strong> {new Date(selectedRequest.rejected_at).toLocaleString()}
                             {selectedRequest.rejected_by && <em> by {selectedRequest.rejected_by}</em>}
                             {selectedRequest.rejection_reason && (
-                              <div style={{ marginTop: "4px", color: "var(--neg)" }}>
+                              <div style={{ marginTop: "4px", color: "var(--md-sys-color-error)" }}>
                                 Reason: {selectedRequest.rejection_reason}
                               </div>
                             )}
@@ -205,16 +206,12 @@ export function PendingApprovalRequestList() {
                     )}
                   </div>
                   <div className="modal__footer">
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => {
+                    <Button variant="tonal" onClick={() => {
                         setShowHistoryModal(false);
                         setSelectedRequest(null);
-                      }}
-                    >
+                      }}>
                       Close
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>

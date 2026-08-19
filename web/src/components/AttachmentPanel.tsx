@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FormError } from "./ui";
 import { api } from "../api";
 import type { Attachment } from "../types";
+import { Button } from "./m3";
 
 interface Props {
   ownerType: string;
@@ -106,15 +107,15 @@ export function AttachmentPanel({ ownerType, ownerId }: Props) {
     <div className="attachment-panel">
       <div className="attachment-panel__head">
         <span className="attachment-panel__title">Attachments</span>
-        <button
-          type="button"
-          className="btn btn--secondary btn--sm"
+        <Button
+          variant="outlined"
+          size="sm"
           onClick={handlePick}
           disabled={uploading || ownerId <= 0}
           title="Upload a photo or PDF as proof"
         >
           {uploading ? "Uploading..." : "+ Add file"}
-        </button>
+        </Button>
         <input
           ref={fileInput}
           type="file"
@@ -144,17 +145,21 @@ export function AttachmentPanel({ ownerType, ownerId }: Props) {
                 <span className={`kind-mark ${item.ocr_status === "COMPLETED" ? "is-positive" : ""}`}>{item.ocr_status}</span>
               </span>
               <span className="ledger-table__actions">
-                <button type="button" className="btn btn--secondary btn--sm" onClick={() => void handleDownload(item)}>
+                <Button
+                  variant="outlined"
+                  size="sm"
+                  onClick={() => void handleDownload(item)}
+                >
                   Download
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--sm"
+                </Button>
+                <Button
+                  variant="text"
+                  size="sm"
                   onClick={() => void handleDelete(item.id)}
                   disabled={deletingId === item.id}
                 >
                   {deletingId === item.id ? "Deleting..." : "Delete"}
-                </button>
+                </Button>
               </span>
             </div>
           ))}

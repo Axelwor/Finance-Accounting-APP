@@ -3,6 +3,7 @@ import { useWorkbench } from "../../workbench/state";
 import { EmptyState, LoadingState, FormError } from "../../components/ui";
 import { api } from "../../api";
 import type { Supplier } from "../../types";
+import { Button } from "../../components/m3";
 
 export function PurchaseSupplierList() {
   const workbench = useWorkbench();
@@ -28,9 +29,13 @@ export function PurchaseSupplierList() {
       <div className="listtab__toolbar">
         <div className="listtab__filters" />
         <div className="listtab__actions">
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.openEntryDraft("purchase-supplier-entry")}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={() => workbench.openEntryDraft("purchase-supplier-entry")}
+          >
             + New Supplier
-          </button>
+          </Button>
           <span className="listtab__count">{suppliers.length}</span>
         </div>
       </div>
@@ -40,9 +45,9 @@ export function PurchaseSupplierList() {
             title="No suppliers yet"
             message="Add suppliers to create purchase orders and track payables."
             action={
-              <button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("purchase-supplier-entry")}>
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("purchase-supplier-entry")}>
                 New Supplier
-              </button>
+              </Button>
             }
           />
         ) : (

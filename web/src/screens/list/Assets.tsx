@@ -28,7 +28,7 @@ export function AssetRegisterList() {
       key: "code",
       label: "Code",
       render: (r) => (
-        <span style={{ fontFamily: "var(--font-mono)", color: "var(--ink-secondary)" }}>{r.code}</span>
+        <span style={{ fontFamily: "var(--md-ref-typeface-plain)", color: "var(--md-sys-color-on-surface-variant)" }}>{r.code}</span>
       ),
     },
     {
@@ -41,7 +41,7 @@ export function AssetRegisterList() {
     {
       key: "acquiredDate",
       label: "Acquired",
-      render: (r) => <span style={{ fontFamily: "var(--font-mono)" }}>{r.acquiredDate}</span>,
+      render: (r) => <span style={{ fontFamily: "var(--md-ref-typeface-plain)" }}>{r.acquiredDate}</span>,
     },
     {
       key: "cost",

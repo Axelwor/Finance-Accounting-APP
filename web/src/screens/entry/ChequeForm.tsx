@@ -4,6 +4,7 @@ import type { EntryTab } from "../../workbench/types";
 import { api } from "../../api";
 import { Combobox } from "../../components/Combobox";
 import type { BankAccountListItem } from "../../types";
+import { Button } from "../../components/m3";
 
 interface ChequeFormData {
   cheque_number: string;
@@ -159,14 +160,14 @@ export function ChequeForm({ id, entryId, title }: EntryTab) {
         {error && <p className="form__error">{error}</p>}
       </div>
       <div className="form__foot">
-        <button className="btn btn--ghost" onClick={() => workbench.close(id)}>Cancel</button>
-        <button
-          className="btn btn--primary"
+        <Button variant="text" onClick={() => workbench.close(id)}>Cancel</Button>
+        <Button
+          variant="filled"
           onClick={handleSubmit}
           disabled={saving || !formData.cheque_number || !formData.bank_account_id || !formData.amount_cents || !formData.counterparty_name}
         >
           {saving ? "Saving..." : "Save"}
-        </button>
+        </Button>
       </div>
     </div>
   );

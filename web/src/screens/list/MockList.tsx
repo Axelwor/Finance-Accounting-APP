@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { EmptyState } from "../../components/ui";
+import { Button } from "../../components/m3";
 
 /** Tone class for amount cells. */
 export type AmountTone = "is-positive" | "is-negative" | "is-muted" | "";
@@ -102,13 +103,21 @@ export function MockList<T>({
         </div>
         <div className="listtab__toolbar">
           {onAdd ? (
-            <button type="button" className="btn btn--ink btn--sm" onClick={onAdd}>
+            <Button
+              variant="tonal"
+              size="sm"
+              onClick={onAdd}
+            >
               + Tambah
-            </button>
+            </Button>
           ) : null}
-          <button type="button" className="btn btn--secondary btn--sm" onClick={handleReload}>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={handleReload}
+          >
             Reload
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -131,9 +140,13 @@ export function MockList<T>({
             message="Clear the search or rule a new entry with the + Tambah button."
             action={
               onAdd ? (
-                <button type="button" className="btn btn--primary btn--sm" onClick={onAdd}>
+                <Button
+                  variant="filled"
+                  size="sm"
+                  onClick={onAdd}
+                >
                   + Tambah
-                </button>
+                </Button>
               ) : undefined
             }
           />
@@ -167,10 +180,10 @@ export function MockList<T>({
       <div className="listtab__footer">
         <span>
           Showing <strong>{filtered.length}</strong> of {rows.length} &middot;{" "}
-          <span style={{ color: "var(--ink-muted)" }}>{description}</span>
+          <span style={{ color: "var(--md-sys-color-outline)" }}>{description}</span>
         </span>
-        <span style={{ color: "var(--ink-muted)" }}>
-          Module: <strong style={{ color: "var(--ink-tertiary)" }}>{kind}</strong>
+        <span style={{ color: "var(--md-sys-color-outline)" }}>
+          Module: <strong style={{ color: "var(--md-sys-color-outline)" }}>{kind}</strong>
         </span>
       </div>
     </div>

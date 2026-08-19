@@ -3,6 +3,7 @@ import { FormError } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR, todayISO } from "../../lib/format";
 import type { SupplierPayment } from "../../types";
+import { Button } from "../../components/m3";
 
 /**
  * SupplierPaymentPanel — the "Bayar" (pay supplier) section for a supplier
@@ -104,7 +105,7 @@ export function SupplierPaymentPanel({ invoiceId, payableCents, invoiceStatus }:
   };
 
   return (
-    <div style={{ marginTop: 16, borderTop: "2px solid var(--accent)", paddingTop: 12 }}>
+    <div style={{ marginTop: 16, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 12 }}>
       <div className="entrytab__detail-title" style={{ marginBottom: 8 }}>
         Payments — Paid: <strong>{formatIDR(totalApplied)}</strong> / Payable:{" "}
         <strong>{formatIDR(payableCents)}</strong>
@@ -185,14 +186,14 @@ export function SupplierPaymentPanel({ invoiceId, payableCents, invoiceStatus }:
           </div>
           <div />
           <div style={{ display: "flex", alignItems: "flex-end" }}>
-            <button
-              type="button"
-              className="btn btn--primary btn--sm"
+            <Button
+              variant="filled"
+              size="sm"
               onClick={() => void handlePost()}
               disabled={posting}
             >
               {posting ? "Posting..." : "Pay Supplier"}
-            </button>
+            </Button>
           </div>
         </div>
       )}

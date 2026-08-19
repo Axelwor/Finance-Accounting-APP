@@ -194,9 +194,9 @@ export function BudgetForm({ tabId, entryId, initialTitle }: Props) {
             </span>
           ) : null}
           {isLocked ? (
-            <span style={{ color: "var(--neg)" }}>Locked — only DRAFT budgets can be edited.</span>
+            <span style={{ color: "var(--md-sys-color-error)" }}>Locked — only DRAFT budgets can be edited.</span>
           ) : null}
-          {success ? <span style={{ color: "var(--pos)" }}>{success}</span> : null}
+          {success ? <span style={{ color: "var(--md-sys-color-success)" }}>{success}</span> : null}
         </div>
       </div>
 
@@ -255,7 +255,7 @@ export function BudgetForm({ tabId, entryId, initialTitle }: Props) {
                   </thead>
                   <tbody>
                     {lines.map((line) => (
-                      <tr key={line.id} style={{ borderBottom: "1px solid var(--rule)" }}>
+                      <tr key={line.id} style={{ borderBottom: "1px solid var(--md-sys-color-outline-variant)" }}>
                         <td style={{ padding: "8px 12px" }}>
                           <select
                             className="field__input"
@@ -305,7 +305,7 @@ export function BudgetForm({ tabId, entryId, initialTitle }: Props) {
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr style={{ borderTop: "2px solid var(--rule)" }}>
+                    <tr style={{ borderTop: "2px solid var(--md-sys-color-outline-variant)" }}>
                       <td colSpan={2} style={{ padding: "8px 12px", fontWeight: 600 }}>
                         Total
                       </td>
@@ -326,7 +326,7 @@ export function BudgetForm({ tabId, entryId, initialTitle }: Props) {
             </div>
 
             {error ? (
-              <p style={{ color: "var(--neg)", marginTop: 16 }}>{error}</p>
+              <p style={{ color: "var(--md-sys-color-error)", marginTop: 16 }}>{error}</p>
             ) : null}
           </>
         )}

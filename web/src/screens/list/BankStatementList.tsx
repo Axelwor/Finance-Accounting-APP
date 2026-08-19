@@ -4,6 +4,7 @@ import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR, formatDate } from "../../lib/format";
 import type { BankStatementListItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 const STATUS_TONE: Record<string, string> = {
   IMPORTED: "is-muted",
@@ -37,12 +38,20 @@ export function BankStatementList() {
       <div className="listtab__toolbar">
         <div className="listtab__filters" />
         <div className="listtab__actions">
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.openEntryDraft("bank-reconciliation-entry")}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={() => workbench.openEntryDraft("bank-reconciliation-entry")}
+          >
             + Import Statement
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -54,9 +63,9 @@ export function BankStatementList() {
             title="No bank statements imported yet"
             message="Import a bank statement (CSV pasted and parsed) to start reconciling recorded cash transactions against the bank."
             action={
-              <button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("bank-reconciliation-entry")}>
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("bank-reconciliation-entry")}>
                 Import Statement
-              </button>
+              </Button>
             }
           />
         ) : (

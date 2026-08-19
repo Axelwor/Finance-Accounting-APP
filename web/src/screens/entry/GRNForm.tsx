@@ -8,6 +8,7 @@ import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import type { PurchaseOrderListItem, Item, GRNLineInput } from "../../types";
 import type { PrefillRef } from "../../workbench/types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -223,9 +224,15 @@ export function GRNForm({ tabId, entryId, initialTitle, prefill }: Props) {
           <div className="entrytab__detail-title">
             Received items *{loadingPO ? " — loading from purchase order..." : ""}
             {!isExisting && poLines.some((l) => l.remainingQty > 0) && (
-              <button type="button" className="btn btn--secondary btn--sm" style={{ marginLeft: 12 }} onClick={receiveAll} title="Set every line to the remaining ordered quantity">
+              <Button
+                variant="outlined"
+                size="sm"
+                style={{ marginLeft: 12 }}
+                onClick={receiveAll}
+                title="Set every line to the remaining ordered quantity"
+              >
                 Receive All
-              </button>
+              </Button>
             )}
           </div>
           <div className="detail-grid detail-grid--grn">
@@ -268,9 +275,13 @@ export function GRNForm({ tabId, entryId, initialTitle, prefill }: Props) {
             ))}
           </div>
           {!isExisting && (
-            <button type="button" className="btn btn--ghost" onClick={addLine} style={{ marginTop: 8 }}>
+            <Button
+              variant="text"
+              onClick={addLine}
+              style={{ marginTop: 8 }}
+            >
               + Add line
-            </button>
+            </Button>
           )}
 
           <div className="entrytab__total">

@@ -9,6 +9,7 @@ import { openPrintWindow } from "../../lib/print";
 import { draftNumber } from "../../workbench/modules";
 import type { DeliveryLineInput, Item, SalesOrderListItem } from "../../types";
 import type { PrefillRef } from "../../workbench/types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -346,9 +347,13 @@ export function DeliveryOrderForm({ tabId, entryId, initialTitle, prefill }: Pro
               {!isExisting && (
                 <div className="detail-grid__row detail-grid__row--add">
                   <div>
-                    <button type="button" className="btn btn--secondary btn--sm" onClick={() => setLines((cur) => [...cur, seedLine()])}>
+                    <Button
+                      variant="outlined"
+                      size="sm"
+                      onClick={() => setLines((cur) => [...cur, seedLine()])}
+                    >
                       + Add item
-                    </button>
+                    </Button>
                   </div>
                   <div />
                   <div />

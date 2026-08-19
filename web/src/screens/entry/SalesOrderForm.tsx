@@ -9,6 +9,7 @@ import { draftNumber } from "../../workbench/modules";
 import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
 import type { Customer, Item, SalesOrderLineInput, DownPayment, SalesOrder } from "../../types";
 import type { PrefillRef } from "../../workbench/types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -504,9 +505,13 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
               {!isExisting && (
                 <div className="detail-grid__row detail-grid__row--add">
                   <div>
-                    <button type="button" className="btn btn--secondary btn--sm" onClick={() => setLines((cur) => [...cur, seedLine()])}>
+                    <Button
+                      variant="outlined"
+                      size="sm"
+                      onClick={() => setLines((cur) => [...cur, seedLine()])}
+                    >
                       + Add item
-                    </button>
+                    </Button>
                   </div>
                   <div />
                   <div />
@@ -526,7 +531,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
             <span className="entrytab__total-label">PPN {taxRate > 0 ? `(${taxRate}%)` : ""}</span>
             <span className="entrytab__total-value">{formatIDR(ppnCents)}</span>
           </div>
-          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--accent)", paddingTop: 8 }}>
+          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 8 }}>
             <span className="entrytab__total-label">Total</span>
             <span className="entrytab__total-value">{formatIDR(isExisting ? subtotalCents + ppnCents : totalCents)}</span>
           </div>
@@ -562,7 +567,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
       </div>
 
       {isExisting && (
-        <div ref={dpSectionRef} className="entrytab__dp-section" style={{ marginTop: 16, borderTop: "2px solid var(--accent)", paddingTop: 12 }}>
+        <div ref={dpSectionRef} className="entrytab__dp-section" style={{ marginTop: 16, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 12 }}>
           <div className="entrytab__detail-title" style={{ marginBottom: 8 }}>
             Down Payments — DP Received: <strong>{formatIDR(dpReceived)}</strong> / Remaining: <strong>{formatIDR(remaining)}</strong>
           </div>
@@ -586,9 +591,13 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
                   </span>
                   <span>
                     {dp.status === "RECEIVED" && (
-                      <button type="button" className="btn btn--secondary btn--sm" onClick={() => void handleRefundDP(dp.id)}>
+                      <Button
+                        variant="outlined"
+                        size="sm"
+                        onClick={() => void handleRefundDP(dp.id)}
+                      >
                         Refund
-                      </button>
+                      </Button>
                     )}
                   </span>
                 </div>
@@ -620,9 +629,14 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
               </div>
               <div />
               <div style={{ display: "flex", alignItems: "flex-end" }}>
-                <button type="button" className="btn btn--primary btn--sm" onClick={() => void handlePostDP()} disabled={postingDP}>
+                <Button
+                  variant="filled"
+                  size="sm"
+                  onClick={() => void handlePostDP()}
+                  disabled={postingDP}
+                >
                   {postingDP ? "Posting..." : "Receive DP"}
-                </button>
+                </Button>
               </div>
             </div>
           )}

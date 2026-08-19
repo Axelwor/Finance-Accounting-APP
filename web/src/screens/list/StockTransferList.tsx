@@ -3,6 +3,7 @@ import { useWorkbench } from "../../workbench/state";
 import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { StockTransferListItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 const TRANSFER_STATUS_TONE: Record<string, string> = {
   COMPLETED: "is-positive",
@@ -37,12 +38,20 @@ export function StockTransferList() {
       <div className="listtab__toolbar">
         <div className="listtab__filters" />
         <div className="listtab__actions">
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.openEntryDraft("stock-transfer-entry")}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={() => workbench.openEntryDraft("stock-transfer-entry")}
+          >
             + New Transfer
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -54,9 +63,9 @@ export function StockTransferList() {
             title="No stock transfers yet"
             message="Move stock between warehouses. Each transfer records TRANSFER_OUT and TRANSFER_IN inventory movements with no journal posted (same inventory account)."
             action={
-              <button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("stock-transfer-entry")}>
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("stock-transfer-entry")}>
                 New Transfer
-              </button>
+              </Button>
             }
           />
         ) : (

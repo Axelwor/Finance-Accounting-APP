@@ -4,6 +4,7 @@ import { EmptyState, LoadingState, FormError } from "../../components/ui";
 import { api } from "../../api";
 import type { Warehouse } from "../../types";
 import { WarehouseStockList } from "./WarehouseStockList";
+import { Button } from "../../components/m3";
 
 export function WarehouseList() {
   const workbench = useWorkbench();
@@ -57,13 +58,13 @@ export function WarehouseList() {
           </label>
         </div>
         <div className="listtab__actions">
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
+          <Button
+            variant="filled"
+            size="sm"
             onClick={() => workbench.openEntryDraft("warehouse-entry")}
           >
             + New Warehouse
-          </button>
+          </Button>
           <span className="listtab__count">{filteredWarehouses.length}</span>
         </div>
       </div>
@@ -73,13 +74,9 @@ export function WarehouseList() {
             title="No warehouses yet"
             message="Add warehouses to track inventory across multiple locations."
             action={
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => workbench.openEntryDraft("warehouse-entry")}
-              >
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("warehouse-entry")}>
                 New Warehouse
-              </button>
+              </Button>
             }
           />
         ) : (
@@ -115,29 +112,30 @@ export function WarehouseList() {
                   <span className={`kind-mark ${wh.is_active ? "is-positive" : "is-negative"}`}>{wh.is_active ? "Active" : "Inactive"}</span>
                 </span>
                 <span className="ledger-table__action">
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--xs"
+                  <Button
+                    variant="text"
+                    size="xs"
                     onClick={(e) => {
                       e.stopPropagation();
                       setStockWarehouse(wh);
                     }}
                   >
                     View Stock
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--xs"
+                  </Button>
+                  <Button
+                    variant="text"
+                    size="xs"
                     onClick={(e) => {
                       e.stopPropagation();
                       workbench.openEntryExisting("warehouse-entry", wh.id, `${wh.code} · ${wh.name}`, wh.is_active ? "ACTIVE" : "INACTIVE");
                     }}
                   >
                     Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn--negative btn--xs"
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="xs"
+                    danger
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!window.confirm(`Delete warehouse "${wh.code}"? This cannot be undone.`)) return;
@@ -149,7 +147,7 @@ export function WarehouseList() {
                     }}
                   >
                     Delete
-                  </button>
+                  </Button>
                 </span>
               </div>
             ))}

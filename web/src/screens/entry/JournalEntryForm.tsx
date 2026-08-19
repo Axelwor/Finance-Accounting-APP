@@ -5,6 +5,7 @@ import { api, mockHelpers } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { BackendAccount, JournalEntry, JournalEntryLine } from "../../types";
 import { AttachmentPanel } from "../../components/AttachmentPanel";
+import { Button, IconButton } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -210,9 +211,13 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
             <div className="entrytab__section-head">
               <span>Lines</span>
               {!readOnly ? (
-                <button type="button" className="btn btn--secondary btn--sm" onClick={addLine}>
+                <Button
+                  variant="outlined"
+                  size="sm"
+                  onClick={addLine}
+                >
                   + Add line
-                </button>
+                </Button>
               ) : null}
             </div>
             <div className="ledger-table ledger-table--entry">
@@ -276,21 +281,30 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
                   </p>
                 </div>
               )}
-              <button
+              <Button
+                variant="filled"
+                fullWidth
                 type="submit"
-                className="btn btn--primary btn--full"
                 disabled={saving || !balanced || posted}
               >
                 {saving ? "Posting..." : posted ? "Posted" : "Post Journal"}
-              </button>
+              </Button>
               {posted ? (
-                <button type="button" className="btn btn--secondary btn--full" onClick={handleNewJournal}>
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  onClick={handleNewJournal}
+                >
                   New Journal
-                </button>
+                </Button>
               ) : (
-                <button type="button" className="btn btn--secondary btn--full" disabled>
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  disabled
+                >
                   Save & New
-                </button>
+                </Button>
               )}
             </>
           ) : (
@@ -387,9 +401,13 @@ function LineRow({
       </span>
       {!disabled ? (
         <span>
-          <button type="button" className="btn btn--icon btn--sm" onClick={onRemove} aria-label="Remove line">
+          <IconButton
+            size="sm"
+            onClick={onRemove}
+            label="Remove line"
+          >
             ×
-          </button>
+          </IconButton>
         </span>
       ) : null}
     </div>

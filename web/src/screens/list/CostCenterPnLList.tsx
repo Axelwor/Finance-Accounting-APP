@@ -4,6 +4,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { CostCenter, CostCenterPnLResult } from "../../types";
+import { Button } from "../../components/m3";
 
 interface PnLRow {
   center: CostCenter;
@@ -115,14 +116,14 @@ export function CostCenterPnLList() {
               style={{ width: 140 }}
             />
           </label>
-          <button
-            type="button"
-            className="btn btn--secondary btn--sm"
+          <Button
+            variant="outlined"
+            size="sm"
             onClick={() => void handleLoad()}
             disabled={loading || !costCenters.length}
           >
             {loading ? "Loading..." : "Load"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -133,7 +134,7 @@ export function CostCenterPnLList() {
           <EmptyState
             title="No cost centers yet"
             message="Create cost centers first to see their P&L performance."
-            action={<button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("cost-center-entry")}>+ New Cost Center</button>}
+            action={<Button variant="filled" onClick={() => workbench.openEntryDraft("cost-center-entry")}>+ New Cost Center</Button>}
           />
         ) : error ? (
           <ErrorState message={error} onRetry={() => void handleLoad()} />
@@ -165,20 +166,20 @@ export function CostCenterPnLList() {
             <tbody>
               {rows.map(({ center, pnl }) => (
                 <tr key={center.id}>
-                  <td style={{ fontFamily: "var(--font-mono)" }}>{center.code}</td>
+                  <td style={{ fontFamily: "var(--md-ref-typeface-plain)" }}>{center.code}</td>
                   <td>{center.name}</td>
                   <td>{CENTER_TYPE_LABEL[center.center_type] ?? center.center_type}</td>
-                  <td style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}>
+                  <td style={{ textAlign: "right", fontFamily: "var(--md-ref-typeface-plain)" }}>
                     {formatIDR(pnl.revenue_cents)}
                   </td>
-                  <td style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}>
+                  <td style={{ textAlign: "right", fontFamily: "var(--md-ref-typeface-plain)" }}>
                     {formatIDR(pnl.expense_cents)}
                   </td>
                   <td
                     style={{
                       textAlign: "right",
-                      fontFamily: "var(--font-mono)",
-                      color: pnl.net_cents >= 0 ? "var(--pos)" : "var(--neg)",
+                      fontFamily: "var(--md-ref-typeface-plain)",
+                      color: pnl.net_cents >= 0 ? "var(--md-sys-color-success)" : "var(--md-sys-color-error)",
                       fontWeight: 600,
                     }}
                   >
@@ -193,18 +194,18 @@ export function CostCenterPnLList() {
                 <td colSpan={3} style={{ fontWeight: 700 }}>
                   Totals
                 </td>
-                <td style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
+                <td style={{ textAlign: "right", fontFamily: "var(--md-ref-typeface-plain)", fontWeight: 700 }}>
                   {totals ? formatIDR(totals.revenue) : "-"}
                 </td>
-                <td style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
+                <td style={{ textAlign: "right", fontFamily: "var(--md-ref-typeface-plain)", fontWeight: 700 }}>
                   {totals ? formatIDR(totals.expense) : "-"}
                 </td>
                 <td
                   style={{
                     textAlign: "right",
-                    fontFamily: "var(--font-mono)",
+                    fontFamily: "var(--md-ref-typeface-plain)",
                     fontWeight: 700,
-                    color: totals && totals.net >= 0 ? "var(--pos)" : "var(--neg)",
+                    color: totals && totals.net >= 0 ? "var(--md-sys-color-success)" : "var(--md-sys-color-error)",
                   }}
                 >
                   {totals ? formatIDR(totals.net) : "-"}

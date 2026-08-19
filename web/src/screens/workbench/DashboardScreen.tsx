@@ -8,6 +8,7 @@ import { KpiCard } from "../../components/dashboard/KpiCard";
 import { AgingChart } from "../../components/dashboard/AgingChart";
 import { RecentTxnsWidget } from "../../components/dashboard/RecentTxnsWidget";
 import { LowStockWidget } from "../../components/dashboard/LowStockWidget";
+import { Button } from "../../components/m3/Button";
 import { TaxSummaryWidget } from "../../components/dashboard/TaxSummaryWidget";
 import { formatIDR } from "../../lib/format";
 import type {
@@ -159,20 +160,15 @@ export function DashboardScreen() {
           </p>
         </div>
         <div className="page-head__actions">
-          <button
-            type="button"
-            className="btn btn--secondary"
+          <Button
+            variant="tonal"
             onClick={() => workbench.openList("cash-other-payment")}
           >
             Open ledger
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={() => workbench.openEntryDraft("money-in")}
-          >
+          </Button>
+          <Button onClick={() => workbench.openEntryDraft("money-in")}>
             New entry
-          </button>
+          </Button>
         </div>
       </header>
 

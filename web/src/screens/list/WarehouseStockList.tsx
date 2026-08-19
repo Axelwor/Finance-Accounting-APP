@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { EmptyState, LoadingState, FormError } from "../../components/ui";
 import { api } from "../../api";
 import type { WarehouseStockItem } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   warehouseId: number;
@@ -118,13 +119,9 @@ export function WarehouseStockList({ warehouseId, warehouseName, onBack }: Props
               </dl>
             </div>
             <div className="modal__footer">
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => setShowDetails(null)}
-              >
+              <Button variant="filled" onClick={() => setShowDetails(null)}>
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         </div>

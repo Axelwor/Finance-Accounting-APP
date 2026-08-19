@@ -10,6 +10,7 @@ import { draftNumber } from "../../workbench/modules";
 import type { SupplierListItem, GoodsReceivedNoteListItem, Item, SupplierInvoiceLineInput } from "../../types";
 import type { PrefillRef } from "../../workbench/types";
 import { SupplierPaymentPanel } from "./SupplierPaymentPanel";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -488,9 +489,13 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle, prefill }: P
               {!isExisting && (
                 <div className="detail-grid__row detail-grid__row--add" role="row">
                   <div role="cell">
-                    <button type="button" className="btn btn--secondary btn--sm" onClick={() => setLines((cur) => [...cur, seedLine()])}>
+                    <Button
+                      variant="outlined"
+                      size="sm"
+                      onClick={() => setLines((cur) => [...cur, seedLine()])}
+                    >
                       + Add item
-                    </button>
+                    </Button>
                   </div>
                   <div role="cell" />
                   <div role="cell" />
@@ -512,11 +517,11 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle, prefill }: P
             <span className="entrytab__total-label">VAT (PPN Masukan)</span>
             <span className="entrytab__total-value">{formatIDR(isExisting ? vat : computedVat)}</span>
           </div>
-          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--accent)", paddingTop: 8 }}>
+          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 8 }}>
             <span className="entrytab__total-label">Total</span>
             <span className="entrytab__total-value">{formatIDR(isExisting ? total : computedTotal)}</span>
           </div>
-          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--accent)", paddingTop: 8 }}>
+          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 8 }}>
             <span className="entrytab__total-label">Payable (Cr 2101 AP)</span>
             <span className="entrytab__total-value">{formatIDR(isExisting ? payable : computedPayable)}</span>
           </div>

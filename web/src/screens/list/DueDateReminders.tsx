@@ -3,6 +3,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { DueDateReminder } from "../../types";
+import { IconButton } from "../../components/m3";
 
 /**
  * Due Date Reminders (Pengingat Jatuh Tempo).
@@ -66,9 +67,13 @@ export function DueDateReminders() {
           </label>
         </div>
         <div className="listtab__actions">
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>

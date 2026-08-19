@@ -4,6 +4,7 @@ import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { PurchaseReturnListItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 const PR_STATUS_TONE: Record<string, string> = {
   APPLIED: "is-positive",
@@ -49,12 +50,20 @@ export function PurchaseReturnList() {
       <div className="listtab__toolbar">
         <div className="listtab__filters" />
         <div className="listtab__actions">
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.openEntryDraft("purchase-return-entry")}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={() => workbench.openEntryDraft("purchase-return-entry")}
+          >
             + New Purchase Return
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -67,9 +76,9 @@ export function PurchaseReturnList() {
             title="No purchase returns yet"
             message="Return goods to a supplier against a supplier invoice. Each return posts a journal (Dr AP / Cr Inventory + Cr Input VAT) and records stock movements."
             action={
-              <button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("purchase-return-entry")}>
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("purchase-return-entry")}>
                 New Purchase Return
-              </button>
+              </Button>
             }
           />
         ) : (

@@ -3,6 +3,7 @@ import { useWorkbench } from "../../workbench/state";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { FinancialNote } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 /**
  * Financial Notes list (Catatan atas Laporan Keuangan).
@@ -73,21 +74,20 @@ export function FinancialNotesList() {
       <div className="listtab__toolbar">
         <div className="listtab__filters" />
         <div className="listtab__actions">
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
+          <Button
+            variant="filled"
+            size="sm"
             onClick={() => workbench.openEntryDraft("financial-notes-entry")}
           >
             + New Note
-          </button>
-          <button
-            type="button"
-            className="btn btn--icon btn--sm"
+          </Button>
+          <IconButton
+            size="sm"
             onClick={() => void load()}
-            aria-label="Reload"
+            label="Reload"
           >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -101,13 +101,9 @@ export function FinancialNotesList() {
             title="No financial notes yet"
             message="Add a note to disclose accounting policies, breakdowns, or commitments attached to the Laporan Posisi Keuangan."
             action={
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => workbench.openEntryDraft("financial-notes-entry")}
-              >
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("financial-notes-entry")}>
                 New Note
-              </button>
+              </Button>
             }
           />
         ) : (
@@ -150,12 +146,20 @@ function FRow({ item, onOpen, onDelete }: { item: FinancialNote; onOpen: () => v
       <td><span>{previewContent(item.content)}</span></td>
       <td>
         <span>
-          <button type="button" className="btn btn--secondary btn--sm" onClick={(e) => { e.stopPropagation(); onOpen(); }}>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={(e) => { e.stopPropagation(); onOpen(); }}
+          >
             Edit
-          </button>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}>
+          </Button>
+          <Button
+            variant="text"
+            size="sm"
+            onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
+          >
             Delete
-          </button>
+          </Button>
         </span>
       </td>
     </tr>

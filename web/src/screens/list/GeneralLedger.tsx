@@ -3,6 +3,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { BackendAccount, GeneralLedgerResult } from "../../types";
+import { Button } from "../../components/m3";
 
 /**
  * General Ledger (Buku Besar) — Accountant Mode v1.
@@ -104,9 +105,13 @@ export function GeneralLedger() {
               onChange={(e) => setToDate(e.target.value)}
             />
           </label>
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => void load()}>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={() => void load()}
+          >
             Run
-          </button>
+          </Button>
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { JournalEntryListItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 /**
  * Journal Entries list (Accountant Mode v1).
@@ -74,17 +75,29 @@ export function JournalEntryList() {
               onChange={(e) => setToDate(e.target.value)}
             />
           </label>
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => void load()}>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={() => void load()}
+          >
             Apply
-          </button>
+          </Button>
         </div>
         <div className="listtab__actions">
-          <button type="button" className="btn btn--primary btn--sm" onClick={openNew}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={openNew}
+          >
             + New Journal
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -99,9 +112,9 @@ export function JournalEntryList() {
             title="No journal entries"
             message="Post a manual journal entry to record adjustments, accruals, or corrections."
             action={
-              <button type="button" className="btn btn--primary" onClick={openNew}>
+              <Button variant="filled" onClick={openNew}>
                 New Journal Entry
-              </button>
+              </Button>
             }
           />
         ) : (

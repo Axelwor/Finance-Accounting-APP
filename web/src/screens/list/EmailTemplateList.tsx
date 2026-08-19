@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { EmailTemplate } from "../../types";
+import { Button, Select } from "../../components/m3";
 
 type TriggerEvent =
   | "INVOICE_SENT"
@@ -94,27 +95,29 @@ export function EmailTemplateList() {
           <small>Manage automated email templates for transactions and communications.</small>
         </div>
         <div className="listtab__toolbar">
-          <select
-            className="btn btn--secondary btn--sm"
+          <Select
             value={filterTrigger}
-            onChange={(e) => setFilterTrigger(e.target.value)}
-          >
-            <option value="">All Triggers</option>
-            {TRIGGER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          <select
-            className="btn btn--secondary btn--sm"
+            onChange={(e) => setFilterTrigger((e.target as HTMLElement & { value: string }).value)}
+            options={[
+              { value: "", label: "All Triggers" },
+              ...TRIGGER_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label })),
+            ]}
+          />
+          <Select
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
-            <option value="">All Status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
+            onChange={(e) => setFilterStatus((e.target as HTMLElement & { value: string }).value)}
+            options={[
+              { value: "", label: "All Status" },
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+            ]}
+          />
           {!showForm ? (
-            <button className="btn btn--primary btn--sm" onClick={openNew}>+ New Template</button>
+            <Button
+              variant="filled"
+              size="sm"
+              onClick={openNew}
+            >+ New Template</Button>
           ) : null}
         </div>
       </div>
@@ -162,26 +165,30 @@ export function EmailTemplateList() {
                       </Badge>
                     </td>
                     <td style={{ textAlign: "right" }}>
-                      <button
-                        className="btn btn--ghost btn--sm"
+                      <Button
+                        variant="text"
+                        size="sm"
                         onClick={() => openEdit(template)}
                         style={{ marginRight: "4px" }}
                       >
                         Edit
-                      </button>
-                      <button
-                        className="btn btn--danger btn--sm"
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        size="sm"
+                        danger
                         onClick={() => handleDelete(template.id)}
                         style={{ marginRight: "4px" }}
                       >
                         Delete
-                      </button>
-                      <button
-                        className="btn btn--ghost btn--sm"
+                      </Button>
+                      <Button
+                        variant="text"
+                        size="sm"
                         onClick={() => handleToggleActive(template)}
                       >
                         {template.is_active ? "Deactivate" : "Activate"}
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -286,7 +293,7 @@ function EmailTemplateFormModal({ visible, onClose, onSave, initialData }: Email
           <button className="modal__close" onClick={onClose} aria-label="Close">×</button>
         </div>
         <div className="modal__body">
-          {error && <p className="error-message" style={{ color: "var(--neg)", marginBottom: "12px" }}>{error}</p>}
+          {error && <p className="error-message" style={{ color: "var(--md-sys-color-error)", marginBottom: "12px" }}>{error}</p>}
           
           <div className="detail-grid" style={{ gridTemplateColumns: "180px 1fr", gap: "12px", marginBottom: "16px" }}>
             <label className="field__label">Subject</label>
@@ -315,18 +322,20 @@ function EmailTemplateFormModal({ visible, onClose, onSave, initialData }: Email
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
             <strong>Body</strong>
             <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                className="btn btn--ghost btn--sm"
+              <Button
+                variant="text"
+                size="sm"
                 onClick={() => setIsPreviewMode(true)}
               >
                 Preview
-              </button>
-              <button
-                className="btn btn--ghost btn--sm"
+              </Button>
+              <Button
+                variant="text"
+                size="sm"
                 onClick={() => setIsPreviewMode(false)}
               >
                 Edit HTML
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -334,7 +343,7 @@ function EmailTemplateFormModal({ visible, onClose, onSave, initialData }: Email
             {isPreviewMode ? (
               <div
                 className="email-preview"
-                style={{ padding: "16px", border: "1px solid var(--border)", borderRadius: "4px", overflowX: "auto" }}
+                style={{ padding: "16px", border: "1px solid var(--md-sys-color-outline-variant)", borderRadius: "4px", overflowX: "auto" }}
                 dangerouslySetInnerHTML={{ __html: bodyHtml || "<em>No content</em>" }}
               />
             ) : (
@@ -360,10 +369,19 @@ function EmailTemplateFormModal({ visible, onClose, onSave, initialData }: Email
           </div>
 
           <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
-            <button className="btn btn--primary btn--sm" onClick={handleSubmit} disabled={saving}>
+            <Button
+              variant="filled"
+              size="sm"
+              onClick={handleSubmit}
+              disabled={saving}
+            >
               {saving ? "Saving..." : (initialData ? "Update" : "Create")}
-            </button>
-            <button className="btn btn--secondary btn--sm" onClick={onClose}>Cancel</button>
+            </Button>
+            <Button
+              variant="outlined"
+              size="sm"
+              onClick={onClose}
+            >Cancel</Button>
           </div>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { JournalRegisterItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 /**
  * Journal Register — Accountant Mode v1.
@@ -91,14 +92,22 @@ export function JournalRegister() {
               <option value="REVERSAL">Reversal</option>
             </select>
           </label>
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => void load()}>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={() => void load()}
+          >
             Apply
-          </button>
+          </Button>
         </div>
         <div className="listtab__actions">
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>

@@ -8,6 +8,7 @@ import { RowActions, type RowAction } from "../../components/RowActions";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { InvoiceListItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 type SortableColumn = "number" | "date" | "customer" | "due" | "status" | "dp" | "receivable";
 
@@ -106,16 +107,20 @@ export function InvoiceList() {
           </div>
         </div>
         <div className="listtab__actions">
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
+          <Button
+            variant="filled"
+            size="sm"
             onClick={() => workbench.openEntryDraft("sales-invoice")}
           >
             + New Invoice
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{sorted.length}</span>
         </div>
       </div>
@@ -128,13 +133,9 @@ export function InvoiceList() {
             entity="invoice"
             filtered={items.length > 0}
             action={
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => workbench.openEntryDraft("sales-invoice")}
-              >
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("sales-invoice")}>
                 + New Invoice
-              </button>
+              </Button>
             }
           />
         ) : (

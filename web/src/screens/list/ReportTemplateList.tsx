@@ -4,6 +4,7 @@ import { api } from "../../api";
 import { useWorkbench } from "../../workbench/state";
 import { REPORT_TEMPLATE_TYPES } from "../../types";
 import type { ReportTemplate, CreateReportTemplateInput, ReportTemplateDocumentType } from "../../types";
+import { Button } from "../../components/m3";
 
 const DT_LABELS = REPORT_TEMPLATE_TYPES;
 
@@ -181,19 +182,32 @@ export function ReportTemplateList() {
         </div>
         <div className="listtab__toolbar">
           {!showForm && items.length > 0 && (
-            <button type="button" className="btn btn--secondary btn--sm" onClick={() => void load()} disabled={loading}>
+            <Button
+              variant="outlined"
+              size="sm"
+              onClick={() => void load()}
+              disabled={loading}
+            >
               Reload
-            </button>
+            </Button>
           )}
           {showForm && editingId && (
-            <button type="button" className="btn btn--secondary btn--sm" onClick={() => { setShowForm(false); setEditingId(null); setFormError(null); }}>
+            <Button
+              variant="outlined"
+              size="sm"
+              onClick={() => { setShowForm(false); setEditingId(null); setFormError(null); }}
+            >
               Cancel
-            </button>
+            </Button>
           )}
           {showForm && !editingId && (
-            <button type="button" className="btn btn--secondary btn--sm" onClick={resetForm}>
+            <Button
+              variant="outlined"
+              size="sm"
+              onClick={resetForm}
+            >
               Cancel
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -231,7 +245,7 @@ export function ReportTemplateList() {
               <textarea
                 className="input"
                 rows={12}
-                style={{ fontFamily: "var(--font-mono)", fontSize: "12px" }}
+                style={{ fontFamily: "var(--md-ref-typeface-plain)", fontSize: "12px" }}
                 placeholder="# NextReport template YAML\nheader:\n  title: {{ invoice.number }}"
                 value={yaml}
                 onChange={(e) => setYaml(e.target.value)}
@@ -243,16 +257,16 @@ export function ReportTemplateList() {
                 <span className="field__label">Set as default template</span>
               </label>
             </div>
-            {formError ? <p style={{ color: "var(--neg)", margin: "8px 0 0" }}>{formError}</p> : null}
+            {formError ? <p style={{ color: "var(--md-sys-color-error)", margin: "8px 0 0" }}>{formError}</p> : null}
             <div style={{ marginTop: "12px" }}>
-              <button
-                type="button"
-                className="btn btn--primary btn--sm"
+              <Button
+                variant="filled"
+                size="sm"
                 onClick={handleSave}
                 disabled={saving}
               >
                 {saving ? "Saving..." : editingId ? "Update Template" : "Save Template"}
-              </button>
+              </Button>
             </div>
           </div>
         ) : items.length === 0 ? (
@@ -260,9 +274,9 @@ export function ReportTemplateList() {
             title="No templates yet"
             message="Add templates for invoices, reports, and statements."
             action={
-              <button type="button" className="btn btn--primary" onClick={openCreate}>
+              <Button variant="filled" onClick={openCreate}>
                 + New Template
-              </button>
+              </Button>
             }
           />
         ) : (
@@ -280,7 +294,7 @@ export function ReportTemplateList() {
             <tbody>
               {items.map((item) => (
                 <tr key={item.id}>
-                  <td style={{ fontFamily: "var(--font-mono)" }}>{item.code}</td>
+                  <td style={{ fontFamily: "var(--md-ref-typeface-plain)" }}>{item.code}</td>
                   <td>{item.name}</td>
                   <td>
                     <span className={`kind-mark ${item.is_active ? "is-positive" : "is-negative"}`}>
@@ -290,22 +304,44 @@ export function ReportTemplateList() {
                   <td>{item.is_default ? "Yes" : "—"}</td>
                   <td>{item.is_active ? "Yes" : "No"}</td>
                   <td>
-                    <button type="button" className="btn btn--secondary btn--xs" onClick={() => openEdit(item)}>
+                    <Button
+                      variant="outlined"
+                      size="xs"
+                      onClick={() => openEdit(item)}
+                    >
                       Edit
-                    </button>{" "}
-                    <button type="button" className="btn btn--secondary btn--xs" onClick={() => openEditor(item)}>
+                    </Button>{" "}
+                    <Button
+                      variant="outlined"
+                      size="xs"
+                      onClick={() => openEditor(item)}
+                    >
                       Editor
-                    </button>{" "}
-                    <button type="button" className="btn btn--secondary btn--xs" onClick={() => renderPDF(item)}>
+                    </Button>{" "}
+                    <Button
+                      variant="outlined"
+                      size="xs"
+                      onClick={() => renderPDF(item)}
+                    >
                       PDF
-                    </button>{" "}
-                    <button type="button" className="btn btn--secondary btn--xs" onClick={() => renderHTML(item)}>
+                    </Button>{" "}
+                    <Button
+                      variant="outlined"
+                      size="xs"
+                      onClick={() => renderHTML(item)}
+                    >
                       HTML
-                    </button>{" "}
+                    </Button>{" "}
                     {!item.is_default && (
-                      <button type="button" className="btn btn--negative btn--xs" onClick={() => handleDelete(item.id)} disabled={deletingId === item.id}>
+                      <Button
+                        variant="outlined"
+                        size="xs"
+                        danger
+                        onClick={() => handleDelete(item.id)}
+                        disabled={deletingId === item.id}
+                      >
                         {deletingId === item.id ? "Deleting..." : "Del"}
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>
@@ -318,9 +354,13 @@ export function ReportTemplateList() {
       {!showForm && items.length > 0 && (
         <div className="listtab__footer">
           <span className="listtab__footer-count">{items.length} template(s)</span>
-          <button type="button" className="btn btn--primary btn--sm" onClick={openCreate}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={openCreate}
+          >
             + New Template
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -5,6 +5,7 @@ import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import type { Item, ProductionJob, ProductionCostType } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -249,16 +250,21 @@ export function ProductionJobForm({ tabId, entryId, initialTitle }: Props) {
                     <span className="entrytab__total-label">Cost Line Total</span>
                     <span className="entrytab__total-value">{formatIDR(costLineTotal)}</span>
                   </div>
-                  <button type="button" className="btn btn--ghost" onClick={handleAddCost} disabled={addingCost} style={{ marginTop: 8 }}>
+                  <Button
+                    variant="text"
+                    onClick={handleAddCost}
+                    disabled={addingCost}
+                    style={{ marginTop: 8 }}
+                  >
                     {addingCost ? "Posting..." : "+ Post Cost"}
-                  </button>
+                  </Button>
                   {costType === "material" && (
-                    <small style={{ display: "block", marginTop: 4, color: "var(--muted, #888)" }}>
+                    <small style={{ display: "block", marginTop: 4, color: "var(--md-sys-color-on-surface-variant)" }}>
                       Material cost consumes stock from inventory (Dr 1303 WIP / Cr 1301 Inventory). Unit cost is resolved by the costing method (FIFO / moving average).
                     </small>
                   )}
                   {costType !== "material" && (
-                    <small style={{ display: "block", marginTop: 4, color: "var(--muted, #888)" }}>
+                    <small style={{ display: "block", marginTop: 4, color: "var(--md-sys-color-on-surface-variant)" }}>
                       {`${costType === "labor" ? "Labor" : "Overhead"} cost posts Dr 1303 WIP / Cr 1101 Cash.`}
                     </small>
                   )}

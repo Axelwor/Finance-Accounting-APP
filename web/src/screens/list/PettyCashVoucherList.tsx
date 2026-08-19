@@ -4,6 +4,7 @@ import { EmptyState, LoadingState, FormError } from "../../components/ui";
 import { api } from "../../api";
 import type { PettyCashVoucher, PettyCashFund } from "../../types";
 import { formatIDR, formatDate } from "../../lib/format";
+import { Button } from "../../components/m3";
 
 interface Props {
   selectedFundId?: number;
@@ -126,9 +127,13 @@ export function PettyCashVoucherList({ selectedFundId, onFundChange }: Props) {
           </div>
         </div>
         <div className="listtab__actions">
-          <button type="button" className="btn btn--primary btn--sm" onClick={handleNewVoucher}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={handleNewVoucher}
+          >
             + New Voucher
-          </button>
+          </Button>
           <span className="listtab__count">{vouchers.length}</span>
         </div>
       </div>
@@ -138,9 +143,9 @@ export function PettyCashVoucherList({ selectedFundId, onFundChange }: Props) {
             title="No vouchers found"
             message="Add vouchers to track petty cash expenses."
             action={
-              <button type="button" className="btn btn--primary" onClick={handleNewVoucher}>
+              <Button variant="filled" onClick={handleNewVoucher}>
                 New Voucher
-              </button>
+              </Button>
             }
           />
         ) : (

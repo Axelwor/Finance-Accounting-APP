@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ChequeListItem } from "../../types";
+import { Button } from "../../components/m3";
 
 interface BounceModalProps {
   open: boolean;
@@ -41,7 +42,7 @@ export function BounceModal({ open, onClose, onSubmit, cheque }: BounceModalProp
           <p><strong>Cheque #:</strong> {cheque.cheque_number}</p>
           <p><strong>Counterparty:</strong> {cheque.counterparty_name}</p>
           <p><strong>Amount:</strong> {formatIDR(cheque.amount_cents)}</p>
-          <label className="form__field" style={{ marginTop: "var(--u-4)" }}>
+          <label className="form__field" style={{ marginTop: "var(--md-sys-spacing-4)" }}>
             <span className="form__label">Reason *</span>
             <textarea
               className="form__input form__input--large"
@@ -54,10 +55,19 @@ export function BounceModal({ open, onClose, onSubmit, cheque }: BounceModalProp
           {error && <p className="modal__error">{error}</p>}
         </div>
         <div className="modal__foot">
-          <button className="btn btn--ghost" onClick={onClose} disabled={bouncing}>Cancel</button>
-          <button className="btn btn--danger" onClick={handleBounce} disabled={bouncing || !reason.trim()}>
+          <Button
+            variant="text"
+            onClick={onClose}
+            disabled={bouncing}
+          >Cancel</Button>
+          <Button
+            variant="outlined"
+            danger
+            onClick={handleBounce}
+            disabled={bouncing || !reason.trim()}
+          >
             {bouncing ? "Processing..." : "Confirm Bounce"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { api } from "../../api";
 import { formatIDR, todayISO, formatDate } from "../../lib/format";
 import { showToast } from "../../lib/toast";
 import type { AgingReport } from "../../types";
+import { Button } from "../../components/m3";
 
 export function ARAgingList() {
   const [asOf, setAsOf] = useState<string>(todayISO());
@@ -67,22 +68,22 @@ export function ARAgingList() {
           </label>
         </div>
         <div className="listtab__actions" style={{ marginLeft: "auto" }}>
-          <button
-            type="button"
-            className="btn btn--secondary btn--sm"
+          <Button
+            variant="outlined"
+            size="sm"
             disabled={exporting !== null || loading}
             onClick={() => void handleExport("pdf")}
           >
             {exporting === "pdf" ? "Exporting..." : "Export PDF"}
-          </button>
-          <button
-            type="button"
-            className="btn btn--secondary btn--sm"
+          </Button>
+          <Button
+            variant="outlined"
+            size="sm"
             disabled={exporting !== null || loading}
             onClick={() => void handleExport("xlsx")}
           >
             {exporting === "xlsx" ? "Exporting..." : "Export Excel"}
-          </button>
+          </Button>
         </div>
       </div>
       <div className="listtab__body">

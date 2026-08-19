@@ -4,6 +4,7 @@ import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { CostCenterListItem } from "../../types";
+import { Button } from "../../components/m3";
 
 type TreeCostCenter = CostCenterListItem & { children?: TreeCostCenter[] };
 
@@ -71,16 +72,20 @@ export function CostCenterList() {
           <small>Hierarki pusat biaya / laba / investasi</small>
         </div>
         <div className="listtab__toolbar">
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => void load()}>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={() => void load()}
+          >
             Reload
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
+          </Button>
+          <Button
+            variant="filled"
+            size="sm"
             onClick={() => workbench.openEntryDraft("cost-center-entry")}
           >
             + New Cost Center
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -161,28 +166,28 @@ function TreeCostCenterRow({ node, allItems, level }: TreeCostCenterRowProps) {
             flexShrink: 0,
           }}
         />
-        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{node.code}</span>
+        <span style={{ fontFamily: "var(--md-ref-typeface-plain)", fontWeight: 600 }}>{node.code}</span>
         <span style={{ maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis" }}>{node.name}</span>
         <span>{CENTER_TYPE_LABEL[node.center_type] ?? node.center_type}</span>
         <span>{node.parent_id != null ? findParentCode(node.parent_id) : "-"}</span>
-        <span style={{ textAlign: "right", fontFamily: "var(--font-mono)" }}>
+        <span style={{ textAlign: "right", fontFamily: "var(--md-ref-typeface-plain)" }}>
           {formatIDR(node.total_allocated_cents ?? 0)}
         </span>
         <div style={{ marginLeft: 8, display: "flex", gap: 4 }}>
-          <button
-            type="button"
-            className="btn btn--secondary btn--xs"
+          <Button
+            variant="outlined"
+            size="xs"
             onClick={handleAllocation}
           >
             Allocate
-          </button>
-          <button
-            type="button"
-            className="btn btn--secondary btn--xs"
+          </Button>
+          <Button
+            variant="outlined"
+            size="xs"
             onClick={handlePnL}
           >
             P&L
-          </button>
+          </Button>
         </div>
       </div>
       {node.children && node.children.length > 0 && (

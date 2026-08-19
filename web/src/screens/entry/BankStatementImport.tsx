@@ -4,6 +4,7 @@ import { FormError } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { BackendAccount } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -193,9 +194,13 @@ export function BankStatementImport({ tabId }: Props) {
               onChange={(e) => setCsvText(e.target.value)}
             />
           </label>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={handleParse}>
+          <Button
+            variant="text"
+            size="sm"
+            onClick={handleParse}
+          >
             Parse lines
-          </button>
+          </Button>
         </div>
 
         {parsedLines.length > 0 && (

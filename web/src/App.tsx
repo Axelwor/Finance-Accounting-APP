@@ -6,6 +6,7 @@ import { ToastProvider } from "./components/Toast";
 import { AppShell } from "./workbench/AppShell";
 import { AuthScreen } from "./screens/AuthScreen";
 import { OnboardingScreen } from "./screens/OnboardingScreen";
+import { Button } from "./components/m3";
 
 function ShellRoute({ children }: { children: React.ReactNode }) {
   const { user, hydrating } = useAppState();
@@ -58,16 +59,16 @@ export class ErrorBoundary extends Component<
       <div className="app" role="alert">
         <main className="app-main">
           <div className="app-main__inner">
-            <div className="error-state" style={{ maxWidth: 520, margin: "var(--u-7) auto" }}>
+            <div className="error-state" style={{ maxWidth: 520, margin: "var(--md-sys-spacing-7) auto" }}>
               <h2 className="error-state__title">Something went wrong</h2>
               <p className="error-state__message">
                 An unexpected error occurred{this.state.message ? `: ${this.state.message}` : "."}
                 <br />
                 Reloading the app will restore your open tabs — unsaved form data may be lost.
               </p>
-              <button type="button" className="btn btn--primary" onClick={() => window.location.reload()}>
+              <Button variant="filled" onClick={() => window.location.reload()}>
                 Reload
-              </button>
+              </Button>
             </div>
           </div>
         </main>
@@ -104,12 +105,12 @@ export class TabErrorBoundary extends Component<
           {this.state.message || "An unexpected error occurred in this tab."} Other tabs are unaffected.
         </p>
         <div className="quick-actions">
-          <button type="button" className="btn btn--primary" onClick={() => this.setState({ hasError: false, message: "" })}>
+          <Button variant="filled" onClick={() => this.setState({ hasError: false, message: "" })}>
             Try again
-          </button>
-          <button type="button" className="btn btn--secondary" onClick={() => window.location.reload()}>
+          </Button>
+          <Button variant="outlined" onClick={() => window.location.reload()}>
             Reload app
-          </button>
+          </Button>
         </div>
       </div>
     );

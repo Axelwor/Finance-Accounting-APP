@@ -4,6 +4,7 @@ import { FormError } from "../../components/ui";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import type { EntrySubKind } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -254,9 +255,14 @@ export function DemoEntryForm({ tabId, subKind, title, initialTitle }: Props) {
                 onChange={(e) => setNumber(e.target.value)}
                 placeholder="Document number"
               />
-              <button type="button" className="btn btn--secondary btn--sm entrytab__ambil" disabled>
+              <Button
+                variant="outlined"
+                size="sm"
+                disabled
+                className="entrytab__ambil"
+              >
                 <span aria-hidden="true">↗</span> Ambil
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -338,9 +344,13 @@ export function DemoEntryForm({ tabId, subKind, title, initialTitle }: Props) {
               ))}
               <div className="detail-grid__row detail-grid__row--add">
                 <div>
-                  <button type="button" className="btn btn--secondary btn--sm" onClick={addCounter}>
+                  <Button
+                    variant="outlined"
+                    size="sm"
+                    onClick={addCounter}
+                  >
                     + Add line
-                  </button>
+                  </Button>
                 </div>
                 <div />
                 <div />

@@ -24,6 +24,9 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "@lit/react": "^1.0.8",
+    "@material/material-color-utilities": "^0.4.0",
+    "@material/web": "^2.5.0",
     "react-router-dom": "6.30.1"
   }
 }

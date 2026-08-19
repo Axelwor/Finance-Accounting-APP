@@ -4,6 +4,7 @@ import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { DeliveryOrderListItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 const DO_STATUS_TONE: Record<string, string> = {
   SHIPPED: "is-positive",
@@ -51,16 +52,20 @@ export function DeliveryOrderList() {
           </div>
         </div>
         <div className="listtab__actions">
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
+          <Button
+            variant="filled"
+            size="sm"
             onClick={() => workbench.openEntryDraft("delivery-order-entry")}
           >
             + New Delivery
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -73,13 +78,9 @@ export function DeliveryOrderList() {
             title="No delivery orders yet"
             message="Ship goods against a sales order. Each delivery posts a COGS journal (Dr COGS / Cr Inventory) and records an inventory movement."
             action={
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => workbench.openEntryDraft("delivery-order-entry")}
-              >
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("delivery-order-entry")}>
                 New Delivery Order
-              </button>
+              </Button>
             }
           />
         ) : (

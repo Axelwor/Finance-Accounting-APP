@@ -9,6 +9,7 @@ import { AccountPicker } from "../../components/AccountPicker";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { AccountItem, CashEntryListItem, EntrySubKind, ListSubKind } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 interface Props {
   listKind: ListSubKind;
@@ -217,9 +218,9 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
             />
           </div>
           {accountFilterActive && (
-            <button
-              type="button"
-              className="btn btn--secondary btn--sm"
+            <Button
+              variant="outlined"
+              size="sm"
               onClick={() => {
                 setFromDate("");
                 setToDate("");
@@ -227,7 +228,7 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
               }}
             >
               Reset
-            </button>
+            </Button>
           )}
         </div>
         {showFilters && (
@@ -253,21 +254,41 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
           </div>
         )}
         <div className="listtab__actions">
-          <button type="button" className="btn btn--primary btn--sm" onClick={openAdd}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={openAdd}
+          >
             + Tambah
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" aria-label="Download" disabled>
+          </IconButton>
+          <IconButton
+            size="sm"
+            label="Download"
+            disabled
+          >
             <DownloadIcon />
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" aria-label="Print" disabled>
+          </IconButton>
+          <IconButton
+            size="sm"
+            label="Print"
+            disabled
+          >
             <PrintIcon />
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" aria-label="Settings" disabled>
+          </IconButton>
+          <IconButton
+            size="sm"
+            label="Settings"
+            disabled
+          >
             <SettingsIcon />
-          </button>
+          </IconButton>
           <input
             type="search"
             className="input listtab__search"
@@ -292,9 +313,9 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
             entity="cash entry"
             filtered={items.length > 0}
             action={
-              <button type="button" className="btn btn--primary" onClick={openAdd}>
+              <Button variant="filled" onClick={openAdd}>
                 + Tambah
-              </button>
+              </Button>
             }
           />
         ) : (
@@ -330,7 +351,7 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
       <div className="listtab__footer">
         <span>
           Net{" "}
-          <strong className={total >= 0 ? "is-positive" : "is-negative"} style={{ color: total >= 0 ? "var(--pos)" : "var(--neg)" }}>
+          <strong className={total >= 0 ? "is-positive" : "is-negative"} style={{ color: total >= 0 ? "var(--md-sys-color-success)" : "var(--md-sys-color-error)" }}>
             {total >= 0 ? "+" : "−"}
             {formatIDR(Math.abs(total))}
           </strong>

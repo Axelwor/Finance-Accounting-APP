@@ -7,6 +7,7 @@ import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import type { FixedAsset, DepreciationMethod, ImpairAssetInput } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -510,9 +511,14 @@ export function FixedAssetForm({ tabId, entryId, initialTitle }: Props) {
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
-                    <button type="button" className="btn btn--secondary btn--sm" disabled={postingReval} onClick={() => void handlePostRevaluation()}>
+                    <Button
+                      variant="outlined"
+                      size="sm"
+                      disabled={postingReval}
+                      onClick={() => void handlePostRevaluation()}
+                    >
                       {postingReval ? "Posting..." : "Post Revaluation"}
-                    </button>
+                    </Button>
                   </div>
                   <FormError message={revalError} />
                 </>
@@ -557,16 +563,16 @@ export function FixedAssetForm({ tabId, entryId, initialTitle }: Props) {
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
-                    <button
-                      type="button"
-                      className="btn btn--secondary btn--sm"
+                    <Button
+                      variant="outlined"
+                      size="sm"
                       disabled={postingImpair}
                       onClick={() => void handlePostImpairment()}
                     >
                       {postingImpair ? "Posting..." : "Post Impairment"}
-                    </button>
+                    </Button>
                     {impairSuccess ? (
-                      <span role="status" style={{ fontSize: 12, color: "var(--text-secondary)" }}>{impairSuccess}</span>
+                      <span role="status" style={{ fontSize: 12, color: "var(--md-sys-color-on-surface-variant)" }}>{impairSuccess}</span>
                     ) : null}
                   </div>
                   <FormError message={impairError} />

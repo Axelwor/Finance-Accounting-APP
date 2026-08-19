@@ -4,6 +4,7 @@ import { EmptyState, LoadingState, FormError } from "../../components/ui";
 import { api } from "../../api";
 import type { RecurringTransactionListItem, CreateRecurringTransactionInput, RecurringFrequency } from "../../types";
 import { fmtDateIDR, parseDateInput, parseAmountInput, fmtCurrencyIDR } from "../../lib/format";
+import { Button } from "../../components/m3";
 
 type FrequencyFilter = "all" | RecurringFrequency;
 
@@ -114,13 +115,13 @@ export function RecurringTransactionList() {
           </div>
         </div>
         <div className="listtab__actions">
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
+          <Button
+            variant="filled"
+            size="sm"
             onClick={() => workbench.openEntryDraft("recurring-transaction-entry")}
           >
             + New
-          </button>
+          </Button>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -130,13 +131,9 @@ export function RecurringTransactionList() {
             title="No recurring transactions"
             message="Create templates for rent, salary, insurance, and other recurring journals."
             action={
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => workbench.openEntryDraft("recurring-transaction-entry")}
-              >
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("recurring-transaction-entry")}>
                 New Recurring Transaction
-              </button>
+              </Button>
             }
           />
         ) : (
@@ -165,28 +162,31 @@ export function RecurringTransactionList() {
                   </span>
                 </span>
                 <span>
-                  <button
-                    className="btn btn--sm"
+                  <Button
+                    variant="tonal"
+                    size="sm"
                     onClick={() => workbench.openEntryExisting("recurring-transaction-entry", item.id, item.name)}
                   >
                     Edit
-                  </button>
+                  </Button>
                   {item.is_active && (
                     <>
-                      <button
-                        className="btn btn--sm"
+                      <Button
+                        variant="tonal"
+                        size="sm"
                         onClick={() => handlePostNow(item.id)}
                         disabled={postNowLoadingSet.has(item.id)}
                       >
                         Post Now
-                      </button>
-                      <button
-                        className="btn btn--sm"
+                      </Button>
+                      <Button
+                        variant="tonal"
+                        size="sm"
                         onClick={() => handleDeactivate(item.id)}
                         disabled={deactivateLoadingSet.has(item.id)}
                       >
                         Deactivate
-                      </button>
+                      </Button>
                     </>
                   )}
                 </span>

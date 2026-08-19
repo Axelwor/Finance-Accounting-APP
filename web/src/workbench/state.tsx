@@ -238,6 +238,11 @@ function reducer(state: State, action: Action): State {
       for (const parentId of Object.keys(state.nested)) {
         const idx = next[parentId].findIndex((c) => c.id === action.id);
         if (idx >= 0) {
+          // No-op when the flag is already the requested value: returning a
+          // new state object here would recreate the workbench api (memoized
+          // on state) and re-trigger the caller's markUnsaved effect,
+          // causing a maximum-update-depth loop.
+          if (next[parentId][idx].unsaved === action.unsaved) return state;
           const updated: NestedTab = { ...next[parentId][idx], unsaved: action.unsaved };
           next[parentId] = [...next[parentId]];
           next[parentId][idx] = updated;

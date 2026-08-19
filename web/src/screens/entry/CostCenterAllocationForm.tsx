@@ -3,6 +3,7 @@ import { useWorkbench } from "../../workbench/state";
 import { Button, EmptyState, ErrorState, FieldShell, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { CostCenter, CreateAllocationInput, CostCenterAllocation } from "../../types";
+import { Button as M3Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -240,14 +241,15 @@ export function CostCenterAllocationForm({ tabId, initialTitle }: Props) {
                           ))}
                         </select>
 
-                        <button
-                          type="button"
-                          className="btn btn--danger btn--xs"
+                        <M3Button
+                          variant="outlined"
+                          size="xs"
+                          danger
                           onClick={() => removeLine(line.id)}
                           disabled={allocating}
                         >
                           Remove
-                        </button>
+                        </M3Button>
                       </div>
                     ))}
                     <Button variant="secondary" onClick={addLine} disabled={allocating}>

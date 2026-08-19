@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { Dimension } from "../../types";
+import { Button } from "../../components/m3";
 
 type DimensionType = Dimension["dimension_type"];
 
@@ -85,13 +86,21 @@ export function DimensionList() {
           <small>Cabang / Proyek / Departemen / Cost Center</small>
         </div>
         <div className="listtab__toolbar">
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => void load()}>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={() => void load()}
+          >
             Reload
-          </button>
+          </Button>
           {!showForm ? (
-            <button type="button" className="btn btn--primary btn--sm" onClick={() => setShowForm(true)}>
+            <Button
+              variant="filled"
+              size="sm"
+              onClick={() => setShowForm(true)}
+            >
               + New Dimension
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
@@ -134,15 +143,24 @@ export function DimensionList() {
               </select>
             </div>
             {formError ? (
-              <p style={{ color: "var(--neg)", margin: "8px 0 0" }}>{formError}</p>
+              <p style={{ color: "var(--md-sys-color-error)", margin: "8px 0 0" }}>{formError}</p>
             ) : null}
             <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-              <button type="button" className="btn btn--primary btn--sm" disabled={saving} onClick={() => void handleSave()}>
+              <Button
+                variant="filled"
+                size="sm"
+                disabled={saving}
+                onClick={() => void handleSave()}
+              >
                 {saving ? "Saving..." : "Save"}
-              </button>
-              <button type="button" className="btn btn--secondary btn--sm" onClick={resetForm}>
+              </Button>
+              <Button
+                variant="outlined"
+                size="sm"
+                onClick={resetForm}
+              >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
@@ -163,7 +181,7 @@ export function DimensionList() {
               <tbody>
                 {items.map((d) => (
                   <tr key={d.id}>
-                    <td style={{ fontFamily: "var(--font-mono)" }}>{d.code}</td>
+                    <td style={{ fontFamily: "var(--md-ref-typeface-plain)" }}>{d.code}</td>
                     <td>{d.name}</td>
                     <td>{DIMENSION_TYPE_LABEL[d.dimension_type] ?? d.dimension_type}</td>
                     <td>{d.is_active ? "Yes" : "No"}</td>

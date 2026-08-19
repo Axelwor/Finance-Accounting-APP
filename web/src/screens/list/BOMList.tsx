@@ -3,6 +3,7 @@ import { useWorkbench } from "../../workbench/state";
 import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { BOMListItem } from "../../types";
+import { Button, IconButton } from "../../components/m3";
 
 const BOM_STATUS_TONE: Record<string, string> = {
   ACTIVE: "is-positive",
@@ -34,12 +35,20 @@ export function BOMList() {
       <div className="listtab__toolbar">
         <div className="listtab__filters" />
         <div className="listtab__actions">
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.openEntryDraft("bom-entry")}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={() => workbench.openEntryDraft("bom-entry")}
+          >
             + New BOM
-          </button>
-          <button type="button" className="btn btn--icon btn--sm" onClick={() => void load()} aria-label="Reload">
+          </Button>
+          <IconButton
+            size="sm"
+            onClick={() => void load()}
+            label="Reload"
+          >
             <ReloadIcon />
-          </button>
+          </IconButton>
           <span className="listtab__count">{items.length}</span>
         </div>
       </div>
@@ -51,9 +60,9 @@ export function BOMList() {
             title="No BOMs yet"
             message="Create a Bill of Materials to define the materials, labor, and overhead that go into producing a finished good. Production jobs use BOMs to prefill costs."
             action={
-              <button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("bom-entry")}>
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("bom-entry")}>
                 + New BOM
-              </button>
+              </Button>
             }
           />
         ) : (

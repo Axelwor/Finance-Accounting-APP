@@ -6,6 +6,7 @@ import { formatIDR } from "../../lib/format";
 import type { ChequeListItem } from "../../types";
 import { DepositModal } from "../entry/DepositModal";
 import { BounceModal } from "../entry/BounceModal";
+import { Button } from "../../components/m3";
 
 type DirectionFilter = "RECEIVED" | "ISSUED" | "";
 
@@ -113,9 +114,9 @@ export function ChequeList() {
             </select>
           </label>
         </div>
-        <button className="btn btn--primary" onClick={() => workbench.openEntryDraft("cheque-entry")}>
+        <Button variant="filled" onClick={() => workbench.openEntryDraft("cheque-entry")}>
           + New Cheque
-        </button>
+        </Button>
       </div>
 
       <div className="listtab__body">
@@ -145,15 +146,27 @@ export function ChequeList() {
                 <div className="ledger-table__cell">{getStatusBadge(it.status)}</div>
                 <div className="ledger-table__cell">
                   {it.status === "REGISTERED" && (
-                    <button className="btn btn--ghost btn--sm" onClick={() => handleDeposit(it)}>Deposit</button>
+                    <Button
+                      variant="text"
+                      size="sm"
+                      onClick={() => handleDeposit(it)}
+                    >Deposit</Button>
                   )}
                   {it.status === "DEPOSITED" && (
                     <>
-                      <button className="btn btn--ghost btn--sm" onClick={() => handleBounce(it)}>Bounce</button>
+                      <Button
+                        variant="text"
+                        size="sm"
+                        onClick={() => handleBounce(it)}
+                      >Bounce</Button>
                     </>
                   )}
                   {it.status === "BOUNCED" && (
-                    <button className="btn btn--ghost btn--sm" onClick={() => workbench.openEntryExisting("cheque-entry", it.id.toString(), it.cheque_number)}>View</button>
+                    <Button
+                      variant="text"
+                      size="sm"
+                      onClick={() => workbench.openEntryExisting("cheque-entry", it.id.toString(), it.cheque_number)}
+                    >View</Button>
                   )}
                 </div>
               </div>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { AuditLog } from "../../types";
+import { Button } from "../../components/m3";
 
 /**
  * Audit Log list (US-101 — Audit Trail).
@@ -55,9 +56,14 @@ export function AuditLogList() {
           <small>Log lengkap semua aksi yang mengubah data</small>
         </div>
         <div className="listtab__actions">
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => void load()} disabled={loading}>
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={() => void load()}
+            disabled={loading}
+          >
             <ReloadIcon /> {loading ? "Loading..." : "Reload"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -95,9 +101,9 @@ export function AuditLogList() {
           onBlur={() => void load()}
         />
         {hasFilters ? (
-          <button
-            type="button"
-            className="btn btn--ghost btn--sm"
+          <Button
+            variant="text"
+            size="sm"
             onClick={() => {
               setEntityType("");
               setUserId("");
@@ -107,7 +113,7 @@ export function AuditLogList() {
             }}
           >
             Clear
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -161,9 +167,13 @@ function AuditLogRow({ log, expanded, onToggle }: { log: AuditLog; expanded: boo
         <span className="ledger-table__cat">{log.user_name || (log.user_id ? `User #${log.user_id}` : "—")}</span>
         <span className="ledger-table__amount">{formatTimestamp(log.created_at)}</span>
         <span className="ledger-table__actions">
-          <button type="button" className="btn btn--ghost btn--sm" onClick={(e) => { e.stopPropagation(); onToggle(); }}>
+          <Button
+            variant="text"
+            size="sm"
+            onClick={(e) => { e.stopPropagation(); onToggle(); }}
+          >
             {expanded ? "Hide" : "Details"}
-          </button>
+          </Button>
         </span>
       </div>
       {expanded ? (

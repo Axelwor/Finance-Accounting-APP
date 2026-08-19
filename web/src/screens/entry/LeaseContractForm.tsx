@@ -7,6 +7,7 @@ import { api } from "../../api";
 import { formatIDR, todayISO } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import type { LeaseContract, CreateLeaseContractInput } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -201,9 +202,13 @@ export function LeaseContractForm({ tabId, entryId, initialTitle }: Props) {
           {error && <FormError message={error} />}
 
           <div className="entryform__actions">
-            <button type="button" className="btn btn--primary" disabled={saving} onClick={() => void handleSave()}>
+            <Button
+              variant="filled"
+              disabled={saving}
+              onClick={() => void handleSave()}
+            >
               {saving ? "Saving..." : "Register Lease"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -370,12 +375,16 @@ function LeaseContractDetail({
                 </label>
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button type="button" className="btn btn--primary" onClick={() => void handleModify()} disabled={postingModify}>
+                <Button
+                  variant="filled"
+                  onClick={() => void handleModify()}
+                  disabled={postingModify}
+                >
                   {postingModify ? "Posting..." : "Post Modification"}
-                </button>
-                <button type="button" className="btn btn--secondary" onClick={() => setShowModify(false)}>
+                </Button>
+                <Button variant="outlined" onClick={() => setShowModify(false)}>
                   Cancel
-                </button>
+                </Button>
               </div>
               <FormError message={modError} />
             </div>

@@ -5,6 +5,7 @@ import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import type { SupplierInvoiceListItem, PurchaseReturnLineInput } from "../../types";
+import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -243,16 +244,25 @@ export function PurchaseReturnForm({ tabId, entryId, initialTitle }: Props) {
                 </div>
                 <div className="detail-grid__cell right">{formatIDR(line.lineTotalCents)}</div>
                 <div className="detail-grid__cell">
-                  <button type="button" className="btn btn--ghost btn--sm" onClick={() => removeLine(line.id)} aria-label="Remove line">
+                  <Button
+                    variant="text"
+                    size="sm"
+                    onClick={() => removeLine(line.id)}
+                    aria-label="Remove line"
+                  >
                     ×
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}
           </div>
-          <button type="button" className="btn btn--ghost" onClick={addLine} style={{ marginTop: 8 }}>
+          <Button
+            variant="text"
+            onClick={addLine}
+            style={{ marginTop: 8 }}
+          >
             + Add line
-          </button>
+          </Button>
         </div>
 
         <div className="entrytab__totals">

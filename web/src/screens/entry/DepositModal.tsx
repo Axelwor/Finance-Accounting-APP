@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ChequeListItem } from "../../types";
+import { Button } from "../../components/m3";
 
 interface DepositModalProps {
   open: boolean;
@@ -39,10 +40,18 @@ export function DepositModal({ open, onClose, onSubmit, cheque }: DepositModalPr
           {error && <p className="modal__error">{error}</p>}
         </div>
         <div className="modal__foot">
-          <button className="btn btn--ghost" onClick={onClose} disabled={depositing}>Cancel</button>
-          <button className="btn btn--primary" onClick={handleDeposit} disabled={depositing}>
+          <Button
+            variant="text"
+            onClick={onClose}
+            disabled={depositing}
+          >Cancel</Button>
+          <Button
+            variant="filled"
+            onClick={handleDeposit}
+            disabled={depositing}
+          >
             {depositing ? "Processing..." : "Confirm Deposit"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

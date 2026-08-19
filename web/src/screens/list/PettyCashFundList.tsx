@@ -4,6 +4,7 @@ import { EmptyState, LoadingState, FormError } from "../../components/ui";
 import { api } from "../../api";
 import type { PettyCashFund } from "../../types";
 import { formatIDR } from "../../lib/format";
+import { Button } from "../../components/m3";
 
 export function PettyCashFundList() {
   const workbench = useWorkbench();
@@ -29,9 +30,13 @@ export function PettyCashFundList() {
       <div className="listtab__toolbar">
         <div className="listtab__filters" />
         <div className="listtab__actions">
-          <button type="button" className="btn btn--primary btn--sm" onClick={() => workbench.openEntryDraft("pc-fund-entry")}>
+          <Button
+            variant="filled"
+            size="sm"
+            onClick={() => workbench.openEntryDraft("pc-fund-entry")}
+          >
             + New Fund
-          </button>
+          </Button>
           <span className="listtab__count">{funds.length}</span>
         </div>
       </div>
@@ -41,9 +46,9 @@ export function PettyCashFundList() {
             title="No petty cash funds yet"
             message="Add funds to track imprest balances and expense vouchers."
             action={
-              <button type="button" className="btn btn--primary" onClick={() => workbench.openEntryDraft("pc-fund-entry")}>
+              <Button variant="filled" onClick={() => workbench.openEntryDraft("pc-fund-entry")}>
                 New Fund
-              </button>
+              </Button>
             }
           />
         ) : (

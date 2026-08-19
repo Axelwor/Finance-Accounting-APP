@@ -1,154 +1,104 @@
 /* ============================================================
-   Ledgerly — Wave-inspired corporate system
-   White workspace, cool slate panels, deep navy ink, single blue
-   primary, green for positive only. Inter sans body + display,
-   IBM Plex Mono for numeric data. Soft hairlines, controlled shadow
-   only on elevated proofs.
+   Ledgerly — Material Design 3 (Material You) system
+   Dynamic color via @material/material-color-utilities.
+   Roboto (plain) + Roboto Flex (brand/display). Tabular nums for
+   numeric columns. Airy M3 default spacing.
 
-   Tokens live in :root. Components only consume tokens.
+   Token layering:
+   1. m3-tokens.css  — static generated tokens (fallback)
+   2. #m3-dynamic-theme <style> — runtime generated (user source color)
    ============================================================ */
 
+@import "./m3-tokens.css";
+
 :root {
-  /* Wave-inspired surface scale: white workspace, cool slate panels */
-  --canvas: #f5f7fa;
-  --paper: #ffffff;
-  --paper-elev: #ffffff;
-  --panel: #eef2f6;
-  --panel-hover: #e6edf5;
-  --rule: #d8e0e8;
-  --rule-soft: #e9eef3;
-  --rule-strong: #b8c5d2;
+  /* Custom (non-standard) semantic extensions of the M3 scheme.
+     M3 has no success/warning roles; these keep green=positive and
+     amber=warning semantics while following M3 dark-mode conventions. */
+  --md-sys-color-success: #1e7e34;
+  --md-sys-color-on-success: #ffffff;
+  --md-sys-color-success-container: #a3f2b4;
+  --md-sys-color-on-success-container: #00210a;
+  --md-sys-color-warning: #8f5400;
+  --md-sys-color-on-warning: #ffffff;
+  --md-sys-color-warning-container: #ffdcbe;
+  --md-sys-color-on-warning-container: #2e1500;
 
-  /* Cool navy ink scale */
-  --ink-deep: #18324b;
-  --ink: #263d55;
-  --ink-secondary: #5c6f82;
-  --ink-muted: #6c757d;
-  --ink-faint: #6c757d;
+  /* Typeface refs (M3 2021 baseline: Roboto plain + Roboto Flex brand) */
+  --md-ref-typeface-plain: "Roboto", "Segoe UI", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --md-ref-typeface-brand: "Roboto Flex", "Roboto", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
 
-  /* Wave-style primary: blue. Green remains semantic only. */
-  --accent: #1a6dc4;
-  --accent-hover: #1459a0;
-  --accent-soft: rgba(47, 128, 237, 0.1);
-  --accent-rule: rgba(47, 128, 237, 0.25);
+  /* M3 shape scale (static) */
+  --md-sys-shape-corner-none: 0px;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-extra-large: 28px;
+  --md-sys-shape-corner-full: 9999px;
 
-  --positive: #1e7e34;
-  --positive-soft: rgba(39, 150, 111, 0.1);
-  --negative: #c64b4b;
-  --negative-soft: rgba(198, 75, 75, 0.1);
-  --warning: #b87333;
-  --warning-soft: rgba(209, 139, 44, 0.1);
+  /* M3 airy spacing (4/8/12/16/24/32/48/64) */
+  --md-sys-spacing-1: 4px;
+  --md-sys-spacing-2: 8px;
+  --md-sys-spacing-3: 12px;
+  --md-sys-spacing-4: 16px;
+  --md-sys-spacing-5: 24px;
+  --md-sys-spacing-6: 32px;
+  --md-sys-spacing-7: 48px;
+  --md-sys-spacing-8: 64px;
 
-  /* Type */
-  --font-display: "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
-  --font-sans: "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* Motion (M3 easing + durations) */
+  --md-sys-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --md-sys-motion-easing-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --md-sys-motion-easing-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --md-sys-motion-duration-short-2: 100ms;
+  --md-sys-motion-duration-short-3: 150ms;
+  --md-sys-motion-duration-short-4: 200ms;
+  --md-sys-motion-duration-medium-1: 250ms;
+  --md-sys-motion-duration-medium-2: 300ms;
+  --md-sys-motion-duration-medium-3: 350ms;
+  --md-sys-motion-duration-medium-4: 400ms;
+  --md-sys-motion-duration-long-1: 450ms;
+  --md-sys-motion-duration-long-2: 500ms;
+  --md-sys-motion-duration-extra-long-1: 700ms;
+  --md-sys-motion-duration-extra-long-2: 800ms;
 
-  --text-2xs: 0.6875rem;
-  --text-xs: 0.75rem;
-  --text-sm: 0.875rem;
-  --text-base: 0.9375rem;
+  /* State layers (M3 interaction states, opacity on color) */
+  --md-sys-state-hover-opacity: 0.08;
+  --md-sys-state-focus-opacity: 0.12;
+  --md-sys-state-press-opacity: 0.12;
+  --md-sys-state-dragged-opacity: 0.16;
 
-  --u-1: 4px;
-  --u-2: 8px;
-  --u-3: 12px;
-  --u-4: 16px;
-  --u-5: 24px;
-  --u-6: 32px;
-  --u-7: 48px;
-  --u-8: 64px;
-
-  --radius-xs: 2px;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-pill: 999px;
-
-  --shadow-card: 0 1px 2px rgba(20, 32, 54, 0.04), 0 8px 24px -12px rgba(20, 32, 54, 0.08);
-  --shadow-pop: 0 12px 28px -10px rgba(20, 32, 54, 0.18);
-
-  /* Compatibility aliases used by the workbench layer. Every alias maps
-     back to the corporate palette above, so no legacy tech token can
-     silently fall back to transparent or black. */
-  --surface-canvas: var(--canvas);
-  --surface-panel: var(--paper);
-  --surface-well: var(--panel);
-  --surface-elev: var(--paper-elev);
-  --surface-hover: var(--panel-hover);
-  --ink-primary: var(--ink-deep);
-  --ink-tertiary: var(--ink-muted);
-  --ink-dim: var(--ink-faint);
-  --rule-bright: var(--rule-strong);
-  --pos: var(--positive);
-  --pos-soft: var(--positive-soft);
-  --neg: var(--negative);
-  --neg-soft: var(--negative-soft);
-  --acc: var(--accent);
-  --acc-soft: var(--accent-soft);
-  --warn: var(--warning);
-  --warn-soft: var(--warning-soft);
-  --space-1: var(--u-1);
-  --space-2: var(--u-2);
-  --space-3: var(--u-3);
-  --space-4: var(--u-4);
-  --space-5: var(--u-5);
-  --space-6: var(--u-6);
-  --space-7: var(--u-7);
-  --space-8: var(--u-8);
-
-  font-family: var(--font-sans);
-  color: var(--ink);
-  background: var(--canvas);
-  font-feature-settings: "ss01", "cv11";
-  -webkit-font-smoothing: antialiased;
+  /* Elevation (M3) */
+  --md-sys-elevation-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.30), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --md-sys-elevation-2: 0px 1px 2px 0px rgba(0, 0, 0, 0.30), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --md-sys-elevation-3: 0px 4px 8px 3px rgba(0, 0, 0, 0.15), 0px 1px 3px 0px rgba(0, 0, 0, 0.30);
+  --md-sys-elevation-4: 0px 6px 10px 4px rgba(0, 0, 0, 0.15), 0px 2px 3px 0px rgba(0, 0, 0, 0.30);
+  --md-sys-elevation-5: 0px 8px 12px 6px rgba(0, 0, 0, 0.15), 0px 4px 4px 0px rgba(0, 0, 0, 0.30);
 }
 
 [data-theme="dark"] {
-  --canvas: #0f172a;
-  --paper: #1e293b;
-  --paper-elev: #1e293b;
-  --panel: #334155;
-  --panel-hover: #475569;
-  --rule: #334155;
-  --rule-soft: #475569;
-  --rule-strong: #475569;
-  --ink-deep: #f1f5f9;
-  --ink: #e2e8f0;
-  --ink-secondary: #cbd5e1;
-  --ink-muted: #94a3b8;
-  --ink-faint: #64748b;
-  --accent: #60a5fa;
-  --accent-hover: #3b82f6;
-  --accent-soft: rgba(96, 165, 250, 0.15);
-  --accent-rule: rgba(96, 165, 250, 0.25);
-  --positive: #34d399;
-  --positive-soft: rgba(52, 211, 153, 0.15);
-  --negative: #f87171;
-  --negative-soft: rgba(248, 113, 113, 0.15);
-  --warning: #fbbf24;
-  --warning-soft: rgba(251, 191, 36, 0.15);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
-  --shadow-pop: 0 12px 28px -10px rgba(0, 0, 0, 0.6);
-  --surface-canvas: var(--canvas);
-  --surface-panel: var(--paper);
-  --surface-well: var(--panel);
-  --surface-elev: var(--paper-elev);
-  --surface-hover: var(--panel-hover);
-  --ink-primary: var(--ink-deep);
-  --ink-tertiary: var(--ink-muted);
-  --ink-dim: var(--ink-faint);
-  --rule-bright: var(--rule-strong);
-  --pos: var(--positive);
-  --pos-soft: var(--positive-soft);
-  --neg: var(--negative);
-  --neg-soft: var(--negative-soft);
-  --acc: var(--accent);
-  --acc-soft: var(--accent-soft);
-  --warn: var(--warning);
-  --warn-soft: var(--warning-soft);
+  /* Custom semantic extensions — dark variants */
+  --md-sys-color-success: #87d37e;
+  --md-sys-color-on-success: #003910;
+  --md-sys-color-success-container: #00531f;
+  --md-sys-color-on-success-container: #a3f2b4;
+  --md-sys-color-warning: #ffb95c;
+  --md-sys-color-on-warning: #4a2800;
+  --md-sys-color-warning-container: #6a3e00;
+  --md-sys-color-on-warning-container: #ffdcbe;
 }
 
-*:root, [data-theme="dark"] * {
-  font-feature-settings: "ss01", "cv11";
+/* ============================================================
+   Base styles — M3 tokens applied directly (alias layer removed).
+   ============================================================ */
+
+:root {
+    font-family: var(--md-ref-typeface-plain);
+  color: var(--md-sys-color-on-surface-variant);
+  background: var(--md-sys-color-surface);
+  font-feature-settings: "tnum", "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
 }
 
@@ -157,8 +107,8 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: var(--canvas);
-  color: var(--ink);
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface-variant);
   min-height: 100vh;
 }
 
@@ -175,10 +125,10 @@ button, input, select, textarea {
 button { cursor: pointer; }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--md-sys-color-primary);
   outline-offset: 2px;
 }
-::selection { background: var(--accent-soft); color: var(--ink-deep); }
+::selection { background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-surface); }
 
 .sr-only {
   position: absolute;
@@ -192,47 +142,122 @@ button { cursor: pointer; }
   border: 0;
 }
 
-
 /* ------------------------------------------------------------
-   Buttons — square 4px, uppercase mono labels, ink + accent
+   M3 button density + semantic color variants.
+   Applied by the m3 Button/IconButton wrappers via class names.
    ------------------------------------------------------------ */
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--u-2);
-  min-height: 36px;
-  padding: 0 var(--u-4);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--rule-strong);
-  background: var(--paper-elev);
-  font-family: var(--font-sans);
-  font-weight: 600;
-  font-size: var(--text-sm);
-  letter-spacing: 0.01em;
-  line-height: 1;
-  color: var(--ink);
-  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, transform 80ms ease;
+/* Density: sm = 32px, xs = 28px (default container height is 40px). */
+.m3-button--sm {
+  --md-filled-button-container-height: 32px;
+  --md-outlined-button-container-height: 32px;
+  --md-filled-tonal-button-container-height: 32px;
+  --md-text-button-container-height: 32px;
+  --md-filled-button-label-text-size: 0.8125rem;
+  --md-outlined-button-label-text-size: 0.8125rem;
+  --md-filled-tonal-button-label-text-size: 0.8125rem;
+  --md-text-button-label-text-size: 0.8125rem;
+  --md-filled-button-label-text-line-height: 1.125rem;
+  --md-outlined-button-label-text-line-height: 1.125rem;
+  --md-filled-tonal-button-label-text-line-height: 1.125rem;
+  --md-text-button-label-text-line-height: 1.125rem;
+  --md-filled-button-leading-space: 16px;
+  --md-filled-button-trailing-space: 16px;
+  --md-outlined-button-leading-space: 16px;
+  --md-outlined-button-trailing-space: 16px;
+  --md-filled-tonal-button-leading-space: 16px;
+  --md-filled-tonal-button-trailing-space: 16px;
+  --md-text-button-leading-space: 12px;
+  --md-text-button-trailing-space: 12px;
 }
-.btn:active { transform: translateY(1px); }
-.btn:disabled, .btn.is-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+.m3-button--xs {
+  --md-filled-button-container-height: 28px;
+  --md-outlined-button-container-height: 28px;
+  --md-filled-tonal-button-container-height: 28px;
+  --md-text-button-container-height: 28px;
+  --md-filled-button-label-text-size: 0.75rem;
+  --md-outlined-button-label-text-size: 0.75rem;
+  --md-filled-tonal-button-label-text-size: 0.75rem;
+  --md-text-button-label-text-size: 0.75rem;
+  --md-filled-button-label-text-line-height: 1rem;
+  --md-outlined-button-label-text-line-height: 1rem;
+  --md-filled-tonal-button-label-text-line-height: 1rem;
+  --md-text-button-label-text-line-height: 1rem;
+  --md-filled-button-leading-space: 12px;
+  --md-filled-button-trailing-space: 12px;
+  --md-outlined-button-leading-space: 12px;
+  --md-outlined-button-trailing-space: 12px;
+  --md-filled-tonal-button-leading-space: 12px;
+  --md-filled-tonal-button-trailing-space: 12px;
+  --md-text-button-leading-space: 8px;
+  --md-text-button-trailing-space: 8px;
+}
 
-.btn--primary { background: var(--ink-deep); color: var(--paper); border-color: var(--ink-deep); }
-.btn--primary:hover:not(:disabled) { background: var(--ink); border-color: var(--ink); }
+/* Semantic: destructive actions use error tokens on every variant. */
+.m3-button--danger.md-outlined-button {
+  --md-outlined-button-label-text-color: var(--md-sys-color-error);
+  --md-outlined-button-hover-label-text-color: var(--md-sys-color-error);
+  --md-outlined-button-focus-label-text-color: var(--md-sys-color-error);
+  --md-outlined-button-pressed-label-text-color: var(--md-sys-color-error);
+  --md-outlined-button-outline-color: var(--md-sys-color-error);
+  --md-outlined-button-hover-state-layer-color: var(--md-sys-color-error);
+  --md-outlined-button-pressed-state-layer-color: var(--md-sys-color-error);
+}
+.m3-button--danger.md-filled-button {
+  --md-filled-button-container-color: var(--md-sys-color-error);
+  --md-filled-button-label-text-color: var(--md-sys-color-on-error);
+  --md-filled-button-hover-label-text-color: var(--md-sys-color-on-error);
+  --md-filled-button-focus-label-text-color: var(--md-sys-color-on-error);
+  --md-filled-button-pressed-label-text-color: var(--md-sys-color-on-error);
+  --md-filled-button-hover-state-layer-color: var(--md-sys-color-on-error);
+  --md-filled-button-pressed-state-layer-color: var(--md-sys-color-on-error);
+}
+.m3-button--danger.md-text-button {
+  --md-text-button-label-text-color: var(--md-sys-color-error);
+  --md-text-button-hover-label-text-color: var(--md-sys-color-error);
+  --md-text-button-focus-label-text-color: var(--md-sys-color-error);
+  --md-text-button-pressed-label-text-color: var(--md-sys-color-error);
+  --md-text-button-hover-state-layer-color: var(--md-sys-color-error);
+  --md-text-button-pressed-state-layer-color: var(--md-sys-color-error);
+}
+.m3-button--danger.md-filled-tonal-button {
+  --md-filled-tonal-button-container-color: var(--md-sys-color-error-container);
+  --md-filled-tonal-button-label-text-color: var(--md-sys-color-on-error-container);
+  --md-filled-tonal-button-hover-label-text-color: var(--md-sys-color-on-error-container);
+  --md-filled-tonal-button-focus-label-text-color: var(--md-sys-color-on-error-container);
+  --md-filled-tonal-button-pressed-label-text-color: var(--md-sys-color-on-error-container);
+  --md-filled-tonal-button-hover-state-layer-color: var(--md-sys-color-on-error-container);
+  --md-filled-tonal-button-pressed-state-layer-color: var(--md-sys-color-on-error-container);
+}
 
-.btn--secondary { background: var(--paper-elev); color: var(--ink-deep); border-color: var(--rule-strong); }
-.btn--secondary:hover:not(:disabled) { background: var(--paper); border-color: var(--ink); }
+/* Semantic: positive actions use success tokens. */
+.m3-button--success.md-filled-button {
+  --md-filled-button-container-color: var(--md-sys-color-success);
+  --md-filled-button-label-text-color: var(--md-sys-color-on-success);
+  --md-filled-button-hover-label-text-color: var(--md-sys-color-on-success);
+  --md-filled-button-focus-label-text-color: var(--md-sys-color-on-success);
+  --md-filled-button-pressed-label-text-color: var(--md-sys-color-on-success);
+  --md-filled-button-hover-state-layer-color: var(--md-sys-color-on-success);
+  --md-filled-button-pressed-state-layer-color: var(--md-sys-color-on-success);
+}
+.m3-button--success.md-outlined-button {
+  --md-outlined-button-label-text-color: var(--md-sys-color-success);
+  --md-outlined-button-hover-label-text-color: var(--md-sys-color-success);
+  --md-outlined-button-focus-label-text-color: var(--md-sys-color-success);
+  --md-outlined-button-pressed-label-text-color: var(--md-sys-color-success);
+  --md-outlined-button-outline-color: var(--md-sys-color-success);
+  --md-outlined-button-hover-state-layer-color: var(--md-sys-color-success);
+  --md-outlined-button-pressed-state-layer-color: var(--md-sys-color-success);
+}
 
-.btn--ghost { background: transparent; color: var(--ink-secondary); border-color: transparent; font-weight: 500; }
-.btn--ghost:hover:not(:disabled) { color: var(--ink-deep); background: var(--panel); }
-
-.btn--danger { background: var(--paper-elev); color: var(--negative); border-color: var(--negative); }
-.btn--danger:hover:not(:disabled) { background: var(--negative-soft); }
-
-.btn--ink { background: var(--accent); color: var(--paper); border-color: var(--accent); }
-.btn--ink:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
-
-.btn--full { width: 100%; }
-.btn--sm { min-height: 28px; padding: 0 var(--u-3); font-size: var(--text-xs); }
-
+/* Icon button density: sm = 32px state layer + 20px icon, xs = 28px + 18px. */
+md-icon-button.m3-icon-button--sm {
+  --md-icon-button-state-layer-width: 32px;
+  --md-icon-button-state-layer-height: 32px;
+  --md-icon-button-icon-size: 20px;
+}
+md-icon-button.m3-icon-button--xs {
+  --md-icon-button-state-layer-width: 28px;
+  --md-icon-button-state-layer-height: 28px;
+  --md-icon-button-icon-size: 18px;
+}

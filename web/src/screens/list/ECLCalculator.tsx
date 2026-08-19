@@ -3,6 +3,7 @@ import { ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import type { CalculateECLResult } from "../../types";
+import { Button } from "../../components/m3";
 
 /**
  * ECL Calculator (US-082, PSAK 48).
@@ -96,9 +97,13 @@ export function ECLCalculator() {
               <span className="form-field__label">Entry date</span>
               <input className="input" type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
             </label>
-            <button type="button" className="btn btn--primary" onClick={() => void calculate()} disabled={loading}>
+            <Button
+              variant="filled"
+              onClick={() => void calculate()}
+              disabled={loading}
+            >
               {loading ? "Calculating..." : "Calculate & Post"}
-            </button>
+            </Button>
           </div>
         </section>
 
@@ -169,9 +174,9 @@ export function ECLCalculator() {
               </div>
             </section>
 
-            <section style={{ marginTop: 24, borderTop: "1px solid var(--rule)", paddingTop: 16 }}>
+            <section style={{ marginTop: 24, borderTop: "1px solid var(--md-sys-color-outline-variant)", paddingTop: 16 }}>
               <h3 style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 600 }}>Write Off Receivable</h3>
-              <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 12px" }}>
+              <p style={{ fontSize: 13, color: "var(--md-sys-color-on-surface-variant)", margin: "0 0 12px" }}>
                 Remove a specific uncollectible receivable: Dr 1202 (Allowance) / Cr 1201 (AR).
               </p>
               <div className="form-row">
@@ -208,23 +213,22 @@ export function ECLCalculator() {
                     placeholder="reason"
                   />
                 </label>
-                <button
-                  type="button"
-                  className="btn btn--secondary"
+                <Button
+                  variant="outlined"
                   onClick={() => void writeOff()}
                   disabled={writingOff}
                 >
                   {writingOff ? "Posting..." : "Write Off"}
-                </button>
+                </Button>
               </div>
-              {woError ? <p style={{ marginTop: 8, fontSize: 13, color: "var(--neg)" }}>{woError}</p> : null}
-              {woMsg ? <p style={{ marginTop: 8, fontSize: 13, color: "var(--pos)" }}>{woMsg}</p> : null}
+              {woError ? <p style={{ marginTop: 8, fontSize: 13, color: "var(--md-sys-color-error)" }}>{woError}</p> : null}
+              {woMsg ? <p style={{ marginTop: 8, fontSize: 13, color: "var(--md-sys-color-success)" }}>{woMsg}</p> : null}
             </section>
           </div>
         ) : (
           <div className="workarea__placeholder">
             <p>Pick an as-of date and press Calculate to age receivables and post the ECL provision.</p>
-            <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 8 }}>
+            <p style={{ fontSize: 13, color: "var(--md-sys-color-on-surface-variant)", marginTop: 8 }}>
               Default rates: {Object.entries(DEFAULT_RATES).map(([k, v]) => `${k}=${v}%`).join(", ")}.
             </p>
           </div>

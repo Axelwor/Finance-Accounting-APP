@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useToast } from "./Toast";
 import { api } from "../api";
 import type { ApprovalRequest } from "../types";
+import { Button } from "./m3";
 
 interface ApprovalActionsProps {
   request: ApprovalRequest;
@@ -50,22 +51,24 @@ export function ApprovalActions({ request, onSuccess }: ApprovalActionsProps) {
 
   return (
     <>
-      <button
-        type="button"
-        className="btn btn--sm btn--success"
+      <Button
+        variant="filled"
+        size="sm"
+        success
         onClick={() => openModal("approve")}
         disabled={request.status !== "PENDING"}
       >
         Approve
-      </button>
-      <button
-        type="button"
-        className="btn btn--sm btn--danger"
+      </Button>
+      <Button
+        variant="outlined"
+        size="sm"
+        danger
         onClick={() => openModal("reject")}
         disabled={request.status !== "PENDING"}
       >
         Reject
-      </button>
+      </Button>
       {showModal && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="approval-modal-title">
           <div className="modal">
@@ -112,15 +115,20 @@ export function ApprovalActions({ request, onSuccess }: ApprovalActionsProps) {
               )}
             </div>
             <div className="modal__footer">
-              <button type="button" className="btn" onClick={() => setShowModal(false)} disabled={loading}>Cancel</button>
-              <button
-                type="button"
-                className={`btn btn--${actionType === "approve" ? "success" : "danger"}`}
+              <Button
+                variant="tonal"
+                onClick={() => setShowModal(false)}
+                disabled={loading}
+              >Cancel</Button>
+              <Button
+                variant="filled"
+                success={actionType === "approve"}
+                danger={actionType === "reject"}
                 onClick={handleSubmit}
                 disabled={loading || (actionType === "reject" && !reason.trim())}
               >
                 {loading ? "Processing..." : actionType === "approve" ? "Confirm Approve" : "Confirm Reject"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

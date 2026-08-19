@@ -3,11 +3,14 @@ import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useAppState } from "../state";
 import { TenantSwitcher } from "./TenantSwitcher";
+import { Icon } from "../components/m3/Icon";
+import { ThemePicker } from "../components/ThemePicker";
+import "@material/web/iconbutton/icon-button.js";
 
 /**
- * Top navigation: brand, business identity (tenant switcher), and sign out.
- * Corporate Wave-style bar — no live clock or connection-status
- * dots that added visual noise.
+ * Top navigation — M3 top app bar: brand, business identity (tenant
+ * switcher), theme toggle, and sign out. Uses Material Symbols icons and
+ * M3 token typography (title-large, on-surface).
  */
 export function TopBar() {
   const { user, setUser, setBusiness, setTransactions } = useAppState();
@@ -46,33 +49,17 @@ export function TopBar() {
       </div>
 
       <div className="topbar__actions">
-        <button
-          type="button"
-          className="btn btn--ghost btn--sm"
-          onClick={toggleTheme}
+        <ThemePicker />
+        <md-icon-button
+          onclick={toggleTheme}
           aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
           title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
         >
-          {theme === "light" ? (
-            <>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="5"/>
-                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-              </svg>
-              Dark
-            </>
-          ) : (
-            <>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-              </svg>
-              Light
-            </>
-          )}
-        </button>
-        <button type="button" className="btn btn--ghost btn--sm" onClick={handleLogout}>
-          Sign out
-        </button>
+          <Icon name={theme === "light" ? "dark_mode" : "light_mode"} />
+        </md-icon-button>
+        <md-icon-button onclick={handleLogout} aria-label="Sign out" title="Sign out">
+          <Icon name="logout" />
+        </md-icon-button>
       </div>
     </header>
   );

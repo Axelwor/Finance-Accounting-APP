@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { EmailQueueItem } from "../../types";
+import { Button, Select } from "../../components/m3";
 
 export function EmailQueueList() {
   const [items, setItems] = useState<EmailQueueItem[]>([]);
@@ -74,29 +75,33 @@ export function EmailQueueList() {
           <small>View and manage queued email notifications.</small>
         </div>
         <div className="listtab__toolbar">
-          <select
-            className="btn btn--secondary btn--sm"
+          <Select
             value={filterTrigger}
-            onChange={(e) => setFilterTrigger(e.target.value)}
-          >
-            <option value="">All Triggers</option>
-            <option value="INVOICE_SENT">Invoice Sent</option>
-            <option value="PAYMENT_RECEIVED">Payment Received</option>
-            <option value="CREDIT_NOTE_ISSUED">Credit Note Issued</option>
-            <option value="QUOTATION_ACCEPTED">Quotation Accepted</option>
-            <option value="DELIVERY_ORDER_COMPLETED">Delivery Order Completed</option>
-          </select>
-          <select
-            className="btn btn--secondary btn--sm"
+            onChange={(e) => setFilterTrigger((e.target as HTMLElement & { value: string }).value)}
+            options={[
+              { value: "", label: "All Triggers" },
+              { value: "INVOICE_SENT", label: "Invoice Sent" },
+              { value: "PAYMENT_RECEIVED", label: "Payment Received" },
+              { value: "CREDIT_NOTE_ISSUED", label: "Credit Note Issued" },
+              { value: "QUOTATION_ACCEPTED", label: "Quotation Accepted" },
+              { value: "DELIVERY_ORDER_COMPLETED", label: "Delivery Order Completed" },
+            ]}
+          />
+          <Select
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
-            <option value="">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="sent">Sent</option>
-            <option value="failed">Failed</option>
-          </select>
-          <button className="btn btn--secondary btn--sm" onClick={() => void load()}>Reload</button>
+            onChange={(e) => setFilterStatus((e.target as HTMLElement & { value: string }).value)}
+            options={[
+              { value: "", label: "All Status" },
+              { value: "pending", label: "Pending" },
+              { value: "sent", label: "Sent" },
+              { value: "failed", label: "Failed" },
+            ]}
+          />
+          <Button
+            variant="outlined"
+            size="sm"
+            onClick={() => void load()}
+          >Reload</Button>
         </div>
       </div>
 
@@ -131,7 +136,7 @@ export function EmailQueueList() {
                         : formatStatus(item.status)}
                     </span>
                     {item.last_error && (
-                      <div style={{ fontSize: "12px", color: "var(--neg)", marginTop: "4px" }}>
+                      <div style={{ fontSize: "12px", color: "var(--md-sys-color-error)", marginTop: "4px" }}>
                         Error: {item.last_error}
                       </div>
                     )}
@@ -139,23 +144,30 @@ export function EmailQueueList() {
                   <td style={{ textAlign: "right" }}>
                     {(item.status === "PENDING" || item.status === "FAILED") && (
                       <>
-                        <button
-                          className="btn btn--ghost btn--sm"
+                        <Button
+                          variant="text"
+                          size="sm"
                           onClick={() => handleSend(item.id)}
                           style={{ marginRight: "4px" }}
                         >
                           Send
-                        </button>
-                        <button
-                          className="btn btn--danger btn--sm"
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="sm"
+                          danger
                           onClick={() => handleCancel(item.id)}
                         >
                           Cancel
-                        </button>
+                        </Button>
                       </>
                     )}
                     {item.status === "SENT" && (
-                      <button className="btn btn--disabled btn--sm" disabled>Viewed</button>
+                      <Button
+                        variant="tonal"
+                        size="sm"
+                        disabled
+                      >Viewed</Button>
                     )}
                   </td>
                 </tr>
