@@ -165,6 +165,25 @@ func Timeout(duration time.Duration) func(http.Handler) http.Handler {
 }
 
 // ---------------------------------------------------------------------------
+// F-05: LimitBody — global request body cap.
+// ---------------------------------------------------------------------------
+
+// LimitBody bounds every request body to n bytes and answers 413 when the
+// client exceeds it. Routes that need their own (tighter or looser) cap can
+// wrap r.Body with http.MaxBytesReader again — the inner reader wins because
+// it is applied closer to the handler.
+func LimitBody(n int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Body != nil {
+				r.Body = http.MaxBytesReader(w, r.Body, n)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
 // M-027: RateLimit — simple per-IP rate limiter for login endpoint.
 // ---------------------------------------------------------------------------
 

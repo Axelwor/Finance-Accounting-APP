@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import DOMPurify from "dompurify";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { EmailTemplate } from "../../types";
@@ -344,7 +345,7 @@ function EmailTemplateFormModal({ visible, onClose, onSave, initialData }: Email
               <div
                 className="email-preview"
                 style={{ padding: "16px", border: "1px solid var(--md-sys-color-outline-variant)", borderRadius: "4px", overflowX: "auto" }}
-                dangerouslySetInnerHTML={{ __html: bodyHtml || "<em>No content</em>" }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(bodyHtml || "<em>No content</em>") }}
               />
             ) : (
               <textarea

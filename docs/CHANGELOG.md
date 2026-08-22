@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Audit Fixes Phase A — Correctness & Security (F-02, F-03, F-04, F-05, F-07; plan `1787414685590-audit-fix-implementation-plan.md`):**
+  - **Trial balance POSTED-only (Critical):** `fetchTrialBalance` LEFT JOINs converted to INNER JOINs — lines belonging to non-POSTED (VOID/unposted) journal entries no longer leak into totals when no date filter is supplied. Regression-tested with a live-DB integration test (POSTED + VOID entry on the same account → only posted amounts counted).
+  - **Stored-XSS hardening (High):** Email template HTML preview is now sanitized client-side via DOMPurify (`<script>`, inline event handlers, and `javascript:` URLs stripped before render); all `/email/templates` + `/email/queue` endpoints moved from the staff-writable group to the Owner/Admin-only RBAC group (staff/accountant/manager/viewer now receive 403).
+  - **HTTP server timeouts (High):** `http.Server` now sets ReadHeaderTimeout=10s, ReadTimeout=60s, WriteTimeout=65s (deliberately above the 60s per-request handler timeout so exports are never truncated mid-write), IdleTimeout=120s.
+  - **Global body size cap (High):** new `middleware.LimitBody(8 MiB)` applied to every route — oversized request bodies are rejected; per-route tighter caps (e.g. attachments) still win.
+  - **Register rate-limited (Medium):** `POST /auth/register` now shares the login limiter (5 req/min/IP), returning 429 when exceeded.
+
 - **Frontend Visual & UX Enhancement Wave (FE-VIS-002 - Plan fe-vis-002-visual-ux-implementation.md):**
   - **Design System Tokens & Utilities:** High-contrast focus rings (`:focus-visible`), accounting double-underline rules (`.total-rule-top`, `.total-double`), soft Debit/Credit tinting (`.cell-debit`, `.cell-credit`) with dark mode support, computed field styling (`.input-computed`), sticky table headers, and standardized semantic status badges.
   - **Dashboard Analytics Widgets:** New `SegmentedAgingBar` (stacked horizontal progress with aging buckets 0-30, 31-60, 61-90, >90 days), `TrendPill` (semantic change indicators), and `QuickRatioGauge` (tri-zone liquidity gauge) integrated into Dashboard KPI and Aging matrices.

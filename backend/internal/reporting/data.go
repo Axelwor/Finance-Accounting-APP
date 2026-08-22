@@ -59,9 +59,9 @@ func (service *Service) fetchTrialBalance(ctx context.Context, tenantID int64, f
 		SELECT a.id, a.code, a.name,
 		       COALESCE(SUM(jl.debit_cents), 0), COALESCE(SUM(jl.credit_cents), 0)
 		FROM accounts a
-		LEFT JOIN journal_lines jl
+		JOIN journal_lines jl
 		       ON jl.tenant_id = $1 AND jl.account_id = a.id
-		LEFT JOIN journal_entries je
+		JOIN journal_entries je
 		       ON je.tenant_id = $1 AND je.id = jl.entry_id AND je.status = 'POSTED'
 		`+join+`
 		WHERE a.tenant_id = $1 AND a.is_group = false`+dateFilter(f.dateRange, dateBase, &args)+`

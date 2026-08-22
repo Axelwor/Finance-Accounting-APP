@@ -119,6 +119,7 @@ func main() {
 	router.Use(middleware.RequestLogger)                        // i-009: log every request
 	router.Use(middleware.CORS(middleware.DefaultCORSConfig())) // i-010: CORS
 	router.Use(middleware.Timeout(60 * time.Second))            // i-011: per-request timeout
+	router.Use(middleware.LimitBody(8 << 20))                   // F-05: global 8 MiB body cap (attachments install their own tighter cap)
 
 	// Rate limiter for auth endpoints (M-027: prevent brute-force).
 	loginLimiter := middleware.NewRateLimiter(5, time.Minute)
@@ -127,7 +128,7 @@ func main() {
 	router.Get("/healthz/detail", tenantHandler.HealthDetailed)
 	router.Route("/api/v1", func(router chi.Router) {
 		router.With(loginLimiter.Middleware).Post("/auth/login", authService.Login)
-		router.Post("/auth/register", authService.Register)
+		router.With(loginLimiter.Middleware).Post("/auth/register", authService.Register)
 		router.With(loginLimiter.Middleware).Post("/auth/refresh", authService.Refresh)
 		router.Post("/auth/logout", authService.Logout)
 		router.Post("/auth/switch-tenant", authService.SwitchTenant)
@@ -245,9 +246,6 @@ func main() {
 				// F-09: Cost/Profit Center
 				costCenterHandler.Routes(router)
 
-				// F-15: Email Notification (write — templates + queue)
-				emailHandler.Routes(router)
-
 				// N-01..N-10: Report Templates (CRUD)
 				router.Get("/reports/templates", reportsHandler.ListTemplates)
 				router.Post("/reports/templates", reportsHandler.CreateTemplate)
@@ -270,6 +268,13 @@ func main() {
 				router.Post("/periods/close", periodHandler.Close)
 				router.Post("/periods/unlock", periodHandler.Unlock)
 				router.Post("/accounts/{id}/deactivate", coaHandler.Deactivate)
+
+				// F-15/F-03: Email templates & queue (admin-only). Template
+				// bodyHTML is rendered as HTML in the UI preview, so only the
+				// trusted roles may create or edit it; sanitization happens at
+				// render time (DOMPurify) and deliberately not server-side,
+				// because legitimate templates need a wide tag set.
+				emailHandler.Routes(router)
 			})
 
 			// --- Read-only: all authenticated users (including viewer) ---
@@ -356,7 +361,17 @@ func main() {
 
 	// Graceful shutdown: SIGINT/SIGTERM triggers a 15-second drain period
 	// so in-flight requests finish before the process exits.
-	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: router}
+	// F-04: server-level timeouts. WriteTimeout (65s) deliberately exceeds
+	// the per-request Timeout middleware (60s) so the handler timeout wins
+	// and large XLSX/PDF exports are never truncated mid-write.
+	srv := &http.Server{
+		Addr:              cfg.HTTPAddr,
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      65 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 
 	shutdownErr := make(chan error, 1)
 	go func() {

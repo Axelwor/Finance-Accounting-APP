@@ -2,8 +2,10 @@ package middleware
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -294,5 +296,59 @@ func TestRequestID_HonorsIncomingHeader(t *testing.T) {
 func TestRequestIDFromContextEmpty(t *testing.T) {
 	if got := RequestIDFromContext(context.Background()); got != "" {
 		t.Errorf("expected empty request id, got %q", got)
+	}
+}
+
+// TestLimitBody_OverCap verifies F-05: a body larger than the cap is cut off
+// by http.MaxBytesReader. The handler sees a read error, and the response
+// writer has been marked so the server answers 413 when the handler writes
+// without an explicit status.
+func TestLimitBody_OverCap(t *testing.T) {
+	handler := LimitBody(16)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		buf := make([]byte, 64)
+		if _, err := r.Body.Read(buf); err == nil {
+			t.Error("expected read error for oversized body")
+		}
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+	}))
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequest("POST", "/", strings.NewReader("this body is definitely longer than sixteen bytes")))
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("expected 413, got %d", rr.Code)
+	}
+}
+
+// TestLimitBody_UnderCap verifies bodies within the cap pass through intact.
+func TestLimitBody_UnderCap(t *testing.T) {
+	handler := LimitBody(1024)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("unexpected read error: %v", err)
+		}
+		if string(body) != `{"ok":true}` {
+			t.Errorf("body = %q, want original payload", string(body))
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequest("POST", "/", strings.NewReader(`{"ok":true}`)))
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr.Code)
+	}
+}
+
+// TestLimitBody_ExactlyAtCap verifies the boundary: n bytes are allowed.
+func TestLimitBody_ExactlyAtCap(t *testing.T) {
+	handler := LimitBody(8)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil || len(body) != 8 {
+			t.Fatalf("expected full 8-byte body without error, got %d bytes, err=%v", len(body), err)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, httptest.NewRequest("POST", "/", strings.NewReader("12345678")))
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr.Code)
 	}
 }

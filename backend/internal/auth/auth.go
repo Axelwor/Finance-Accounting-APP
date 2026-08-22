@@ -755,3 +755,9 @@ func RoleFromContext(ctx context.Context) (string, bool) {
 func ContextKeyTenantID() contextKey {
 	return tenantIDKey
 }
+
+// ContextKeyRole exposes the role context key for tests and other packages
+// that need to inject the same value the middleware sets.
+func ContextKeyRole() contextKey {
+	return roleKey
+}
