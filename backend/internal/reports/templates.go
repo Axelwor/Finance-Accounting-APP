@@ -245,16 +245,6 @@ func (s *Service) GetLayout(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errResp{"LAYOUT_FAILED", err.Error()})
 		return
 	}
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT id, widget_type, title, config_json, grid_x, grid_y, grid_w, grid_h
-		FROM dashboard_widgets WHERE tenant_id=$1 AND layout_id=$2
-		ORDER BY grid_y, grid_x
-	`, tid, layoutID)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errResp{"QUERY_FAILED", err.Error()})
-		return
-	}
-	defer rows.Close()
 	type widget struct {
 		ID         int64           `json:"id"`
 		WidgetType string          `json:"widget_type"`
@@ -266,14 +256,30 @@ func (s *Service) GetLayout(w http.ResponseWriter, r *http.Request) {
 		GridH      int             `json:"grid_h"`
 	}
 	widgets := []widget{}
-	for rows.Next() {
-		var wt widget
-		var cfg []byte
-		if err := rows.Scan(&wt.ID, &wt.WidgetType, &wt.Title, &cfg, &wt.GridX, &wt.GridY, &wt.GridW, &wt.GridH); err != nil {
-			continue
+	err = db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT id, widget_type, title, config_json, grid_x, grid_y, grid_w, grid_h
+			FROM dashboard_widgets WHERE tenant_id=$1 AND layout_id=$2
+			ORDER BY grid_y, grid_x
+		`, tid, layoutID)
+		if err != nil {
+			return err
 		}
-		wt.Config = cfg
-		widgets = append(widgets, wt)
+		defer rows.Close()
+		for rows.Next() {
+			var wt widget
+			var cfg []byte
+			if err := rows.Scan(&wt.ID, &wt.WidgetType, &wt.Title, &cfg, &wt.GridX, &wt.GridY, &wt.GridW, &wt.GridH); err != nil {
+				continue
+			}
+			wt.Config = cfg
+			widgets = append(widgets, wt)
+		}
+		return nil
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errResp{"QUERY_FAILED", err.Error()})
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"layout_id": layoutID, "widgets": widgets})
 }
@@ -297,7 +303,10 @@ func (s *Service) SaveLayout(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errResp{"LAYOUT_FAILED", err.Error()})
 		return
 	}
-	_, _ = s.pool.Exec(r.Context(), `UPDATE dashboard_layouts SET name=$3 WHERE id=$1 AND tenant_id=$2`, layoutID, tid, req.Name)
+	_ = db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		_, err := tx.Exec(r.Context(), `UPDATE dashboard_layouts SET name=$3 WHERE id=$1 AND tenant_id=$2`, layoutID, tid, req.Name)
+		return err
+	})
 	writeJSON(w, http.StatusOK, map[string]any{"layout_id": layoutID, "message": "saved"})
 }
 
@@ -333,10 +342,12 @@ func (s *Service) AddWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var id int64
-	err = s.pool.QueryRow(r.Context(), `
-		INSERT INTO dashboard_widgets (tenant_id, layout_id, widget_type, title, config_json, grid_x, grid_y, grid_w, grid_h)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id
-	`, tid, layoutID, req.WidgetType, req.Title, []byte(req.Config), req.GridX, req.GridY, req.GridW, req.GridH).Scan(&id)
+	err = db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			INSERT INTO dashboard_widgets (tenant_id, layout_id, widget_type, title, config_json, grid_x, grid_y, grid_w, grid_h)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id
+		`, tid, layoutID, req.WidgetType, req.Title, []byte(req.Config), req.GridX, req.GridY, req.GridW, req.GridH).Scan(&id)
+	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errResp{"ADD_FAILED", err.Error()})
 		return
@@ -356,10 +367,13 @@ func (s *Service) UpdateWidget(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errResp{"INVALID_REQUEST", err.Error()})
 		return
 	}
-	_, err := s.pool.Exec(r.Context(), `
-		UPDATE dashboard_widgets SET widget_type=$3, title=$4, config_json=$5, grid_x=$6, grid_y=$7, grid_w=$8, grid_h=$9
-		WHERE tenant_id=$1 AND id=$2
-	`, tid, id, req.WidgetType, req.Title, []byte(req.Config), req.GridX, req.GridY, req.GridW, req.GridH)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		_, err := tx.Exec(r.Context(), `
+			UPDATE dashboard_widgets SET widget_type=$3, title=$4, config_json=$5, grid_x=$6, grid_y=$7, grid_w=$8, grid_h=$9
+			WHERE tenant_id=$1 AND id=$2
+		`, tid, id, req.WidgetType, req.Title, []byte(req.Config), req.GridX, req.GridY, req.GridW, req.GridH)
+		return err
+	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errResp{"UPDATE_FAILED", err.Error()})
 		return
@@ -374,7 +388,10 @@ func (s *Service) DeleteWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := pathID(chi.URLParam(r, "id"))
-	_, err := s.pool.Exec(r.Context(), `DELETE FROM dashboard_widgets WHERE tenant_id=$1 AND id=$2`, tid, id)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		_, err := tx.Exec(r.Context(), `DELETE FROM dashboard_widgets WHERE tenant_id=$1 AND id=$2`, tid, id)
+		return err
+	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errResp{"DELETE_FAILED", err.Error()})
 		return
@@ -433,51 +450,59 @@ func (s *Service) GetWidgetData(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) widgetKPICash(w http.ResponseWriter, r *http.Request, tid int64) {
 	var cash int64
-	_ = s.pool.QueryRow(r.Context(), `
-		SELECT COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0)
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.id = jl.entry_id AND je.tenant_id = jl.tenant_id
-		JOIN accounts a ON a.id = jl.account_id AND a.tenant_id = jl.tenant_id
-		WHERE jl.tenant_id = $1 AND je.status = 'POSTED' AND a.account_type IN ('CASH', 'BANK')
-	`, tid).Scan(&cash)
+	_ = db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0)
+			FROM journal_lines jl
+			JOIN journal_entries je ON je.id = jl.entry_id AND je.tenant_id = jl.tenant_id
+			JOIN accounts a ON a.id = jl.account_id AND a.tenant_id = jl.tenant_id
+			WHERE jl.tenant_id = $1 AND je.status = 'POSTED' AND a.account_type IN ('CASH', 'BANK')
+		`, tid).Scan(&cash)
+	})
 	writeJSON(w, http.StatusOK, map[string]any{"widget_type": "kpi_cash", "cash_cents": cash})
 }
 
 func (s *Service) widgetKPIAR(w http.ResponseWriter, r *http.Request, tid int64) {
 	var ar int64
-	_ = s.pool.QueryRow(r.Context(), `
-		SELECT COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0)
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.id = jl.entry_id AND je.tenant_id = jl.tenant_id
-		JOIN accounts a ON a.id = jl.account_id AND a.tenant_id = jl.tenant_id
-		WHERE jl.tenant_id = $1 AND je.status = 'POSTED' AND a.account_type = 'ACCOUNTS_RECEIVABLE'
-	`, tid).Scan(&ar)
+	_ = db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0)
+			FROM journal_lines jl
+			JOIN journal_entries je ON je.id = jl.entry_id AND je.tenant_id = jl.tenant_id
+			JOIN accounts a ON a.id = jl.account_id AND a.tenant_id = jl.tenant_id
+			WHERE jl.tenant_id = $1 AND je.status = 'POSTED' AND a.account_type = 'ACCOUNTS_RECEIVABLE'
+		`, tid).Scan(&ar)
+	})
 	writeJSON(w, http.StatusOK, map[string]any{"widget_type": "kpi_ar", "ar_cents": ar})
 }
 
 func (s *Service) widgetKPIAP(w http.ResponseWriter, r *http.Request, tid int64) {
 	var ap int64
-	_ = s.pool.QueryRow(r.Context(), `
-		SELECT COALESCE(SUM(jl.credit_cents - jl.debit_cents), 0)
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.id = jl.entry_id AND je.tenant_id = jl.tenant_id
-		JOIN accounts a ON a.id = jl.account_id AND a.tenant_id = jl.tenant_id
-		WHERE jl.tenant_id = $1 AND je.status = 'POSTED' AND a.account_type = 'ACCOUNTS_PAYABLE'
-	`, tid).Scan(&ap)
+	_ = db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT COALESCE(SUM(jl.credit_cents - jl.debit_cents), 0)
+			FROM journal_lines jl
+			JOIN journal_entries je ON je.id = jl.entry_id AND je.tenant_id = jl.tenant_id
+			JOIN accounts a ON a.id = jl.account_id AND a.tenant_id = jl.tenant_id
+			WHERE jl.tenant_id = $1 AND je.status = 'POSTED' AND a.account_type = 'ACCOUNTS_PAYABLE'
+		`, tid).Scan(&ap)
+	})
 	writeJSON(w, http.StatusOK, map[string]any{"widget_type": "kpi_ap", "ap_cents": ap})
 }
 
 func (s *Service) widgetKPIPL(w http.ResponseWriter, r *http.Request, tid int64) {
 	var rev, exp int64
-	_ = s.pool.QueryRow(r.Context(), `
-		SELECT
-		  COALESCE(SUM(CASE WHEN a.report_group='revenue' THEN jl.credit_cents - jl.debit_cents ELSE 0 END), 0),
-		  COALESCE(SUM(CASE WHEN a.report_group='expense' THEN jl.debit_cents - jl.credit_cents ELSE 0 END), 0)
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.id = jl.entry_id AND je.tenant_id = jl.tenant_id
-		JOIN accounts a ON a.id = jl.account_id AND a.tenant_id = jl.tenant_id
-		WHERE jl.tenant_id = $1 AND je.status = 'POSTED' AND a.report_group IN ('revenue', 'expense')
-	`, tid).Scan(&rev, &exp)
+	_ = db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT
+			  COALESCE(SUM(CASE WHEN a.report_group='revenue' THEN jl.credit_cents - jl.debit_cents ELSE 0 END), 0),
+			  COALESCE(SUM(CASE WHEN a.report_group='expense' THEN jl.debit_cents - jl.credit_cents ELSE 0 END), 0)
+			FROM journal_lines jl
+			JOIN journal_entries je ON je.id = jl.entry_id AND je.tenant_id = jl.tenant_id
+			JOIN accounts a ON a.id = jl.account_id AND a.tenant_id = jl.tenant_id
+			WHERE jl.tenant_id = $1 AND je.status = 'POSTED' AND a.report_group IN ('revenue', 'expense')
+		`, tid).Scan(&rev, &exp)
+	})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"widget_type":   "kpi_pl",
 		"revenue_cents": rev,
@@ -487,19 +512,6 @@ func (s *Service) widgetKPIPL(w http.ResponseWriter, r *http.Request, tid int64)
 }
 
 func (s *Service) widgetKPILowStock(w http.ResponseWriter, r *http.Request, tid int64) {
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT i.code, i.name, COALESCE(sb.qty_on_hand, 0), i.min_stock_qty
-		FROM items i
-		LEFT JOIN stock_balances sb ON sb.tenant_id = i.tenant_id AND sb.item_id = i.id
-		WHERE i.tenant_id = $1 AND i.is_tracked_stock = true
-		  AND COALESCE(sb.qty_on_hand, 0) <= i.min_stock_qty
-		LIMIT 20
-	`, tid)
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"widget_type": "kpi_low_stock", "items": []any{}})
-		return
-	}
-	defer rows.Close()
 	type item struct {
 		Code     string  `json:"code"`
 		Name     string  `json:"name"`
@@ -507,29 +519,36 @@ func (s *Service) widgetKPILowStock(w http.ResponseWriter, r *http.Request, tid 
 		MinStock float64 `json:"min_stock"`
 	}
 	items := []item{}
-	for rows.Next() {
-		var it item
-		if err := rows.Scan(&it.Code, &it.Name, &it.OnHand, &it.MinStock); err != nil {
-			continue
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT i.code, i.name, COALESCE(sb.qty_on_hand, 0), i.min_stock_qty
+			FROM items i
+			LEFT JOIN stock_balances sb ON sb.tenant_id = i.tenant_id AND sb.item_id = i.id
+			WHERE i.tenant_id = $1 AND i.is_tracked_stock = true
+			  AND COALESCE(sb.qty_on_hand, 0) <= i.min_stock_qty
+			LIMIT 20
+		`, tid)
+		if err != nil {
+			return err
 		}
-		items = append(items, it)
+		defer rows.Close()
+		for rows.Next() {
+			var it item
+			if err := rows.Scan(&it.Code, &it.Name, &it.OnHand, &it.MinStock); err != nil {
+				continue
+			}
+			items = append(items, it)
+		}
+		return nil
+	})
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"widget_type": "kpi_low_stock", "items": []any{}})
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"widget_type": "kpi_low_stock", "items": items})
 }
 
 func (s *Service) widgetRecentTransactions(w http.ResponseWriter, r *http.Request, tid int64) {
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT je.number, je.entry_date, je.description, je.source_ref, je.intent_type,
-		       (SELECT SUM(jl.debit_cents) FROM journal_lines jl WHERE jl.entry_id = je.id) AS total_debit
-		FROM journal_entries je
-		WHERE je.tenant_id = $1 AND je.status = 'POSTED'
-		ORDER BY je.created_at DESC LIMIT 10
-	`, tid)
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"widget_type": "recent_transactions", "transactions": []any{}})
-		return
-	}
-	defer rows.Close()
 	type txn struct {
 		Number      string `json:"number"`
 		EntryDate   string `json:"entry_date"`
@@ -539,42 +558,66 @@ func (s *Service) widgetRecentTransactions(w http.ResponseWriter, r *http.Reques
 		TotalCents  int64  `json:"total_cents"`
 	}
 	txns := []txn{}
-	for rows.Next() {
-		var t txn
-		if err := rows.Scan(&t.Number, &t.EntryDate, &t.Description, &t.SourceRef, &t.IntentType, &t.TotalCents); err != nil {
-			continue
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT je.number, je.entry_date, je.description, je.source_ref, je.intent_type,
+			       (SELECT SUM(jl.debit_cents) FROM journal_lines jl WHERE jl.entry_id = je.id) AS total_debit
+			FROM journal_entries je
+			WHERE je.tenant_id = $1 AND je.status = 'POSTED'
+			ORDER BY je.created_at DESC LIMIT 10
+		`, tid)
+		if err != nil {
+			return err
 		}
-		txns = append(txns, t)
+		defer rows.Close()
+		for rows.Next() {
+			var t txn
+			if err := rows.Scan(&t.Number, &t.EntryDate, &t.Description, &t.SourceRef, &t.IntentType, &t.TotalCents); err != nil {
+				continue
+			}
+			txns = append(txns, t)
+		}
+		return nil
+	})
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"widget_type": "recent_transactions", "transactions": []any{}})
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"widget_type": "recent_transactions", "transactions": txns})
 }
 
 func (s *Service) widgetBankBalance(w http.ResponseWriter, r *http.Request, tid int64) {
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT a.code, a.name, COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0)
-		FROM accounts a
-		LEFT JOIN journal_lines jl ON jl.account_id = a.id AND jl.tenant_id = a.tenant_id
-		LEFT JOIN journal_entries je ON je.id = jl.entry_id AND je.status = 'POSTED'
-		WHERE a.tenant_id = $1 AND a.account_type IN ('CASH', 'BANK') AND a.is_group = false
-		GROUP BY a.code, a.name ORDER BY a.code
-	`, tid)
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"widget_type": "bank_balance", "accounts": []any{}})
-		return
-	}
-	defer rows.Close()
 	type acct struct {
 		Code     string `json:"code"`
 		Name     string `json:"name"`
 		BalCents int64  `json:"balance_cents"`
 	}
 	banks := []acct{}
-	for rows.Next() {
-		var b acct
-		if err := rows.Scan(&b.Code, &b.Name, &b.BalCents); err != nil {
-			continue
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT a.code, a.name, COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0)
+			FROM accounts a
+			LEFT JOIN journal_lines jl ON jl.account_id = a.id AND jl.tenant_id = a.tenant_id
+			LEFT JOIN journal_entries je ON je.id = jl.entry_id AND je.status = 'POSTED'
+			WHERE a.tenant_id = $1 AND a.account_type IN ('CASH', 'BANK') AND a.is_group = false
+			GROUP BY a.code, a.name ORDER BY a.code
+		`, tid)
+		if err != nil {
+			return err
 		}
-		banks = append(banks, b)
+		defer rows.Close()
+		for rows.Next() {
+			var b acct
+			if err := rows.Scan(&b.Code, &b.Name, &b.BalCents); err != nil {
+				continue
+			}
+			banks = append(banks, b)
+		}
+		return nil
+	})
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"widget_type": "bank_balance", "accounts": []any{}})
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"widget_type": "bank_balance", "accounts": banks})
 }
@@ -583,21 +626,27 @@ func (s *Service) widgetBankBalance(w http.ResponseWriter, r *http.Request, tid 
 // HELPERS
 // =====================================================================
 
+// ensureLayout resolves (or creates) the user's active dashboard_layouts row.
+// Both statements run inside ONE tenant transaction: under a restricted role
+// the freshly inserted row would otherwise be invisible to the follow-up
+// statements, and the lookup itself fails closed without the tenant GUC.
 func (s *Service) ensureLayout(ctx context.Context, tid, uid int64) (int64, error) {
 	var layoutID int64
-	err := s.pool.QueryRow(ctx, `
-		SELECT id FROM dashboard_layouts WHERE tenant_id = $1 AND user_id = $2 AND is_active = true LIMIT 1
-	`, tid, uid).Scan(&layoutID)
-	if err == nil {
-		return layoutID, nil
-	}
-	if !isNoRows(err) {
-		return 0, err
-	}
-	err = s.pool.QueryRow(ctx, `
-		INSERT INTO dashboard_layouts (tenant_id, user_id, name, is_active)
-		VALUES ($1, $2, 'Default', true) RETURNING id
-	`, tid, uid).Scan(&layoutID)
+	err := db.WithTenantData(ctx, s.pool, tid, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `
+			SELECT id FROM dashboard_layouts WHERE tenant_id = $1 AND user_id = $2 AND is_active = true LIMIT 1
+		`, tid, uid).Scan(&layoutID)
+		if err == nil {
+			return nil
+		}
+		if !isNoRows(err) {
+			return err
+		}
+		return tx.QueryRow(ctx, `
+			INSERT INTO dashboard_layouts (tenant_id, user_id, name, is_active)
+			VALUES ($1, $2, 'Default', true) RETURNING id
+		`, tid, uid).Scan(&layoutID)
+	})
 	return layoutID, err
 }
 
