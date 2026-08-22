@@ -229,18 +229,6 @@ func (service *Service) ListDepreciationLog(writer http.ResponseWriter, request 
 		return
 	}
 
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT period_year, period_month, depreciation_cents, journal_entry_id, posted_at
-		FROM lease_depreciation_log
-		WHERE tenant_id = $1 AND lease_id = $2
-		ORDER BY period_year DESC, period_month DESC
-	`, tenantID, contractID)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
 	type depLogEntry struct {
 		PeriodYear        int    `json:"period_year"`
 		PeriodMonth       int    `json:"period_month"`
@@ -249,13 +237,29 @@ func (service *Service) ListDepreciationLog(writer http.ResponseWriter, request 
 		PostedAt          string `json:"posted_at"`
 	}
 	var log []depLogEntry
-	for rows.Next() {
-		var e depLogEntry
-		if err := rows.Scan(&e.PeriodYear, &e.PeriodMonth, &e.DepreciationCents, &e.JournalEntryID, &e.PostedAt); err != nil {
-			writeError(writer, http.StatusInternalServerError, "SCAN_FAILED", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT period_year, period_month, depreciation_cents, journal_entry_id, posted_at
+			FROM lease_depreciation_log
+			WHERE tenant_id = $1 AND lease_id = $2
+			ORDER BY period_year DESC, period_month DESC
+		`, tenantID, contractID)
+		if err != nil {
+			return err
 		}
-		log = append(log, e)
+		defer rows.Close()
+		for rows.Next() {
+			var e depLogEntry
+			if err := rows.Scan(&e.PeriodYear, &e.PeriodMonth, &e.DepreciationCents, &e.JournalEntryID, &e.PostedAt); err != nil {
+				return err
+			}
+			log = append(log, e)
+		}
+		return nil
+	})
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
+		return
 	}
 	if log == nil {
 		log = []depLogEntry{}

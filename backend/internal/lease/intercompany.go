@@ -188,39 +188,39 @@ func (service *Service) ListInterCompanyTx(writer http.ResponseWriter, request *
 	}
 	eliminated := request.URL.Query().Get("eliminated")
 
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT ic.id, ic.tenant_id, ic.counterparty_tenant_id,
-		       COALESCE(t2.name, ''),
-		       ic.tx_type, ic.journal_entry_id, ic.amount_cents, ic.tx_date,
-		       COALESCE(ic.description, ''), ic.eliminated, ic.created_at
-		FROM inter_company_transactions ic
-		LEFT JOIN tenants t2 ON t2.id = ic.counterparty_tenant_id
-		WHERE ic.tenant_id = $1
-		  AND ($2 = '' OR ic.tx_type = $2)
-		  AND ($3 = '' OR ic.eliminated = ($3 = 'true'))
-		ORDER BY ic.tx_date DESC, ic.id DESC
-		LIMIT 500
-	`, tenant, txType, eliminated)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "ICTX_LIST_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
 	items := []interCompanyTxResponse{}
-	for rows.Next() {
-		var it interCompanyTxResponse
-		var txDate time.Time
-		if err := rows.Scan(&it.ID, &it.TenantID, &it.CounterpartyTenantID, &it.CounterpartyName,
-			&it.TxType, &it.JournalEntryID, &it.AmountCents, &txDate,
-			&it.Description, &it.Eliminated, &it.CreatedAt); err != nil {
-			writeError(writer, http.StatusInternalServerError, "ICTX_LIST_FAILED", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT ic.id, ic.tenant_id, ic.counterparty_tenant_id,
+			       COALESCE(t2.name, ''),
+			       ic.tx_type, ic.journal_entry_id, ic.amount_cents, ic.tx_date,
+			       COALESCE(ic.description, ''), ic.eliminated, ic.created_at
+			FROM inter_company_transactions ic
+			LEFT JOIN tenants t2 ON t2.id = ic.counterparty_tenant_id
+			WHERE ic.tenant_id = $1
+			  AND ($2 = '' OR ic.tx_type = $2)
+			  AND ($3 = '' OR ic.eliminated = ($3 = 'true'))
+			ORDER BY ic.tx_date DESC, ic.id DESC
+			LIMIT 500
+		`, tenant, txType, eliminated)
+		if err != nil {
+			return err
 		}
-		it.TxDate = txDate.Format("2006-01-02")
-		items = append(items, it)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var it interCompanyTxResponse
+			var txDate time.Time
+			if err := rows.Scan(&it.ID, &it.TenantID, &it.CounterpartyTenantID, &it.CounterpartyName,
+				&it.TxType, &it.JournalEntryID, &it.AmountCents, &txDate,
+				&it.Description, &it.Eliminated, &it.CreatedAt); err != nil {
+				return err
+			}
+			it.TxDate = txDate.Format("2006-01-02")
+			items = append(items, it)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "ICTX_LIST_FAILED", err.Error())
 		return
 	}
@@ -281,12 +281,14 @@ func (service *Service) DeleteInterCompanyTx(writer http.ResponseWriter, request
 // child of tenant (either direction of the entity_hierarchy edge).
 func (service *Service) isInConsolidationGroup(ctx context.Context, tenant, counterparty int64) (bool, error) {
 	var related bool
-	err := service.pool.QueryRow(ctx, `
-		SELECT EXISTS(
-			SELECT 1 FROM entity_hierarchy
-			WHERE (tenant_id = $1 AND parent_tenant_id = $2)
-			   OR (tenant_id = $2 AND parent_tenant_id = $1)
-		)
-	`, tenant, counterparty).Scan(&related)
+	err := db.WithTenantData(ctx, service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			SELECT EXISTS(
+				SELECT 1 FROM entity_hierarchy
+				WHERE (tenant_id = $1 AND parent_tenant_id = $2)
+				   OR (tenant_id = $2 AND parent_tenant_id = $1)
+			)
+		`, tenant, counterparty).Scan(&related)
+	})
 	return related, err
 }

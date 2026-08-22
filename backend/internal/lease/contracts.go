@@ -243,42 +243,46 @@ func (service *Service) ListLeaseContracts(writer http.ResponseWriter, request *
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT id, number, lessee_name, lessor_name, start_date, end_date,
-		       payment_amount_cents, payment_frequency, total_payments, discount_rate,
-		       rou_asset_account_id, lease_liability_account_id, interest_expense_account_id,
-		       status, initial_rou_cents, initial_liability_cents, journal_entry_id
-		FROM lease_contracts
-		WHERE tenant_id = $1
-		ORDER BY start_date DESC, id DESC
-	`, tenant)
+	items := make([]leaseContractResponse, 0)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT id, number, lessee_name, lessor_name, start_date, end_date,
+			       payment_amount_cents, payment_frequency, total_payments, discount_rate,
+			       rou_asset_account_id, lease_liability_account_id, interest_expense_account_id,
+			       status, initial_rou_cents, initial_liability_cents, journal_entry_id
+			FROM lease_contracts
+			WHERE tenant_id = $1
+			ORDER BY start_date DESC, id DESC
+		`, tenant)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var lc leaseContractResponse
+			var startDate, endDate pgtype.Date
+			var lessorName pgtype.Text
+			var journalID pgtype.Int8
+			var rate pgtype.Numeric
+			if err := rows.Scan(&lc.ID, &lc.Number, &lc.LesseeName, &lessorName,
+				&startDate, &endDate, &lc.PaymentAmountCents, &lc.PaymentFrequency,
+				&lc.TotalPayments, &rate, &lc.ROUAssetAccountID, &lc.LeaseLiabilityAccountID,
+				&lc.InterestExpenseAccountID, &lc.Status, &lc.InitialROUCents,
+				&lc.InitialLiabilityCents, &journalID); err != nil {
+				return err
+			}
+			lc.StartDate = dateString(startDate)
+			lc.EndDate = dateString(endDate)
+			lc.LessorName = textValue(lessorName)
+			lc.DiscountRate = numericToString(rate)
+			lc.JournalEntryID = int8ValueRaw(journalID)
+			items = append(items, lc)
+		}
+		return nil
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "LIST_FAILED", err.Error())
 		return
-	}
-	defer rows.Close()
-
-	items := make([]leaseContractResponse, 0)
-	for rows.Next() {
-		var lc leaseContractResponse
-		var startDate, endDate pgtype.Date
-		var lessorName pgtype.Text
-		var journalID pgtype.Int8
-		var rate pgtype.Numeric
-		if err := rows.Scan(&lc.ID, &lc.Number, &lc.LesseeName, &lessorName,
-			&startDate, &endDate, &lc.PaymentAmountCents, &lc.PaymentFrequency,
-			&lc.TotalPayments, &rate, &lc.ROUAssetAccountID, &lc.LeaseLiabilityAccountID,
-			&lc.InterestExpenseAccountID, &lc.Status, &lc.InitialROUCents,
-			&lc.InitialLiabilityCents, &journalID); err != nil {
-			writeError(writer, http.StatusInternalServerError, "LIST_FAILED", err.Error())
-			return
-		}
-		lc.StartDate = dateString(startDate)
-		lc.EndDate = dateString(endDate)
-		lc.LessorName = textValue(lessorName)
-		lc.DiscountRate = numericToString(rate)
-		lc.JournalEntryID = int8ValueRaw(journalID)
-		items = append(items, lc)
 	}
 	writeJSON(writer, http.StatusOK, items)
 }
@@ -310,32 +314,37 @@ func (service *Service) GetLeaseContract(writer http.ResponseWriter, request *ht
 	}
 
 	// Load schedule.
-	schedRows, err := service.pool.Query(request.Context(), `
-		SELECT payment_no, payment_date, payment_amount_cents, principal_cents,
-		       interest_cents, remaining_liability_cents, journal_entry_id, posted
-		FROM lease_payments
-		WHERE tenant_id = $1 AND lease_id = $2
-		ORDER BY payment_no
-	`, tenant, leaseID)
+	schedule := make([]leasePaymentScheduleResponse, 0)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		schedRows, err := tx.Query(request.Context(), `
+			SELECT payment_no, payment_date, payment_amount_cents, principal_cents,
+			       interest_cents, remaining_liability_cents, journal_entry_id, posted
+			FROM lease_payments
+			WHERE tenant_id = $1 AND lease_id = $2
+			ORDER BY payment_no
+		`, tenant, leaseID)
+		if err != nil {
+			return err
+		}
+		defer schedRows.Close()
+		for schedRows.Next() {
+			var s leasePaymentScheduleResponse
+			var payDate pgtype.Date
+			var journalID pgtype.Int8
+			if err := schedRows.Scan(&s.PaymentNo, &payDate, &s.PaymentAmountCents,
+				&s.PrincipalCents, &s.InterestCents, &s.RemainingLiabilityCents,
+				&journalID, &s.Posted); err != nil {
+				return err
+			}
+			s.PaymentDate = dateString(payDate)
+			s.JournalEntryID = int8ValueRaw(journalID)
+			schedule = append(schedule, s)
+		}
+		return nil
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "LOAD_FAILED", err.Error())
 		return
-	}
-	defer schedRows.Close()
-	schedule := make([]leasePaymentScheduleResponse, 0)
-	for schedRows.Next() {
-		var s leasePaymentScheduleResponse
-		var payDate pgtype.Date
-		var journalID pgtype.Int8
-		if err := schedRows.Scan(&s.PaymentNo, &payDate, &s.PaymentAmountCents,
-			&s.PrincipalCents, &s.InterestCents, &s.RemainingLiabilityCents,
-			&journalID, &s.Posted); err != nil {
-			writeError(writer, http.StatusInternalServerError, "LOAD_FAILED", err.Error())
-			return
-		}
-		s.PaymentDate = dateString(payDate)
-		s.JournalEntryID = int8ValueRaw(journalID)
-		schedule = append(schedule, s)
 	}
 	result.Schedule = schedule
 
