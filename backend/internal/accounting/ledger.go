@@ -1,11 +1,15 @@
 package accounting
 
 import (
+	"github.com/jackc/pgx/v5"
+
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // ---------------------------------------------------------------------------
@@ -64,9 +68,11 @@ func (service *Service) GetGeneralLedger(writer http.ResponseWriter, request *ht
 
 	// Load the account (code + name) for display.
 	var accountCode, accountName string
-	err = service.pool.QueryRow(ctx, `
-		SELECT code, name FROM accounts WHERE tenant_id = $1 AND id = $2
-	`, tenant, accountID).Scan(&accountCode, &accountName)
+	err = db.WithTenantData(ctx, service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			SELECT code, name FROM accounts WHERE tenant_id = $1 AND id = $2
+		`, tenant, accountID).Scan(&accountCode, &accountName)
+	})
 	if err != nil {
 		writeError(writer, http.StatusNotFound, "ACCOUNT_NOT_FOUND", "account not found")
 		return
@@ -77,14 +83,16 @@ func (service *Service) GetGeneralLedger(writer http.ResponseWriter, request *ht
 	// movement).
 	var opening int64
 	if fromDate != "" {
-		err = service.pool.QueryRow(ctx, `
-			SELECT COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0)::bigint
-			FROM journal_lines jl
-			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-			WHERE jl.tenant_id = $1 AND jl.account_id = $2
-			  AND je.status = 'POSTED'
-			  AND je.entry_date < $3
-		`, tenant, accountID, fromDate).Scan(&opening)
+		err = db.WithTenantData(ctx, service.pool, tenant, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx, `
+				SELECT COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0)::bigint
+				FROM journal_lines jl
+				JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
+				WHERE jl.tenant_id = $1 AND jl.account_id = $2
+				  AND je.status = 'POSTED'
+				  AND je.entry_date < $3
+			`, tenant, accountID, fromDate).Scan(&opening)
+		})
 		if err != nil {
 			writeError(writer, http.StatusInternalServerError, "LEDGER_FAILED", err.Error())
 			return
@@ -92,37 +100,37 @@ func (service *Service) GetGeneralLedger(writer http.ResponseWriter, request *ht
 	}
 
 	// Movements inside the window.
-	rows, err := service.pool.Query(ctx, `
-		SELECT je.number, to_char(je.entry_date, 'YYYY-MM-DD'),
-		       COALESCE(je.description, ''),
-		       jl.debit_cents, jl.credit_cents
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		WHERE jl.tenant_id = $1 AND jl.account_id = $2
-		  AND je.status = 'POSTED'
-		  AND ($3 = '' OR je.entry_date >= $3)
-		  AND ($4 = '' OR je.entry_date <= $4)
-		ORDER BY je.entry_date ASC, je.number ASC
-	`, tenant, accountID, fromDate, toDate)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "LEDGER_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
 	movements := make([]GeneralLedgerMovement, 0)
-	running := opening
-	for rows.Next() {
-		var mov GeneralLedgerMovement
-		if err := rows.Scan(&mov.EntryNumber, &mov.EntryDate, &mov.Description, &mov.DebitCents, &mov.CreditCents); err != nil {
-			writeError(writer, http.StatusInternalServerError, "LEDGER_FAILED", err.Error())
-			return
+	err = db.WithTenantData(ctx, service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT je.number, to_char(je.entry_date, 'YYYY-MM-DD'),
+			       COALESCE(je.description, ''),
+			       jl.debit_cents, jl.credit_cents
+			FROM journal_lines jl
+			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
+			WHERE jl.tenant_id = $1 AND jl.account_id = $2
+			  AND je.status = 'POSTED'
+			  AND ($3 = '' OR je.entry_date >= $3)
+			  AND ($4 = '' OR je.entry_date <= $4)
+			ORDER BY je.entry_date ASC, je.number ASC
+		`, tenant, accountID, fromDate, toDate)
+		if err != nil {
+			return err
 		}
-		running += mov.DebitCents - mov.CreditCents
-		mov.RunningBalanceCents = running
-		movements = append(movements, mov)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		running := opening
+		for rows.Next() {
+			var mov GeneralLedgerMovement
+			if err := rows.Scan(&mov.EntryNumber, &mov.EntryDate, &mov.Description, &mov.DebitCents, &mov.CreditCents); err != nil {
+				return err
+			}
+			running += mov.DebitCents - mov.CreditCents
+			mov.RunningBalanceCents = running
+			movements = append(movements, mov)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "LEDGER_FAILED", err.Error())
 		return
 	}

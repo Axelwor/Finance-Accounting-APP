@@ -13,6 +13,8 @@ import (
 
 	"finance-accounting-app/backend/internal/approval"
 	"finance-accounting-app/backend/internal/auth"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // ManualLineRequest is one line of a manual journal entry request.
@@ -182,34 +184,34 @@ func (service *Service) ListJournalEntries(writer http.ResponseWriter, request *
 		idx++
 	}
 	args = append(args, 200) // limit
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT je.id, je.number, je.entry_date::text, COALESCE(je.description, ''),
-		       COALESCE(je.intent_type, ''), je.status,
-		       COALESCE(SUM(jl.debit_cents), 0), COALESCE(SUM(jl.credit_cents), 0)
-		FROM journal_entries je
-		LEFT JOIN journal_lines jl ON jl.tenant_id = je.tenant_id AND jl.entry_id = je.id
-		`+where+`
-		GROUP BY je.id, je.number, je.entry_date, je.description, je.intent_type, je.status
-		ORDER BY je.entry_date DESC, je.number DESC
-		LIMIT $`+itoa(idx)+`
-	`, args...)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
 	items := make([]JournalEntryListItem, 0)
-	for rows.Next() {
-		var item JournalEntryListItem
-		if err := rows.Scan(&item.ID, &item.Number, &item.EntryDate, &item.Description,
-			&item.IntentType, &item.Status, &item.TotalDebitCents, &item.TotalCreditCents); err != nil {
-			writeError(writer, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT je.id, je.number, je.entry_date::text, COALESCE(je.description, ''),
+			       COALESCE(je.intent_type, ''), je.status,
+			       COALESCE(SUM(jl.debit_cents), 0), COALESCE(SUM(jl.credit_cents), 0)
+			FROM journal_entries je
+			LEFT JOIN journal_lines jl ON jl.tenant_id = je.tenant_id AND jl.entry_id = je.id
+			`+where+`
+			GROUP BY je.id, je.number, je.entry_date, je.description, je.intent_type, je.status
+			ORDER BY je.entry_date DESC, je.number DESC
+			LIMIT $`+itoa(idx)+`
+		`, args...)
+		if err != nil {
+			return err
 		}
-		items = append(items, item)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var item JournalEntryListItem
+			if err := rows.Scan(&item.ID, &item.Number, &item.EntryDate, &item.Description,
+				&item.IntentType, &item.Status, &item.TotalDebitCents, &item.TotalCreditCents); err != nil {
+				return err
+			}
+			items = append(items, item)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
 	}
@@ -232,20 +234,22 @@ func (service *Service) GetJournalEntry(writer http.ResponseWriter, request *htt
 
 	var detail JournalEntryDetail
 	var sourceRef pgtype.Text
-	err = service.pool.QueryRow(request.Context(), `
-		SELECT je.id, je.number, je.entry_date::text, COALESCE(je.description, ''),
-		       COALESCE(je.intent_type, ''), je.status,
-		       COALESCE(SUM(jl.debit_cents), 0), COALESCE(SUM(jl.credit_cents), 0),
-		       je.source_ref
-		FROM journal_entries je
-		LEFT JOIN journal_lines jl ON jl.tenant_id = je.tenant_id AND jl.entry_id = je.id
-		WHERE je.tenant_id = $1 AND je.id = $2
-		GROUP BY je.id, je.number, je.entry_date, je.description, je.intent_type, je.status, je.source_ref
-	`, tenant, entryID).Scan(
-		&detail.ID, &detail.Number, &detail.EntryDate, &detail.Description,
-		&detail.IntentType, &detail.Status, &detail.TotalDebitCents, &detail.TotalCreditCents,
-		&sourceRef,
-	)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(request.Context(), `
+			SELECT je.id, je.number, je.entry_date::text, COALESCE(je.description, ''),
+			       COALESCE(je.intent_type, ''), je.status,
+			       COALESCE(SUM(jl.debit_cents), 0), COALESCE(SUM(jl.credit_cents), 0),
+			       je.source_ref
+			FROM journal_entries je
+			LEFT JOIN journal_lines jl ON jl.tenant_id = je.tenant_id AND jl.entry_id = je.id
+			WHERE je.tenant_id = $1 AND je.id = $2
+			GROUP BY je.id, je.number, je.entry_date, je.description, je.intent_type, je.status, je.source_ref
+		`, tenant, entryID).Scan(
+			&detail.ID, &detail.Number, &detail.EntryDate, &detail.Description,
+			&detail.IntentType, &detail.Status, &detail.TotalDebitCents, &detail.TotalCreditCents,
+			&sourceRef,
+		)
+	})
 	if err != nil {
 		if isNoRows(err) {
 			writeError(writer, http.StatusNotFound, "NOT_FOUND", "journal entry not found")
@@ -256,31 +260,31 @@ func (service *Service) GetJournalEntry(writer http.ResponseWriter, request *htt
 	}
 	detail.SourceRef = textValue(sourceRef)
 
-	lineRows, err := service.pool.Query(request.Context(), `
-		SELECT jl.account_id, COALESCE(a.code, ''), COALESCE(a.name, ''),
-		       jl.debit_cents, jl.credit_cents, COALESCE(jl.description, '')
-		FROM journal_lines jl
-		LEFT JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		WHERE jl.tenant_id = $1 AND jl.entry_id = $2
-		ORDER BY jl.debit_cents DESC, jl.credit_cents DESC
-	`, tenant, entryID)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
-		return
-	}
-	defer lineRows.Close()
-
 	detail.Lines = make([]JournalEntryLine, 0)
-	for lineRows.Next() {
-		var line JournalEntryLine
-		if err := lineRows.Scan(&line.AccountID, &line.AccountCode, &line.AccountName,
-			&line.DebitCents, &line.CreditCents, &line.Description); err != nil {
-			writeError(writer, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		lineRows, err := tx.Query(request.Context(), `
+			SELECT jl.account_id, COALESCE(a.code, ''), COALESCE(a.name, ''),
+			       jl.debit_cents, jl.credit_cents, COALESCE(jl.description, '')
+			FROM journal_lines jl
+			LEFT JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+			WHERE jl.tenant_id = $1 AND jl.entry_id = $2
+			ORDER BY jl.debit_cents DESC, jl.credit_cents DESC
+		`, tenant, entryID)
+		if err != nil {
+			return err
 		}
-		detail.Lines = append(detail.Lines, line)
-	}
-	if err := lineRows.Err(); err != nil {
+		defer lineRows.Close()
+		for lineRows.Next() {
+			var line JournalEntryLine
+			if err := lineRows.Scan(&line.AccountID, &line.AccountCode, &line.AccountName,
+				&line.DebitCents, &line.CreditCents, &line.Description); err != nil {
+				return err
+			}
+			detail.Lines = append(detail.Lines, line)
+		}
+		return lineRows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
 	}

@@ -1,8 +1,12 @@
 package accounting
 
 import (
+	"github.com/jackc/pgx/v5"
+
 	"net/http"
 	"strings"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // ---------------------------------------------------------------------------
@@ -64,34 +68,34 @@ func (service *Service) GetJournalRegister(writer http.ResponseWriter, request *
 		idx++
 	}
 	args = append(args, 500) // limit
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT je.id, je.number, je.entry_date::text, COALESCE(je.description, ''),
-		       COALESCE(je.intent_type, ''),
-		       COALESCE(SUM(jl.debit_cents), 0), COALESCE(SUM(jl.credit_cents), 0)
-		FROM journal_entries je
-		LEFT JOIN journal_lines jl ON jl.tenant_id = je.tenant_id AND jl.entry_id = je.id
-		`+where+`
-		GROUP BY je.id, je.number, je.entry_date, je.description, je.intent_type
-		ORDER BY je.entry_date DESC, je.number DESC
-		LIMIT $`+itoa(idx)+`
-	`, args...)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "REGISTER_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
 	items := make([]JournalRegisterItem, 0)
-	for rows.Next() {
-		var item JournalRegisterItem
-		if err := rows.Scan(&item.ID, &item.Number, &item.EntryDate, &item.Description,
-			&item.IntentType, &item.TotalDebitCents, &item.TotalCreditCents); err != nil {
-			writeError(writer, http.StatusInternalServerError, "REGISTER_FAILED", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT je.id, je.number, je.entry_date::text, COALESCE(je.description, ''),
+			       COALESCE(je.intent_type, ''),
+			       COALESCE(SUM(jl.debit_cents), 0), COALESCE(SUM(jl.credit_cents), 0)
+			FROM journal_entries je
+			LEFT JOIN journal_lines jl ON jl.tenant_id = je.tenant_id AND jl.entry_id = je.id
+			`+where+`
+			GROUP BY je.id, je.number, je.entry_date, je.description, je.intent_type
+			ORDER BY je.entry_date DESC, je.number DESC
+			LIMIT $`+itoa(idx)+`
+		`, args...)
+		if err != nil {
+			return err
 		}
-		items = append(items, item)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var item JournalRegisterItem
+			if err := rows.Scan(&item.ID, &item.Number, &item.EntryDate, &item.Description,
+				&item.IntentType, &item.TotalDebitCents, &item.TotalCreditCents); err != nil {
+				return err
+			}
+			items = append(items, item)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REGISTER_FAILED", err.Error())
 		return
 	}
