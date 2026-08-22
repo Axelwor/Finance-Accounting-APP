@@ -62,7 +62,7 @@ export function AuthScreen() {
         <div className="auth__copy">
           <h1 className="auth__title">
             Double-entry, simple<span className="slash">.</span>
-            <em> No accounting degree.</em>
+            <span> No accounting degree.</span>
           </h1>
           <p className="auth__lede">
             Money in, money out, transfers, and period close — written to one
@@ -71,7 +71,7 @@ export function AuthScreen() {
         </div>
         <div className="auth__signoff">
           <span><strong>Ledgerly</strong> &middot; bookkeeping for small business</span>
-          <span>M1 &middot; IDR</span>
+          <span className="auth__badge">M1 &middot; IDR</span>
         </div>
       </div>
 
@@ -99,33 +99,45 @@ export function AuthScreen() {
           </div>
 
           {mode === "register" ? (
-            <TextField
-              label="Business name"
-              value={businessName}
-              onChange={setBusinessName}
-              placeholder="e.g. Sari Corner Store"
-              autoComplete="organization"
-            />
+            <div className="field">
+              <label className="field__label" htmlFor="businessName">Business name</label>
+              <input
+                id="businessName"
+                className="input"
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                placeholder="e.g. Sari Corner Store"
+                autoComplete="organization"
+              />
+            </div>
           ) : null}
 
-          <TextField
-            label="Email"
-            type="email"
-            value={email}
-            onChange={setEmail}
-            placeholder="name@example.com"
-            autoComplete="email"
-            inputMode="email"
-          />
+          <div className="field">
+            <label className="field__label" htmlFor="email">Email</label>
+            <input
+              id="email"
+              className="input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@example.com"
+              autoComplete="email"
+              inputMode="email"
+            />
+          </div>
 
-          <TextField
-            label="Password"
-            type="password"
-            value={password}
-            onChange={setPassword}
-            placeholder="At least 8 characters"
-            autoComplete={mode === "register" ? "new-password" : "current-password"}
-          />
+          <div className="field">
+            <label className="field__label" htmlFor="password">Password</label>
+            <input
+              id="password"
+              className="input"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="At least 8 characters"
+              autoComplete={mode === "register" ? "new-password" : "current-password"}
+            />
+          </div>
 
           <FormError message={error} />
 

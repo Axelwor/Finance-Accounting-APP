@@ -178,8 +178,8 @@ export function DashboardScreen() {
         <LoadingState label="Loading dashboard..." />
       ) : (
         <div className="dashboard-grid">
-          {/* KPI row — 4 cards */}
-          <div className="dashboard-grid__cell dashboard-grid__cell--span-4">
+          {/* KPI row — 4 cards span full 12 columns */}
+          <div className="dashboard-grid__cell dashboard-grid__cell--span-12">
             <div className="kpi-grid">
               <KpiCard
                 lead
