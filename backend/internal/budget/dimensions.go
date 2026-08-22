@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // US-093: Dimensions (cabang / proyek / departemen / cost center). Dimensions
@@ -107,28 +109,32 @@ func (service *Service) ListDimensions(writer http.ResponseWriter, request *http
 	activeParam := strings.TrimSpace(q.Get("is_active"))
 
 	args := []any{tenant, nullableStr(dtype), nullableBool(activeParam)}
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT id, code, name, dimension_type, is_active, created_at
-		FROM dimensions
-		WHERE tenant_id = $1
-		  AND ($2::text IS NULL OR dimension_type = $2)
-		  AND ($3::boolean IS NULL OR is_active = $3)
-		ORDER BY dimension_type, code
-	`, args...)
+	items := []dimensionResponse{}
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT id, code, name, dimension_type, is_active, created_at
+			FROM dimensions
+			WHERE tenant_id = $1
+			  AND ($2::text IS NULL OR dimension_type = $2)
+			  AND ($3::boolean IS NULL OR is_active = $3)
+			ORDER BY dimension_type, code
+		`, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var d dimensionResponse
+			if err := rows.Scan(&d.ID, &d.Code, &d.Name, &d.DimensionType, &d.IsActive, &d.CreatedAt); err != nil {
+				return err
+			}
+			items = append(items, d)
+		}
+		return nil
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "DIMENSION_LIST_FAILED", err.Error())
 		return
-	}
-	defer rows.Close()
-
-	items := []dimensionResponse{}
-	for rows.Next() {
-		var d dimensionResponse
-		if err := rows.Scan(&d.ID, &d.Code, &d.Name, &d.DimensionType, &d.IsActive, &d.CreatedAt); err != nil {
-			writeError(writer, http.StatusInternalServerError, "DIMENSION_LIST_FAILED", err.Error())
-			return
-		}
-		items = append(items, d)
 	}
 	writeJSON(writer, http.StatusOK, items)
 }

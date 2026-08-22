@@ -10,6 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // US-093: Budgets — planned amounts per account / month for a fiscal year.
@@ -153,32 +155,36 @@ func (service *Service) ListBudgets(writer http.ResponseWriter, request *http.Re
 	}
 	q := request.URL.Query()
 	args := []any{tenant, optionalInt(q.Get("fiscal_year")), nullableStr(strings.TrimSpace(q.Get("status")))}
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT b.id, b.name, b.fiscal_year, COALESCE(b.dimension_id, 0), b.status, b.created_at,
-		       COUNT(bl.id), COALESCE(SUM(bl.amount_cents), 0)
-		FROM budgets b
-		LEFT JOIN budget_lines bl ON bl.tenant_id = b.tenant_id AND bl.budget_id = b.id
-		WHERE b.tenant_id = $1
-		  AND ($2::int IS NULL OR b.fiscal_year = $2)
-		  AND ($3::text IS NULL OR b.status = $3)
-		GROUP BY b.id
-		ORDER BY b.fiscal_year DESC, b.name
-	`, args...)
+	items := []budgetListItem{}
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT b.id, b.name, b.fiscal_year, COALESCE(b.dimension_id, 0), b.status, b.created_at,
+			       COUNT(bl.id), COALESCE(SUM(bl.amount_cents), 0)
+			FROM budgets b
+			LEFT JOIN budget_lines bl ON bl.tenant_id = b.tenant_id AND bl.budget_id = b.id
+			WHERE b.tenant_id = $1
+			  AND ($2::int IS NULL OR b.fiscal_year = $2)
+			  AND ($3::text IS NULL OR b.status = $3)
+			GROUP BY b.id
+			ORDER BY b.fiscal_year DESC, b.name
+		`, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var b budgetListItem
+			if err := rows.Scan(&b.ID, &b.Name, &b.FiscalYear, &b.DimensionID, &b.Status,
+				&b.CreatedAt, &b.LineCount, &b.TotalCents); err != nil {
+				return err
+			}
+			items = append(items, b)
+		}
+		return nil
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "BUDGET_LIST_FAILED", err.Error())
 		return
-	}
-	defer rows.Close()
-
-	items := []budgetListItem{}
-	for rows.Next() {
-		var b budgetListItem
-		if err := rows.Scan(&b.ID, &b.Name, &b.FiscalYear, &b.DimensionID, &b.Status,
-			&b.CreatedAt, &b.LineCount, &b.TotalCents); err != nil {
-			writeError(writer, http.StatusInternalServerError, "BUDGET_LIST_FAILED", err.Error())
-			return
-		}
-		items = append(items, b)
 	}
 	writeJSON(writer, http.StatusOK, items)
 }
@@ -197,10 +203,12 @@ func (service *Service) GetBudget(writer http.ResponseWriter, request *http.Requ
 	}
 
 	var b budgetResponse
-	err = service.pool.QueryRow(request.Context(), `
-		SELECT id, name, fiscal_year, COALESCE(dimension_id, 0), status, created_at
-		FROM budgets WHERE tenant_id = $1 AND id = $2
-	`, tenant, id).Scan(&b.ID, &b.Name, &b.FiscalYear, &b.DimensionID, &b.Status, &b.CreatedAt)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(request.Context(), `
+			SELECT id, name, fiscal_year, COALESCE(dimension_id, 0), status, created_at
+			FROM budgets WHERE tenant_id = $1 AND id = $2
+		`, tenant, id).Scan(&b.ID, &b.Name, &b.FiscalYear, &b.DimensionID, &b.Status, &b.CreatedAt)
+	})
 	if err != nil {
 		if isNoRows(err) {
 			writeError(writer, http.StatusNotFound, "BUDGET_NOT_FOUND", "budget not found")
@@ -210,25 +218,30 @@ func (service *Service) GetBudget(writer http.ResponseWriter, request *http.Requ
 		return
 	}
 
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT id, budget_id, account_id, COALESCE(dimension_id, 0), month, amount_cents
-		FROM budget_lines
-		WHERE tenant_id = $1 AND budget_id = $2
-		ORDER BY month, account_id
-	`, tenant, id)
+	b.Lines = []budgetLineResponse{}
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT id, budget_id, account_id, COALESCE(dimension_id, 0), month, amount_cents
+			FROM budget_lines
+			WHERE tenant_id = $1 AND budget_id = $2
+			ORDER BY month, account_id
+		`, tenant, id)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var bl budgetLineResponse
+			if err := rows.Scan(&bl.ID, &bl.BudgetID, &bl.AccountID, &bl.DimensionID, &bl.Month, &bl.AmountCents); err != nil {
+				return err
+			}
+			b.Lines = append(b.Lines, bl)
+		}
+		return nil
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "BUDGET_GET_FAILED", err.Error())
 		return
-	}
-	defer rows.Close()
-	b.Lines = []budgetLineResponse{}
-	for rows.Next() {
-		var bl budgetLineResponse
-		if err := rows.Scan(&bl.ID, &bl.BudgetID, &bl.AccountID, &bl.DimensionID, &bl.Month, &bl.AmountCents); err != nil {
-			writeError(writer, http.StatusInternalServerError, "BUDGET_GET_FAILED", err.Error())
-			return
-		}
-		b.Lines = append(b.Lines, bl)
 	}
 	writeJSON(writer, http.StatusOK, b)
 }
@@ -413,10 +426,12 @@ func (service *Service) BudgetVsActual(writer http.ResponseWriter, request *http
 		fiscalYear  int
 		dimensionID int64
 	)
-	err = service.pool.QueryRow(request.Context(), `
-		SELECT name, fiscal_year, COALESCE(dimension_id, 0)
-		FROM budgets WHERE tenant_id = $1 AND id = $2
-	`, tenant, id).Scan(&name, &fiscalYear, &dimensionID)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(request.Context(), `
+			SELECT name, fiscal_year, COALESCE(dimension_id, 0)
+			FROM budgets WHERE tenant_id = $1 AND id = $2
+		`, tenant, id).Scan(&name, &fiscalYear, &dimensionID)
+	})
 	if err != nil {
 		if isNoRows(err) {
 			writeError(writer, http.StatusNotFound, "BUDGET_NOT_FOUND", "budget not found")
@@ -427,34 +442,38 @@ func (service *Service) BudgetVsActual(writer http.ResponseWriter, request *http
 	}
 
 	// Load budget lines grouped by (account_id, month).
-	budgetRows, err := service.pool.Query(request.Context(), `
-		SELECT account_id, month, COALESCE(SUM(amount_cents), 0)
-		FROM budget_lines
-		WHERE tenant_id = $1 AND budget_id = $2
-		GROUP BY account_id, month
-	`, tenant, id)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "BUDGET_VS_ACTUAL_FAILED", err.Error())
-		return
-	}
-	defer budgetRows.Close()
-
 	type key struct {
 		accountID int64
 		month     int
 	}
 	budgetMap := make(map[key]int64)
 	accountIDs := make(map[int64]bool)
-	for budgetRows.Next() {
-		var accountID int64
-		var month int
-		var amount int64
-		if err := budgetRows.Scan(&accountID, &month, &amount); err != nil {
-			writeError(writer, http.StatusInternalServerError, "BUDGET_VS_ACTUAL_FAILED", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		budgetRows, err := tx.Query(request.Context(), `
+			SELECT account_id, month, COALESCE(SUM(amount_cents), 0)
+			FROM budget_lines
+			WHERE tenant_id = $1 AND budget_id = $2
+			GROUP BY account_id, month
+		`, tenant, id)
+		if err != nil {
+			return err
 		}
-		budgetMap[key{accountID, month}] = amount
-		accountIDs[accountID] = true
+		defer budgetRows.Close()
+		for budgetRows.Next() {
+			var accountID int64
+			var month int
+			var amount int64
+			if err := budgetRows.Scan(&accountID, &month, &amount); err != nil {
+				return err
+			}
+			budgetMap[key{accountID, month}] = amount
+			accountIDs[accountID] = true
+		}
+		return nil
+	})
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "BUDGET_VS_ACTUAL_FAILED", err.Error())
+		return
 	}
 
 	// Build the set of months for the fiscal year so we can compute actuals per
@@ -489,46 +508,50 @@ func (service *Service) BudgetVsActual(writer http.ResponseWriter, request *http
 
 	// We need a per-account net sign. Resolve the report_group so revenue is
 	// credit-led and expense is debit-led.
-	actualRows, err := service.pool.Query(request.Context(), `
-		SELECT jl.account_id,
-		       EXTRACT(MONTH FROM je.entry_date)::int AS month,
-		       a.report_group,
-		       COALESCE(SUM(jl.credit_cents - jl.debit_cents), 0) AS signed_credits,
-		       COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0) AS signed_debits
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		WHERE jl.tenant_id = $1
-		  AND je.status = 'POSTED'
-		  AND EXTRACT(YEAR FROM je.entry_date)::int = $2
-		  AND jl.account_id = ANY ($3)
-		`+dimensionJoin+`
-		GROUP BY jl.account_id, EXTRACT(MONTH FROM je.entry_date), a.report_group
-	`, args...)
+	actualMap := make(map[key]int64)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		actualRows, err := tx.Query(request.Context(), `
+			SELECT jl.account_id,
+			       EXTRACT(MONTH FROM je.entry_date)::int AS month,
+			       a.report_group,
+			       COALESCE(SUM(jl.credit_cents - jl.debit_cents), 0) AS signed_credits,
+			       COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0) AS signed_debits
+			FROM journal_lines jl
+			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
+			JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+			WHERE jl.tenant_id = $1
+			  AND je.status = 'POSTED'
+			  AND EXTRACT(YEAR FROM je.entry_date)::int = $2
+			  AND jl.account_id = ANY ($3)
+			`+dimensionJoin+`
+			GROUP BY jl.account_id, EXTRACT(MONTH FROM je.entry_date), a.report_group
+		`, args...)
+		if err != nil {
+			return err
+		}
+		defer actualRows.Close()
+		for actualRows.Next() {
+			var accountID int64
+			var month int
+			var reportGroup string
+			var signedCredits, signedDebits int64
+			if err := actualRows.Scan(&accountID, &month, &reportGroup, &signedCredits, &signedDebits); err != nil {
+				return err
+			}
+			var net int64
+			switch reportGroup {
+			case "revenue":
+				net = signedCredits // credit - debit
+			default:
+				net = signedDebits // debit - credit (expense/asset/liability/eq)
+			}
+			actualMap[key{accountID, month}] += net
+		}
+		return nil
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "BUDGET_VS_ACTUAL_FAILED", err.Error())
 		return
-	}
-	defer actualRows.Close()
-
-	actualMap := make(map[key]int64)
-	for actualRows.Next() {
-		var accountID int64
-		var month int
-		var reportGroup string
-		var signedCredits, signedDebits int64
-		if err := actualRows.Scan(&accountID, &month, &reportGroup, &signedCredits, &signedDebits); err != nil {
-			writeError(writer, http.StatusInternalServerError, "BUDGET_VS_ACTUAL_FAILED", err.Error())
-			return
-		}
-		var net int64
-		switch reportGroup {
-		case "revenue":
-			net = signedCredits // credit - debit
-		default:
-			net = signedDebits // debit - credit (expense/asset/liability/eq)
-		}
-		actualMap[key{accountID, month}] += net
 	}
 
 	// Resolve account code/name for the budgeted accounts.
@@ -538,24 +561,27 @@ func (service *Service) BudgetVsActual(writer http.ResponseWriter, request *http
 		for id := range accountIDs {
 			ids = append(ids, id)
 		}
-		metaRows, err := service.pool.Query(request.Context(), `
-			SELECT id, code, name FROM accounts WHERE tenant_id = $1 AND id = ANY ($2)
-		`, tenant, ids)
-		if err != nil {
+		if err := db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+			metaRows, err := tx.Query(request.Context(), `
+				SELECT id, code, name FROM accounts WHERE tenant_id = $1 AND id = ANY ($2)
+			`, tenant, ids)
+			if err != nil {
+				return err
+			}
+			defer metaRows.Close()
+			for metaRows.Next() {
+				var id2 int64
+				var code, aname string
+				if err := metaRows.Scan(&id2, &code, &aname); err != nil {
+					return err
+				}
+				accountMeta[id2] = struct{ code, name string }{code, aname}
+			}
+			return nil
+		}); err != nil {
 			writeError(writer, http.StatusInternalServerError, "BUDGET_VS_ACTUAL_FAILED", err.Error())
 			return
 		}
-		for metaRows.Next() {
-			var id2 int64
-			var code, aname string
-			if err := metaRows.Scan(&id2, &code, &aname); err != nil {
-				metaRows.Close()
-				writeError(writer, http.StatusInternalServerError, "BUDGET_VS_ACTUAL_FAILED", err.Error())
-				return
-			}
-			accountMeta[id2] = struct{ code, name string }{code, aname}
-		}
-		metaRows.Close()
 	}
 
 	result := BudgetVsActualResult{

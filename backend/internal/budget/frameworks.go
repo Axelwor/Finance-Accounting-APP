@@ -1,10 +1,14 @@
 package budget
 
 import (
+	"github.com/jackc/pgx/v5"
+
 	"context"
 	"errors"
 	"net/http"
 	"strings"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // US-090A: Report framework selection (EMKM / ETAP / SAK Umum). The framework
@@ -31,26 +35,30 @@ func (service *Service) ListFrameworks(writer http.ResponseWriter, request *http
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT id, framework, is_default, tenant_id, created_at
-		FROM report_frameworks
-		WHERE tenant_id = $1
-		ORDER BY is_default DESC, framework
-	`, tenant)
+	items := []frameworkResponse{}
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT id, framework, is_default, tenant_id, created_at
+			FROM report_frameworks
+			WHERE tenant_id = $1
+			ORDER BY is_default DESC, framework
+		`, tenant)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var f frameworkResponse
+			if err := rows.Scan(&f.ID, &f.Framework, &f.IsDefault, &f.TenantID, &f.CreatedAt); err != nil {
+				return err
+			}
+			items = append(items, f)
+		}
+		return nil
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "FRAMEWORK_LIST_FAILED", err.Error())
 		return
-	}
-	defer rows.Close()
-
-	items := []frameworkResponse{}
-	for rows.Next() {
-		var f frameworkResponse
-		if err := rows.Scan(&f.ID, &f.Framework, &f.IsDefault, &f.TenantID, &f.CreatedAt); err != nil {
-			writeError(writer, http.StatusInternalServerError, "FRAMEWORK_LIST_FAILED", err.Error())
-			return
-		}
-		items = append(items, f)
 	}
 	writeJSON(writer, http.StatusOK, items)
 }
@@ -120,11 +128,13 @@ func (service *Service) SetFramework(writer http.ResponseWriter, request *http.R
 // the tenant has not picked one yet (callers fall back to SAK_UMUM).
 func (service *Service) DefaultFramework(ctx context.Context, tenant int64) (string, error) {
 	var fw string
-	err := service.pool.QueryRow(ctx, `
-		SELECT framework FROM report_frameworks
-		WHERE tenant_id = $1 AND is_default = true
-		LIMIT 1
-	`, tenant).Scan(&fw)
+	err := db.WithTenantData(ctx, service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			SELECT framework FROM report_frameworks
+			WHERE tenant_id = $1 AND is_default = true
+			LIMIT 1
+		`, tenant).Scan(&fw)
+	})
 	if err != nil {
 		if isNoRows(err) {
 			return "", nil
