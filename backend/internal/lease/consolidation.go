@@ -1,6 +1,8 @@
 package lease
 
 import (
+	"sort"
+
 	"context"
 	"fmt"
 	"net/http"
@@ -187,36 +189,52 @@ func (service *Service) fetchConsolidatedTrialBalance(ctx context.Context, paren
 	// A-29: child balances are weighted by consolidation_pct from the entity
 	// hierarchy (parent = 100%). The pct scales debit and credit equally, so
 	// each tenant's books stay internally balanced after weighting.
-	rows, err := service.pool.Query(ctx, `
-		SELECT a.id, a.code, a.name, a.report_group,
-		       COALESCE(SUM(ROUND(jl.debit_cents  * COALESCE(eh.consolidation_pct, 1.0))), 0)::bigint,
-		       COALESCE(SUM(ROUND(jl.credit_cents * COALESCE(eh.consolidation_pct, 1.0))), 0)::bigint
-		FROM accounts a
-		LEFT JOIN journal_lines jl
-		       ON jl.tenant_id = ANY($1) AND jl.account_id = a.id
-		LEFT JOIN journal_entries je
-		       ON je.tenant_id = ANY($1) AND je.id = jl.entry_id AND je.status = 'POSTED'
-		LEFT JOIN entity_hierarchy eh
-		       ON eh.tenant_id = jl.tenant_id AND eh.parent_tenant_id = $2
-		WHERE a.tenant_id = ANY($1) AND a.is_group = false
-		GROUP BY a.id, a.code, a.name, a.report_group
-		ORDER BY a.code
-	`, tenantIDs, parentTenantID)
-	if err != nil {
-		return result, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var r consolidatedTrialBalanceRow
-		if err := rows.Scan(&r.AccountID, &r.AccountCode, &r.AccountName, &r.ReportGroup,
-			&r.DebitCents, &r.CreditCents); err != nil {
+	//
+	// Every journal/account/hierarchy table is RLS-scoped with fail-closed
+	// policies, so the former single ANY($1) cross-tenant query is now a
+	// per-tenant sweep inside tenant transactions. Weighted SUM is additive
+	// across tenants, so merging per-tenant results yields identical numbers;
+	// rows are re-sorted by account code afterwards to match the old output.
+	for _, tid := range tenantIDs {
+		err := db.WithTenantData(ctx, service.pool, tid, func(tx pgx.Tx) error {
+			rows, err := tx.Query(ctx, `
+				SELECT a.id, a.code, a.name, a.report_group,
+				       COALESCE(SUM(ROUND(jl.debit_cents  * COALESCE(eh.consolidation_pct, 1.0))), 0)::bigint,
+				       COALESCE(SUM(ROUND(jl.credit_cents * COALESCE(eh.consolidation_pct, 1.0))), 0)::bigint
+				FROM accounts a
+				LEFT JOIN journal_lines jl
+				       ON jl.tenant_id = $1 AND jl.account_id = a.id
+				LEFT JOIN journal_entries je
+				       ON je.tenant_id = $1 AND je.id = jl.entry_id AND je.status = 'POSTED'
+				LEFT JOIN entity_hierarchy eh
+				       ON eh.tenant_id = $1 AND eh.parent_tenant_id = $2
+				WHERE a.tenant_id = $1 AND a.is_group = false
+				GROUP BY a.id, a.code, a.name, a.report_group
+				ORDER BY a.code
+			`, tid, parentTenantID)
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var r consolidatedTrialBalanceRow
+				if err := rows.Scan(&r.AccountID, &r.AccountCode, &r.AccountName, &r.ReportGroup,
+					&r.DebitCents, &r.CreditCents); err != nil {
+					return err
+				}
+				result.Rows = append(result.Rows, r)
+				result.TotalDebitCents += r.DebitCents
+				result.TotalCreditCents += r.CreditCents
+			}
+			return nil
+		})
+		if err != nil {
 			return result, err
 		}
-		result.Rows = append(result.Rows, r)
-		result.TotalDebitCents += r.DebitCents
-		result.TotalCreditCents += r.CreditCents
 	}
+	sort.Slice(result.Rows, func(i, j int) bool {
+		return result.Rows[i].AccountCode < result.Rows[j].AccountCode
+	})
 
 	// Eliminate inter-company transactions: for each matched pair, subtract the
 	// journal lines of both entries from the consolidated totals.
@@ -276,35 +294,44 @@ func (service *Service) fetchConsolidatedProfitLoss(ctx context.Context, parentT
 	}
 
 	// A-29: child revenue/expense weighted by consolidation_pct (parent = 100%).
-	rows, err := service.pool.Query(ctx, `
-		SELECT a.report_group, COALESCE(SUM(ROUND((CASE
-			WHEN a.report_group IN ('revenue') THEN jl.credit_cents - jl.debit_cents
-			ELSE jl.debit_cents - jl.credit_cents END)
-			* COALESCE(eh.consolidation_pct, 1.0))), 0)::bigint
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		LEFT JOIN entity_hierarchy eh ON eh.tenant_id = jl.tenant_id AND eh.parent_tenant_id = $2
-		WHERE jl.tenant_id = ANY($1) AND je.status = 'POSTED'
-		  AND a.report_group IN ('revenue', 'expense')
-		GROUP BY a.report_group
-	`, tenantIDs, parentTenantID)
-	if err != nil {
-		return result, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var group string
-		var amount int64
-		if err := rows.Scan(&group, &amount); err != nil {
+	// RLS-scoped tables force a per-tenant sweep; the weighted sums are
+	// additive across tenants so accumulating per tenant is equivalent.
+	for _, tid := range tenantIDs {
+		err := db.WithTenantData(ctx, service.pool, tid, func(tx pgx.Tx) error {
+			rows, err := tx.Query(ctx, `
+				SELECT a.report_group, COALESCE(SUM(ROUND((CASE
+					WHEN a.report_group IN ('revenue') THEN jl.credit_cents - jl.debit_cents
+					ELSE jl.debit_cents - jl.credit_cents END)
+					* COALESCE(eh.consolidation_pct, 1.0))), 0)::bigint
+				FROM journal_lines jl
+				JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
+				JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+				LEFT JOIN entity_hierarchy eh ON eh.tenant_id = jl.tenant_id AND eh.parent_tenant_id = $2
+				WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
+				  AND a.report_group IN ('revenue', 'expense')
+				GROUP BY a.report_group
+			`, tid, parentTenantID)
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var group string
+				var amount int64
+				if err := rows.Scan(&group, &amount); err != nil {
+					return err
+				}
+				switch group {
+				case "revenue":
+					result.RevenueCents += amount
+				case "expense":
+					result.ExpenseCents += amount
+				}
+			}
+			return nil
+		})
+		if err != nil {
 			return result, err
-		}
-		switch group {
-		case "revenue":
-			result.RevenueCents = amount
-		case "expense":
-			result.ExpenseCents = amount
 		}
 	}
 
@@ -314,10 +341,10 @@ func (service *Service) fetchConsolidatedProfitLoss(ctx context.Context, parentT
 		return result, err
 	}
 	for _, e := range elim {
-		// Look up the account's report_group to determine if it's revenue or expense.
-		var reportGroup string
-		err := service.pool.QueryRow(ctx, `SELECT report_group FROM accounts WHERE id = $1`, e.accountID).Scan(&reportGroup)
-		if err != nil {
+		// report_group is resolved while collecting the elimination lines
+		// (inside the owning tenant's scope), so no extra lookup is needed.
+		reportGroup := e.reportGroup
+		if reportGroup == "" {
 			continue
 		}
 		net := e.debit - e.credit
@@ -340,39 +367,50 @@ func (service *Service) fetchConsolidatedProfitLoss(ctx context.Context, parentT
 // ---------------------------------------------------------------------------
 
 type eliminationEntry struct {
-	accountID int64
-	debit     int64
-	credit    int64
+	accountID   int64
+	tenantID    int64
+	debit       int64
+	credit      int64
+	reportGroup string
 }
 
 // computeEliminations finds matched inter-company transaction pairs (SALE from
 // A to B + PURCHASE from B to A, same amount) and returns the journal lines of
 // both entries so they can be subtracted from the consolidated totals.
+//
+// inter_company_transactions, journal_lines, and accounts are RLS-scoped with
+// fail-closed policies, so loading happens per tenant inside tenant
+// transactions: IC rows are collected tenant-by-tenant, matching stays a pure
+// in-memory step over the merged rows, and each pair's journal lines are read
+// inside the OWNING leg's tenant scope.
 func (service *Service) computeEliminations(ctx context.Context, tenantIDs []int64) ([]eliminationEntry, error) {
-	// Find all inter-company transactions within the consolidation group.
-	rows, err := service.pool.Query(ctx, `
-		SELECT id, tenant_id, counterparty_tenant_id, tx_type, journal_entry_id, amount_cents, eliminated
-		FROM inter_company_transactions
-		WHERE tenant_id = ANY($1) AND counterparty_tenant_id = ANY($1)
-		  AND journal_entry_id IS NOT NULL AND eliminated = false
-		ORDER BY amount_cents DESC, tx_date
-	`, tenantIDs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
 	var txs []icTx
-	for rows.Next() {
-		var t icTx
-		if err := rows.Scan(&t.id, &t.tenantID, &t.counterpartyTenantID, &t.txType,
-			&t.journalEntryID, &t.amountCents, &t.used); err != nil {
+	for _, tid := range tenantIDs {
+		err := db.WithTenantData(ctx, service.pool, tid, func(tx pgx.Tx) error {
+			rows, err := tx.Query(ctx, `
+				SELECT id, tenant_id, counterparty_tenant_id, tx_type, journal_entry_id, amount_cents, eliminated
+				FROM inter_company_transactions
+				WHERE counterparty_tenant_id = ANY($1)
+				  AND journal_entry_id IS NOT NULL AND eliminated = false
+				ORDER BY amount_cents DESC, tx_date
+			`, tenantIDs)
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var t icTx
+				if err := rows.Scan(&t.id, &t.tenantID, &t.counterpartyTenantID, &t.txType,
+					&t.journalEntryID, &t.amountCents, &t.used); err != nil {
+					return err
+				}
+				txs = append(txs, t)
+			}
+			return rows.Err()
+		})
+		if err != nil {
 			return nil, err
 		}
-		txs = append(txs, t)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 
 	pairs := matchEliminationPairs(txs)
@@ -381,38 +419,53 @@ func (service *Service) computeEliminations(ctx context.Context, tenantIDs []int
 	}
 
 	var elimEntries []eliminationEntry
-	var matchedIDs []int64
+	matchedByTenant := make(map[int64][]int64)
 	for _, p := range pairs {
-		matchedIDs = append(matchedIDs, p[0].id, p[1].id)
-		// Collect journal lines from both entries.
-		for _, entryID := range []int64{p[0].journalEntryID, p[1].journalEntryID} {
-			lines, err := service.pool.Query(ctx, `
-				SELECT account_id, debit_cents, credit_cents
-				FROM journal_lines
-				WHERE entry_id = $1 AND (debit_cents > 0 OR credit_cents > 0)
-			`, entryID)
+		matchedByTenant[p[0].tenantID] = append(matchedByTenant[p[0].tenantID], p[0].id)
+		matchedByTenant[p[1].tenantID] = append(matchedByTenant[p[1].tenantID], p[1].id)
+		// Collect journal lines (with the account's report group for P&L
+		// classification) from both entries, each inside its owning tenant.
+		for _, leg := range [2]icTx{p[0], p[1]} {
+			err := db.WithTenantData(ctx, service.pool, leg.tenantID, func(tx pgx.Tx) error {
+				lines, err := tx.Query(ctx, `
+					SELECT jl.account_id, jl.debit_cents, jl.credit_cents, COALESCE(a.report_group, '')
+					FROM journal_lines jl
+					LEFT JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+					WHERE jl.entry_id = $1 AND (jl.debit_cents > 0 OR jl.credit_cents > 0)
+				`, leg.journalEntryID)
+				if err != nil {
+					return err
+				}
+				defer lines.Close()
+				for lines.Next() {
+					var e eliminationEntry
+					if err := lines.Scan(&e.accountID, &e.debit, &e.credit, &e.reportGroup); err != nil {
+						return err
+					}
+					e.tenantID = leg.tenantID
+					elimEntries = append(elimEntries, e)
+				}
+				return nil
+			})
 			if err != nil {
 				return nil, err
 			}
-			for lines.Next() {
-				var e eliminationEntry
-				if err := lines.Scan(&e.accountID, &e.debit, &e.credit); err != nil {
-					lines.Close()
-					return nil, err
-				}
-				elimEntries = append(elimEntries, e)
-			}
-			lines.Close()
 		}
 	}
 	// A-29: persist the eliminated flag so each matched pair is eliminated
 	// exactly once. Best-effort — a failure to update must not break the
 	// report, so the error is swallowed (the next run retries the match).
-	_, _ = service.pool.Exec(ctx, `
-		UPDATE inter_company_transactions
-		SET eliminated = true
-		WHERE id = ANY($1)
-	`, matchedIDs)
+	// Updates are grouped per tenant because the table is RLS-scoped.
+	for tid, ids := range matchedByTenant {
+		_ = db.WithTenantData(ctx, service.pool, tid, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `
+				UPDATE inter_company_transactions
+				SET eliminated = true
+				WHERE id = ANY($1)
+			`, ids)
+			return err
+		})
+	}
 	return elimEntries, nil
 }
 
@@ -471,22 +524,52 @@ func matchEliminationPairs(txs []icTx) [][2]icTx {
 
 // collectConsolidationTenants returns the parent tenant + all its children.
 // If no hierarchy exists, returns just the requesting tenant.
+//
+// entity_hierarchy stores the edge under the CHILD's tenant id and is
+// RLS-scoped with fail-closed policies, so children are discovered by asking
+// every deployment tenant (the tenants table itself is not RLS-scoped)
+// whether it declares the given parent — each probe runs in that tenant's
+// own scope.
 func (service *Service) collectConsolidationTenants(ctx context.Context, parentTenantID int64) []int64 {
 	tenantIDs := []int64{parentTenantID}
-	rows, err := service.pool.Query(ctx, `
-		SELECT tenant_id FROM entity_hierarchy WHERE parent_tenant_id = $1
-	`, parentTenantID)
+	all, err := service.allTenantIDs(ctx)
 	if err != nil {
 		return tenantIDs
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var childID int64
-		if err := rows.Scan(&childID); err == nil {
-			tenantIDs = append(tenantIDs, childID)
+	for _, tid := range all {
+		if tid == parentTenantID {
+			continue
+		}
+		var count int
+		err := db.WithTenantData(ctx, service.pool, tid, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx,
+				`SELECT COUNT(*) FROM entity_hierarchy WHERE parent_tenant_id = $1`,
+				parentTenantID).Scan(&count)
+		})
+		if err == nil && count > 0 {
+			tenantIDs = append(tenantIDs, tid)
 		}
 	}
 	return tenantIDs
+}
+
+// allTenantIDs enumerates deployment tenants from the (not RLS-scoped)
+// tenants table.
+func (service *Service) allTenantIDs(ctx context.Context) ([]int64, error) {
+	rows, err := service.pool.Query(ctx, `SELECT id FROM tenants ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // formatIntSlice is a small helper for debugging/logging (unused but kept for
