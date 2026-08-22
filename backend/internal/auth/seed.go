@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -17,7 +18,20 @@ func seedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 // SeedDefaultCOA is the exported variant so other packages (e.g. tenant, which
 // creates additional books for an existing user) can provision a new tenant
 // with the same default chart of accounts, categories, and open period.
+//
+// QA-01 (CRITICAL): every seeded table (accounts, categories,
+// accounting_periods, ledger_chain_heads, …) is RLS-scoped with fail-closed
+// policies, so the inserts are rejected for a restricted application role
+// unless the NEW tenant's id is set on the transaction first. The GUC is set
+// here — inside the seed itself — so both provisioning paths (registration
+// and CreateAdditional) stay correct with one fix.
 func SeedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
+	if _, err := tx.Exec(ctx,
+		`SELECT set_config('app.tenant_id', $1, true)`,
+		strconv.FormatInt(tenantID, 10),
+	); err != nil {
+		return err
+	}
 	accounts := []struct {
 		code        string
 		name        string
