@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/auth"
+	"finance-accounting-app/backend/internal/db"
 	"finance-accounting-app/backend/internal/httperr"
 )
 
@@ -133,23 +135,25 @@ func (s *Service) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 		active = *req.IsActive
 	}
 	var resp TemplateResponse
-	err := s.pool.QueryRow(r.Context(), `
-		INSERT INTO email_templates (
-			tenant_id, code, name, subject, body_html, body_text,
-			trigger_event, is_active
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			INSERT INTO email_templates (
+				tenant_id, code, name, subject, body_html, body_text,
+				trigger_event, is_active
+			)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+			RETURNING id, code, name, subject, body_html, body_text,
+				trigger_event, is_active, created_at, updated_at
+		`,
+			tid, strings.TrimSpace(req.Code), strings.TrimSpace(req.Name),
+			strings.TrimSpace(req.Subject), req.BodyHTML, req.BodyText,
+			strings.ToUpper(strings.TrimSpace(req.TriggerEvent)), active,
+		).Scan(
+			&resp.ID, &resp.Code, &resp.Name, &resp.Subject, &resp.BodyHTML,
+			&resp.BodyText, &resp.TriggerEvent, &resp.IsActive, &resp.CreatedAt,
+			&resp.UpdatedAt,
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-		RETURNING id, code, name, subject, body_html, body_text,
-			trigger_event, is_active, created_at, updated_at
-	`,
-		tid, strings.TrimSpace(req.Code), strings.TrimSpace(req.Name),
-		strings.TrimSpace(req.Subject), req.BodyHTML, req.BodyText,
-		strings.ToUpper(strings.TrimSpace(req.TriggerEvent)), active,
-	).Scan(
-		&resp.ID, &resp.Code, &resp.Name, &resp.Subject, &resp.BodyHTML,
-		&resp.BodyText, &resp.TriggerEvent, &resp.IsActive, &resp.CreatedAt,
-		&resp.UpdatedAt,
-	)
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
 		return
@@ -163,31 +167,32 @@ func (s *Service) ListTemplates(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "TENANT_REQUIRED", "tenant context is required")
 		return
 	}
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT id, code, name, subject, body_html, body_text,
-			trigger_event, is_active, created_at, updated_at
-		FROM email_templates
-		WHERE tenant_id = $1
-		ORDER BY code
-	`, tid)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
-		return
-	}
-	defer rows.Close()
 	results := make([]TemplateResponse, 0)
-	for rows.Next() {
-		var t TemplateResponse
-		if err := rows.Scan(
-			&t.ID, &t.Code, &t.Name, &t.Subject, &t.BodyHTML, &t.BodyText,
-			&t.TriggerEvent, &t.IsActive, &t.CreatedAt, &t.UpdatedAt,
-		); err != nil {
-			writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
-			return
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT id, code, name, subject, body_html, body_text,
+				trigger_event, is_active, created_at, updated_at
+			FROM email_templates
+			WHERE tenant_id = $1
+			ORDER BY code
+		`, tid)
+		if err != nil {
+			return err
 		}
-		results = append(results, t)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var t TemplateResponse
+			if err := rows.Scan(
+				&t.ID, &t.Code, &t.Name, &t.Subject, &t.BodyHTML, &t.BodyText,
+				&t.TriggerEvent, &t.IsActive, &t.CreatedAt, &t.UpdatedAt,
+			); err != nil {
+				return err
+			}
+			results = append(results, t)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
 		return
 	}
@@ -252,16 +257,18 @@ func (s *Service) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 	sets = append(sets, "updated_at = now()")
 
 	var resp TemplateResponse
-	err := s.pool.QueryRow(r.Context(), `
-		UPDATE email_templates SET `+strings.Join(sets, ", ")+`
-		WHERE tenant_id = $1 AND id = $2
-		RETURNING id, code, name, subject, body_html, body_text,
-			trigger_event, is_active, created_at, updated_at
-	`, args...).Scan(
-		&resp.ID, &resp.Code, &resp.Name, &resp.Subject, &resp.BodyHTML,
-		&resp.BodyText, &resp.TriggerEvent, &resp.IsActive, &resp.CreatedAt,
-		&resp.UpdatedAt,
-	)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			UPDATE email_templates SET `+strings.Join(sets, ", ")+`
+			WHERE tenant_id = $1 AND id = $2
+			RETURNING id, code, name, subject, body_html, body_text,
+				trigger_event, is_active, created_at, updated_at
+		`, args...).Scan(
+			&resp.ID, &resp.Code, &resp.Name, &resp.Subject, &resp.BodyHTML,
+			&resp.BodyText, &resp.TriggerEvent, &resp.IsActive, &resp.CreatedAt,
+			&resp.UpdatedAt,
+		)
+	})
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "NOT_FOUND", "email template not found")
 		return
@@ -281,17 +288,19 @@ func (s *Service) DeactivateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var resp TemplateResponse
-	err := s.pool.QueryRow(r.Context(), `
-		UPDATE email_templates
-		SET is_active = false, updated_at = now()
-		WHERE tenant_id = $1 AND id = $2
-		RETURNING id, code, name, subject, body_html, body_text,
-			trigger_event, is_active, created_at, updated_at
-	`, tid, id).Scan(
-		&resp.ID, &resp.Code, &resp.Name, &resp.Subject, &resp.BodyHTML,
-		&resp.BodyText, &resp.TriggerEvent, &resp.IsActive, &resp.CreatedAt,
-		&resp.UpdatedAt,
-	)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			UPDATE email_templates
+			SET is_active = false, updated_at = now()
+			WHERE tenant_id = $1 AND id = $2
+			RETURNING id, code, name, subject, body_html, body_text,
+				trigger_event, is_active, created_at, updated_at
+		`, tid, id).Scan(
+			&resp.ID, &resp.Code, &resp.Name, &resp.Subject, &resp.BodyHTML,
+			&resp.BodyText, &resp.TriggerEvent, &resp.IsActive, &resp.CreatedAt,
+			&resp.UpdatedAt,
+		)
+	})
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "NOT_FOUND", "email template not found")
 		return
@@ -322,11 +331,13 @@ func (s *Service) Enqueue(w http.ResponseWriter, r *http.Request) {
 	// Resolve subject/body from template when a template_id is supplied.
 	var subject, bodyHTML, bodyText string
 	if req.TemplateID != nil && *req.TemplateID > 0 {
-		err := s.pool.QueryRow(r.Context(), `
-			SELECT subject, body_html, COALESCE(body_text, '')
-			FROM email_templates
-			WHERE tenant_id = $1 AND id = $2 AND is_active = true
-		`, tid, *req.TemplateID).Scan(&subject, &bodyHTML, &bodyText)
+		err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+			return tx.QueryRow(r.Context(), `
+				SELECT subject, body_html, COALESCE(body_text, '')
+				FROM email_templates
+				WHERE tenant_id = $1 AND id = $2 AND is_active = true
+			`, tid, *req.TemplateID).Scan(&subject, &bodyHTML, &bodyText)
+		})
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, "TEMPLATE_NOT_FOUND", "active email template not found")
 			return
@@ -346,24 +357,26 @@ func (s *Service) Enqueue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var resp QueueResponse
-	err := s.pool.QueryRow(r.Context(), `
-		INSERT INTO email_queue (
-			tenant_id, template_id, to_email, cc_email, bcc_email,
-			subject, body_html, body_text, status, entity_type, entity_id
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			INSERT INTO email_queue (
+				tenant_id, template_id, to_email, cc_email, bcc_email,
+				subject, body_html, body_text, status, entity_type, entity_id
+			)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'PENDING',$9,$10)
+			RETURNING id, template_id, to_email, cc_email, bcc_email, subject,
+				body_html, body_text, status, retry_count, max_retries, last_error,
+				sent_at, entity_type, entity_id, created_at, updated_at
+		`,
+			tid, req.TemplateID, strings.TrimSpace(req.ToEmail), req.CCEmail,
+			req.BCCEmail, subject, bodyHTML, bodyText, req.EntityType, req.EntityID,
+		).Scan(
+			&resp.ID, &resp.TemplateID, &resp.ToEmail, &resp.CCEmail, &resp.BCCEmail,
+			&resp.Subject, &resp.BodyHTML, &resp.BodyText, &resp.Status,
+			&resp.RetryCount, &resp.MaxRetries, &resp.LastError, &resp.SentAt,
+			&resp.EntityType, &resp.EntityID, &resp.CreatedAt, &resp.UpdatedAt,
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'PENDING',$9,$10)
-		RETURNING id, template_id, to_email, cc_email, bcc_email, subject,
-			body_html, body_text, status, retry_count, max_retries, last_error,
-			sent_at, entity_type, entity_id, created_at, updated_at
-	`,
-		tid, req.TemplateID, strings.TrimSpace(req.ToEmail), req.CCEmail,
-		req.BCCEmail, subject, bodyHTML, bodyText, req.EntityType, req.EntityID,
-	).Scan(
-		&resp.ID, &resp.TemplateID, &resp.ToEmail, &resp.CCEmail, &resp.BCCEmail,
-		&resp.Subject, &resp.BodyHTML, &resp.BodyText, &resp.Status,
-		&resp.RetryCount, &resp.MaxRetries, &resp.LastError, &resp.SentAt,
-		&resp.EntityType, &resp.EntityID, &resp.CreatedAt, &resp.UpdatedAt,
-	)
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
 		return
@@ -392,27 +405,28 @@ func (s *Service) ListQueue(w http.ResponseWriter, r *http.Request) {
 	}
 	query += " ORDER BY created_at DESC"
 
-	rows, err := s.pool.Query(r.Context(), query, args...)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
-		return
-	}
-	defer rows.Close()
 	results := make([]QueueResponse, 0)
-	for rows.Next() {
-		var q QueueResponse
-		if err := rows.Scan(
-			&q.ID, &q.TemplateID, &q.ToEmail, &q.CCEmail, &q.BCCEmail,
-			&q.Subject, &q.BodyHTML, &q.BodyText, &q.Status, &q.RetryCount,
-			&q.MaxRetries, &q.LastError, &q.SentAt, &q.EntityType, &q.EntityID,
-			&q.CreatedAt, &q.UpdatedAt,
-		); err != nil {
-			writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
-			return
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), query, args...)
+		if err != nil {
+			return err
 		}
-		results = append(results, q)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var q QueueResponse
+			if err := rows.Scan(
+				&q.ID, &q.TemplateID, &q.ToEmail, &q.CCEmail, &q.BCCEmail,
+				&q.Subject, &q.BodyHTML, &q.BodyText, &q.Status, &q.RetryCount,
+				&q.MaxRetries, &q.LastError, &q.SentAt, &q.EntityType, &q.EntityID,
+				&q.CreatedAt, &q.UpdatedAt,
+			); err != nil {
+				return err
+			}
+			results = append(results, q)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
 		return
 	}
@@ -434,19 +448,21 @@ func (s *Service) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var resp QueueResponse
-	err := s.pool.QueryRow(r.Context(), `
-		UPDATE email_queue
-		SET status = 'SENT', sent_at = now(), updated_at = now()
-		WHERE tenant_id = $1 AND id = $2 AND status = 'PENDING'
-		RETURNING id, template_id, to_email, cc_email, bcc_email, subject,
-			body_html, body_text, status, retry_count, max_retries, last_error,
-			sent_at, entity_type, entity_id, created_at, updated_at
-	`, tid, id).Scan(
-		&resp.ID, &resp.TemplateID, &resp.ToEmail, &resp.CCEmail, &resp.BCCEmail,
-		&resp.Subject, &resp.BodyHTML, &resp.BodyText, &resp.Status,
-		&resp.RetryCount, &resp.MaxRetries, &resp.LastError, &resp.SentAt,
-		&resp.EntityType, &resp.EntityID, &resp.CreatedAt, &resp.UpdatedAt,
-	)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			UPDATE email_queue
+			SET status = 'SENT', sent_at = now(), updated_at = now()
+			WHERE tenant_id = $1 AND id = $2 AND status = 'PENDING'
+			RETURNING id, template_id, to_email, cc_email, bcc_email, subject,
+				body_html, body_text, status, retry_count, max_retries, last_error,
+				sent_at, entity_type, entity_id, created_at, updated_at
+			`, tid, id).Scan(
+			&resp.ID, &resp.TemplateID, &resp.ToEmail, &resp.CCEmail, &resp.BCCEmail,
+			&resp.Subject, &resp.BodyHTML, &resp.BodyText, &resp.Status,
+			&resp.RetryCount, &resp.MaxRetries, &resp.LastError, &resp.SentAt,
+			&resp.EntityType, &resp.EntityID, &resp.CreatedAt, &resp.UpdatedAt,
+		)
+	})
 	if err != nil {
 		writeErr(w, http.StatusConflict, "INVALID_STATE", "email cannot be sent (must be in PENDING status)")
 		return
@@ -466,19 +482,21 @@ func (s *Service) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var resp QueueResponse
-	err := s.pool.QueryRow(r.Context(), `
-		UPDATE email_queue
-		SET status = 'CANCELLED', updated_at = now()
-		WHERE tenant_id = $1 AND id = $2 AND status = 'PENDING'
-		RETURNING id, template_id, to_email, cc_email, bcc_email, subject,
-			body_html, body_text, status, retry_count, max_retries, last_error,
-			sent_at, entity_type, entity_id, created_at, updated_at
-	`, tid, id).Scan(
-		&resp.ID, &resp.TemplateID, &resp.ToEmail, &resp.CCEmail, &resp.BCCEmail,
-		&resp.Subject, &resp.BodyHTML, &resp.BodyText, &resp.Status,
-		&resp.RetryCount, &resp.MaxRetries, &resp.LastError, &resp.SentAt,
-		&resp.EntityType, &resp.EntityID, &resp.CreatedAt, &resp.UpdatedAt,
-	)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			UPDATE email_queue
+			SET status = 'CANCELLED', updated_at = now()
+			WHERE tenant_id = $1 AND id = $2 AND status = 'PENDING'
+			RETURNING id, template_id, to_email, cc_email, bcc_email, subject,
+				body_html, body_text, status, retry_count, max_retries, last_error,
+				sent_at, entity_type, entity_id, created_at, updated_at
+		`, tid, id).Scan(
+			&resp.ID, &resp.TemplateID, &resp.ToEmail, &resp.CCEmail, &resp.BCCEmail,
+			&resp.Subject, &resp.BodyHTML, &resp.BodyText, &resp.Status,
+			&resp.RetryCount, &resp.MaxRetries, &resp.LastError, &resp.SentAt,
+			&resp.EntityType, &resp.EntityID, &resp.CreatedAt, &resp.UpdatedAt,
+		)
+	})
 	if err != nil {
 		writeErr(w, http.StatusConflict, "INVALID_STATE", "email cannot be cancelled (must be in PENDING status)")
 		return
