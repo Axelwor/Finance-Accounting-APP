@@ -71,6 +71,9 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # TLS certificates for the n8n subdomain served by this Caddy
+      # (environment-specific path, mirrors the live VPS layout).
+      - /home/ubuntu/n8n/certs:/etc/caddy/certs:ro
       - caddy_data:/data
       - caddy_config:/config
 
