@@ -1,48 +1,34 @@
 # UI Contract
 
-**Version:** 0.4.0  
+**Version:** 0.5.0  
 **Status:** Active  
 **Owner:** Product + Frontend  
-**Language:** English  
-**Last synced:** 2026-08-08 (SPEC-001)
+**Language:** English / Indonesian Localization Support  
+**Last synced:** 2026-08-22 (FE-OVR-001)
 
 ## Design Direction
 
-- **Accurate Online-inspired corporate workbench.** Calm, dense, professional — the instrument the user opens many times a day. The interface earns trust through consistency, legibility, and speed, not through decoration.
-- **White workspace, cool slate panels, deep navy ink.** A single blue accent (`#2f80ed`) is the only color carrying meaning beyond ink/surface; green is reserved exclusively for positive financial status.
-- **One professional sans family** (Inter) for headings, body, buttons, navigation, and field labels. **One monospace family** (IBM Plex Mono) for amounts, dates, codes, and compact metadata. No serif display layer.
-- **Native controls and structured layouts** over decorative component stacks. Optimize for daily-work density on desktop and mobile.
-- **Authoritative token source:** `web/src/styles.css` (`:root`). Every spec value below must match it; the CSS file is the source of truth.
+- **Accounting-First Corporate Workbench.** High density, structured, robust data entry inspired by Accurate Online / SAP combined with the crisp aesthetic of modern enterprise software.
+- **Zero-Glitch Pure SVG System:** Dependensi font ligature Material Symbols dihapus 100% dan digantikan oleh Pure SVG (`lucide-react`).
+- **Standard 3-Zone Enterprise Form Architecture:**
+  - **Zone 1 (Sticky Header):** Document Numbering, Status Badges, Toolbar Aksi (Cetak/Duplikasi/Tutup).
+  - **Zone 2 (Dynamic Body):** 2-Column Header Fields, Line Items Grid Engine (Keyboard-driven), Live Journal Impact Preview.
+  - **Zone 3 (Sticky Footer):** Real-time Debit=Credit Integrity Indicator, Grand Total Breakdown, Shortcut CTA Buttons.
+- **Authoritative token source:** `web/src/styles/m3-tokens.css` dan `web/src/styles/base.css`.
 
 ## Tokens
 
 | Token | Value | Role |
 |---|---|---|
-| `--canvas` | `#f5f7fa` | Page workspace background |
-| `--paper` | `#ffffff` | Form cards, table surfaces, flyouts |
-| `--paper-elev` | `#ffffff` | Elevated cards and popup surfaces |
-| `--panel` | `#eef2f6` | Sidebar, tab strip, secondary surfaces |
-| `--panel-hover` | `#e6edf5` | Hover states on panels |
-| `--ink-deep` | `#18324b` | Primary headings, strongest text, active nav |
-| `--ink` | `#263d55` | Body text, controls |
-| `--ink-secondary` | `#5c6f82` | Supporting text |
-| `--ink-muted` | `#8191a0` | Metadata, hints |
-| `--ink-faint` | `#aebbc7` | Disabled, faint borders |
-| `--rule` | `#d8e0e8` | Standard borders |
-| `--rule-soft` | `#e9eef3` | Subtle dividers |
-| `--rule-strong` | `#b8c5d2` | Input borders, control borders |
-| `--accent` | `#2f80ed` | Brand blue — links, primary buttons, active nav, positive amounts |
-| `--accent-hover` | `#236dcc` | Primary button hover |
-| `--accent-soft` | `rgba(47,128,237,0.10)` | Selected backgrounds, active-tab fills |
-| `--accent-rule` | `rgba(47,128,237,0.25)` | Tinted rules, focus rings |
-| `--positive` | `#27966f` | Profit, credit, balanced status (semantic only) |
-| `--negative` | `#c64b4b` | Losses, errors |
-| `--warning` | `#d18b2c` | Alerts, attention states |
-| Font — sans | `Inter` | All UI |
-| Font — mono | `IBM Plex Mono` | Amounts, dates, codes, status, journal numbers |
-| Radii | `2 / 4 / 6px` + `999px` pill | Cards, inputs, buttons, kind-mark pills |
-| Spacing | `4 / 8 / 12 / 16 / 24 / 32 / 48 / 64px` | One rhythm, no in-between values |
-| Shadow | `0 1px 2px + 0 8px 24px -12px` | Card elevation; popup shadow stronger |
+| `--brand-primary` | `#2563eb` | Primary Royal Blue accent |
+| `--bg-canvas` | `#f8fafc` | Canvas / Page Background (Slate 50) |
+| `--bg-surface` | `#ffffff` | Surface / Card / Table Background |
+| `--border-color` | `#e2e8f0` | Standard slate border |
+| `--color-success` | `#059669` | Balanced status, profit |
+| `--color-danger` | `#dc2626` | Unbalanced warning, loss |
+| `--color-warning` | `#d97706` | Pending, draft, warnings |
+| Font — sans | `Inter` / `Geist Sans` | Primary UI, labels, text |
+| Font — mono | `JetBrains Mono` / `IBM Plex Mono` | Tabular financial amounts, dates, IDs |
 
 **No Wave teal (`#0d7370`). No cream canvas (`#f7f5f0`). No Source Serif display layer.** These tokens are superseded by SPEC-001 (2026-08-08).
 

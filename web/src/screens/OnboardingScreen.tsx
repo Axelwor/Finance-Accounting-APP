@@ -2,42 +2,40 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAppState } from "../state";
-import { AmountField, Button, FormError, SelectField, TextField } from "../components/ui";
-import type { CurrencyCode } from "../types";
+import { Icon } from "../components/m3/Icon";
 import { formatIDR } from "../lib/format";
+import type { CurrencyCode } from "../types";
 
 type BalanceKey = "cash" | "bank" | "receivables" | "payables" | "equity";
 
-const BALANCE_FIELDS: { key: BalanceKey; label: string; hint?: string }[] = [
-  { key: "cash", label: "Cash on hand", hint: "Physical money in the drawer." },
-  { key: "bank", label: "Bank balance" },
-  { key: "receivables", label: "Receivables", hint: "Money owed to the business." },
-  { key: "payables", label: "Payables", hint: "Money the business owes." },
-  { key: "equity", label: "Starting capital" },
+const BALANCE_FIELDS: { key: BalanceKey; label: string; hint: string; type: "debit" | "credit" }[] = [
+  { key: "cash", label: "Kas Fisik (Cash on Hand)", hint: "Uang tunai di kasir/brankas", type: "debit" },
+  { key: "bank", label: "Rekening Bank Utama", hint: "Saldo giro/tabungan operasional", type: "debit" },
+  { key: "receivables", label: "Piutang Usaha (AR)", hint: "Tagihan yang belum dibayar pelanggan", type: "debit" },
+  { key: "payables", label: "Hutang Usaha (AP)", hint: "Kewajiban tagihan kepada pemasok", type: "credit" },
+  { key: "equity", label: "Modal Pemilik / Laba Ditahan", hint: "Ekuitas awal penyeimbang neraca", type: "credit" },
 ];
 
 const BUSINESS_TYPES = [
-  "Grocery / convenience store",
-  "Cafe / restaurant",
-  "Online shop",
-  "Services",
-  "Workshop",
-  "Other",
+  "Perdagangan / Retail / Grosir",
+  "Restoran / Cafe / F&B",
+  "Manufaktur & Pabrikasi",
+  "Jasa Konsultan & Profesional",
+  "Kontraktor & Konstruksi",
+  "Logistik & Transportasi",
+  "Lainnya",
 ];
-
-const CURRENCIES: { value: CurrencyCode; label: string }[] = [{ value: "IDR", label: "Rupiah (IDR)" }];
 
 const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
 ];
 
-/** 3-step onboarding flow: business details, book period, opening balance. */
 export function OnboardingScreen() {
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
-  const [businessType, setBusinessType] = useState("");
-  const [currency, setCurrency] = useState<CurrencyCode>("IDR");
+  const [businessType, setBusinessType] = useState(BUSINESS_TYPES[0]);
+  const [currency] = useState<CurrencyCode>("IDR");
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [startMonth, setStartMonth] = useState("1");
   const [balance, setBalance] = useState<Record<BalanceKey, string>>({
@@ -53,29 +51,29 @@ export function OnboardingScreen() {
   const navigate = useNavigate();
   const { setBusiness } = useAppState();
 
-  const totalAssets =
+  const totalDebit =
     (balance.cash ? Number(balance.cash) : 0) +
     (balance.bank ? Number(balance.bank) : 0) +
     (balance.receivables ? Number(balance.receivables) : 0);
-  const totalLiabilitiesEquity =
-    (balance.payables ? Number(balance.payables) : 0) + (balance.equity ? Number(balance.equity) : 0);
 
-  const stepValid = (): boolean => {
-    if (step === 0) return name.trim().length > 0 && businessType.trim().length > 0;
-    if (step === 1) {
-      const y = Number(year);
-      return y >= 2000 && y <= 2100 && startMonth !== "";
-    }
-    return true;
-  };
+  const totalCredit =
+    (balance.payables ? Number(balance.payables) : 0) +
+    (balance.equity ? Number(balance.equity) : 0);
 
-  const next = () => {
-    setError(null);
-    if (step === 0 && !stepValid()) {
-      setError("Please fill in business name and business type to continue.");
-      return;
-    }
-    if (step < 2) setStep((s) => s + 1);
+  const difference = totalDebit - totalCredit;
+  const isBalanced = difference === 0 && (totalDebit > 0 || totalCredit === 0);
+
+  const autoBalanceEquity = () => {
+    // Solves for equity so that: Assets = Liabilities + Equity (totalDebit = totalCredit)
+    const netAssets = (balance.cash ? Number(balance.cash) : 0) +
+      (balance.bank ? Number(balance.bank) : 0) +
+      (balance.receivables ? Number(balance.receivables) : 0) -
+      (balance.payables ? Number(balance.payables) : 0);
+
+    setBalance(prev => ({
+      ...prev,
+      equity: String(Math.max(0, netAssets))
+    }));
   };
 
   const handleFinish = async () => {
@@ -95,161 +93,256 @@ export function OnboardingScreen() {
       });
       const state = api.getLocalState();
       setBusiness(state.business);
-      navigate("/dashboard", { replace: true });
-    } catch (err) {
-      // The API throws ApiError ({ code, message }) objects, not Error
-      // instances — extract the message from either shape so the user sees
-      // the real backend error (e.g. opening balance failed to post) instead
-      // of a generic "Something went wrong".
-      const message =
-        err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string"
-          ? (err as { message: string }).message
-          : err instanceof Error
-            ? err.message
-            : "Something went wrong. Please try again.";
-      setError(message);
+      navigate("/", { replace: true });
+    } catch (err: unknown) {
+      const msg = typeof err === "object" && err !== null && "message" in err
+        ? (err as { message: string }).message
+        : "Gagal menyelesaikan konfigurasi.";
+      setError(msg);
+    } finally {
       setFinishing(false);
     }
   };
 
-  const setBalanceField = (key: BalanceKey, raw: string) => {
-    setBalance((s) => ({ ...s, [key]: raw.replace(/[^\d]/g, "").slice(0, 15) }));
-  };
-
-  const renderStep = () => {
-    if (step === 0) {
-      return (
-        <div className="form-stack">
-          <TextField label="Business name" value={name} onChange={setName} placeholder="e.g. Sari Corner Store" />
-          <SelectField
-            label="Business type"
-            value={businessType}
-            onChange={setBusinessType}
-            options={BUSINESS_TYPES.map((t) => ({ value: t, label: t }))}
-            placeholder="Choose business type"
-          />
-          <SelectField
-            label="Currency"
-            value={currency}
-            onChange={(v) => setCurrency(v as CurrencyCode)}
-            options={CURRENCIES}
-          />
-        </div>
-      );
-    }
-    if (step === 1) {
-      return (
-        <div className="form-stack">
-          <TextField
-            label="Fiscal year"
-            value={year}
-            onChange={(v) => setYear(v.replace(/[^\d]/g, "").slice(0, 4))}
-            inputMode="numeric"
-            hint="The year your bookkeeping starts."
-          />
-          <SelectField
-            label="Book period starts in month"
-            value={startMonth}
-            onChange={setStartMonth}
-            options={MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))}
-          />
-          <p className="field-note">
-            Book period: {MONTHS[Number(startMonth) - 1]} {year} through{" "}
-            {MONTHS[(Number(startMonth) + 10) % 12]} {Number(startMonth) === 1 ? year : Number(year) + 1}.
-          </p>
-        </div>
-      );
-    }
-    return (
-      <div className="form-stack">
-        {BALANCE_FIELDS.map((f) => (
-          <AmountField
-            key={f.key}
-            label={f.label}
-            value={balance[f.key]}
-            onChange={(raw) => setBalanceField(f.key, raw)}
-            hint={f.hint}
-          />
-        ))}
-        <div className="balance-summary">
-          <p className="balance-summary__label">Day-one ruling</p>
-          <div className="balance-summary__row">
-            <span>Total assets</span>
-            <strong>{formatIDR(totalAssets)}</strong>
-          </div>
-          <div className="balance-summary__row">
-            <span>Payables + capital</span>
-            <strong>{formatIDR(totalLiabilitiesEquity)}</strong>
-          </div>
-          <p className="balance-summary__note">
-            The system balances any difference against capital automatically.
-          </p>
-        </div>
-      </div>
-    );
-  };
-
-  const stepMeta = [
-    { label: "01 / Business", desc: "Name, type, and currency." },
-    { label: "02 / Period", desc: "When the fiscal year starts." },
-    { label: "03 / Opening balance", desc: "Your day-one financial position." },
-  ];
-
   return (
-    <div className="onboarding">
-      <header className="page-head">
-        <div className="page-head__left">
-          <p className="page-head__meta"><strong>SETUP</strong> &middot; 3 STEPS</p>
-          <h1 className="page-title">
-            <span>Open the book</span>
-            <span className="page-title__sep">/</span>
-            <span className="page-title__sub">onboarding</span>
-          </h1>
+    <div className="onboarding-page">
+      <header className="onboarding-header">
+        <div className="onboarding-brand">
+          <div className="brand-badge">
+            <Icon name="book_open" size={20} className="text-white" />
+          </div>
+          <span className="brand-name">Ledgerly Setup Wizard</span>
+        </div>
+        <div className="onboarding-steps-indicator">
+          <div className={`step-pill ${step >= 0 ? "is-active" : ""}`}>
+            <span className="step-num">1</span>
+            <span>Profil Usaha</span>
+          </div>
+          <div className="step-line" />
+          <div className={`step-pill ${step >= 1 ? "is-active" : ""}`}>
+            <span className="step-num">2</span>
+            <span>Periode Buku</span>
+          </div>
+          <div className="step-line" />
+          <div className={`step-pill ${step >= 2 ? "is-active" : ""}`}>
+            <span className="step-num">3</span>
+            <span>Neraca Awal</span>
+          </div>
         </div>
       </header>
 
-      <ol className="stepper" aria-label="Onboarding steps">
-        {stepMeta.map((s, i) => (
-          <li
-            key={s.label}
-            className={`stepper__item${i === step ? " is-active" : i < step ? " is-done" : ""}`}
-          >
-            <span className="stepper__num">{s.label.split(" / ")[0]}</span>
-            <span className="stepper__label">{s.label.split(" / ")[1]}</span>
-          </li>
-        ))}
-      </ol>
-
-      <form
-        className="card-panel"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (step === 2) void handleFinish();
-          else next();
-        }}
-        noValidate
-      >
-        <div className="card-panel__head">
-          <h2 className="card-panel__title">{stepMeta[step].label.split(" / ")[1]}</h2>
-          <p className="card-panel__sub">{stepMeta[step].desc}</p>
-        </div>
-
-        {renderStep()}
-        <FormError message={error} />
-
-        <div className="form-card__actions">
-          {step > 0 ? (
-            <Button variant="secondary" onClick={() => setStep((s) => s - 1)}>
-              Back
-            </Button>
-          ) : (
-            <span />
+      <main className="onboarding-body">
+        <div className="onboarding-card">
+          {error && (
+            <div className="auth-error-alert" role="alert">
+              <Icon name="error" size={16} />
+              <span>{error}</span>
+            </div>
           )}
-          <Button type="submit" variant="primary" disabled={finishing}>
-            {step < 2 ? "Next" : finishing ? "Posting..." : "Open console"}
-          </Button>
+
+          {step === 0 && (
+            <div className="wizard-step">
+              <div className="wizard-step__header">
+                <h2>Langkah 1: Identitas & Bidang Usaha</h2>
+                <p>Tentukan nama entitas resmi dan jenis industri untuk struktur bagan akun otomatis.</p>
+              </div>
+
+              <div className="wizard-fields">
+                <div className="auth-field">
+                  <label htmlFor="company-name">Nama Entitas / Perusahaan *</label>
+                  <input
+                    id="company-name"
+                    type="text"
+                    required
+                    className="input-base"
+                    placeholder="Contoh: PT Surya Niaga Mandiri"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </div>
+
+                <div className="auth-field">
+                  <label htmlFor="business-type">Sektor / Bidang Industri</label>
+                  <select
+                    id="business-type"
+                    className="input-base"
+                    value={businessType}
+                    onChange={(e) => setBusinessType(e.target.value)}
+                  >
+                    {BUSINESS_TYPES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="wizard-actions">
+                <div />
+                <button
+                  type="button"
+                  className="btn-wizard-next"
+                  disabled={!name.trim()}
+                  onClick={() => setStep(1)}
+                >
+                  <span>Lanjutkan ke Periode Buku</span>
+                  <Icon name="arrow_forward" size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div className="wizard-step">
+              <div className="wizard-step__header">
+                <h2>Langkah 2: Konfigurasi Tahun & Periode Fiskal</h2>
+                <p>Tentukan tahun buku aktif dan bulan awal pembukuan akuntansi.</p>
+              </div>
+
+              <div className="wizard-fields form-grid-2col">
+                <div className="auth-field">
+                  <label htmlFor="fiscal-year">Tahun Buku Fiskal *</label>
+                  <input
+                    id="fiscal-year"
+                    type="number"
+                    min="2000"
+                    max="2100"
+                    className="input-base font-mono"
+                    value={year}
+                    onChange={(e) => setYear(e.target.value)}
+                  />
+                </div>
+
+                <div className="auth-field">
+                  <label htmlFor="start-month">Bulan Mulai Pembukuan</label>
+                  <select
+                    id="start-month"
+                    className="input-base"
+                    value={startMonth}
+                    onChange={(e) => setStartMonth(e.target.value)}
+                  >
+                    {MONTHS.map((m, idx) => (
+                      <option key={m} value={String(idx + 1)}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="wizard-actions">
+                <button
+                  type="button"
+                  className="btn-wizard-prev"
+                  onClick={() => setStep(0)}
+                >
+                  <Icon name="arrow_back" size={16} />
+                  <span>Kembali</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn-wizard-next"
+                  onClick={() => setStep(2)}
+                >
+                  <span>Lanjutkan ke Neraca Saldo Awal</span>
+                  <Icon name="arrow_forward" size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="wizard-step">
+              <div className="wizard-step__header">
+                <div className="flex-between">
+                  <div>
+                    <h2>Langkah 3: Neraca Saldo Hari Pertama (Day-One Solver)</h2>
+                    <p>Masukkan saldo kas, piutang, dan hutang per tanggal mulai pembukuan.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-auto-balance"
+                    onClick={autoBalanceEquity}
+                    title="Seimbangkan modal secara otomatis"
+                  >
+                    <Icon name="refresh" size={14} />
+                    <span>Seimbangkan Modal Otomatis</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="balance-grid">
+                {BALANCE_FIELDS.map((f) => (
+                  <div key={f.key} className="balance-row">
+                    <div className="balance-info">
+                      <span className="balance-label">{f.label}</span>
+                      <span className="balance-hint">{f.hint}</span>
+                    </div>
+                    <div className="balance-input-wrapper">
+                      <span className="currency-prefix">Rp</span>
+                      <input
+                        type="number"
+                        className="balance-input font-mono"
+                        placeholder="0"
+                        value={balance[f.key]}
+                        onChange={(e) =>
+                          setBalance((b) => ({ ...b, [f.key]: e.target.value }))
+                        }
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="balance-summary-strip">
+                <div className="summary-col">
+                  <span className="summary-label">Total Aset (Debit):</span>
+                  <span className="summary-val font-mono">{formatIDR(totalDebit)}</span>
+                </div>
+                <div className="summary-col">
+                  <span className="summary-label">Total Kewajiban & Modal (Kredit):</span>
+                  <span className="summary-val font-mono">{formatIDR(totalCredit)}</span>
+                </div>
+                <div className="summary-col">
+                  <span className="summary-label">Status Keseimbangan:</span>
+                  {isBalanced ? (
+                    <span className="status-badge status-balanced">
+                      <Icon name="check" size={14} /> Seimbang (100%)
+                    </span>
+                  ) : (
+                    <span className="status-badge status-unbalanced">
+                      Selisih: {formatIDR(Math.abs(difference))}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="wizard-actions">
+                <button
+                  type="button"
+                  className="btn-wizard-prev"
+                  onClick={() => setStep(1)}
+                >
+                  <Icon name="arrow_back" size={16} />
+                  <span>Kembali</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn-wizard-finish"
+                  disabled={finishing}
+                  onClick={handleFinish}
+                >
+                  {finishing ? (
+                    <span>Menyimpan Konfigurasi...</span>
+                  ) : (
+                    <>
+                      <Icon name="check" size={16} />
+                      <span>Selesaikan Setup & Buka Dashboard</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-      </form>
+      </main>
     </div>
   );
 }

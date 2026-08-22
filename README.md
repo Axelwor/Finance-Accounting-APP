@@ -77,10 +77,28 @@ Aplikasi akuntansi double-entry lengkap dengan arsitektur modular monolith Go + 
 |---|---|
 | Backend | Go 1.25, chi router, pgx/v5, sqlc, golang-jwt, bcrypt |
 | Database | PostgreSQL 16 (RLS FORCE per tenant, deferred balance constraint) |
-| Frontend | React 19, TypeScript, Vite/Rolldown |
+| Frontend | React 19, TypeScript, Vite, Pure CSS Tokens (Accounting-First Architecture), Lucide SVG Icons |
 | Report Rendering | NextReport sidecar (zero-dep Node, zero-dep PDF writer) |
 | Reverse Proxy | Caddy 2 (gzip, Let's Encrypt) |
 | Deploy | Docker Compose (5 containers) di VPS, Cloudflare proxy |
+
+## Arsitektur Antarmuka (Accounting-First UI v2.0)
+
+Front-end Ledgerly dibangun ulang dengan prinsip **Accounting-First Design System**:
+1. **Zero-Glitch Pure SVG Icons:** Menggantikan dependensi web font ligature `@material/web` dengan `lucide-react` pure SVG. Menghapus 100% bug teks font (`ala`, `sel`, `let`, `go`).
+2. **Browser-Style Multi-Tab Workbench:** Mendukung pembukaan multi-dokumen bersamaan dengan proteksi data draft (`dirty state indicator`).
+3. **Standar Master Layout 3-Zona (Enterprise 3-Zone Architecture):**
+   - **Zone 1:** Sticky Document Header & Top Toolbar (Auto-numbering, status badge, quick print/close).
+   - **Zone 2:** Dynamic Form Body (2-Column Grid, Keyboard-Driven Line Items Table, Live Journal Preview).
+   - **Zone 3:** Sticky Summary & Action Footer (Real-time Debit=Credit balance check, grand total, shortcut actions).
+4. **4-Tier Financial Health Dashboard:**
+   - **Tier 1:** 5 KPI Likuiditas Utama (Kas & Bank, Laba MTD, AR, AP, Quick Ratio).
+   - **Tier 2 & 3:** Cashflow matrix, AR/AP aging buckets, dan mutasi buku jurnal terkini.
+   - **Tier 4:** Quick Action Dock & Pengawasan Pajak MTD.
+5. **Dukungan Keyboard Shortcuts Global:**
+   - `Ctrl+S` / `Cmd+S`: Simpan & Posting Dokumen.
+   - `Tab` / `Enter`: Navigasi dan penambahan baris otomatis pada grid transaksi.
+   - `Esc`: Batalkan / Tutup Form.
 
 ## Development
 

@@ -28,6 +28,7 @@ import { TextField } from "./TextField";
 import type { M3TextFieldProps, TextFieldInternalProps } from "./TextField";
 import "@material/web/menu/menu.js";
 import "@material/web/menu/menu-item.js";
+import { Icon } from "./Icon";
 import "@material/web/progress/circular-progress.js";
 
 interface AutocompleteMenuInternalProps {
@@ -230,7 +231,7 @@ export function Autocomplete({
                 aria-label="Clear selection"
                 onClick={handleClear}
               >
-                <md-icon>close</md-icon>
+                <Icon name="close" size={14} />
               </button>
             ) : null
           }

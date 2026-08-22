@@ -1,0 +1,107 @@
+/* ============================================================
+   Ledgerly — Print Engine (@media print)
+   Print-ready official financial statement layouts
+   ============================================================ */
+
+@media print {
+  /* Hide interactive shell & buttons */
+  .sidebar,
+  .topbar,
+  .tabstrip,
+  .nested-tabstrip,
+  .form-zone-1 .topbar__icon-btn,
+  .form-zone-3 button,
+  .btn-dash-primary,
+  .btn-dash-secondary,
+  .datatable-toolbar,
+  .datatable-footer,
+  .sidebar-toggle,
+  .quick-menu-backdrop,
+  .quick-menu-dropdown,
+  .no-print {
+    display: none !important;
+  }
+
+  body, html, .app-shell, .main-wrapper, .workarea {
+    background: #ffffff !important;
+    color: #000000 !important;
+    height: auto !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .enterprise-form, .datatable-wrapper, .form-card {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  .form-zone-1, .form-zone-3 {
+    position: static !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .form-zone-1 {
+    border-bottom: 2px solid #000000 !important;
+    padding-bottom: 12px !important;
+    margin-bottom: 20px !important;
+  }
+
+  .datatable th {
+    background-color: #f1f5f9 !important;
+    color: #000000 !important;
+    border-bottom: 1.5px solid #000000 !important;
+  }
+
+  .datatable td {
+    border-bottom: 1px solid #e2e8f0 !important;
+    color: #000000 !important;
+  }
+
+  /* Legal Sign-off Footer for Printed Reports & Vouchers (Official 3-Box Voucher Layout) */
+  .print-signoff {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: 48px;
+    padding-top: 24px;
+    page-break-inside: avoid;
+    gap: 20px;
+  }
+
+  .print-signoff-box {
+    flex: 1;
+    min-width: 160px;
+    text-align: center;
+    border-top: 1px solid #000000;
+    padding-top: 8px;
+    font-size: 11px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .print-signoff-box .sign-space {
+    height: 56px;
+  }
+
+  .print-signoff-box .sign-role {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 10px;
+    color: #333333;
+    margin-bottom: 4px;
+  }
+
+  .print-signoff-box .sign-name {
+    border-top: 1px dashed #666666;
+    width: 80%;
+    padding-top: 4px;
+    font-weight: 600;
+  }
+}
+
+.print-signoff {
+  display: none;
+}

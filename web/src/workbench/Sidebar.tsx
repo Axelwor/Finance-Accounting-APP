@@ -1,33 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { useWorkbench } from "./state";
 import { MODULES } from "./modules";
-import { Icon as M3Icon } from "../components/m3/Icon";
-import "@material/web/icon/icon.js";
+import { Icon } from "../components/m3/Icon";
 import type { Module, SubItem } from "./types";
 
-/** Legacy module icon key → Material Symbols ligature name. */
-const MODULE_ICON_SYMBOLS: Record<Module["icon"], string> = {
-  wallet: "account_balance_wallet",
-  sale: "sell",
-  purchase: "shopping_cart",
-  box: "inventory_2",
-  building: "apartment",
-  report: "description",
-  ledger: "menu_book",
+/** Module icon mapping to clean SVG icon names */
+const MODULE_ICON_NAMES: Record<Module["icon"], string> = {
+  wallet: "wallet",
+  sale: "sale",
+  purchase: "purchase",
+  box: "box",
+  building: "building",
+  report: "report",
+  ledger: "ledger",
   factory: "factory",
-  email: "mail",
+  email: "email",
 };
 
-/** Module icon — Material Symbols ligature (replaces inline SVGs). */
-function ModuleIcon({ name }: { name: Module["icon"] }) {
-  return <M3Icon name={MODULE_ICON_SYMBOLS[name]} size={24} />;
-}
-
 /**
- * Icon rail sidebar. Each module is a compact icon button.
- * On hover the module label appears as small text below the icon,
- * and a flyout submenu shows the module's sub-items to the right.
- * On mobile the rail becomes a slide-over with full-width rows.
+ * High-Density Rail Sidebar (64px slim rail + Smooth Flyout Submenu).
+ * 100% Pure SVG Icons — completely immune to web font ligature glitches.
  */
 export function Sidebar() {
   const workbench = useWorkbench();
@@ -36,8 +28,6 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const closeTimer = useRef<number | null>(null);
 
-  // The active module is whichever one owns the currently-active top tab
-  // (M3 navigation rail highlights the active destination).
   const activeModuleId = workbench.tabs.find((t) => t.id === workbench.activeId)?.moduleId ?? null;
 
   // Close on Escape.
@@ -67,7 +57,7 @@ export function Sidebar() {
     if (closeTimer.current) window.clearTimeout(closeTimer.current);
     closeTimer.current = window.setTimeout(() => {
       setHoveredModule(null);
-    }, 200);
+    }, 180);
   };
 
   const handleSubClick = (sub: SubItem) => {
@@ -86,28 +76,30 @@ export function Sidebar() {
         aria-label={mobileOpen ? "Close menu" : "Open menu"}
         onClick={() => setMobileOpen((v) => !v)}
       >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 6h16" />
-          <path d="M4 12h16" />
-          <path d="M4 18h16" />
-        </svg>
+        <Icon name={mobileOpen ? "close" : "tune"} size={20} />
       </button>
+
       <div
         className={`sidebar-scrim${mobileOpen ? " is-visible" : ""}`}
         aria-hidden="true"
         onClick={() => setMobileOpen(false)}
       />
+
       <aside className={`sidebar${mobileOpen ? " is-open" : ""}`} aria-label="Modules">
-        {/* Brand mark at top of rail */}
-        <div className="sidebar__brand">
-          <span className="brand__mark" aria-hidden="true" />
+        {/* Brand mark */}
+        <div className="sidebar__brand" title="Ledgerly Accounting">
+          <div className="brand-badge">
+            <Icon name="book_open" size={20} className="text-white" />
+          </div>
         </div>
 
-        {/* Icon rail */}
+        {/* Navigation Rail */}
         <nav className="sidebar__rail" aria-label="Modules">
           {MODULES.map((mod) => {
             const isOpen = openModuleId === mod.id;
             const isActive = activeModuleId === mod.id;
+            const iconName = MODULE_ICON_NAMES[mod.icon] || "file_text";
+
             return (
               <div
                 key={mod.id}
@@ -128,7 +120,7 @@ export function Sidebar() {
                   onBlur={handleLeave}
                 >
                   <span className="rail-item__icon">
-                    <ModuleIcon name={mod.icon} />
+                    <Icon name={iconName} size={20} strokeWidth={2} />
                   </span>
                   <span className="rail-item__label">{mod.label}</span>
                 </button>
@@ -140,7 +132,12 @@ export function Sidebar() {
                   onMouseEnter={() => handleEnter(mod.id)}
                   onMouseLeave={handleLeave}
                 >
-                  <p className="rail-flyout__title">{mod.label}</p>
+                  <div className="rail-flyout__header">
+                    <span className="rail-flyout__header-icon">
+                      <Icon name={iconName} size={16} />
+                    </span>
+                    <p className="rail-flyout__title">{mod.label}</p>
+                  </div>
                   <ul className="rail-flyout__items">
                     {mod.items.map((sub) => (
                       <li key={sub.id}>
@@ -150,10 +147,12 @@ export function Sidebar() {
                           className="rail-flyout__item"
                           onClick={() => handleSubClick(sub)}
                         >
-                          <span>{sub.label}</span>
+                          <span className="rail-flyout__item-text">{sub.label}</span>
                           {sub.mockData ? (
                             <span className="rail-flyout__badge">Demo</span>
-                          ) : null}
+                          ) : (
+                            <Icon name="chevron_right" size={14} className="rail-flyout__arrow" />
+                          )}
                         </button>
                       </li>
                     ))}

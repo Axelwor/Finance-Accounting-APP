@@ -2,17 +2,15 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useAppState } from "../state";
-import { Button, FormError, TextField } from "../components/ui";
+import { Icon } from "../components/m3/Icon";
 
-const wordmark = "Ledgerly";
-
-/** Sign in / create account page (login & register in one flow). */
 export function AuthScreen() {
   const [params] = useSearchParams();
   const registerMode = params.get("mode") === "register";
   const [mode, setMode] = useState<"login" | "register">(registerMode ? "register" : "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [businessName, setBusinessName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -37,142 +35,188 @@ export function AuthScreen() {
       } else {
         const { user, hasTenant } = await api.login({ email, password });
         setUser(user);
-        // Repeat logins with an existing tenant skip onboarding and go
-        // straight to the dashboard; first-time logins need onboarding.
         navigate(hasTenant ? "/" : "/onboarding", { replace: true });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not reach the server. Try again.");
+      setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server. Silakan coba lagi.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="auth">
-      <div className="auth__hero">
-        <div className="auth__brand">
-          <span className="brand__mark" aria-hidden="true" />
-          <span className="brand__name">{wordmark}</span>
+    <div className="auth-container">
+      {/* Left Banner: Accounting Values */}
+      <div className="auth-banner">
+        <div className="auth-banner__header">
+          <div className="auth-brand-logo">
+            <Icon name="book_open" size={24} />
+          </div>
+          <span className="auth-brand-name">Ledgerly</span>
         </div>
-        <div className="auth__copy-meta">
-          <span className="pos-dot" aria-hidden="true" />
-          <span>No sync, no double-entry — one book</span>
-        </div>
-        <div className="auth__copy">
-          <h1 className="auth__title">
-            Double-entry, simple<span className="slash">.</span>
-            <span> No accounting degree.</span>
+
+        <div className="auth-banner__content">
+          <div className="auth-badge">
+            <Icon name="security" size={14} />
+            <span>Sistem Akuntansi Enterprise Berbasis Standar PSAK</span>
+          </div>
+
+          <h1 className="auth-title">
+            Pengelolaan Keuangan & Pembukuan Presisi Tinggi.
           </h1>
-          <p className="auth__lede">
-            Money in, money out, transfers, and period close — written to one
-            ledger your accountant trusts, ready for tax season.
+
+          <p className="auth-description">
+            Otomatisasi jurnal berpasangan (*double-entry*), manajemen arus kas real-time,
+            dan kepatuhan pajak siap audit untuk bisnis Anda.
           </p>
+
+          <div className="auth-feature-list">
+            <div className="auth-feature-item">
+              <span className="auth-feature-check">
+                <Icon name="check" size={14} />
+              </span>
+              <span>Jurnal otomatis real-time (Zero unposted transactions)</span>
+            </div>
+            <div className="auth-feature-item">
+              <span className="auth-feature-check">
+                <Icon name="check" size={14} />
+              </span>
+              <span>Proteksi integritas rantai audit (Hash-chain verified)</span>
+            </div>
+            <div className="auth-feature-item">
+              <span className="auth-feature-check">
+                <Icon name="check" size={14} />
+              </span>
+              <span>Multi-cabang & multi-termin pembayaran</span>
+            </div>
+          </div>
         </div>
-        <div className="auth__signoff">
-          <span><strong>Ledgerly</strong> &middot; bookkeeping for small business</span>
-          <span className="auth__badge">M1 &middot; IDR</span>
+
+        <div className="auth-banner__footer">
+          <span>&copy; 2026 Ledgerly Financial Engine &bull; PSAK / EMKM Compliant</span>
         </div>
       </div>
 
-      <div className="auth__panel">
-        <form className="auth-card" onSubmit={handleSubmit} noValidate>
-          <div className="auth-card__tabs" role="tablist" aria-label="Sign in or create account">
+      {/* Right Form Card */}
+      <div className="auth-form-panel">
+        <div className="auth-card-v2">
+          <div className="auth-card-v2__header">
+            <h2>{mode === "login" ? "Masuk ke Pembukuan" : "Daftarkan Bisnis Baru"}</h2>
+            <p>
+              {mode === "login"
+                ? "Masukkan email dan kata sandi akun Anda untuk melanjutkan"
+                : "Mulai pencatatan akuntansi profesional dalam hitungan detik"}
+            </p>
+          </div>
+
+          <div className="auth-mode-switch">
             <button
               type="button"
-              role="tab"
-              aria-selected={mode === "login"}
-              className={`auth-card__tab${mode === "login" ? " is-active" : ""}`}
+              className={`auth-mode-btn${mode === "login" ? " is-active" : ""}`}
               onClick={() => switchMode("login")}
             >
-              Sign in
+              Masuk (Sign In)
             </button>
             <button
               type="button"
-              role="tab"
-              aria-selected={mode === "register"}
-              className={`auth-card__tab${mode === "register" ? " is-active" : ""}`}
+              className={`auth-mode-btn${mode === "register" ? " is-active" : ""}`}
               onClick={() => switchMode("register")}
             >
-              Open book
+              Buka Buku Baru
             </button>
           </div>
 
-          {mode === "register" ? (
-            <div className="field">
-              <label className="field__label" htmlFor="businessName">Business name</label>
-              <input
-                id="businessName"
-                className="input"
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-                placeholder="e.g. Sari Corner Store"
-                autoComplete="organization"
-              />
+          {error && (
+            <div className="auth-error-alert" role="alert">
+              <Icon name="error" size={16} />
+              <span>{error}</span>
             </div>
-          ) : null}
+          )}
 
-          <div className="field">
-            <label className="field__label" htmlFor="email">Email</label>
-            <input
-              id="email"
-              className="input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@example.com"
-              autoComplete="email"
-              inputMode="email"
-            />
-          </div>
-
-          <div className="field">
-            <label className="field__label" htmlFor="password">Password</label>
-            <input
-              id="password"
-              className="input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 8 characters"
-              autoComplete={mode === "register" ? "new-password" : "current-password"}
-            />
-          </div>
-
-          <FormError message={error} />
-
-          <Button type="submit" variant="primary" fullWidth disabled={loading}>
-            {loading
-              ? "Connecting..."
-              : mode === "register"
-                ? "Open the book"
-                : "Sign in"}
-          </Button>
-
-          <p className="auth-card__switch">
-            {mode === "login" ? (
-              <>
-                First time here?{" "}
-                <button type="button" className="link-button" onClick={() => switchMode("register")}>
-                  Open a new book
-                </button>
-              </>
-            ) : (
-              <>
-                Already on the books?{" "}
-                <button type="button" className="link-button" onClick={() => switchMode("login")}>
-                  Sign back in
-                </button>
-              </>
+          <form onSubmit={handleSubmit} className="auth-form">
+            {mode === "register" && (
+              <div className="auth-field">
+                <label htmlFor="businessName">Nama Perusahaan / Bisnis *</label>
+                <div className="auth-input-box">
+                  <Icon name="building" size={16} className="auth-input-icon" />
+                  <input
+                    id="businessName"
+                    type="text"
+                    required
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    placeholder="Contoh: PT Maju Bersama Makmur"
+                  />
+                </div>
+              </div>
             )}
-          </p>
 
-          <p className="auth-card__note">
-            <Link to="/onboarding" className="link-inline">
-              Try example data, no account needed
+            <div className="auth-field">
+              <label htmlFor="email">Alamat Email *</label>
+              <div className="auth-input-box">
+                <Icon name="mail" size={16} className="auth-input-icon" />
+                <input
+                  id="email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="akuntan@perusahaan.co.id"
+                />
+              </div>
+            </div>
+
+            <div className="auth-field">
+              <label htmlFor="password">Kata Sandi (Password) *</label>
+              <div className="auth-input-box">
+                <Icon name="lock" size={16} className="auth-input-icon" />
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Minimal 8 karakter"
+                />
+                <button
+                  type="button"
+                  className="auth-password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                >
+                  <Icon name={showPassword ? "visibility" : "visibility"} size={16} />
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-auth-submit"
+            >
+              {loading ? (
+                <span>Memproses...</span>
+              ) : mode === "login" ? (
+                <>
+                  <span>Masuk ke Dashboard</span>
+                  <Icon name="arrow_forward" size={16} />
+                </>
+              ) : (
+                <>
+                  <span>Buat Buku Perusahaan</span>
+                  <Icon name="arrow_forward" size={16} />
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="auth-card-footer">
+            <Link to="/onboarding" className="auth-demo-link">
+              <Icon name="open_in_new" size={14} />
+              <span>Jelajahi Demo Interaktif (Tanpa Akun)</span>
             </Link>
-          </p>
-        </form>
+          </div>
+        </div>
       </div>
     </div>
   );

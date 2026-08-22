@@ -1291,6 +1291,7 @@ export interface CreateStockTransferInput {
 export interface JournalEntryListItem {
   id: number; number: string; entry_date: string; description: string;
   intent_type: string; status: string; total_debit_cents: number; total_credit_cents: number;
+  source_ref?: string;
 }
 export interface JournalEntryLine {
   account_id: number; account_code: string; account_name: string;

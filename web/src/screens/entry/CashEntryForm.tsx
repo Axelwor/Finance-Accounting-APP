@@ -1,21 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
-import { useToast } from "../../components/Toast";
-import { AccountPicker } from "../../components/AccountPicker";
-import { StaticCombobox } from "../../components/Combobox";
+import { useAppState } from "../../state";
 import { ErrorState, FormError, LoadingState } from "../../components/ui";
-import { TextField as M3TextField } from "../../components/m3/TextField";
 import { api, mockHelpers } from "../../api";
-import { formatIDR, formatDate } from "../../lib/format";
-import type { AccountItem, Category, CounterLinePayload, EntrySubKind } from "../../types";
-import { Button } from "../../components/m3";
+import { formatIDR } from "../../lib/format";
+import { Icon } from "../../components/m3/Icon";
+import type { BackendAccount, CounterLinePayload, EntrySubKind, JournalEntryListItem } from "../../types";
 
 interface Props {
   tabId: string;
   subKind: EntrySubKind;
-  /** Entry id when viewing an existing entry; absent for a draft. */
   entryId?: string | number;
-  /** Persisted number when viewing an existing entry. */
   initialTitle?: string;
 }
 
@@ -26,1049 +21,618 @@ interface CounterLine {
   memo: string;
 }
 
-/** localStorage keys for remembered form preferences. */
-const LS_MODE = "cashForm.mode"; // "quick" | "detail"
-const LS_LAST_CASH = "cashForm.lastCashAccount"; // account id per subKind
-const LS_KEEP_HEADER = "cashForm.keepHeader"; // "1" | "0"
-
-type FormMode = "quick" | "detail";
-
-function loadMode(): FormMode {
-  try {
-    return localStorage.getItem(LS_MODE) === "detail" ? "detail" : "quick";
-  } catch {
-    return "quick";
-  }
-}
-
-function lastCashKey(subKind: EntrySubKind): string {
-  return `${LS_LAST_CASH}.${subKind}`;
-}
-
-function loadLastCash(subKind: EntrySubKind): string {
-  try {
-    return localStorage.getItem(lastCashKey(subKind)) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function loadKeepHeader(): boolean {
-  try {
-    return localStorage.getItem(LS_KEEP_HEADER) !== "0";
-  } catch {
-    return true;
-  }
-}
-
 let lineSeq = 0;
-function seedCounterLine(): CounterLine {
+function seedLine(): CounterLine {
   lineSeq += 1;
-  return { id: `l${Date.now()}-${lineSeq}`, accountId: "", amount: "", memo: "" };
+  return { id: `cl-${Date.now()}-${lineSeq}`, accountId: "", amount: "", memo: "" };
 }
 
 function parseCents(digits: string): number {
   const clean = digits.replace(/[^\d]/g, "");
-  if (!clean) return 0;
-  return parseInt(clean, 10);
+  return clean ? parseInt(clean, 10) : 0;
 }
 
-function formatDigits(value: string): string {
-  return value.replace(/[^\d]/g, "").slice(0, 15);
-}
-
-/**
- * Cash & bank entry form — dual-mode single page.
- *
- * ┌──────────────────────────────────────────────┬──────────────┐
- * │ Header: Tanggal · Counterparty · Kas/Bank ·  │ Action rail  │
- * │         Jumlah · No Bukti · Referensi        │  Simpan      │
- * │                                              │  Simpan&Baru │
- * │ Mode: [Cepat | Rinci]                        │  Tutup       │
- * │  Cepat  → kategori + catatan (1 baris)       │              │
- * │  Rinci → grid multi-akun + memo              │              │
- * │                                              │              │
- * │ Pratinjau jurnal (live, read-only)           │              │
- * └──────────────────────────────────────────────┴──────────────┘
- *
- * Design rules (from the UX improvement plan):
- *  - The cash-side account picker only lists CASH/BANK accounts.
- *  - One source of truth for the amount: Quick mode & single detail line
- *    sync two-way with the header amount; ≥2 lines make the grid total the
- *    master and the header shows Δ with a one-click "Samakan" fix.
- *  - Save shows the real journal number from the backend response.
- *  - Save & New keeps date/cash account/counterparty/mode when the user
- *    enabled "Pertahankan header" (default on).
- *  - Keyboard: Ctrl/Cmd+S save, Ctrl/Cmd+Enter save & new, Esc close,
- *    Enter in the last grid row adds a new line.
- */
 export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) {
   const workbench = useWorkbench();
-  const toast = useToast();
-  const [accounts, setAccounts] = useState<AccountItem[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  let business = null;
+  try {
+    const appState = useAppState();
+    business = appState?.business ?? null;
+  } catch {
+    // optional outside AppStateProvider (e.g. tests)
+  }
+  const isDetail = entryId !== undefined;
+  const isReceipt = subKind === "money-in";
+
+  const [accounts, setAccounts] = useState<BackendAccount[]>([]);
+  const [recentEntries, setRecentEntries] = useState<JournalEntryListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  /** Journal number + id returned by the backend after a successful save. */
-  const [savedJournal, setSavedJournal] = useState<{ id: number; number: string } | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
 
-  // ── Header state ────────────────────────────────────────────────────────
+  // Form Fields
   const [date, setDate] = useState(mockHelpers.today());
-  const [number, setNumber] = useState(initialTitle ?? draftNumber(subKind));
-  const [autoNumber, setAutoNumber] = useState(true);
-  const [description, setDescription] = useState("");
+  const [cashAccountId, setCashAccountId] = useState("");
   const [counterparty, setCounterparty] = useState("");
+  const [description, setDescription] = useState("");
   const [reference, setReference] = useState("");
-  const [cashAccount, setCashAccount] = useState("");
-  const [counterAccount, setCounterAccount] = useState(""); // transfer "To"
-  const [amountDisplay, setAmountDisplay] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [note, setNote] = useState("");
+  const [lines, setLines] = useState<CounterLine[]>([seedLine()]);
+  const [docNumber, setDocNumber] = useState(initialTitle ?? (isReceipt ? "BKM-2026/DRAFT" : "BKK-2026/DRAFT"));
+  const [status, setStatus] = useState(isDetail ? "POSTED" : "DRAFT");
 
-  // ── Detail grid (Rinci mode) ────────────────────────────────────────────
-  const [counterLines, setCounterLines] = useState<CounterLine[]>([seedCounterLine()]);
-  /** When the user edits the header amount manually while the grid total
-   *  leads, we flag an override and surface Δ + a "Samakan" fix button. */
-  const [amountOverride, setAmountOverride] = useState(false);
+  const draftKey = `ledgerly.draft.${tabId}`;
+  const isInitialMount = useRef(true);
 
-  // ── Modes & preferences ─────────────────────────────────────────────────
-  const [mode, setMode] = useState<FormMode>(loadMode);
-  const [keepHeader, setKeepHeader] = useState(loadKeepHeader);
-
-  // ── Existing entry loading state ────────────────────────────────────────
-  const [existingLoading, setExistingLoading] = useState(false);
-  const [existingError, setExistingError] = useState<string | null>(null);
-
-  const isTransfer = subKind === "cash-transfer";
-  const isMoneyIn = subKind === "money-in";
-  const readOnly = savedJournal !== null;
-
-  const cashOptions = useMemo(
-    () => accounts.filter((a) => a.account_type === "CASH" || a.account_type === "BANK"),
-    [accounts],
-  );
-
-  const categoryOptions = useMemo(
-    () =>
-      categories
-        .filter((c) => c.kind === subKind)
-        .map((c) => ({ value: c.id, label: c.name })),
-    [categories, subKind],
-  );
-
-  const accountByID = useMemo(() => {
-    const map = new Map<string, AccountItem>();
-    for (const a of accounts) map.set(String(a.id), a);
-    return map;
-  }, [accounts]);
-
-  // ── Data loading (accounts + categories) ────────────────────────────────
+  // 1. Restore draft on mount if not detail
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
+    if (!isDetail) {
       try {
-        const [acctList, catList] = await Promise.all([
-          api.listAccounts(),
-          api.listCategories(),
-        ]);
-        if (cancelled) return;
-        setAccounts(acctList);
-        setCategories(catList);
-        // Default the cash account to the last one used for this subKind.
-        const last = loadLastCash(subKind);
-        if (last && acctList.some((a) => a.id === last)) setCashAccount(last);
-      } catch (err) {
-        if (cancelled) return;
-        setLoadError(err instanceof Error ? err.message : "Gagal memuat akun.");
-      } finally {
-        if (!cancelled) setLoading(false);
+        const savedDraft = localStorage.getItem(draftKey);
+        if (savedDraft) {
+          const parsed = JSON.parse(savedDraft);
+          if (parsed.date) setDate(parsed.date);
+          if (parsed.cashAccountId) setCashAccountId(parsed.cashAccountId);
+          if (parsed.counterparty) setCounterparty(parsed.counterparty);
+          if (parsed.description) setDescription(parsed.description);
+          if (parsed.reference) setReference(parsed.reference);
+          if (Array.isArray(parsed.lines) && parsed.lines.length > 0) setLines(parsed.lines);
+          setDraftRestored(true);
+          setTimeout(() => setDraftRestored(false), 3500);
+        }
+      } catch (e) {
+        console.warn("Failed to restore draft", e);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [subKind]);
-
-  // ── Load existing entry data (if entryId provided) ───────────────────────
-  useEffect(() => {
-    if (!entryId) return;
-    
-    let cancelled = false;
-    setExistingLoading(true);
-    setExistingError(null);
-    
-    (async () => {
-      try {
-        // First get list to confirm entry exists and fetch basic fields
-        const items = await api.listCashEntries({
-          kind: isTransfer ? "transfer" : isMoneyIn ? "money-in" : "money-out",
-          q: typeof entryId === "string" ? entryId : String(entryId),
-          limit: 5,
-        });
-        if (cancelled) return;
-        
-        const match = items.find(
-          (it) => String(it.id) === String(entryId) || it.number === String(entryId)
-        ) ?? items[0];
-        
-        if (!match) {
-          setExistingError("Entri tidak ditemukan.");
-          setExistingLoading(false);
-          return;
-        }
-        
-        // Populate header fields
-        setNumber(match.number);
-        setDate(match.entry_date);
-        setDescription(match.description);
-        
-        // Set cash account based on entry kind
-        if (isTransfer && match.from_account_id) {
-          setCashAccount(String(match.from_account_id));
-          setCounterAccount(String(match.to_account_id ?? ""));
-        } else {
-          setCashAccount(String(match.cash_account_id ?? ""));
-        }
-        
-        // Now fetch the full journal entry with lines
-        const journalId = match.id;
-        if (!journalId) {
-          setExistingError("Entri tidak memiliki ID.");
-          setExistingLoading(false);
-          return;
-        }
-        
-        const fullEntry = await api.getJournalEntry(journalId);
-        if (cancelled || !fullEntry || !fullEntry.lines || fullEntry.lines.length === 0) {
-          if (!cancelled) {
-            setExistingError(fullEntry?.lines ? "No lines found" : "Entry not found");
-          }
-          setExistingLoading(false);
-          return;
-        }
-        
-        // Transform and populate counter lines
-        const transformedLines: CounterLine[] = fullEntry.lines.map((l, idx) => ({
-          id: `existing-${idx}`,
-          accountId: String(l.account_id),
-          amount: l.debit_cents > 0 
-            ? l.debit_cents.toString() 
-            : l.credit_cents.toString(),
-          memo: l.description ?? ""
-        }));
-        
-        setCounterLines(transformedLines);
-        
-        // Clear loading/error since success
-        setExistingLoading(false);
-        
-      } catch (err) {
-        if (!cancelled) {
-          setExistingError(err instanceof Error ? err.message : "Gagal memuat entri.");
-        }
-        setExistingLoading(false);
-      }
-    })();
-    
-    return () => {
-      cancelled = true;
-    };
-  }, [entryId, isTransfer, isMoneyIn]);
-
-  // ── Unsaved tracking ────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!readOnly) workbench.markUnsaved(tabId, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabId, date, number, description, cashAccount, counterAccount, counterLines, amountDisplay, mode, categoryId, note, keepHeader, workbench]);
-
-  // ── Amount sync (single source of truth) ────────────────────────────────
-  const cashAmountCents = useMemo(() => parseCents(amountDisplay), [amountDisplay]);
-
-  const counterTotalCents = useMemo(
-    () => counterLines.reduce((sum, line) => sum + parseCents(line.amount), 0),
-    [counterLines],
-  );
-
-  /** Filled detail lines (an empty trailing row is not "filled"). */
-  const filledLineCount = useMemo(
-    () => counterLines.filter((l) => l.accountId !== "" || parseCents(l.amount) > 0).length,
-    [counterLines],
-  );
-
-  // Grid total drives the header when ≥2 filled lines and no manual override.
-  useEffect(() => {
-    if (isTransfer || mode === "quick") return;
-    if (filledLineCount >= 2 && !amountOverride && counterTotalCents > 0) {
-      setAmountDisplay(counterTotalCents ? String(counterTotalCents) : "");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [counterTotalCents, filledLineCount, amountOverride]);
+  }, [isDetail, draftKey]);
 
-  const setHeaderAmount = (digits: string) => {
-    setAmountDisplay(digits);
-    setAmountOverride(filledLineCount >= 2);
-    // Single filled row drives the two-way sync in BOTH modes: quick mode's
-    // hidden counter line and detail mode's first row mirror the header.
-    if (filledLineCount <= 1 && counterLines.length >= 1) {
-      setCounterLines((current) =>
-        current.map((line, idx) => (idx === 0 ? { ...line, amount: digits } : line)),
-      );
+  // 2. Debounced draft autosave
+  useEffect(() => {
+    if (isDetail || saved) return;
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      try {
+        const payload = { date, cashAccountId, counterparty, description, reference, lines };
+        localStorage.setItem(draftKey, JSON.stringify(payload));
+      } catch (e) {
+        console.warn("Failed to autosave draft", e);
+      }
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [date, cashAccountId, counterparty, description, reference, lines, isDetail, saved, draftKey]);
+
+  useEffect(() => {
+    void loadInitialData();
+  }, []);
+
+  const loadInitialData = async () => {
+    setLoading(true);
+    try {
+      const [accs, recent] = await Promise.all([
+        api.listBackendAccounts(),
+        api.listRecentJournalEntries(100).catch(() => []),
+      ]);
+      const active = accs.filter((a) => a.is_active && !a.is_group);
+      setAccounts(active);
+      setRecentEntries(recent);
+      const cashAcc = active.find((a) => a.account_type === "CASH" || a.account_type === "BANK");
+      if (cashAcc && !cashAccountId) setCashAccountId(String(cashAcc.id));
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Gagal memuat data formulir kas.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const setLineAmount = (lineId: string, digits: string) => {
-    setCounterLines((current) =>
-      current.map((line) => (line.id === lineId ? { ...line, amount: digits } : line)),
+  // Keyboard shortcut: Ctrl/Cmd+S to save, Escape to close (only for active nested tab)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Gate to ensure only the currently active nested tab handles the event
+      if (workbench.activeNested?.id && workbench.activeNested.id !== tabId) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (!saving && !saved && !isDetail) {
+          void handlePost();
+        }
+      } else if (e.key === "Escape") {
+        if (!saving) {
+          workbench.close(tabId);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [workbench.activeNested?.id, saving, saved, isDetail, tabId, cashAccountId, lines, date, description, counterparty, reference]);
+
+  const cashAccounts = useMemo(
+    () => accounts.filter((a) => a.account_type === "CASH" || a.account_type === "BANK" || a.code.startsWith("11")),
+    [accounts]
+  );
+
+  const expenseOrRevenueAccounts = useMemo(
+    () => accounts.filter((a) => !cashAccounts.some((c) => c.id === a.id)),
+    [accounts, cashAccounts]
+  );
+
+  const totalAmount = useMemo(
+    () => lines.reduce((sum, l) => sum + parseCents(l.amount), 0),
+    [lines]
+  );
+
+  // Period-lock warning
+  const periodLockWarning = useMemo(() => {
+    if (!date) return null;
+    const entryYear = new Date(date).getFullYear();
+    const currentYear = new Date().getFullYear();
+    const fiscalStartYear = business?.fiscalYearStart ? new Date(business.fiscalYearStart).getFullYear() : currentYear;
+
+    if (entryYear !== fiscalStartYear && entryYear !== currentYear) {
+      return `Tanggal di luar periode buku aktif (FY ${fiscalStartYear || currentYear}) — periksa kembali.`;
+    }
+    return null;
+  }, [date, business]);
+
+  // Duplicate reference check
+  const duplicateRefWarning = useMemo(() => {
+    if (!reference || !reference.trim()) return null;
+    const trimmed = reference.trim().toLowerCase();
+    const found = recentEntries.find(
+      (entry) =>
+        (entry.source_ref && entry.source_ref.trim().toLowerCase() === trimmed) ||
+        (entry.number && entry.number.trim().toLowerCase() === trimmed)
     );
-    // Single filled row drives the header (two-way sync).
-    const othersFilled = counterLines.filter((l) => l.id !== lineId && parseCents(l.amount) > 0);
-    if (othersFilled.length === 0) {
-      setAmountDisplay(digits);
-      setAmountOverride(false);
+    if (found) {
+      return `No. Referensi "${reference}" sudah pernah digunakan pada jurnal ${found.number}.`;
     }
+    return null;
+  }, [reference, recentEntries]);
+
+  const addLine = () => setLines((prev) => [...prev, seedLine()]);
+
+  const updateLine = (id: string, field: keyof CounterLine, val: string) => {
+    setLines((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, [field]: val } : l))
+    );
   };
 
-  const matchAmountToTotal = () => {
-    setAmountDisplay(counterTotalCents ? String(counterTotalCents) : "");
-    setAmountOverride(false);
+  const removeLine = (id: string) => {
+    if (lines.length <= 1) return;
+    setLines((prev) => prev.filter((l) => l.id !== id));
   };
 
-  // ── Quick mode: category drives the counter account ─────────────────────
-  const applyCategory = (value: string | null) => {
-    setCategoryId(value ?? "");
-    if (!value) return;
-    const cat = categories.find((c) => c.id === value);
-    if (!cat) return;
-    // money-in: Dr cash / Cr category default credit; money-out: Dr default debit / Cr cash.
-    const wanted = isMoneyIn ? cat.default_credit_account_id : cat.default_debit_account_id;
-    if (wanted) {
-      setCounterLines((current) =>
-        current.map((line, idx) => (idx === 0 ? { ...line, accountId: String(wanted) } : line)),
-      );
+  const handlePost = async () => {
+    if (!cashAccountId) {
+      setError("Pilih rekening Kas/Bank utama.");
+      return;
     }
-  };
+    if (totalAmount <= 0) {
+      setError("Nominal transaksi harus lebih dari Rp 0.");
+      return;
+    }
+    const invalidLines = lines.some((l) => !l.accountId || parseCents(l.amount) <= 0);
+    if (invalidLines) {
+      setError("Pastikan semua baris alokasi memiliki akun dan nominal valid.");
+      return;
+    }
 
-  // ── Journal preview (live) ──────────────────────────────────────────────
-  const journalPreview = useMemo(() => {
-    const rows: { side: "Dr" | "Cr"; account: string; amount: number }[] = [];
-    const cashName =
-      accountByID.get(cashAccount)?.name ?? (cashAccount ? `#${cashAccount}` : "— kas/bank —");
-    const toName =
-      accountByID.get(counterAccount)?.name ?? (counterAccount ? `#${counterAccount}` : "— tujuan —");
-    if (isTransfer) {
-      if (cashAccount) rows.push({ side: "Dr", account: cashName, amount: cashAmountCents });
-      if (counterAccount) rows.push({ side: "Cr", account: toName, amount: cashAmountCents });
-      return rows;
-    }
-    if (mode === "quick") {
-      const line = counterLines[0];
-      const acct = line?.accountId ? accountByID.get(line.accountId) : undefined;
-      const name = acct ? acct.name : "— pilih kategori/akun —";
-      if (isMoneyIn) {
-        rows.push({ side: "Dr", account: cashName, amount: cashAmountCents });
-        rows.push({ side: "Cr", account: name, amount: cashAmountCents });
-      } else {
-        rows.push({ side: "Dr", account: name, amount: cashAmountCents });
-        rows.push({ side: "Cr", account: cashName, amount: cashAmountCents });
-      }
-      return rows;
-    }
-    for (const line of counterLines) {
-      const acct = line.accountId ? accountByID.get(line.accountId) : undefined;
-      const cents = parseCents(line.amount);
-      if (!acct || cents <= 0) continue;
-      if (isMoneyIn) rows.push({ side: "Cr", account: acct.name, amount: cents });
-      else rows.push({ side: "Dr", account: acct.name, amount: cents });
-    }
-    const cashRow = { side: isMoneyIn ? ("Dr" as const) : ("Cr" as const), account: cashName, amount: cashAmountCents };
-    if (cashAmountCents > 0) rows.unshift(cashRow);
-    return rows;
-  }, [isTransfer, isMoneyIn, mode, cashAccount, counterAccount, cashAmountCents, counterLines, accountByID]);
-
-  const previewDr = journalPreview.filter((r) => r.side === "Dr").reduce((s, r) => s + r.amount, 0);
-  const previewCr = journalPreview.filter((r) => r.side === "Cr").reduce((s, r) => s + r.amount, 0);
-  const previewBalanced = previewDr > 0 && previewDr === previewCr;
-
-  // ── Line ops ────────────────────────────────────────────────────────────
-  const updateCounter = (lineId: string, patch: Partial<CounterLine>) => {
-    setCounterLines((current) => current.map((line) => (line.id === lineId ? { ...line, ...patch } : line)));
-  };
-  const removeCounter = (lineId: string) => {
-    setCounterLines((current) => (current.length > 1 ? current.filter((line) => line.id !== lineId) : current));
-  };
-  const addCounter = () => setCounterLines((current) => [...current, seedCounterLine()]);
-
-  // ── Validation (per-field) ──────────────────────────────────────────────
-  const validate = (): true | Record<string, string> => {
-    const errs: Record<string, string> = {};
-    if (cashAmountCents <= 0) errs.amount = "Isi nominal lebih dari 0.";
-    if (isTransfer) {
-      if (!cashAccount) errs.cashAccount = "Pilih akun sumber (CASH/BANK).";
-      if (!counterAccount) errs.counterAccount = "Pilih akun tujuan (CASH/BANK).";
-      if (cashAccount && cashAccount === counterAccount) errs.counterAccount = "Akun tujuan harus berbeda dari sumber.";
-    } else {
-      if (!cashAccount) errs.cashAccount = "Pilih akun kas/bank.";
-      if (mode === "quick") {
-        const line = counterLines[0];
-        if (!line?.accountId) errs.category = "Pilih kategori (atau isi akun di Mode Rinci).";
-      } else {
-        for (const line of counterLines) {
-          if (parseCents(line.amount) > 0 && !line.accountId) errs[line.id] = "Pilih akun untuk baris ini.";
-        }
-        if (counterTotalCents <= 0) errs.grid = "Isi minimal satu baris rincian.";
-        if (counterTotalCents !== cashAmountCents) {
-          errs.grid = `Total rincian ${formatIDR(counterTotalCents)} ≠ jumlah ${formatIDR(cashAmountCents)}.`;
-        }
-      }
-    }
-    if (!date) errs.date = "Tanggal wajib diisi.";
-    return Object.keys(errs).length > 0 ? errs : true;
-  };
-
-  /** Composed description: counterparty + reference + note/description. */
-  const composedDescription = useCallback((): string => {
-    const parts: string[] = [];
-    if (counterparty.trim()) {
-      parts.push(isTransfer ? counterparty.trim() : `${counterpartyLabel(isMoneyIn)}: ${counterparty.trim()}`);
-    }
-    if (description.trim()) parts.push(description.trim());
-    if (!isTransfer && mode === "quick" && note.trim()) parts.push(note.trim());
-    if (reference.trim()) parts.push(`Ref: ${reference.trim()}`);
-    return parts.join(" — ");
-  }, [counterparty, description, note, reference, isTransfer, mode, isMoneyIn]);
-
-  // ── Save ────────────────────────────────────────────────────────────────
-  const doSave = async (): Promise<{ id: number; number: string } | null> => {
-    const validation = validate();
-    if (validation !== true) {
-      setFieldErrors(validation);
-      const errMsg = Object.values(validation)[0] as string;
-      setError(errMsg);
-      return null;
-    }
     setError(null);
-    setFieldErrors({});
     setSaving(true);
     try {
-      const desc = composedDescription();
-      let result: { id: number; number: string };
-      if (isTransfer) {
-        const r = await api.postTransfer({
+      const counterLines: CounterLinePayload[] = lines.map((l) => ({
+        account_id: Number(l.accountId),
+        amount_cents: parseCents(l.amount),
+        description: l.memo.trim() || description.trim() || "Alokasi kas",
+      }));
+
+      let res;
+      if (isReceipt) {
+        res = await api.postCashIn({
           entry_date: date,
-          description: desc,
-          from_account_id: Number(cashAccount),
-          to_account_id: Number(counterAccount),
-          amount_cents: cashAmountCents,
+          description: description.trim() || (counterparty ? `Kas Masuk dari ${counterparty}` : "Kas Masuk Operasional"),
+          cash_account_id: Number(cashAccountId),
+          counter_account_id: Number(counterLines[0].account_id),
+          amount_cents: totalAmount,
+          counter_lines: counterLines,
         });
-        result = { id: r.id, number: r.number };
       } else {
-        const lines: CounterLinePayload[] =
-          mode === "quick"
-            ? [
-                {
-                  account_id: Number(counterLines[0].accountId),
-                  amount_cents: cashAmountCents,
-                  description: note.trim(),
-                },
-              ]
-            : counterLines
-                .filter((l) => l.accountId && parseCents(l.amount) > 0)
-                .map((l) => ({
-                  account_id: Number(l.accountId),
-                  amount_cents: parseCents(l.amount),
-                  description: l.memo.trim(),
-                }));
-        const method = isMoneyIn ? api.postCashIn : api.postCashOut;
-        const r = await method({
+        res = await api.postCashOut({
           entry_date: date,
-          description: desc,
-          cash_account_id: Number(cashAccount),
-          counter_account_id: 0,
-          amount_cents: cashAmountCents,
-          counter_lines: lines,
+          description: description.trim() || (counterparty ? `Kas Keluar kepada ${counterparty}` : "Kas Keluar Operasional"),
+          cash_account_id: Number(cashAccountId),
+          counter_account_id: Number(counterLines[0].account_id),
+          amount_cents: totalAmount,
+          counter_lines: counterLines,
         });
-        result = { id: r.id, number: r.number };
       }
-      // Remember the cash account for the next entry of this subKind.
+
+      setSaved(true);
+      setStatus("POSTED");
+      if (res?.number) setDocNumber(res.number);
       try {
-        localStorage.setItem(lastCashKey(subKind), cashAccount);
-      } catch {
-        /* storage unavailable — skip remembering */
+        localStorage.removeItem(draftKey);
+      } catch (e) {
+        console.warn("Failed to clear autosaved draft", e);
       }
-      setSavedJournal(result);
-      workbench.markUnsaved(tabId, false);
-      toast.success(`Tersimpan — Jurnal ${result.number}`);
-      return result;
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Gagal menyimpan.";
-      setError(message);
-      return null;
+      setError(err instanceof Error ? err.message : "Gagal mem-posting transaksi kas.");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSave = async () => {
-    await doSave();
-  };
+  if (loading) return <LoadingState label="Memuat formulir kas..." />;
+  if (loadError) return <ErrorState message={loadError} onRetry={loadInitialData} />;
 
-  const handleSaveAndNew = async () => {
-    const result = await doSave();
-    if (result) resetForNew();
-  };
-
-  const handleSaveAndClose = async () => {
-    const result = await doSave();
-    if (result) workbench.close(tabId);
-  };
-
-  /** Reset for the next entry. keepHeader=true retains date, cash account,
-   *  counterparty and mode — the common batch-entry case. */
-  const resetForNew = () => {
-    const keep = keepHeader;
-    setNumber(draftNumber(subKind));
-    setAutoNumber(true);
-    setDescription("");
-    if (!keep) {
-      setCounterparty("");
-      setDate(mockHelpers.today());
-      setCashAccount(loadLastCash(subKind) || "");
-    }
-    setReference("");
-    setAmountDisplay("");
-    setAmountOverride(false);
-    setCategoryId("");
-    setNote("");
-    setCounterLines([seedCounterLine()]);
-    setSavedJournal(null);
-    setError(null);
-    setFieldErrors({});
-    workbench.markUnsaved(tabId, true);
-  };
-
-  const counterpartyLabel = (isMoneyIn: boolean): string => {
-    return isMoneyIn ? "Diterima dari" : "Dibayar kepada";
-  };
-
-  // ── Submit handlers ────────────────────────────────────────────────────
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    void handleSave();
-  };
-
-  useEffect(() => {
-    if (readOnly) return;
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        if (!saving) void handleSave();
-      } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        e.preventDefault();
-        if (!saving) void handleSaveAndNew();
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saving, readOnly, date, number, description, cashAccount, counterAccount, counterLines, amountDisplay, mode, categoryId, note, reference, counterparty]);
-
-  const firstFieldRef = useRef<HTMLSelectElement | HTMLInputElement | null>(null);
-  useEffect(() => {
-    if (!loading && !readOnly) firstFieldRef.current?.focus();
-  }, [loading, readOnly]);
-
-  // ── Derived labels ──────────────────────────────────────────────────────
-  const titleLabel =
-    subKind === "money-in"
-      ? "Penerimaan Kas Lainnya"
-      : subKind === "money-out"
-        ? "Pengeluaran Kas Lainnya"
-        : "Transfer Kas/Bank";
-  const statusLabel = readOnly ? (savedJournal ? "POSTED" : "VIEW") : "DRAFT";
-
-  const hasData = isTransfer
-    ? amountDisplay.trim() !== "" && cashAccount !== "" && counterAccount !== ""
-    : amountDisplay.trim() !== "" || counterLines.some((l) => l.accountId !== "" || l.amount.trim() !== "");
-
-  const anyChanged = useMemo(() => {
-    if (savedJournal) return false; // POSTED -> never change
-    if (!entryId) return true; // Draft mode -> always can save
-    
-    // Editing existing: check if anything changed from original
-    // For now, assume any interaction = changed
-    return true;
-  }, [savedJournal, entryId]);
-
-  // ── Render ──────────────────────────────────────────────────────────────
-  if (loading) return <LoadingState label="Loading masters..." />;
-  if (loadError) return <ErrorState message={loadError} onRetry={() => window.location.reload()} />;
+  const cashAccountName = accounts.find((a) => String(a.id) === cashAccountId)?.name || "Kas/Bank Utama";
 
   return (
-    <form className="entrytab entrytab--accurate" onSubmit={handleSubmit} noValidate>
-      <div className="entrytab__head">
-        <div className="entrytab__title">
-          <span>{titleLabel}</span>
-          <span className={`entrytab__status ${readOnly ? "entrytab__status--posted" : "entrytab__status--draft"}`}>
-            {statusLabel}
-          </span>
-          <span className="entrytab__number">{number}</span>
-          <span className="entrytab__date">{formatDate(date)}</span>
-        </div>
-      </div>
-
-      <div className="entrytab__body">
-        <div className="entrytab__main">
-          {/* Existing entry loading error */}
-          {existingError && !readOnly && (
-            <FormError message={existingError} />
-          )}
-
-          {/* Success panel replaces the form after save. */}
-          {savedJournal ? (
-            <div className="entrytab__saved" role="status">
-              <div className="entrytab__saved-title">✓ Tersimpan — Jurnal {savedJournal.number}</div>
-              <div className="entrytab__saved-actions">
-                <Button
-                  variant="filled"
-                  size="sm"
-                  onClick={() => workbench.activate(tabId)}
-                >
-                  Lihat daftar
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="sm"
-                  onClick={resetForNew}
-                >
-                  Entri baru
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="sm"
-                  onClick={() => workbench.close(tabId)}
-                >
-                  Tutup tab
-                </Button>
-              </div>
+    <div className="enterprise-form">
+      {/* Zone 1: Sticky Document Header */}
+      <header className="form-zone-1">
+        <div className="form-header__title-group">
+          <div className="form-header__icon-box">
+            <Icon
+              name={isReceipt ? "arrow_down_left" : "arrow_up_right"}
+              size={20}
+              className={isReceipt ? "text-success" : "text-danger"}
+            />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="form-header__title">
+                {isReceipt ? "Kas Masuk Operasional (Other Receipt)" : "Kas Keluar Operasional (Other Payment)"}
+              </h1>
+              <span className="form-header__doc-number">{docNumber}</span>
+              <span className={`form-header__status-badge status-${status.toLowerCase()}`}>
+                {status}
+              </span>
+              {draftRestored && (
+                <span className="status-badge-inline status-open font-semibold text-xs">
+                  ✓ Draft Dipulihkan
+                </span>
+              )}
             </div>
-          ) : (
-            <>
-              <div className="entrytab__header-grid">
-                <div className="entrytab__header-col">
-                  <label className="field">
-                    <span className="field__label">Tanggal *</span>
-                    <input
-                      ref={(el) => {
-                        if (el) firstFieldRef.current = el;
-                      }}
-                      className={`input${fieldErrors.date ? " input--error" : ""}`}
-                      type="date"
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      disabled={readOnly}
-                      required
-                    />
-                    {fieldErrors.date && <span className="field__error" role="alert">{fieldErrors.date}</span>}
-                  </label>
-                  {!isTransfer && (
-                    <label className="field">
-                      <span className="field__label">{counterpartyLabel(isMoneyIn)}</span>
-                      <M3TextField
-                        className={`input-m3${fieldErrors.counterparty ? " input--error" : ""}`}
-                        label={isMoneyIn ? "Nama pemberi dana" : "Nama penerima"}
-                        value={counterparty}
-                        onInput={(e) => setCounterparty((e.target as HTMLInputElement).value)}
-                        disabled={readOnly}
-                      />
-                    </label>
-                  )}
-                  <label className="field">
-                    <span className="field__label">{isTransfer ? "Dari akun" : isMoneyIn ? "Masuk ke" : "Keluar dari"} *</span>
-                    <AccountPicker
-                      accounts={accounts}
-                      value={cashAccount || null}
-                      onChange={(v) => setCashAccount(v ?? "")}
-                      allowedTypes={["CASH", "BANK"]}
-                      placeholder="Ketik kode / nama kas-bank…"
-                      disabled={readOnly}
-                    />
-                    {fieldErrors.cashAccount && (
-                      <span className="field__error" role="alert">{fieldErrors.cashAccount}</span>
-                    )}
-                  </label>
-                  {isTransfer && (
-                    <label className="field">
-                      <span className="field__label">Ke akun *</span>
-                      <AccountPicker
-                        accounts={accounts}
-                        value={counterAccount || null}
-                        onChange={(v) => setCounterAccount(v ?? "")}
-                        allowedTypes={["CASH", "BANK"]}
-                        excludeIds={cashAccount ? [cashAccount] : []}
-                        placeholder="Ketik kode / nama kas-bank tujuan…"
-                        disabled={readOnly}
-                      />
-                      {fieldErrors.counterAccount && (
-                        <span className="field__error" role="alert">{fieldErrors.counterAccount}</span>
-                      )}
-                    </label>
-                  )}
-                  <label className="field">
-                    <span className="field__label">Jumlah *</span>
-                    <input
-                      className={`amount${fieldErrors.amount ? " input--error" : ""}`}
-                      type="text"
-                      inputMode="numeric"
-                      value={amountDisplay ? Number(amountDisplay).toLocaleString("id-ID") : ""}
-                      onChange={(e) => setHeaderAmount(formatDigits(e.target.value))}
-                      placeholder="0"
-                      aria-label="Jumlah"
-                      disabled={readOnly}
-                    />
-                    {fieldErrors.amount && <span className="field__error" role="alert">{fieldErrors.amount}</span>}
-                  </label>
-                </div>
-                <div className="entrytab__header-col">
-                  <label className="field field--inline">
-                    <span className="field__label">No Bukti</span>
-                    <input
-                      type="checkbox"
-                      checked={autoNumber}
-                      onChange={(e) => setAutoNumber(e.target.checked)}
-                      aria-label="Nomor otomatis"
-                      disabled={readOnly}
-                    />
-                  </label>
-                  <input
-                    className="input"
-                    value={number}
-                    onChange={(e) => setNumber(e.target.value)}
-                    placeholder="Nomor bukti"
-                    disabled={readOnly || autoNumber}
-                  />
-                  <label className="field">
-                    <span className="field__label">No. Referensi / Cek</span>
-                    <input
-                      className="input"
-                      value={reference}
-                      onChange={(e) => setReference(e.target.value)}
-                      placeholder="Opsional — disimpan di keterangan"
-                      disabled={readOnly}
-                    />
-                  </label>
-                  <label className="field">
-                    <span className="field__label">Keterangan</span>
-                    <input
-                      className="input"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Deskripsi singkat"
-                      disabled={readOnly}
-                    />
-                  </label>
-                </div>
-              </div>
-
-              {/* Quick mode: category + note row */}
-              {!isTransfer && mode === "quick" && !readOnly && (
-                <div className="entrytab__quick">
-                  <label className="field">
-                    <span className="field__label">Kategori *</span>
-                    <StaticCombobox
-                      options={categoryOptions}
-                      value={categoryId || null}
-                      onChange={(v) => applyCategory(v)}
-                      placeholder="Pilih kategori…"
-                    />
-                    {fieldErrors.category && (
-                      <span className="field__error" role="alert">{fieldErrors.category}</span>
-                    )}
-                  </label>
-                  <label className="field">
-                    <span className="field__label">Catatan</span>
-                    <input
-                      className="input"
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      placeholder="Opsional — contoh: listrik Agustus"
-                    />
-                  </label>
-                </div>
-              )}
-
-              {/* Detail grid (Rinci mode, and Quick mode's counter account display) */}
-              {!isTransfer && (mode === "detail" || mode === "quick") && !readOnly && (
-                <div className="entrytab__detail">
-                  <div className="entrytab__detail-title">
-                    {mode === "detail" ? "Rincian alokasi *" : "Detail transaksi"}
-                  </div>
-                  <div className="detail-grid">
-                    <div className="detail-grid__head">
-                      <div>Akun (ketik untuk cari)</div>
-                      <div className="right">Nilai</div>
-                      <div>Memo</div>
-                      <div aria-hidden="true" />
-                    </div>
-                    {counterLines.map((line, idx) => (
-                      <div className="detail-grid__row" key={line.id}>
-                        <div>
-                          <AccountPicker
-                            accounts={accounts}
-                            value={line.accountId || null}
-                            onChange={(v) => updateCounter(line.id, { accountId: v ?? "" })}
-                            excludeIds={cashAccount ? [cashAccount] : []}
-                            disabled={readOnly}
-                            placeholder={idx === 0 ? "Ketik kode / nama akun…" : "Ketik kode / nama akun…"}
-                          />
-                          {fieldErrors[line.id] && (
-                            <span className="field__error" role="alert">{fieldErrors[line.id]}</span>
-                          )}
-                        </div>
-                        <div>
-                          <input
-                            className="amount"
-                            type="text"
-                            inputMode="numeric"
-                            value={line.amount ? Number(line.amount).toLocaleString("id-ID") : ""}
-                            onChange={(e) => setLineAmount(line.id, formatDigits(e.target.value))}
-                            onKeyDown={(e) => {
-                              if (
-                                e.key === "Enter" &&
-                                idx === counterLines.length - 1 &&
-                                !readOnly &&
-                                line.accountId !== "" &&
-                                parseCents(line.amount) > 0
-                              ) {
-                                e.preventDefault();
-                                addCounter();
-                              }
-                            }}
-                            placeholder="0"
-                            aria-label={`Nilai baris ${idx + 1}`}
-                            disabled={readOnly}
-                          />
-                        </div>
-                        <div>
-                          <input
-                            className="input"
-                            value={line.memo}
-                            onChange={(e) => updateCounter(line.id, { memo: e.target.value })}
-                            placeholder="Memo baris"
-                            aria-label={`Memo baris ${idx + 1}`}
-                            disabled={readOnly}
-                          />
-                        </div>
-                        <div>
-                          <button
-                            type="button"
-                            className="detail-grid__remove"
-                            onClick={() => removeCounter(line.id)}
-                            aria-label="Hapus baris"
-                            disabled={readOnly || counterLines.length === 1}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    {!readOnly && (
-                      <div className="detail-grid__row detail-grid__row--add">
-                        <div>
-                          <Button
-                            variant="outlined"
-                            size="sm"
-                            onClick={addCounter}
-                          >
-                            + Tambah baris
-                          </Button>
-                        </div>
-                        <div />
-                        <div />
-                        <div />
-                      </div>
-                    )}
-                  </div>
-                  {mode === "detail" && amountOverride && counterTotalCents !== cashAmountCents && (
-                    <div className="entrytab__delta" role="alert">
-                      ⚠ Selisih {formatIDR(Math.abs(counterTotalCents - cashAmountCents))}{" "}
-                      <Button
-                        variant="outlined"
-                        size="sm"
-                        onClick={matchAmountToTotal}
-                      >
-                        Samakan ke total rincian
-                      </Button>
-                    </div>
-                  )}
-                  {mode === "detail" && fieldErrors.grid && <FormError message={fieldErrors.grid} />}
-                </div>
-              )}
-
-              {/* Live journal preview */}
-              <div className="entrytab__preview" aria-label="Pratinjau jurnal">
-                <div className="entrytab__preview-title">{readOnly ? "Rincian jurnal" : "Pratinjau jurnal"}</div>
-                {journalPreview.length === 0 ? (
-                  <div className="entrytab__preview-empty">Isi form untuk melihat pratinjau jurnal.</div>
-                ) : (
-                  <table className="entrytab__preview-table">
-                    <tbody>
-                      {journalPreview.map((row, i) => (
-                        <tr key={`${row.side}-${i}`}>
-                          <td className="entrytab__preview-side">{row.side}</td>
-                          <td>{row.account}</td>
-                          <td className="right">{formatIDR(row.amount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-                <div className={`entrytab__preview-balance ${previewBalanced ? "is-positive" : "is-negative"}`}>
-                  {previewBalanced ? "✓ Balance" : `Δ ${formatIDR(Math.abs(previewDr - previewCr))}`}
-                </div>
-              </div>
-
-              {error && <FormError message={error} />}
-            </>
-          )}
+            <p className="text-xs text-muted mt-0.5">
+              {isReceipt ? "Pencatatan penerimaan kas non-faktur (pendapatan lain, bunga, setoran)" : "Pencatatan beban & pengeluaran kas non-faktur"}
+            </p>
+          </div>
         </div>
 
-        <aside className="action-rail" aria-label="Aksi form">
-          {!readOnly && (
-            <>
-              <button
-                type="submit"
-                className="action-rail__btn action-rail__btn--primary"
-                disabled={saving || !hasData}
-                title="Simpan (Ctrl+S)"
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="topbar__icon-btn"
+            onClick={() => window.print()}
+            title="Cetak Bukti Kas"
+          >
+            <Icon name="print" size={16} />
+          </button>
+          <button
+            type="button"
+            className="topbar__icon-btn"
+            onClick={() => workbench.close(tabId)}
+            title="Tutup Tab"
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+      </header>
+
+      {/* Zone 2: Dynamic Form Body */}
+      <main className="form-zone-2">
+        {periodLockWarning && (
+          <div
+            style={{
+              padding: "10px 14px",
+              backgroundColor: "var(--color-warning-bg)",
+              border: "1px solid var(--color-warning-border)",
+              borderRadius: "var(--radius-sm)",
+              color: "var(--color-warning-text)",
+              fontSize: "12.5px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <Icon name="warning" size={16} />
+            <span>{periodLockWarning}</span>
+          </div>
+        )}
+
+        {error && <FormError message={error} />}
+
+        {/* 2.A Primary Entity & Header Fields */}
+        <div className="form-card form-grid-2col">
+          {/* Kolom Kiri: Pihak Utama & Rekening */}
+          <div className="flex flex-col gap-3">
+            <div className="auth-field">
+              <label>Rekening Kas / Bank Sumber Transaksi *</label>
+              <select
+                className="input-base font-semibold"
+                value={cashAccountId}
+                disabled={isDetail || saved}
+                onChange={(e) => setCashAccountId(e.target.value)}
               >
-                <DiskIcon />
-                <span>{saving ? "Menyimpan…" : "Simpan"}</span>
-              </button>
-              <button
-                type="button"
-                className="action-rail__btn action-rail__btn--secondary"
-                onClick={handleSaveAndNew}
-                disabled={saving || !hasData}
-                title="Simpan & entri baru (Ctrl+Enter)"
-              >
-                <SavePlusIcon />
-                <span>Simpan &amp; Baru</span>
-              </button>
-              <button
-                type="button"
-                className="action-rail__btn action-rail__btn--secondary"
-                onClick={handleSaveAndClose}
-                disabled={saving || !hasData}
-                title="Simpan dan tutup tab"
-              >
-                <CloseIcon />
-                <span>Simpan &amp; Tutup</span>
-              </button>
-              <label className="action-rail__toggle" title="Pertahankan header saat Simpan & Baru">
-                <input
-                  type="checkbox"
-                  checked={keepHeader}
-                  onChange={(e) => {
-                    setKeepHeader(e.target.checked);
-                    try {
-                      localStorage.setItem(LS_KEEP_HEADER, e.target.checked ? "1" : "0");
-                    } catch { /* ignore */ }
-                  }}
-                />
-                <span>Pertahankan header</span>
-              </label>
-            </>
-          )}
-          {readOnly && (
-            <>
-              {savedJournal && (
-                <div className="action-rail__number" title="Nomor jurnal backend">
-                  {savedJournal.number}
-                </div>
+                {cashAccounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.code} - {acc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="auth-field">
+              <label>{isReceipt ? "Diterima Dari (Pihak Pembayar)" : "Dibayarkan Kepada (Penerima Kas)"}</label>
+              <input
+                type="text"
+                className="input-base"
+                placeholder={isReceipt ? "Nama pelanggan / mitra / sumber dana" : "Nama vendor / staf / penerima pembayaran"}
+                value={counterparty}
+                disabled={isDetail || saved}
+                onChange={(e) => setCounterparty(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Kolom Kanan: Tanggal & Referensi */}
+          <div className="flex flex-col gap-3">
+            <div className="auth-field">
+              <label>Tanggal Transaksi *</label>
+              <input
+                type="date"
+                className="input-base font-mono"
+                value={date}
+                disabled={isDetail || saved}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </div>
+
+            <div className="auth-field">
+              <div className="flex-between">
+                <label>No. Referensi / No. Bukti Fisik</label>
+                {duplicateRefWarning && (
+                  <span className="text-xs text-amber-600 font-semibold flex items-center gap-1">
+                    <Icon name="warning" size={12} /> Referensi duplikat
+                  </span>
+                )}
+              </div>
+              <input
+                type="text"
+                className="input-base font-mono"
+                placeholder="Contoh: REF-BCA-8891 / KWT-002"
+                value={reference}
+                disabled={isDetail || saved}
+                onChange={(e) => setReference(e.target.value)}
+              />
+              {duplicateRefWarning && (
+                <p className="text-xs text-amber-600 mt-1">{duplicateRefWarning}</p>
               )}
-              {entryId && !savedJournal && (
-                <button
-                  type="button"
-                  className="action-rail__btn action-rail__btn--secondary"
-                  onClick={() => alert("Fitur 'Balik & Ganti' akan segera hadir.")}
-                  title="Reverse entry dan buka draft baru"
-                  disabled={saving}
-                >
-                  <ReverseIcon />
-                  <span>{saving ? "Memproses…" : "Balik &amp; Ganti"}</span>
-                </button>
-              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 2.B Line Items Table Engine (Multi-Account Allocation Grid) */}
+        <div className="form-card">
+          <div className="flex-between mb-3">
+            <div>
+              <h2 className="text-sm font-bold text-primary">
+                {isReceipt ? "Alokasi Akun Penerimaan / Pendapatan" : "Alokasi Akun Pengeluaran / Beban"}
+              </h2>
+              <p className="text-xs text-muted">Tentukan satu atau beberapa akun lawan untuk pencatatan transaksi ini.</p>
+            </div>
+            {!isDetail && !saved && (
               <button
                 type="button"
-                className="action-rail__btn"
-                onClick={() => workbench.close(tabId)}
-                title="Tutup tab (Esc)"
+                className="btn-dash-secondary text-xs"
+                onClick={addLine}
               >
-                <CloseIcon />
-                <span>Tutup</span>
+                <Icon name="plus" size={14} />
+                <span>+ Tambah Akun Lawan (Enter)</span>
               </button>
-            </>
-          )}
-        </aside>
-      </div>
-    </form>
+            )}
+          </div>
+
+          <div className="datatable-wrapper">
+            <table className="datatable">
+              <thead>
+                <tr>
+                  <th style={{ width: "40%" }}>Akun Lawan Transaksi *</th>
+                  <th>Keterangan / Memo Baris</th>
+                  <th className="num" style={{ width: "22%" }}>Nominal (Rp) *</th>
+                  {!isDetail && !saved && <th style={{ width: "50px" }}>Aksi</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line, idx) => (
+                  <tr key={line.id}>
+                    <td>
+                      <select
+                        className="input-base text-xs w-full"
+                        value={line.accountId}
+                        disabled={isDetail || saved}
+                        onChange={(e) => updateLine(line.id, "accountId", e.target.value)}
+                      >
+                        <option value="">-- Pilih Akun ({idx + 1}) --</option>
+                        {expenseOrRevenueAccounts.map((acc) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.code} - {acc.name} ({acc.account_type})
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        className="input-base text-xs w-full"
+                        placeholder="Contoh: Pembayaran internet kantor bulan ini"
+                        value={line.memo}
+                        disabled={isDetail || saved}
+                        onChange={(e) => updateLine(line.id, "memo", e.target.value)}
+                      />
+                    </td>
+                    <td className="num">
+                      <input
+                        type="number"
+                        className="input-base text-xs text-right font-mono font-semibold w-full"
+                        placeholder="0"
+                        value={line.amount}
+                        disabled={isDetail || saved}
+                        onChange={(e) => updateLine(line.id, "amount", e.target.value)}
+                      />
+                    </td>
+                    {!isDetail && !saved && (
+                      <td className="text-center">
+                        <button
+                          type="button"
+                          className="topbar__icon-btn text-danger"
+                          disabled={lines.length <= 1}
+                          onClick={() => removeLine(line.id)}
+                          title="Hapus baris"
+                        >
+                          <Icon name="trash" size={14} />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="total-rule-top total-double">
+                  <td colSpan={2} className="font-bold text-right text-xs">
+                    Total Nominal:
+                  </td>
+                  <td className="num font-mono font-bold text-primary text-sm">
+                    {formatIDR(totalAmount)}
+                  </td>
+                  {!isDetail && !saved && <td />}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        {/* 2.C Live Journal Preview */}
+        <div className="form-card bg-surface-secondary">
+          <div className="flex items-center gap-2 mb-2">
+            <Icon name="security" size={16} className="text-brand" />
+            <h3 className="text-xs font-bold text-primary uppercase">Pratinjau Otomatis Jurnal Buku Besar (Live Journal Effect)</h3>
+          </div>
+          <div className="text-xs font-mono space-y-1">
+            {isReceipt ? (
+              <>
+                <p className="text-emerald-700 font-semibold">
+                  (Dr) {cashAccountName}: <strong>{formatIDR(totalAmount)}</strong>
+                </p>
+                {lines.map((l, i) => {
+                  const acc = accounts.find((a) => String(a.id) === l.accountId);
+                  return (
+                    <p key={i} className="text-slate-600 pl-4">
+                      (Cr) {acc ? `${acc.code} - ${acc.name}` : "[Pilih Akun Lawan]"}: {formatIDR(parseCents(l.amount))}
+                    </p>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                {lines.map((l, i) => {
+                  const acc = accounts.find((a) => String(a.id) === l.accountId);
+                  return (
+                    <p key={i} className="text-slate-700 font-semibold">
+                      (Dr) {acc ? `${acc.code} - ${acc.name}` : "[Pilih Akun Lawan]"}: {formatIDR(parseCents(l.amount))}
+                    </p>
+                  );
+                })}
+                <p className="text-rose-700 font-semibold pl-4">
+                  (Cr) {cashAccountName}: <strong>{formatIDR(totalAmount)}</strong>
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+        {/* 2.D Official Print Signature Sign-off Box */}
+        <div className="print-signoff">
+          <div className="print-signoff-box">
+            <div className="sign-role">Dibuat Oleh</div>
+            <div className="sign-space" />
+            <div className="sign-name">( Staf Kasir / Pembuat )</div>
+          </div>
+          <div className="print-signoff-box">
+            <div className="sign-role">Diperiksa Oleh</div>
+            <div className="sign-space" />
+            <div className="sign-name">( Supervisor / Akuntan )</div>
+          </div>
+          <div className="print-signoff-box">
+            <div className="sign-role">Disetujui Oleh</div>
+            <div className="sign-space" />
+            <div className="sign-name">( Manajer Keuangan )</div>
+          </div>
+        </div>
+      </main>
+
+      {/* Zone 3: Sticky Summary & Action Footer */}
+      <footer className="form-zone-3">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-secondary">Integritas Transaksi:</span>
+            {totalAmount > 0 ? (
+              <span className="status-badge status-balanced text-xs">
+                <Icon name="check" size={12} /> SEIMBANG (DEBIT = KREDIT)
+              </span>
+            ) : (
+              <span className="status-badge status-draft text-xs">
+                Draft Kosong
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-muted">
+            <span>Shortcut: [Ctrl+S] Posting Kas &bull; [Esc] Batal</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-6">
+          <div className="text-right">
+            <span className="text-xs text-muted block">TOTAL TRANSAKSI KAS:</span>
+            <span className="font-mono text-xl font-bold text-primary total-double inline-block">{formatIDR(totalAmount)}</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn-dash-secondary"
+              onClick={() => workbench.close(tabId)}
+            >
+              Batal
+            </button>
+            {!isDetail && !saved && (
+              <button
+                type="button"
+                className="btn-dash-primary"
+                disabled={totalAmount <= 0 || saving}
+                onClick={handlePost}
+              >
+                {saving ? (
+                  <span>Menyimpan ke Buku Kas...</span>
+                ) : (
+                  <>
+                    <Icon name="check" size={16} />
+                    <span>POSTING TRANSAKSI KAS (Ctrl+S)</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }
 
-/** Best-effort mapping of backend error strings to friendlier messages. */
-function mapBackendError(message: string): string {
-  if (message.includes("period") && message.toLowerCase().includes("clos")) {
-    return "Periode akuntansi sudah ditutup untuk tanggal ini.";
-  }
-  if (message.includes("counter_lines")) {
-    return "Total rincian tidak sama dengan jumlah. Samakan kedua nilai lalu simpan.";
-  }
-  return message;
-}
-
-function draftNumber(subKind: EntrySubKind): string {
-  switch (subKind) {
-    case "money-in": return "BM-DRAFT";
-    case "money-out": return "BK-DRAFT";
-    case "cash-transfer": return "BT-DRAFT";
-    default: return "DRAFT";
-  }
-}
-
-function DiskIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" fill="currentColor" />
-      <path d="M12 7v5l3 2" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-    </svg>
-  );
-}
-
-function SavePlusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="16" rx="2" fill="currentColor" />
-      <path d="M12 9v6m-3-3h6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="16" rx="2" fill="currentColor" />
-      <path d="M9 9l6 6m0-6l-6 6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ReverseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <path d="M4 12a8 8 0 0 1 14-5l2-2v6h-6l2-2a6 6 0 0 0-10 3M20 12a8 8 0 0 1-8 8l-2 2v-6h6l-2 2a6 6 0 0 0 10-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-    </svg>
-  );
-}

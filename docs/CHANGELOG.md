@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **Frontend Visual & UX Enhancement Wave (FE-VIS-002 - Plan fe-vis-002-visual-ux-implementation.md):**
+  - **Design System Tokens & Utilities:** High-contrast focus rings (`:focus-visible`), accounting double-underline rules (`.total-rule-top`, `.total-double`), soft Debit/Credit tinting (`.cell-debit`, `.cell-credit`) with dark mode support, computed field styling (`.input-computed`), sticky table headers, and standardized semantic status badges.
+  - **Dashboard Analytics Widgets:** New `SegmentedAgingBar` (stacked horizontal progress with aging buckets 0-30, 31-60, 61-90, >90 days), `TrendPill` (semantic change indicators), and `QuickRatioGauge` (tri-zone liquidity gauge) integrated into Dashboard KPI and Aging matrices.
+  - **Power-User Entry Forms (CashEntryForm & JournalEntryForm):** Real keyboard shortcuts (Ctrl+S to save/post, Esc to close tab), draft autosave/restore (localStorage debounced), period-lock fiscal warning banner, inline duplicate reference number warnings, arrow-key grid navigation, live debit/credit micro-balance gauge, and official double-underline totals.
+  - **Global Command Palette (Ctrl+K / Cmd+K):** Instant modal search across all registered accounting modules, reports, list views, and quick entry actions with keyboard navigation (↑/↓/Enter/Esc) and TopBar launcher.
+  - **Official Print Voucher Engine:** Enhanced `@media print` layout featuring official 3-box signature voucher sign-offs (Dibuat Oleh, Diperiksa Oleh, Disetujui Oleh) and full interactive control hiding.
+
+- **Frontend Total Overhaul (Accounting-First Architecture v2.0 - Plan 1787391592524):**
+  - **Zero-Glitch SVG System:** Migrasi 100% dari web component font ligature `@material/web` ke Pure SVG Icons (`lucide-react`). Menghilangkan total bug teks font ligature (`ala`, `sel`, `let`, `go`).
+  - **High-Density App Shell:** Slim Navigation Rail (64px) dengan instant flyout submenu, responsive TopBar dengan Quick Action Menu (`+ Buat Baru`), dan browser-style tabstrip dengan dirty state tracking (`●`).
+  - **4-Tier Financial Health Dashboard:** 5 KPI Likuiditas Utama (Kas Likuid, Laba MTD, AR, AP, Quick Ratio), Cashflow matrix, AR/AP aging buckets, live journal feed, dan Quick Action Dock.
+  - **Enterprise 3-Zone Form Architecture:** Standardisasi seluruh form input transaksi (Zone 1 Header, Zone 2 Dynamic Body dengan live debit-credit balancing preview, Zone 3 Sticky Summary & Action Footer).
+  - **Reusable DataTable Engine:** Search bar cepat, sortable header, status pills, responsive overflow, dan footer summary baris.
+  - **Print Engine:** Professional print stylesheet (`@media print`) untuk dokumen dan laporan keuangan dengan legal sign-off area.
+  - **Pure CSS Token Rebuild:** Menghilangkan specificity conflicts antar stylesheet lama menjadi token sistem modular bersih.
+
 - **Audit trail, idempotency & error-handling fixes (A-31, M-023, B-03):**
   - `audit.Log` now covers all critical posting paths (previously only cash journals, period close, and attachment delete): sales invoices, customer payments, credit notes, delivery orders, down payments (receive + refund with before-state void snapshot), GRN, supplier invoices, supplier payments, purchase returns, asset depreciation/revaluation/disposal/impairment, lease payments and RoU depreciation, stock opname approval, production job completion, ECL provision/write-off, PPN reconciliation, PPh Final recognition + payment, deferred tax calculation, recurring transaction create/deactivate/postnow, petty cash fund/voucher/replenish, and cheque register/deposit/clear/bounce status transitions. All entries are written inside the posting transaction (roll back together with the journal) or state-mutation transaction.
   - Idempotency payload matching extended beyond cash journals: invoices, payments, credit notes, GRN, and supplier invoices now store `request_hash` (sha256 of the request body, column from migration 000032) and reject replays that reuse an idempotency key with a different body with 409 `IDEMPOTENCY_KEY_REUSE`.

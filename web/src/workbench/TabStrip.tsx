@@ -1,13 +1,12 @@
 import { useWorkbench } from "./state";
 import { findModule } from "./modules";
-import { Tabs } from "../components/m3/Tabs";
+import { Icon } from "../components/m3/Icon";
 import type { Tab } from "./types";
 
 /**
- * Top-level browser-style tab strip below the top bar, rendered with M3
- * `md-tabs` + `md-primary-tab`. Shows only the top-level tabs: the
- * Dashboard (pinned, no close button) and module parents. A module
- * parent's children are rendered by NestedTabStrip inside the work area.
+ * Top-level browser-style tab strip below the top bar.
+ * Provides intuitive tab switching with unsaved changes indicators (dot)
+ * and responsive close buttons.
  */
 export function TabStrip() {
   const workbench = useWorkbench();
@@ -15,25 +14,13 @@ export function TabStrip() {
 
   if (tabs.length === 0) return null;
 
-  const activeIndex = tabs.findIndex((tab) => tab.id === workbench.activeId);
-
-  const handleChange = (e: Event) => {
-    const index = (e.target as HTMLElement & { activeTabIndex: number }).activeTabIndex;
-    const tab = tabs[index];
-    if (tab) workbench.activate(tab.id);
-  };
-
   return (
     <nav className="tabstrip" aria-label="Open modules">
-      <Tabs
-        className="tabstrip__inner"
-        activeTabIndex={activeIndex >= 0 ? activeIndex : 0}
-        onChange={handleChange}
-      >
+      <div className="tabstrip__inner" role="tablist">
         {tabs.map((tab) => (
           <TabPill key={tab.id} tab={tab} />
         ))}
-      </Tabs>
+      </div>
     </nav>
   );
 }
@@ -47,7 +34,19 @@ function TabPill({ tab }: { tab: Tab }) {
     : tab.title || (findModule(tab.moduleId)?.label ?? tab.moduleId);
 
   return (
-    <md-primary-tab active={isActive} className={`tabpill${isActive ? " is-active" : ""}`}>
+    <div
+      role="tab"
+      aria-selected={isActive}
+      className={`tabpill${isActive ? " is-active" : ""}`}
+      onClick={() => workbench.activate(tab.id)}
+    >
+      <span className="tabpill__icon">
+        <Icon
+          name={isDashboard ? "table_chart" : "folder"}
+          size={14}
+          className={isActive ? "text-brand" : "text-muted"}
+        />
+      </span>
       <span className="tabpill__title" title={label}>
         {label}
       </span>
@@ -61,9 +60,9 @@ function TabPill({ tab }: { tab: Tab }) {
             workbench.close(tab.id);
           }}
         >
-          ×
+          <Icon name="close" size={12} />
         </button>
       ) : null}
-    </md-primary-tab>
+    </div>
   );
 }

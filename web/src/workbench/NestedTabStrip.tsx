@@ -1,18 +1,12 @@
 import { useWorkbench } from "./state";
+import { Icon } from "../components/m3/Icon";
 import type { NestedTab } from "./types";
 
 /**
  * Sub-tab strip rendered inside the work area when the active top-level
- * tab is a module parent. Lists the module's open children (list views
- * and entry forms) so the user can switch between them without leaving
- * the module.
- *
- * Accurate-style layout: the list tab is an icon-only button (green when
- * active); entry tabs show their title with a close button; the + button
- * adds a new entry draft.
+ * tab is a module parent. Lists open children (list views & entry forms).
  */
 export function NestedTabStrip({
-  parentId,
   children,
   activeChildId,
   onAdd,
@@ -32,7 +26,6 @@ export function NestedTabStrip({
   });
 
   if (sortedChildren.length === 0 && !onAdd) return null;
-  void parentId;
 
   const activeIndex = sortedChildren.findIndex((c) => c.id === activeChildId);
 
@@ -93,7 +86,8 @@ export function NestedTabStrip({
             aria-label={addLabel ?? "Add entry"}
             title={addLabel ?? "New entry"}
           >
-            +
+            <Icon name="plus" size={14} />
+            <span>{addLabel ?? "Baru"}</span>
           </button>
         ) : null}
       </div>
@@ -114,7 +108,7 @@ function NestedTabPill({
 }) {
   const workbench = useWorkbench();
 
-  // List tabs: icon-only, no text, no close button.
+  // List tabs: icon-only + clean indicator.
   if (tab.kind === "list") {
     return (
       <button
@@ -128,12 +122,13 @@ function NestedTabPill({
         onClick={() => workbench.activate(tab.id)}
         onKeyDown={onKeyDown}
       >
-        <ListIcon />
+        <Icon name="table_chart" size={14} />
+        <span className="nested-icon-tab__label">{tab.title}</span>
       </button>
     );
   }
 
-  // Entry tabs: title + close button.
+  // Entry tabs: title + dirty state dot + close button.
   return (
     <div
       className={`nested-tabpill${isActive ? " is-active" : ""}${tab.unsaved ? " is-unsaved" : ""}`}
@@ -144,8 +139,11 @@ function NestedTabPill({
       onClick={() => workbench.activate(tab.id)}
       onKeyDown={onKeyDown}
     >
+      <Icon name="description" size={13} className={isActive ? "text-brand" : "text-muted"} />
       <span className="nested-tabpill__title" title={tab.title}>{tab.title}</span>
-      {tab.unsaved ? <span className="nested-tabpill__dot" aria-hidden="true" /> : null}
+      {tab.unsaved ? (
+        <span className="nested-tabpill__dot" title="Perubahan belum disimpan" aria-hidden="true" />
+      ) : null}
       <button
         type="button"
         className="nested-tabpill__close"
@@ -155,16 +153,8 @@ function NestedTabPill({
           workbench.close(tab.id);
         }}
       >
-        ×
+        <Icon name="close" size={11} />
       </button>
     </div>
-  );
-}
-
-function ListIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />
-    </svg>
   );
 }
