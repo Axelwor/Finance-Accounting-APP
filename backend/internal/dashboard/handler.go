@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/auth"
+	"finance-accounting-app/backend/internal/db"
 	"finance-accounting-app/backend/internal/httperr"
 )
 
@@ -145,32 +146,32 @@ func (service *Service) GetLayout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := service.pool.Query(r.Context(), `
-		SELECT id, widget_type, title, config_json, position, col_span, row_span, layout_id
-		FROM dashboard_widgets
-		WHERE tenant_id = $1 AND user_id = $2
-		ORDER BY position
-	`, tenantID, userID)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
 	var widgets []Widget
-	for rows.Next() {
-		var widget Widget
-		var config []byte
-		if err := rows.Scan(&widget.ID, &widget.WidgetType, &widget.Title, &config, &widget.Position, &widget.ColSpan, &widget.RowSpan, &widget.LayoutID); err != nil {
-			writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
-			return
+	err := db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT id, widget_type, title, config_json, position, col_span, row_span, layout_id
+			FROM dashboard_widgets
+			WHERE tenant_id = $1 AND user_id = $2
+			ORDER BY position
+		`, tenantID, userID)
+		if err != nil {
+			return err
 		}
-		if len(config) > 0 {
-			widget.Config = json.RawMessage(config)
+		defer rows.Close()
+		for rows.Next() {
+			var widget Widget
+			var config []byte
+			if err := rows.Scan(&widget.ID, &widget.WidgetType, &widget.Title, &config, &widget.Position, &widget.ColSpan, &widget.RowSpan, &widget.LayoutID); err != nil {
+				return err
+			}
+			if len(config) > 0 {
+				widget.Config = json.RawMessage(config)
+			}
+			widgets = append(widgets, widget)
 		}
-		widgets = append(widgets, widget)
-	}
-	if err := rows.Err(); err != nil {
+		return rows.Err()
+	})
+	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
 		return
 	}
@@ -187,9 +188,20 @@ func (service *Service) GetLayout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (service *Service) seedDefaultWidgets(ctx context.Context, tenantID, userID int64) []Widget {
+	// Seeding writes several rows; run them in one tenant transaction so a
+	// restricted role sees the freshly created layout row when inserting.
+	var defaults []Widget
+	_ = db.WithTenantData(ctx, service.pool, tenantID, func(tx pgx.Tx) error {
+		defaults = service.seedDefaultWidgetsTx(ctx, tx, tenantID, userID)
+		return nil
+	})
+	return defaults
+}
+
+func (service *Service) seedDefaultWidgetsTx(ctx context.Context, tx pgx.Tx, tenantID, userID int64) []Widget {
 	// Resolve (or create) the user's active dashboard_layouts row so the
 	// layout_id NOT NULL FK is satisfied on insert.
-	layoutID := service.ensureDefaultLayout(ctx, tenantID, userID)
+	layoutID := service.ensureDefaultLayoutTx(ctx, tx, tenantID, userID)
 
 	defaults := []Widget{
 		{WidgetType: WidgetCashBalance, Title: "Cash Balance", Position: 0, ColSpan: 3, RowSpan: 1, LayoutID: layoutID},
@@ -200,7 +212,7 @@ func (service *Service) seedDefaultWidgets(ctx context.Context, tenantID, userID
 		{WidgetType: WidgetPeriodStatus, Title: "Period Status", Position: 5, ColSpan: 2, RowSpan: 1, LayoutID: layoutID},
 	}
 	for i := range defaults {
-		_, _ = service.pool.Exec(ctx, `
+		_, _ = tx.Exec(ctx, `
 			INSERT INTO dashboard_widgets (tenant_id, user_id, layout_id, widget_type, title, position, col_span, row_span)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		`, tenantID, userID, layoutID, defaults[i].WidgetType, defaults[i].Title,
@@ -214,7 +226,16 @@ func (service *Service) seedDefaultWidgets(ctx context.Context, tenantID, userID
 // because dashboard_widgets.layout_id is NOT NULL with a FK back to it.
 func (service *Service) ensureDefaultLayout(ctx context.Context, tenantID, userID int64) int64 {
 	var layoutID int64
-	err := service.pool.QueryRow(ctx, `
+	_ = db.WithTenantData(ctx, service.pool, tenantID, func(tx pgx.Tx) error {
+		layoutID = service.ensureDefaultLayoutTx(ctx, tx, tenantID, userID)
+		return nil
+	})
+	return layoutID
+}
+
+func (service *Service) ensureDefaultLayoutTx(ctx context.Context, tx pgx.Tx, tenantID, userID int64) int64 {
+	var layoutID int64
+	err := tx.QueryRow(ctx, `
 		SELECT id FROM dashboard_layouts
 		WHERE tenant_id = $1 AND user_id = $2 AND is_active = TRUE
 		ORDER BY id DESC LIMIT 1
@@ -223,7 +244,7 @@ func (service *Service) ensureDefaultLayout(ctx context.Context, tenantID, userI
 		return layoutID
 	}
 	// No active layout — create one.
-	err = service.pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		INSERT INTO dashboard_layouts (tenant_id, user_id, name, is_active)
 		VALUES ($1, $2, 'Default', TRUE)
 		ON CONFLICT (tenant_id, user_id, name) DO UPDATE SET is_active = TRUE
@@ -231,7 +252,7 @@ func (service *Service) ensureDefaultLayout(ctx context.Context, tenantID, userI
 	`, tenantID, userID).Scan(&layoutID)
 	if err != nil || layoutID == 0 {
 		// Last resort: pick any layout for this tenant+user.
-		_ = service.pool.QueryRow(ctx, `
+		_ = tx.QueryRow(ctx, `
 			SELECT id FROM dashboard_layouts
 			WHERE tenant_id = $1 AND user_id = $2
 			ORDER BY id DESC LIMIT 1
@@ -262,38 +283,41 @@ func (service *Service) SaveLayout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete existing and re-insert (full replace strategy).
-	_, err := service.pool.Exec(r.Context(), `
-		DELETE FROM dashboard_widgets WHERE tenant_id = $1 AND user_id = $2
-	`, tenantID, userID)
+	// Delete existing and re-insert inside ONE tenant transaction (full
+	// replace strategy — now also atomic under a restricted role).
+	err := db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(r.Context(), `
+			DELETE FROM dashboard_widgets WHERE tenant_id = $1 AND user_id = $2
+		`, tenantID, userID); err != nil {
+			return err
+		}
+		layoutID := service.ensureDefaultLayoutTx(r.Context(), tx, tenantID, userID)
+		for i, widget := range req.Widgets {
+			pos := widget.Position
+			if pos == 0 {
+				pos = i
+			}
+			colSpan := widget.ColSpan
+			if colSpan == 0 {
+				colSpan = 2
+			}
+			rowSpan := widget.RowSpan
+			if rowSpan == 0 {
+				rowSpan = 1
+			}
+			if _, err := tx.Exec(r.Context(), `
+				INSERT INTO dashboard_widgets (tenant_id, user_id, layout_id, widget_type, title, config_json, position, col_span, row_span)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			`, tenantID, userID, layoutID, widget.WidgetType, widget.Title,
+				[]byte(widget.Config), pos, colSpan, rowSpan); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
 		return
-	}
-
-	layoutID := service.ensureDefaultLayout(r.Context(), tenantID, userID)
-	for i, widget := range req.Widgets {
-		pos := widget.Position
-		if pos == 0 {
-			pos = i
-		}
-		colSpan := widget.ColSpan
-		if colSpan == 0 {
-			colSpan = 2
-		}
-		rowSpan := widget.RowSpan
-		if rowSpan == 0 {
-			rowSpan = 1
-		}
-		_, err := service.pool.Exec(r.Context(), `
-			INSERT INTO dashboard_widgets (tenant_id, user_id, layout_id, widget_type, title, config_json, position, col_span, row_span)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		`, tenantID, userID, layoutID, widget.WidgetType, widget.Title,
-			[]byte(widget.Config), pos, colSpan, rowSpan)
-		if err != nil {
-			writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
-			return
-		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"message": "layout saved"})
@@ -352,15 +376,17 @@ func (service *Service) AddWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.ColSpan, req.RowSpan = normalizeWidgetGrid(req.ColSpan, req.RowSpan)
-	layoutID := service.ensureDefaultLayout(r.Context(), tenantID, userID)
 
 	var id int64
-	err := service.pool.QueryRow(r.Context(), `
-		INSERT INTO dashboard_widgets (tenant_id, user_id, layout_id, widget_type, title, config_json, position, col_span, row_span)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING id
-	`, tenantID, userID, layoutID, req.WidgetType, req.Title,
-		[]byte(req.Config), req.Position, req.ColSpan, req.RowSpan).Scan(&id)
+	err := db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		layoutID := service.ensureDefaultLayoutTx(r.Context(), tx, tenantID, userID)
+		return tx.QueryRow(r.Context(), `
+			INSERT INTO dashboard_widgets (tenant_id, user_id, layout_id, widget_type, title, config_json, position, col_span, row_span)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			RETURNING id
+		`, tenantID, userID, layoutID, req.WidgetType, req.Title,
+			[]byte(req.Config), req.Position, req.ColSpan, req.RowSpan).Scan(&id)
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "WIDGET_CREATE_FAILED", err.Error())
 		return
@@ -399,11 +425,14 @@ func (service *Service) UpdateWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = service.pool.Exec(r.Context(), `
-		UPDATE dashboard_widgets
-		SET title = $3, config_json = $4, position = $5, col_span = $6, row_span = $7, updated_at = now()
-		WHERE tenant_id = $1 AND user_id = $2 AND id = $8
-	`, tenantID, userID, req.Title, []byte(req.Config), req.Position, req.ColSpan, req.RowSpan, widgetID)
+	err = db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(r.Context(), `
+			UPDATE dashboard_widgets
+			SET title = $3, config_json = $4, position = $5, col_span = $6, row_span = $7, updated_at = now()
+			WHERE tenant_id = $1 AND user_id = $2 AND id = $8
+		`, tenantID, userID, req.Title, []byte(req.Config), req.Position, req.ColSpan, req.RowSpan, widgetID)
+		return err
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "WIDGET_UPDATE_FAILED", err.Error())
 		return
@@ -429,10 +458,13 @@ func (service *Service) DeleteWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = service.pool.Exec(r.Context(), `
-		DELETE FROM dashboard_widgets
-		WHERE tenant_id = $1 AND user_id = $2 AND id = $3
-	`, tenantID, userID, widgetID)
+	err = db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(r.Context(), `
+			DELETE FROM dashboard_widgets
+			WHERE tenant_id = $1 AND user_id = $2 AND id = $3
+		`, tenantID, userID, widgetID)
+		return err
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "WIDGET_DELETE_FAILED", err.Error())
 		return
@@ -457,12 +489,14 @@ func (service *Service) GetWidgetData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Look up the widget type.
+	// Look up the widget type (dashboard_widgets is RLS-scoped).
 	var widgetType string
-	err = service.pool.QueryRow(r.Context(), `
-		SELECT widget_type FROM dashboard_widgets
-		WHERE tenant_id = $1 AND id = $2
-	`, tenantID, widgetID).Scan(&widgetType)
+	err = db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT widget_type FROM dashboard_widgets
+			WHERE tenant_id = $1 AND id = $2
+		`, tenantID, widgetID).Scan(&widgetType)
+	})
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "WIDGET_NOT_FOUND", "widget not found")
 		return
@@ -507,17 +541,20 @@ func widgetUnavailable(w http.ResponseWriter, err error) {
 
 func (service *Service) fetchCashBalanceData(w http.ResponseWriter, r *http.Request, tenantID int64) {
 	var cashInflow, cashOutflow, cashBalance int64
-	if err := service.pool.QueryRow(r.Context(), `
-		SELECT
-		  COALESCE(SUM(CASE WHEN jl.debit_cents > 0 THEN jl.debit_cents ELSE 0 END), 0),
-		  COALESCE(SUM(CASE WHEN jl.credit_cents > 0 THEN jl.credit_cents ELSE 0 END), 0),
-		  COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0)
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
-		  AND a.account_type IN ('CASH', 'BANK')
-	`, tenantID).Scan(&cashInflow, &cashOutflow, &cashBalance); err != nil {
+	err := db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT
+			  COALESCE(SUM(CASE WHEN jl.debit_cents > 0 THEN jl.debit_cents ELSE 0 END), 0),
+			  COALESCE(SUM(CASE WHEN jl.credit_cents > 0 THEN jl.credit_cents ELSE 0 END), 0),
+			  COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0)
+			FROM journal_lines jl
+			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
+			JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+			WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
+			  AND a.account_type IN ('CASH', 'BANK')
+		`, tenantID).Scan(&cashInflow, &cashOutflow, &cashBalance)
+	})
+	if err != nil {
 		widgetUnavailable(w, err)
 		return
 	}
@@ -532,16 +569,19 @@ func (service *Service) fetchCashBalanceData(w http.ResponseWriter, r *http.Requ
 
 func (service *Service) fetchPLSnapshotData(w http.ResponseWriter, r *http.Request, tenantID int64) {
 	var revenue, expense int64
-	if err := service.pool.QueryRow(r.Context(), `
-		SELECT
-		  COALESCE(SUM(CASE WHEN a.report_group = 'revenue' THEN jl.credit_cents - jl.debit_cents ELSE 0 END), 0),
-		  COALESCE(SUM(CASE WHEN a.report_group = 'expense' THEN jl.debit_cents - jl.credit_cents ELSE 0 END), 0)
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
-		  AND a.report_group IN ('revenue', 'expense')
-	`, tenantID).Scan(&revenue, &expense); err != nil {
+	err := db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT
+			  COALESCE(SUM(CASE WHEN a.report_group = 'revenue' THEN jl.credit_cents - jl.debit_cents ELSE 0 END), 0),
+			  COALESCE(SUM(CASE WHEN a.report_group = 'expense' THEN jl.debit_cents - jl.credit_cents ELSE 0 END), 0)
+			FROM journal_lines jl
+			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
+			JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+			WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
+			  AND a.report_group IN ('revenue', 'expense')
+		`, tenantID).Scan(&revenue, &expense)
+	})
+	if err != nil {
 		widgetUnavailable(w, err)
 		return
 	}
@@ -557,45 +597,46 @@ func (service *Service) fetchPLSnapshotData(w http.ResponseWriter, r *http.Reque
 func (service *Service) fetchARAgingData(w http.ResponseWriter, r *http.Request, tenantID int64) {
 	// Age by due_date (not invoice_date) so "current" means not yet overdue.
 	// Inline date diff replaces the missing invoice_age_days() SQL function.
-	rows, err := service.pool.Query(r.Context(), `
-		SELECT bucket, COALESCE(SUM(amount_cents), 0) as total
-		FROM (
-			SELECT
-			  CASE
-			    WHEN GREATEST(CURRENT_DATE - i.due_date, 0) <= 0 THEN 'current'
-			    WHEN GREATEST(CURRENT_DATE - i.due_date, 0) <= 30 THEN '1-30'
-			    WHEN GREATEST(CURRENT_DATE - i.due_date, 0) <= 60 THEN '31-60'
-			    WHEN GREATEST(CURRENT_DATE - i.due_date, 0) <= 90 THEN '61-90'
-			    ELSE '90+'
-			  END AS bucket,
-			  i.receivable_cents AS amount_cents
-			FROM invoices i
-			WHERE i.tenant_id = $1 AND i.status IN ('ISSUED', 'PARTIALLY_PAID')
-			  AND i.receivable_cents > 0
-		) sub
-		GROUP BY bucket
-	`, tenantID)
+	var buckets []map[string]any
+	var grandTotal int64
+	err := db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT bucket, COALESCE(SUM(amount_cents), 0) as total
+			FROM (
+				SELECT
+				  CASE
+				    WHEN GREATEST(CURRENT_DATE - i.due_date, 0) <= 0 THEN 'current'
+				    WHEN GREATEST(CURRENT_DATE - i.due_date, 0) <= 30 THEN '1-30'
+				    WHEN GREATEST(CURRENT_DATE - i.due_date, 0) <= 60 THEN '31-60'
+				    WHEN GREATEST(CURRENT_DATE - i.due_date, 0) <= 90 THEN '61-90'
+				    ELSE '90+'
+				  END AS bucket,
+				  i.receivable_cents AS amount_cents
+				FROM invoices i
+				WHERE i.tenant_id = $1 AND i.status IN ('ISSUED', 'PARTIALLY_PAID')
+				  AND i.receivable_cents > 0
+			) sub
+			GROUP BY bucket
+		`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		buckets = []map[string]any{}
+		for rows.Next() {
+			var bucket string
+			var total int64
+			if err := rows.Scan(&bucket, &total); err != nil {
+				return err
+			}
+			buckets = append(buckets, map[string]any{"bucket": bucket, "total_cents": total})
+			grandTotal += total
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		// F-08: no fallback total — a partial number looks like real data.
 		widgetUnavailable(w, err)
-		return
-	}
-	defer rows.Close()
-
-	buckets := []map[string]any{}
-	var grandTotal int64
-	for rows.Next() {
-		var bucket string
-		var total int64
-		if err := rows.Scan(&bucket, &total); err != nil {
-			writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
-			return
-		}
-		buckets = append(buckets, map[string]any{"bucket": bucket, "total_cents": total})
-		grandTotal += total
-	}
-	if err := rows.Err(); err != nil {
-		writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
 		return
 	}
 
@@ -609,45 +650,46 @@ func (service *Service) fetchARAgingData(w http.ResponseWriter, r *http.Request,
 func (service *Service) fetchAPAgingData(w http.ResponseWriter, r *http.Request, tenantID int64) {
 	// Age by due_date. supplier_invoices uses payable_cents (not receivable_cents)
 	// and status values ISSUED/PARTIALLY_PAID (not POSTED).
-	rows, err := service.pool.Query(r.Context(), `
-		SELECT bucket, COALESCE(SUM(amount_cents), 0) as total
-		FROM (
-			SELECT
-			  CASE
-			    WHEN GREATEST(CURRENT_DATE - si.due_date, 0) <= 0 THEN 'current'
-			    WHEN GREATEST(CURRENT_DATE - si.due_date, 0) <= 30 THEN '1-30'
-			    WHEN GREATEST(CURRENT_DATE - si.due_date, 0) <= 60 THEN '31-60'
-			    WHEN GREATEST(CURRENT_DATE - si.due_date, 0) <= 90 THEN '61-90'
-			    ELSE '90+'
-			  END AS bucket,
-			  si.payable_cents AS amount_cents
-			FROM supplier_invoices si
-			WHERE si.tenant_id = $1 AND si.status IN ('ISSUED', 'PARTIALLY_PAID')
-			  AND si.payable_cents > 0
-		) sub
-		GROUP BY bucket
-	`, tenantID)
+	var buckets []map[string]any
+	var grandTotal int64
+	err := db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT bucket, COALESCE(SUM(amount_cents), 0) as total
+			FROM (
+				SELECT
+				  CASE
+				    WHEN GREATEST(CURRENT_DATE - si.due_date, 0) <= 0 THEN 'current'
+				    WHEN GREATEST(CURRENT_DATE - si.due_date, 0) <= 30 THEN '1-30'
+				    WHEN GREATEST(CURRENT_DATE - si.due_date, 0) <= 60 THEN '31-60'
+				    WHEN GREATEST(CURRENT_DATE - si.due_date, 0) <= 90 THEN '61-90'
+				    ELSE '90+'
+				  END AS bucket,
+				  si.payable_cents AS amount_cents
+				FROM supplier_invoices si
+				WHERE si.tenant_id = $1 AND si.status IN ('ISSUED', 'PARTIALLY_PAID')
+				  AND si.payable_cents > 0
+			) sub
+			GROUP BY bucket
+		`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		buckets = []map[string]any{}
+		for rows.Next() {
+			var bucket string
+			var total int64
+			if err := rows.Scan(&bucket, &total); err != nil {
+				return err
+			}
+			buckets = append(buckets, map[string]any{"bucket": bucket, "total_cents": total})
+			grandTotal += total
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		// F-08: no fallback total — a partial number looks like real data.
 		widgetUnavailable(w, err)
-		return
-	}
-	defer rows.Close()
-
-	buckets := []map[string]any{}
-	var grandTotal int64
-	for rows.Next() {
-		var bucket string
-		var total int64
-		if err := rows.Scan(&bucket, &total); err != nil {
-			writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
-			return
-		}
-		buckets = append(buckets, map[string]any{"bucket": bucket, "total_cents": total})
-		grandTotal += total
-	}
-	if err := rows.Err(); err != nil {
-		writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
 		return
 	}
 
@@ -659,39 +701,40 @@ func (service *Service) fetchAPAgingData(w http.ResponseWriter, r *http.Request,
 }
 
 func (service *Service) fetchLowStockData(w http.ResponseWriter, r *http.Request, tenantID int64) {
-	rows, err := service.pool.Query(r.Context(), `
-		SELECT i.code, i.name, sb.qty_on_hand, i.min_stock_qty
-		FROM items i
-		LEFT JOIN stock_balances sb ON sb.tenant_id = i.tenant_id AND sb.item_id = i.id
-		WHERE i.tenant_id = $1 AND i.is_tracked_stock = true
-		  AND COALESCE(sb.qty_on_hand, 0) <= COALESCE(i.min_stock_qty, 0)
-		  AND i.min_stock_qty > 0
-		ORDER BY i.code
-		LIMIT 10
-	`, tenantID)
+	var items []map[string]any
+	err := db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT i.code, i.name, sb.qty_on_hand, i.min_stock_qty
+			FROM items i
+			LEFT JOIN stock_balances sb ON sb.tenant_id = i.tenant_id AND sb.item_id = i.id
+			WHERE i.tenant_id = $1 AND i.is_tracked_stock = true
+			  AND COALESCE(sb.qty_on_hand, 0) <= COALESCE(i.min_stock_qty, 0)
+			  AND i.min_stock_qty > 0
+			ORDER BY i.code
+			LIMIT 10
+		`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		items = []map[string]any{}
+		for rows.Next() {
+			var code, name string
+			var onHand, minStock float64
+			if err := rows.Scan(&code, &name, &onHand, &minStock); err != nil {
+				return err
+			}
+			items = append(items, map[string]any{
+				"code":          code,
+				"name":          name,
+				"qty_on_hand":   onHand,
+				"min_stock_qty": minStock,
+			})
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		widgetUnavailable(w, err)
-		return
-	}
-	defer rows.Close()
-
-	items := []map[string]any{}
-	for rows.Next() {
-		var code, name string
-		var onHand, minStock float64
-		if err := rows.Scan(&code, &name, &onHand, &minStock); err != nil {
-			writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
-			return
-		}
-		items = append(items, map[string]any{
-			"code":          code,
-			"name":          name,
-			"qty_on_hand":   onHand,
-			"min_stock_qty": minStock,
-		})
-	}
-	if err := rows.Err(); err != nil {
-		writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
 		return
 	}
 
@@ -704,42 +747,43 @@ func (service *Service) fetchLowStockData(w http.ResponseWriter, r *http.Request
 func (service *Service) fetchRecentTxnsData(w http.ResponseWriter, r *http.Request, tenantID int64) {
 	// Include total_debit_cents as the entry amount so the frontend can show
 	// a nominal per row without a second round-trip to /journal-entries.
-	rows, err := service.pool.Query(r.Context(), `
-		SELECT je.number, je.entry_date::text, COALESCE(je.description, ''),
-		       COALESCE(je.intent_type, ''), je.status,
-		       COALESCE(SUM(jl.debit_cents), 0)
-		FROM journal_entries je
-		LEFT JOIN journal_lines jl ON jl.tenant_id = je.tenant_id AND jl.entry_id = je.id
-		WHERE je.tenant_id = $1 AND je.status = 'POSTED'
-		GROUP BY je.id, je.number, je.entry_date, je.description, je.intent_type, je.status, je.created_at
-		ORDER BY je.created_at DESC
-		LIMIT 10
-	`, tenantID)
+	var txns []map[string]any
+	err := db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT je.number, je.entry_date::text, COALESCE(je.description, ''),
+			       COALESCE(je.intent_type, ''), je.status,
+			       COALESCE(SUM(jl.debit_cents), 0)
+			FROM journal_entries je
+			LEFT JOIN journal_lines jl ON jl.tenant_id = je.tenant_id AND jl.entry_id = je.id
+			WHERE je.tenant_id = $1 AND je.status = 'POSTED'
+			GROUP BY je.id, je.number, je.entry_date, je.description, je.intent_type, je.status, je.created_at
+			ORDER BY je.created_at DESC
+			LIMIT 10
+		`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		txns = []map[string]any{}
+		for rows.Next() {
+			var number, entryDate, description, intentType, status string
+			var totalDebit int64
+			if err := rows.Scan(&number, &entryDate, &description, &intentType, &status, &totalDebit); err != nil {
+				return err
+			}
+			txns = append(txns, map[string]any{
+				"number":            number,
+				"entry_date":        entryDate,
+				"description":       description,
+				"intent_type":       intentType,
+				"status":            status,
+				"total_debit_cents": totalDebit,
+			})
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		widgetUnavailable(w, err)
-		return
-	}
-	defer rows.Close()
-
-	txns := []map[string]any{}
-	for rows.Next() {
-		var number, entryDate, description, intentType, status string
-		var totalDebit int64
-		if err := rows.Scan(&number, &entryDate, &description, &intentType, &status, &totalDebit); err != nil {
-			writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
-			return
-		}
-		txns = append(txns, map[string]any{
-			"number":            number,
-			"entry_date":        entryDate,
-			"description":       description,
-			"intent_type":       intentType,
-			"status":            status,
-			"total_debit_cents": totalDebit,
-		})
-	}
-	if err := rows.Err(); err != nil {
-		writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
 		return
 	}
 
@@ -752,12 +796,15 @@ func (service *Service) fetchRecentTxnsData(w http.ResponseWriter, r *http.Reque
 func (service *Service) fetchPeriodStatusData(w http.ResponseWriter, r *http.Request, tenantID int64) {
 	var status, periodStart, periodEnd string
 	var periodID int64
-	if err := service.pool.QueryRow(r.Context(), `
-		SELECT id, status, period_start::text, period_end::text
-		FROM accounting_periods
-		WHERE tenant_id = $1 AND status IN ('OPEN', 'REOPENED')
-		ORDER BY period_start DESC LIMIT 1
-	`, tenantID).Scan(&periodID, &status, &periodStart, &periodEnd); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	err := db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT id, status, period_start::text, period_end::text
+			FROM accounting_periods
+			WHERE tenant_id = $1 AND status IN ('OPEN', 'REOPENED')
+			ORDER BY period_start DESC LIMIT 1
+		`, tenantID).Scan(&periodID, &status, &periodStart, &periodEnd)
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		// No open period is a legitimate empty state; anything else is a
 		// real failure and must be surfaced (F-08).
 		widgetUnavailable(w, err)
@@ -774,41 +821,42 @@ func (service *Service) fetchPeriodStatusData(w http.ResponseWriter, r *http.Req
 }
 
 func (service *Service) fetchOutstandingInvoicesData(w http.ResponseWriter, r *http.Request, tenantID int64) {
-	rows, err := service.pool.Query(r.Context(), `
-		SELECT i.number, c.name, i.invoice_date::text, i.due_date::text,
-		       i.receivable_cents, i.status
-		FROM invoices i
-		JOIN customers c ON c.tenant_id = i.tenant_id AND c.id = i.customer_id
-		WHERE i.tenant_id = $1 AND i.status IN ('POSTED', 'PARTIALLY_PAID')
-		  AND i.receivable_cents > 0
-		ORDER BY i.due_date ASC
-		LIMIT 10
-	`, tenantID)
+	var invoices []map[string]any
+	err := db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT i.number, c.name, i.invoice_date::text, i.due_date::text,
+			       i.receivable_cents, i.status
+			FROM invoices i
+			JOIN customers c ON c.tenant_id = i.tenant_id AND c.id = i.customer_id
+			WHERE i.tenant_id = $1 AND i.status IN ('POSTED', 'PARTIALLY_PAID')
+			  AND i.receivable_cents > 0
+			ORDER BY i.due_date ASC
+			LIMIT 10
+		`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		invoices = []map[string]any{}
+		for rows.Next() {
+			var number, customerName, invoiceDate, dueDate, status string
+			var receivableCents int64
+			if err := rows.Scan(&number, &customerName, &invoiceDate, &dueDate, &receivableCents, &status); err != nil {
+				return err
+			}
+			invoices = append(invoices, map[string]any{
+				"number":           number,
+				"customer_name":    customerName,
+				"invoice_date":     invoiceDate,
+				"due_date":         dueDate,
+				"receivable_cents": receivableCents,
+				"status":           status,
+			})
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		widgetUnavailable(w, err)
-		return
-	}
-	defer rows.Close()
-
-	invoices := []map[string]any{}
-	for rows.Next() {
-		var number, customerName, invoiceDate, dueDate, status string
-		var receivableCents int64
-		if err := rows.Scan(&number, &customerName, &invoiceDate, &dueDate, &receivableCents, &status); err != nil {
-			writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
-			return
-		}
-		invoices = append(invoices, map[string]any{
-			"number":           number,
-			"customer_name":    customerName,
-			"invoice_date":     invoiceDate,
-			"due_date":         dueDate,
-			"receivable_cents": receivableCents,
-			"status":           status,
-		})
-	}
-	if err := rows.Err(); err != nil {
-		writeErr(w, http.StatusInternalServerError, "DASHBOARD_FAILED", err.Error())
 		return
 	}
 
@@ -824,16 +872,19 @@ func (service *Service) fetchOutstandingInvoicesData(w http.ResponseWriter, r *h
 // widget dispatch does not need to import the tax package.
 func (service *Service) fetchTaxSummaryData(w http.ResponseWriter, r *http.Request, tenantID int64) {
 	var ppnKeluaran, ppnMasukan int64
-	if err := service.pool.QueryRow(r.Context(), `
-		SELECT
-		  COALESCE(SUM(CASE WHEN a.code = '2202' THEN jl.credit_cents - jl.debit_cents ELSE 0 END), 0),
-		  COALESCE(SUM(CASE WHEN a.code = '1203' THEN jl.debit_cents - jl.credit_cents ELSE 0 END), 0)
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
-		  AND a.code IN ('2202', '1203')
-	`, tenantID).Scan(&ppnKeluaran, &ppnMasukan); err != nil {
+	err := db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT
+			  COALESCE(SUM(CASE WHEN a.code = '2202' THEN jl.credit_cents - jl.debit_cents ELSE 0 END), 0),
+			  COALESCE(SUM(CASE WHEN a.code = '1203' THEN jl.debit_cents - jl.credit_cents ELSE 0 END), 0)
+			FROM journal_lines jl
+			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
+			JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+			WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
+			  AND a.code IN ('2202', '1203')
+		`, tenantID).Scan(&ppnKeluaran, &ppnMasukan)
+	})
+	if err != nil {
 		widgetUnavailable(w, err)
 		return
 	}

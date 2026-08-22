@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+
+	"github.com/jackc/pgx/v5"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // fetchReportData computes the raw payload for a report, identical to what the
@@ -13,18 +17,27 @@ import (
 func (service *Service) fetchReportData(r *http.Request, rtype reportType, f reportFilter) (any, error) {
 	tenantID := tenantFrom(r)
 	ctx := r.Context()
-	switch rtype {
-	case reportTrialBalance:
-		return service.fetchTrialBalance(ctx, tenantID, f)
-	case reportProfitLoss:
-		return service.fetchProfitLoss(ctx, tenantID, f)
-	case reportBalanceSheet:
-		return service.fetchBalanceSheet(ctx, tenantID, f)
-	case reportCashFlow:
-		return service.fetchCashFlow(ctx, tenantID, f)
-	default:
-		return nil, fmt.Errorf("unknown report type: %s", rtype)
+	var out any
+	err := db.WithTenantData(ctx, service.pool, tenantID, func(tx pgx.Tx) error {
+		var err error
+		switch rtype {
+		case reportTrialBalance:
+			out, err = service.fetchTrialBalance(ctx, tx, tenantID, f)
+		case reportProfitLoss:
+			out, err = service.fetchProfitLoss(ctx, tx, tenantID, f)
+		case reportBalanceSheet:
+			out, err = service.fetchBalanceSheet(ctx, tx, tenantID, f)
+		case reportCashFlow:
+			out, err = service.fetchCashFlow(ctx, tx, tenantID, f)
+		default:
+			err = fmt.Errorf("unknown report type: %s", rtype)
+		}
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
+	return out, nil
 }
 
 // dimensionJoin returns a JOIN fragment that restricts journal lines to lines
@@ -54,10 +67,10 @@ func dimensionJoin(f reportFilter, baseArg int, lineAlias string, args *[]any) (
 // to_date; from_date is ignored (a trial balance is a snapshot, not a movement).
 // When dimension ids are supplied only journal lines tagged with one of those
 // dimensions are aggregated.
-func (service *Service) fetchTrialBalance(ctx context.Context, tenantID int64, f reportFilter) (TrialBalanceResult, error) {
+func (service *Service) fetchTrialBalance(ctx context.Context, tx pgx.Tx, tenantID int64, f reportFilter) (TrialBalanceResult, error) {
 	args := []any{tenantID}
 	join, dateBase := dimensionJoin(f, 2, "jl", &args)
-	rows, err := service.pool.Query(ctx, `
+	rows, err := tx.Query(ctx, `
 		SELECT a.id, a.code, a.name,
 		       COALESCE(SUM(jl.debit_cents), 0), COALESCE(SUM(jl.credit_cents), 0)
 		FROM accounts a
@@ -96,10 +109,10 @@ func (service *Service) fetchTrialBalance(ctx context.Context, tenantID int64, f
 // fetchProfitLoss aggregates revenue and expense groups for the requested range.
 // When a framework is supplied (EMKM / ETAP / SAK_UMUM) the same totals are also
 // returned as framework-grouped Sections (same data, different presentation).
-func (service *Service) fetchProfitLoss(ctx context.Context, tenantID int64, f reportFilter) (ProfitLossResult, error) {
+func (service *Service) fetchProfitLoss(ctx context.Context, tx pgx.Tx, tenantID int64, f reportFilter) (ProfitLossResult, error) {
 	args := []any{tenantID}
 	join, dateBase := dimensionJoin(f, 2, "jl", &args)
-	rows, err := service.pool.Query(ctx, `
+	rows, err := tx.Query(ctx, `
 		SELECT a.report_group, COALESCE(SUM(CASE
 			WHEN a.report_group IN ('revenue') THEN jl.credit_cents - jl.debit_cents
 			ELSE jl.debit_cents - jl.credit_cents END), 0)
@@ -135,7 +148,7 @@ func (service *Service) fetchProfitLoss(ctx context.Context, tenantID int64, f r
 	// Framework presentation: re-group the same posted movements by account_type
 	// and relabel per the selected framework. Same data, different breakdown.
 	if f.framework != "" {
-		sections, err := service.fetchFrameworkSections(ctx, tenantID, f)
+		sections, err := service.fetchFrameworkSections(ctx, tx, tenantID, f)
 		if err != nil {
 			return ProfitLossResult{}, err
 		}
@@ -148,10 +161,10 @@ func (service *Service) fetchProfitLoss(ctx context.Context, tenantID int64, f r
 // fetchFrameworkSections returns the per-account_type net amounts rolled up
 // into framework-specific sections. Revenue accounts are credit-led (net =
 // credit − debit); expense accounts are debit-led (net = debit − credit).
-func (service *Service) fetchFrameworkSections(ctx context.Context, tenantID int64, f reportFilter) ([]ProfitLossSection, error) {
+func (service *Service) fetchFrameworkSections(ctx context.Context, tx pgx.Tx, tenantID int64, f reportFilter) ([]ProfitLossSection, error) {
 	args := []any{tenantID}
 	join, dateBase := dimensionJoin(f, 2, "jl", &args)
-	rows, err := service.pool.Query(ctx, `
+	rows, err := tx.Query(ctx, `
 		SELECT a.account_type, a.report_group,
 		       COALESCE(SUM(CASE
 			WHEN a.report_group = 'revenue' THEN jl.credit_cents - jl.debit_cents
@@ -277,10 +290,10 @@ func buildFrameworkSections(framework string, byType map[string]int64, groupByTy
 // period profit (revenue − expense) is added to equity so the balance sheet
 // balances before the period is closed (engine §21.2: current earnings
 // real-time). With to_date supplied the snapshot is taken as of that date.
-func (service *Service) fetchBalanceSheet(ctx context.Context, tenantID int64, f reportFilter) (BalanceSheetResult, error) {
+func (service *Service) fetchBalanceSheet(ctx context.Context, tx pgx.Tx, tenantID int64, f reportFilter) (BalanceSheetResult, error) {
 	args := []any{tenantID}
 	join, dateBase := dimensionJoin(f, 2, "jl", &args)
-	rows, err := service.pool.Query(ctx, `
+	rows, err := tx.Query(ctx, `
 		SELECT a.report_group, COALESCE(SUM(CASE
 			WHEN a.report_group = 'asset' THEN jl.debit_cents - jl.credit_cents
 			ELSE jl.credit_cents - jl.debit_cents END), 0)
@@ -319,7 +332,7 @@ func (service *Service) fetchBalanceSheet(ctx context.Context, tenantID int64, f
 	// summed across both groups yields revenue − expense.
 	profitArgs := []any{tenantID}
 	profitJoin, profitDateBase := dimensionJoin(f, 2, "jl", &profitArgs)
-	err = service.pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT COALESCE(SUM(jl.credit_cents - jl.debit_cents), 0)
 		FROM journal_lines jl
 		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
@@ -348,7 +361,7 @@ func (service *Service) fetchBalanceSheet(ctx context.Context, tenantID int64, f
 //     pair-join counted it once per cash leg → 20.000).
 //   - A pure cash↔bank transfer has no non-cash offsetting line at all, so
 //     it contributes zero to every activity (internal movement).
-func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f reportFilter) (CashFlowResult, error) {
+func (service *Service) fetchCashFlow(ctx context.Context, tx pgx.Tx, tenantID int64, f reportFilter) (CashFlowResult, error) {
 	args := []any{tenantID}
 	join, dateBase := dimensionJoin(f, 2, "ol", &args)
 	query := `
@@ -440,7 +453,7 @@ func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f rep
 		  )` + dateFilter(f.dateRange, dateBase, &args) + `
 	`
 	var r CashFlowResult
-	err := service.pool.QueryRow(ctx, query, args...).Scan(
+	err := tx.QueryRow(ctx, query, args...).Scan(
 		&r.OperatingInflowCents, &r.OperatingOutflowCents,
 		&r.InvestingInflowCents, &r.InvestingOutflowCents,
 		&r.FinancingInflowCents, &r.FinancingOutflowCents,

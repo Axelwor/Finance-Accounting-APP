@@ -6,7 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 type Service struct {
@@ -234,7 +237,12 @@ func dateFilter(d dateRange, baseArg int, args *[]any) string {
 // not a movement).
 func (service *Service) TrialBalance(writer http.ResponseWriter, request *http.Request) {
 	f := parseReportFilter(request)
-	result, err := service.fetchTrialBalance(request.Context(), tenantFrom(request), f)
+	var result TrialBalanceResult
+	err := db.WithTenantData(request.Context(), service.pool, tenantFrom(request), func(tx pgx.Tx) error {
+		var err error
+		result, err = service.fetchTrialBalance(request.Context(), tx, tenantFrom(request), f)
+		return err
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
 		return
@@ -266,7 +274,12 @@ func (service *Service) TrialBalance(writer http.ResponseWriter, request *http.R
 // aggregation to journal lines tagged with those dimensions (cabang / proyek).
 func (service *Service) ProfitLoss(writer http.ResponseWriter, request *http.Request) {
 	f := parseReportFilter(request)
-	result, err := service.fetchProfitLoss(request.Context(), tenantFrom(request), f)
+	var result ProfitLossResult
+	err := db.WithTenantData(request.Context(), service.pool, tenantFrom(request), func(tx pgx.Tx) error {
+		var err error
+		result, err = service.fetchProfitLoss(request.Context(), tx, tenantFrom(request), f)
+		return err
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
 		return
@@ -280,7 +293,12 @@ func (service *Service) ProfitLoss(writer http.ResponseWriter, request *http.Req
 // to_date supplied the snapshot is taken as of that date.
 func (service *Service) BalanceSheet(writer http.ResponseWriter, request *http.Request) {
 	f := parseReportFilter(request)
-	result, err := service.fetchBalanceSheet(request.Context(), tenantFrom(request), f)
+	var result BalanceSheetResult
+	err := db.WithTenantData(request.Context(), service.pool, tenantFrom(request), func(tx pgx.Tx) error {
+		var err error
+		result, err = service.fetchBalanceSheet(request.Context(), tx, tenantFrom(request), f)
+		return err
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
 		return
@@ -291,7 +309,12 @@ func (service *Service) BalanceSheet(writer http.ResponseWriter, request *http.R
 // CashFlow aggregates movements across CASH/BANK accounts within the range.
 func (service *Service) CashFlow(writer http.ResponseWriter, request *http.Request) {
 	f := parseReportFilter(request)
-	result, err := service.fetchCashFlow(request.Context(), tenantFrom(request), f)
+	var result CashFlowResult
+	err := db.WithTenantData(request.Context(), service.pool, tenantFrom(request), func(tx pgx.Tx) error {
+		var err error
+		result, err = service.fetchCashFlow(request.Context(), tx, tenantFrom(request), f)
+		return err
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
 		return

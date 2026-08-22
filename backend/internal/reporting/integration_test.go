@@ -9,6 +9,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // F-02 regression: fetchTrialBalance must aggregate only POSTED entries.
@@ -167,8 +169,12 @@ func TestFetchTrialBalance_PostedOnly(t *testing.T) {
 	})
 
 	service := NewHandler(pool)
-	result, err := service.fetchTrialBalance(ctx, tenantID, reportFilter{})
-	if err != nil {
+	var result TrialBalanceResult
+	if err := db.WithTenantData(ctx, pool, tenantID, func(tx pgx.Tx) error {
+		var err error
+		result, err = service.fetchTrialBalance(ctx, tx, tenantID, reportFilter{})
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -343,8 +349,12 @@ func TestFetchCashFlow_MultiCashLegAndTransfer(t *testing.T) {
 	})
 
 	service := NewHandler(pool)
-	result, err := service.fetchCashFlow(ctx, tenantID, reportFilter{})
-	if err != nil {
+	var result CashFlowResult
+	if err := db.WithTenantData(ctx, pool, tenantID, func(tx pgx.Tx) error {
+		var err error
+		result, err = service.fetchCashFlow(ctx, tx, tenantID, reportFilter{})
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 
