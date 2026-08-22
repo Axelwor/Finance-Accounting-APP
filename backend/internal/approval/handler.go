@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/auth"
+	"finance-accounting-app/backend/internal/db"
 	"finance-accounting-app/backend/internal/httperr"
 )
 
@@ -82,7 +84,8 @@ func (s *Service) CreateWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var id int64
-	err := s.pool.QueryRow(r.Context(), `
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
 		INSERT INTO approval_workflows (tenant_id, entity_type, min_amount_cents, approver_role)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (tenant_id, entity_type) DO UPDATE
@@ -91,6 +94,7 @@ func (s *Service) CreateWorkflow(w http.ResponseWriter, r *http.Request) {
 		    is_active = true
 		RETURNING id
 	`, tid, strings.ToLower(req.EntityType), req.MinAmountCents, req.ApproverRole).Scan(&id)
+	})
 	if err != nil {
 		writeErr(w, http.StatusConflict, "CREATE_FAILED", err.Error())
 		return
@@ -107,15 +111,6 @@ func (s *Service) ListWorkflows(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "TENANT_REQUIRED", "tenant context is required")
 		return
 	}
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT id, entity_type, min_amount_cents, approver_role, is_active
-		FROM approval_workflows WHERE tenant_id = $1 ORDER BY entity_type
-	`, tid)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
 	type wf struct {
 		ID             int64  `json:"id"`
 		EntityType     string `json:"entity_type"`
@@ -124,12 +119,27 @@ func (s *Service) ListWorkflows(w http.ResponseWriter, r *http.Request) {
 		IsActive       bool   `json:"is_active"`
 	}
 	var results []wf
-	for rows.Next() {
-		var w wf
-		if err := rows.Scan(&w.ID, &w.EntityType, &w.MinAmountCents, &w.ApproverRole, &w.IsActive); err != nil {
-			continue
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+		SELECT id, entity_type, min_amount_cents, approver_role, is_active
+		FROM approval_workflows WHERE tenant_id = $1 ORDER BY entity_type
+	`, tid)
+		if err != nil {
+			return err
 		}
-		results = append(results, w)
+		defer rows.Close()
+		for rows.Next() {
+			var w wf
+			if err := rows.Scan(&w.ID, &w.EntityType, &w.MinAmountCents, &w.ApproverRole, &w.IsActive); err != nil {
+				continue
+			}
+			results = append(results, w)
+		}
+		return nil
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
+		return
 	}
 	if results == nil {
 		results = []wf{}
@@ -144,8 +154,11 @@ func (s *Service) DeleteWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := pathID(chi.URLParam(r, "id"))
-	_, err := s.pool.Exec(r.Context(),
-		`UPDATE approval_workflows SET is_active = false WHERE tenant_id = $1 AND id = $2`, tid, id)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		_, err := tx.Exec(r.Context(),
+			`UPDATE approval_workflows SET is_active = false WHERE tenant_id = $1 AND id = $2`, tid, id)
+		return err
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DELETE_FAILED", err.Error())
 		return
@@ -189,13 +202,15 @@ func (s *Service) SubmitRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Check if approval is required for this entity type and amount
 	var requiresApproval bool
-	_ = s.pool.QueryRow(r.Context(), `
+	_ = db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
 		SELECT EXISTS(
 			SELECT 1 FROM approval_workflows
 			WHERE tenant_id = $1 AND entity_type = $2 AND is_active = true
 			  AND min_amount_cents <= $3
 		)
 	`, tid, strings.ToLower(req.EntityType), req.AmountCents).Scan(&requiresApproval)
+	})
 
 	if !requiresApproval {
 		writeJSON(w, http.StatusOK, map[string]any{
@@ -217,14 +232,16 @@ func (s *Service) SubmitRequest(w http.ResponseWriter, r *http.Request) {
 		conflictClause = "ON CONFLICT (tenant_id, entity_type, entity_number) WHERE entity_id = 0 AND status IN ('PENDING','APPROVED') AND consumed_at IS NULL DO NOTHING"
 	}
 	var resp ApprovalRequestResponse
-	err := s.pool.QueryRow(r.Context(), `
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
 		INSERT INTO approval_requests (tenant_id, entity_type, entity_id, entity_number, requested_by, amount_cents)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		`+conflictClause+`
 		RETURNING id, entity_type, entity_id, entity_number, requested_by, requested_at, status
 	`, tid, strings.ToLower(req.EntityType), req.EntityID, req.EntityNumber, uid, req.AmountCents).Scan(
-		&resp.ID, &resp.EntityType, &resp.EntityID, &resp.EntityNumber,
-		&resp.RequestedBy, &resp.RequestedAt, &resp.Status)
+			&resp.ID, &resp.EntityType, &resp.EntityID, &resp.EntityNumber,
+			&resp.RequestedBy, &resp.RequestedAt, &resp.Status)
+	})
 	if err != nil {
 		writeErr(w, http.StatusConflict, "ALREADY_SUBMITTED", "approval request already exists for this entity")
 		return
@@ -250,32 +267,38 @@ func (s *Service) ListRequests(w http.ResponseWriter, r *http.Request) {
 	}
 	query += ` ORDER BY requested_at DESC LIMIT 50`
 
-	rows, err := s.pool.Query(r.Context(), query, args...)
+	var results []ApprovalRequestResponse
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), query, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var resp ApprovalRequestResponse
+			var approvedBy, rejectionReason *string
+			var approvedAt *time.Time
+			if err := rows.Scan(&resp.ID, &resp.EntityType, &resp.EntityID, &resp.EntityNumber,
+				&resp.RequestedBy, &resp.RequestedAt, &resp.Status,
+				&approvedBy, &approvedAt, &rejectionReason); err != nil {
+				continue
+			}
+			if approvedBy != nil {
+				resp.ApprovedBy, _ = strconv.ParseInt(*approvedBy, 10, 64)
+			}
+			if approvedAt != nil {
+				resp.ApprovedAt = *approvedAt
+			}
+			if rejectionReason != nil {
+				resp.RejectionReason = *rejectionReason
+			}
+			results = append(results, resp)
+		}
+		return nil
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "QUERY_FAILED", err.Error())
 		return
-	}
-	defer rows.Close()
-	var results []ApprovalRequestResponse
-	for rows.Next() {
-		var resp ApprovalRequestResponse
-		var approvedBy, rejectionReason *string
-		var approvedAt *time.Time
-		if err := rows.Scan(&resp.ID, &resp.EntityType, &resp.EntityID, &resp.EntityNumber,
-			&resp.RequestedBy, &resp.RequestedAt, &resp.Status,
-			&approvedBy, &approvedAt, &rejectionReason); err != nil {
-			continue
-		}
-		if approvedBy != nil {
-			resp.ApprovedBy, _ = strconv.ParseInt(*approvedBy, 10, 64)
-		}
-		if approvedAt != nil {
-			resp.ApprovedAt = *approvedAt
-		}
-		if rejectionReason != nil {
-			resp.RejectionReason = *rejectionReason
-		}
-		results = append(results, resp)
 	}
 	if results == nil {
 		results = []ApprovalRequestResponse{}
@@ -297,13 +320,15 @@ func (s *Service) GetRequest(w http.ResponseWriter, r *http.Request) {
 	var resp ApprovalRequestResponse
 	var approvedBy, rejectionReason *string
 	var approvedAt *time.Time
-	err := s.pool.QueryRow(r.Context(), `
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
 		SELECT id, entity_type, entity_id, entity_number, requested_by, requested_at, status,
 		       approved_by, approved_at, rejection_reason
 		FROM approval_requests WHERE tenant_id = $1 AND id = $2
 	`, tid, id).Scan(&resp.ID, &resp.EntityType, &resp.EntityID, &resp.EntityNumber,
-		&resp.RequestedBy, &resp.RequestedAt, &resp.Status,
-		&approvedBy, &approvedAt, &rejectionReason)
+			&resp.RequestedBy, &resp.RequestedAt, &resp.Status,
+			&approvedBy, &approvedAt, &rejectionReason)
+	})
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "NOT_FOUND", "approval request not found")
 		return
@@ -332,11 +357,14 @@ func (s *Service) Approve(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "INVALID_REQUEST", "id must be a positive integer")
 		return
 	}
-	_, err := s.pool.Exec(r.Context(), `
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		_, err := tx.Exec(r.Context(), `
 		UPDATE approval_requests
 		SET status = 'APPROVED', approved_by = $3, approved_at = now()
 		WHERE tenant_id = $1 AND id = $2 AND status = 'PENDING'
 	`, tid, id, uid)
+		return err
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "APPROVE_FAILED", err.Error())
 		return
@@ -369,11 +397,14 @@ func (s *Service) Reject(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "INVALID_REQUEST", "rejection reason is required")
 		return
 	}
-	_, err := s.pool.Exec(r.Context(), `
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		_, err := tx.Exec(r.Context(), `
 		UPDATE approval_requests
 		SET status = 'REJECTED', approved_by = $3, approved_at = now(), rejection_reason = $4
 		WHERE tenant_id = $1 AND id = $2 AND status = 'PENDING'
 	`, tid, id, uid, strings.TrimSpace(req.Reason))
+		return err
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "REJECT_FAILED", err.Error())
 		return

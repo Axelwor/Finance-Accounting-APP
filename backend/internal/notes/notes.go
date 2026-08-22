@@ -9,6 +9,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // Financial notes (Catatan atas Laporan Keuangan) — basic disclosure text
@@ -52,15 +55,17 @@ func (service *Service) CreateNote(writer http.ResponseWriter, request *http.Req
 	}
 
 	var note noteResponse
-	err = service.pool.QueryRow(request.Context(), `
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(request.Context(), `
 		INSERT INTO financial_notes (tenant_id, period_year, note_number, title, content, display_order, created_by)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, period_year, note_number, title, content, display_order,
 		          COALESCE(created_by, 0), created_at, updated_at
 	`, tenant, req.PeriodYear, strings.TrimSpace(req.NoteNumber), strings.TrimSpace(req.Title),
-		req.Content, req.DisplayOrder, userID(request)).
-		Scan(&note.ID, &note.PeriodYear, &note.NoteNumber, &note.Title, &note.Content,
-			&note.DisplayOrder, &note.CreatedBy, &note.CreatedAt, &note.UpdatedAt)
+			req.Content, req.DisplayOrder, userID(request)).
+			Scan(&note.ID, &note.PeriodYear, &note.NoteNumber, &note.Title, &note.Content,
+				&note.DisplayOrder, &note.CreatedBy, &note.CreatedAt, &note.UpdatedAt)
+	})
 	if err != nil {
 		if isUniqueViolation(err) {
 			writeError(writer, http.StatusConflict, "NOTE_EXISTS", "note_number already exists for this period")
@@ -80,7 +85,9 @@ func (service *Service) ListNotes(writer http.ResponseWriter, request *http.Requ
 		return
 	}
 
-	rows, err := service.pool.Query(request.Context(), `
+	notes := []noteResponse{}
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
 		SELECT id, period_year, note_number, title, content, display_order,
 		       COALESCE(created_by, 0), created_at, updated_at
 		FROM financial_notes
@@ -88,21 +95,23 @@ func (service *Service) ListNotes(writer http.ResponseWriter, request *http.Requ
 		  AND ($2::int IS NULL OR period_year = $2)
 		ORDER BY period_year DESC, display_order ASC, note_number ASC
 	`, tenant, optionalInt(request.URL.Query().Get("period_year")))
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var note noteResponse
+			if err := rows.Scan(&note.ID, &note.PeriodYear, &note.NoteNumber, &note.Title, &note.Content,
+				&note.DisplayOrder, &note.CreatedBy, &note.CreatedAt, &note.UpdatedAt); err != nil {
+				return err
+			}
+			notes = append(notes, note)
+		}
+		return nil
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "NOTE_LIST_FAILED", err.Error())
 		return
-	}
-	defer rows.Close()
-
-	notes := []noteResponse{}
-	for rows.Next() {
-		var note noteResponse
-		if err := rows.Scan(&note.ID, &note.PeriodYear, &note.NoteNumber, &note.Title, &note.Content,
-			&note.DisplayOrder, &note.CreatedBy, &note.CreatedAt, &note.UpdatedAt); err != nil {
-			writeError(writer, http.StatusInternalServerError, "NOTE_LIST_FAILED", err.Error())
-			return
-		}
-		notes = append(notes, note)
 	}
 	writeJSON(writer, http.StatusOK, notes)
 }
@@ -121,13 +130,15 @@ func (service *Service) GetNote(writer http.ResponseWriter, request *http.Reques
 	}
 
 	var note noteResponse
-	err = service.pool.QueryRow(request.Context(), `
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(request.Context(), `
 		SELECT id, period_year, note_number, title, content, display_order,
 		       COALESCE(created_by, 0), created_at, updated_at
 		FROM financial_notes
 		WHERE tenant_id = $1 AND id = $2
 	`, tenant, id).Scan(&note.ID, &note.PeriodYear, &note.NoteNumber, &note.Title, &note.Content,
-		&note.DisplayOrder, &note.CreatedBy, &note.CreatedAt, &note.UpdatedAt)
+			&note.DisplayOrder, &note.CreatedBy, &note.CreatedAt, &note.UpdatedAt)
+	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(writer, http.StatusNotFound, "NOTE_NOT_FOUND", "note not found")
@@ -162,7 +173,8 @@ func (service *Service) UpdateNote(writer http.ResponseWriter, request *http.Req
 	}
 
 	var note noteResponse
-	err = service.pool.QueryRow(request.Context(), `
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(request.Context(), `
 		UPDATE financial_notes
 		SET period_year = $3, note_number = $4, title = $5, content = $6,
 		    display_order = $7, updated_at = $8
@@ -170,9 +182,10 @@ func (service *Service) UpdateNote(writer http.ResponseWriter, request *http.Req
 		RETURNING id, period_year, note_number, title, content, display_order,
 		          COALESCE(created_by, 0), created_at, updated_at
 	`, tenant, id, req.PeriodYear, strings.TrimSpace(req.NoteNumber), strings.TrimSpace(req.Title),
-		req.Content, req.DisplayOrder, time.Now()).
-		Scan(&note.ID, &note.PeriodYear, &note.NoteNumber, &note.Title, &note.Content,
-			&note.DisplayOrder, &note.CreatedBy, &note.CreatedAt, &note.UpdatedAt)
+			req.Content, req.DisplayOrder, time.Now()).
+			Scan(&note.ID, &note.PeriodYear, &note.NoteNumber, &note.Title, &note.Content,
+				&note.DisplayOrder, &note.CreatedBy, &note.CreatedAt, &note.UpdatedAt)
+	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(writer, http.StatusNotFound, "NOTE_NOT_FOUND", "note not found")
@@ -201,9 +214,13 @@ func (service *Service) DeleteNote(writer http.ResponseWriter, request *http.Req
 		return
 	}
 
-	tag, err := service.pool.Exec(request.Context(), `
+	var tag pgconn.CommandTag
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		tag, err = tx.Exec(request.Context(), `
 		DELETE FROM financial_notes WHERE tenant_id = $1 AND id = $2
 	`, tenant, id)
+		return err
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "NOTE_DELETE_FAILED", err.Error())
 		return

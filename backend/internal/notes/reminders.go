@@ -4,6 +4,10 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // dueDateReminder is one row in the due-dates reminder result. It unions
@@ -43,7 +47,9 @@ func (service *Service) DueDateReminders(writer http.ResponseWriter, request *ht
 
 	// Use a CTE so the same cutoff + today are applied to both halves of the
 	// union and the days_overdue computation is consistent.
-	rows, err := service.pool.Query(request.Context(), `
+	reminders := make([]dueDateReminder, 0)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
 		WITH cutoff AS (
 			SELECT CURRENT_DATE AS today,
 			       CURRENT_DATE + ($2 || ' days')::INTERVAL AS horizon
@@ -72,23 +78,21 @@ func (service *Service) DueDateReminders(writer http.ResponseWriter, request *ht
 		) AS combined
 		ORDER BY due_date ASC, direction ASC
 	`, tenant, strconv.Itoa(daysAhead))
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "REMINDER_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
-	reminders := make([]dueDateReminder, 0)
-	for rows.Next() {
-		var r dueDateReminder
-		if err := rows.Scan(&r.ID, &r.Number, &r.PartyName, &r.Direction,
-			&r.InvoiceDate, &r.DueDate, &r.AmountCents, &r.Status, &r.DaysOverdue); err != nil {
-			writeError(writer, http.StatusInternalServerError, "REMINDER_FAILED", err.Error())
-			return
+		if err != nil {
+			return err
 		}
-		reminders = append(reminders, r)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var r dueDateReminder
+			if err := rows.Scan(&r.ID, &r.Number, &r.PartyName, &r.Direction,
+				&r.InvoiceDate, &r.DueDate, &r.AmountCents, &r.Status, &r.DaysOverdue); err != nil {
+				return err
+			}
+			reminders = append(reminders, r)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REMINDER_FAILED", err.Error())
 		return
 	}
