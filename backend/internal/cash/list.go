@@ -7,7 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"finance-accounting-app/backend/internal/accounting"
+	"finance-accounting-app/backend/internal/db"
 )
 
 // ---------------------------------------------------------------------------
@@ -170,11 +173,6 @@ func (service *Service) queryCashEntries(
 		LIMIT $` + strconv.Itoa(limitPos) + ` OFFSET $` + strconv.Itoa(offsetPos) + `
 	`
 
-	rows, err := service.pool.Query(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
 	type row struct {
 		id, debit, credit, amount                      int64
 		number, intent, status, description, sourceRef string
@@ -182,45 +180,53 @@ func (service *Service) queryCashEntries(
 		reversalOfID                                   int64
 	}
 	out := []CashEntryListItem{}
-	for rows.Next() {
-		var r row
-		if err := rows.Scan(&r.id, &r.number, &r.intent, &r.date, &r.status, &r.description, &r.sourceRef, &r.reversalOfID, &r.debit, &r.credit, &r.amount); err != nil {
-			return nil, err
+	err := db.WithTenantData(ctx, service.pool, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, query, args...)
+		if err != nil {
+			return err
 		}
-		item := CashEntryListItem{
-			ID:          r.id,
-			Number:      r.number,
-			Kind:        mapKind(r.intent),
-			EntryDate:   r.date.Format("2006-01-02"),
-			Status:      r.status,
-			Description: r.description,
-			AmountCents: r.amount,
-			Reference:   r.sourceRef,
-
-			ReversalOfID: r.reversalOfID,
-		}
-		if r.intent == string(accounting.IntentTransfer) {
-			item.FromAccountID = r.debit
-			item.ToAccountID = r.credit
-		} else {
-			// For CASH_IN, the cash account is debited; for CASH_OUT, the cash
-			// account is credited. The counter account is the opposite side.
-			if r.intent == string(accounting.IntentCashIn) {
-				item.CashAccountID = r.debit
-				item.CounterAccountID = r.credit
-			} else {
-				item.CashAccountID = r.credit
-				item.CounterAccountID = r.debit
+		defer rows.Close()
+		for rows.Next() {
+			var r row
+			if err := rows.Scan(&r.id, &r.number, &r.intent, &r.date, &r.status, &r.description, &r.sourceRef, &r.reversalOfID, &r.debit, &r.credit, &r.amount); err != nil {
+				return err
 			}
-		}
-		out = append(out, item)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
+			item := CashEntryListItem{
+				ID:          r.id,
+				Number:      r.number,
+				Kind:        mapKind(r.intent),
+				EntryDate:   r.date.Format("2006-01-02"),
+				Status:      r.status,
+				Description: r.description,
+				AmountCents: r.amount,
+				Reference:   r.sourceRef,
 
-	// Resolve account codes + names in a single batched query.
-	if err := service.hydrateAccountNames(ctx, tenantID, out); err != nil {
+				ReversalOfID: r.reversalOfID,
+			}
+			if r.intent == string(accounting.IntentTransfer) {
+				item.FromAccountID = r.debit
+				item.ToAccountID = r.credit
+			} else {
+				// For CASH_IN, the cash account is debited; for CASH_OUT, the cash
+				// account is credited. The counter account is the opposite side.
+				if r.intent == string(accounting.IntentCashIn) {
+					item.CashAccountID = r.debit
+					item.CounterAccountID = r.credit
+				} else {
+					item.CashAccountID = r.credit
+					item.CounterAccountID = r.debit
+				}
+			}
+			out = append(out, item)
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
+		// Resolve account codes + names in a single batched query.
+		return service.hydrateAccountNames(ctx, tx, tenantID, out)
+	})
+	if err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -242,7 +248,7 @@ func mapKind(intent string) string {
 // hydrateAccountNames loads code + display name for every account id
 // referenced in the items, then mutates each item in place. Missing
 // accounts leave the name blank.
-func (service *Service) hydrateAccountNames(ctx context.Context, tenantID int64, items []CashEntryListItem) error {
+func (service *Service) hydrateAccountNames(ctx context.Context, tx pgx.Tx, tenantID int64, items []CashEntryListItem) error {
 	idSet := map[int64]struct{}{}
 	for _, item := range items {
 		for _, id := range []int64{item.CashAccountID, item.CounterAccountID, item.FromAccountID, item.ToAccountID} {
@@ -258,7 +264,7 @@ func (service *Service) hydrateAccountNames(ctx context.Context, tenantID int64,
 	for id := range idSet {
 		ids = append(ids, id)
 	}
-	rows, err := service.pool.Query(ctx, `
+	rows, err := tx.Query(ctx, `
 		SELECT id, code, name
 		FROM accounts
 		WHERE tenant_id = $1 AND id = ANY($2)

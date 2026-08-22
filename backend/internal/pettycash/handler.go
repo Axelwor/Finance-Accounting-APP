@@ -154,24 +154,21 @@ func (service *Service) CreateFund(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, result)
 }
 
+// Sentinel errors distinguishing the list failure stages so each keeps its
+// original status code/message mapping when raised from inside WithTenantData.
+var (
+	errListFundsQuery    = errors.New("failed to list funds")
+	errListFundsScan     = errors.New("failed to read funds")
+	errListVouchersQuery = errors.New("failed to list vouchers")
+	errListVouchersScan  = errors.New("failed to read vouchers")
+)
+
 func (service *Service) ListFunds(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := auth.TenantIDFromContext(r.Context())
 	if !ok || tenantID <= 0 {
 		writeErr(w, http.StatusUnauthorized, "TENANT_REQUIRED", "tenant context is required")
 		return
 	}
-
-	rows, err := service.pool.Query(r.Context(), `
-		SELECT id, code, name, cash_account_id, imprest_amount_cents, is_active
-		FROM petty_cash_funds
-		WHERE tenant_id = $1
-		ORDER BY code
-	`, tenantID)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "QUERY_FAILED", "failed to list funds")
-		return
-	}
-	defer rows.Close()
 
 	type fund struct {
 		ID                 int64  `json:"id"`
@@ -182,13 +179,33 @@ func (service *Service) ListFunds(w http.ResponseWriter, r *http.Request) {
 		IsActive           bool   `json:"is_active"`
 	}
 	var funds []fund
-	for rows.Next() {
-		var f fund
-		if err := rows.Scan(&f.ID, &f.Code, &f.Name, &f.CashAccountID, &f.ImprestAmountCents, &f.IsActive); err != nil {
+	err := db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT id, code, name, cash_account_id, imprest_amount_cents, is_active
+			FROM petty_cash_funds
+			WHERE tenant_id = $1
+			ORDER BY code
+		`, tenantID)
+		if err != nil {
+			return errListFundsQuery
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var f fund
+			if err := rows.Scan(&f.ID, &f.Code, &f.Name, &f.CashAccountID, &f.ImprestAmountCents, &f.IsActive); err != nil {
+				return errListFundsScan
+			}
+			funds = append(funds, f)
+		}
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, errListFundsScan) {
 			writeErr(w, http.StatusInternalServerError, "SCAN_FAILED", "failed to read funds")
 			return
 		}
-		funds = append(funds, f)
+		writeErr(w, http.StatusInternalServerError, "QUERY_FAILED", "failed to list funds")
+		return
 	}
 	if funds == nil {
 		funds = []fund{}
@@ -347,13 +364,6 @@ func (service *Service) ListVouchers(w http.ResponseWriter, r *http.Request) {
 	}
 	query += ` ORDER BY voucher_date DESC LIMIT 100`
 
-	rows, err := service.pool.Query(r.Context(), query, args...)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "QUERY_FAILED", "failed to list vouchers")
-		return
-	}
-	defer rows.Close()
-
 	type voucher struct {
 		ID          int64  `json:"id"`
 		FundID      int64  `json:"fund_id"`
@@ -365,13 +375,28 @@ func (service *Service) ListVouchers(w http.ResponseWriter, r *http.Request) {
 		Status      string `json:"status"`
 	}
 	var vouchers []voucher
-	for rows.Next() {
-		var v voucher
-		if err := rows.Scan(&v.ID, &v.FundID, &v.Number, &v.VoucherDate, &v.AmountCents, &v.Description, &v.Recipient, &v.Status); err != nil {
+	err := db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), query, args...)
+		if err != nil {
+			return errListVouchersQuery
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var v voucher
+			if err := rows.Scan(&v.ID, &v.FundID, &v.Number, &v.VoucherDate, &v.AmountCents, &v.Description, &v.Recipient, &v.Status); err != nil {
+				return errListVouchersScan
+			}
+			vouchers = append(vouchers, v)
+		}
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, errListVouchersScan) {
 			writeErr(w, http.StatusInternalServerError, "SCAN_FAILED", "failed to read vouchers")
 			return
 		}
-		vouchers = append(vouchers, v)
+		writeErr(w, http.StatusInternalServerError, "QUERY_FAILED", "failed to list vouchers")
+		return
 	}
 	if vouchers == nil {
 		vouchers = []voucher{}

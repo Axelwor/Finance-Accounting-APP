@@ -99,16 +99,18 @@ func (service *Service) PPNSummary(writer http.ResponseWriter, request *http.Req
 
 	var keluaran, masukan int64
 	// Sum credits to 2202 (keluaran) and debits to 1203 (masukan).
-	err = service.pool.QueryRow(request.Context(), `
-		SELECT
-		  COALESCE(SUM(CASE WHEN a.code = $2 THEN jl.credit_cents ELSE 0 END), 0) AS keluaran,
-		  COALESCE(SUM(CASE WHEN a.code = $3 THEN jl.debit_cents  ELSE 0 END), 0) AS masukan
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-	`+where+`
-	  AND je.status = 'POSTED'
-	`, args...).Scan(&keluaran, &masukan)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(request.Context(), `
+			SELECT
+			  COALESCE(SUM(CASE WHEN a.code = $2 THEN jl.credit_cents ELSE 0 END), 0) AS keluaran,
+			  COALESCE(SUM(CASE WHEN a.code = $3 THEN jl.debit_cents  ELSE 0 END), 0) AS masukan
+			FROM journal_lines jl
+			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
+			JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+		`+where+`
+		  AND je.status = 'POSTED'
+		`, args...).Scan(&keluaran, &masukan)
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "PPN_SUMMARY_FAILED", err.Error())
 		return
@@ -140,46 +142,46 @@ func (service *Service) PPNReconciliation(writer http.ResponseWriter, request *h
 	}
 	fromDate, toDate := monthBounds(periodYear, periodMonth)
 
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT je.id, je.number, je.entry_date, COALESCE(je.description, ''),
-		       COALESCE(je.intent_type, ''), COALESCE(je.source_ref, ''),
-		       a.code, a.name,
-		       CASE WHEN a.code = $2 THEN 'KELUARAN' ELSE 'MASUKAN' END,
-		       jl.debit_cents, jl.credit_cents
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		WHERE jl.tenant_id = $1 AND (a.code = $2 OR a.code = $3)
-		  AND je.status = 'POSTED'
-		  AND je.entry_date >= $4 AND je.entry_date <= $5
-		ORDER BY je.entry_date, je.number
-	`, tenant, ppnKeluaranCode, ppnMasukanCode, fromDate, toDate)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "PPN_RECON_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
 	lines := make([]PPNReconciliationLine, 0)
 	var keluaran, masukan int64
-	for rows.Next() {
-		var l PPNReconciliationLine
-		var entryDate time.Time
-		if err := rows.Scan(&l.EntryID, &l.EntryNumber, &entryDate, &l.Description,
-			&l.IntentType, &l.SourceRef, &l.AccountCode, &l.AccountName, &l.Direction,
-			&l.DebitCents, &l.CreditCents); err != nil {
-			writeError(writer, http.StatusInternalServerError, "PPN_RECON_FAILED", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT je.id, je.number, je.entry_date, COALESCE(je.description, ''),
+			       COALESCE(je.intent_type, ''), COALESCE(je.source_ref, ''),
+			       a.code, a.name,
+			       CASE WHEN a.code = $2 THEN 'KELUARAN' ELSE 'MASUKAN' END,
+			       jl.debit_cents, jl.credit_cents
+			FROM journal_lines jl
+			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
+			JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+			WHERE jl.tenant_id = $1 AND (a.code = $2 OR a.code = $3)
+			  AND je.status = 'POSTED'
+			  AND je.entry_date >= $4 AND je.entry_date <= $5
+			ORDER BY je.entry_date, je.number
+		`, tenant, ppnKeluaranCode, ppnMasukanCode, fromDate, toDate)
+		if err != nil {
+			return err
 		}
-		l.EntryDate = entryDate.Format("2006-01-02")
-		if l.Direction == "KELUARAN" {
-			keluaran += l.CreditCents
-		} else {
-			masukan += l.DebitCents
+		defer rows.Close()
+		for rows.Next() {
+			var l PPNReconciliationLine
+			var entryDate time.Time
+			if err := rows.Scan(&l.EntryID, &l.EntryNumber, &entryDate, &l.Description,
+				&l.IntentType, &l.SourceRef, &l.AccountCode, &l.AccountName, &l.Direction,
+				&l.DebitCents, &l.CreditCents); err != nil {
+				return err
+			}
+			l.EntryDate = entryDate.Format("2006-01-02")
+			if l.Direction == "KELUARAN" {
+				keluaran += l.CreditCents
+			} else {
+				masukan += l.DebitCents
+			}
+			lines = append(lines, l)
 		}
-		lines = append(lines, l)
-	}
-	if err := rows.Err(); err != nil {
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "PPN_RECON_FAILED", err.Error())
 		return
 	}
