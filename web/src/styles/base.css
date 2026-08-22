@@ -689,39 +689,41 @@ table.datatable thead th {
   z-index: 30;
   background-color: var(--bg-surface);
   border-bottom: 1px solid var(--border-color);
-  padding: 10px 20px;
+  padding: 12px 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: var(--shadow-xs);
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04);
 }
 
 .form-header__title-group {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .form-header__icon-box {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   background-color: var(--brand-primary-light);
   color: var(--brand-primary);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid var(--brand-primary-border);
 }
 
 .form-header__title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
+  letter-spacing: -0.2px;
   color: var(--text-primary);
 }
 
 .form-header__doc-number {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text-secondary);
   background-color: var(--bg-surface-secondary);
@@ -731,7 +733,7 @@ table.datatable thead th {
 }
 
 .form-header__status-badge {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   padding: 2px 8px;
   border-radius: var(--radius-full);
@@ -744,30 +746,99 @@ table.datatable thead th {
 .status-void { background: var(--color-danger-bg); color: var(--color-danger-text); border: 1px solid var(--color-danger-border); text-decoration: line-through; }
 .status-pending { background: var(--color-warning-bg); color: var(--color-warning-text); border: 1px solid var(--color-warning-border); }
 
+/* Form Nav Segmented Control */
+.form-nav-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--bg-surface-secondary);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  width: fit-content;
+}
+
+.form-nav-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.form-nav-tab:hover {
+  color: var(--text-primary);
+}
+
+.form-nav-tab.is-active {
+  background-color: var(--bg-surface);
+  color: var(--brand-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
 /* Zone 2: Dynamic Form Body */
 .form-zone-2 {
   flex: 1;
-  padding: 20px 28px;
+  padding: 24px 32px;
   display: flex;
   flex-direction: column;
   gap: 20px;
   width: 100%;
-  max-width: 100%;
-  margin: 0;
+  max-width: 1600px;
+  margin: 0 auto;
 }
 
 .form-card {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-xs);
-  padding: 16px;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 1px 2px -1px rgba(15, 23, 42, 0.03);
+  padding: 20px 24px;
 }
 
 .form-grid-2col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  gap: 24px;
+}
+
+/* Inputs & Form Controls */
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auth-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.input-base {
+  width: 100%;
+  padding: 9px 12px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.input-base:focus {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px var(--brand-primary-light);
+  outline: none;
 }
 
 /* Zone 3: Sticky Summary & Action Footer */
@@ -777,11 +848,11 @@ table.datatable thead th {
   z-index: 30;
   background-color: var(--bg-surface);
   border-top: 1px solid var(--border-color);
-  padding: 12px 20px;
+  padding: 12px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.04);
 }
 
 /* ------------------------------------------------------------
@@ -791,24 +862,14 @@ table.datatable thead th {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-xs);
+  box-shadow: none;
   overflow: hidden;
-}
-
-.datatable-toolbar {
-  padding: 10px 14px;
-  background-color: var(--bg-surface);
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
 }
 
 .datatable {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: 13px;
   text-align: left;
 }
 
@@ -816,18 +877,28 @@ table.datatable thead th {
   background-color: var(--bg-surface-secondary);
   color: var(--text-secondary);
   font-weight: 600;
-  font-size: 11.5px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
-  padding: 8px 12px;
+  letter-spacing: 0.5px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border-strong);
   white-space: nowrap;
 }
 
 .datatable td {
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border-subtle);
   color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.datatable tfoot tr {
+  background-color: var(--bg-surface-secondary);
+}
+
+.datatable tfoot td {
+  padding: 10px 14px;
+  border-bottom: none;
 }
 
 .datatable tr:hover td {

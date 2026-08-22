@@ -54,7 +54,7 @@ function lineTotal(qty: number, unitPriceCents: number, discountCents: number): 
 export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
   const workbench = useWorkbench();
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState<"header" | "items" | "additional">("items");
+  const [activeTab, setActiveTab] = useState<"items" | "header" | "additional">("items");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [number, setNumber] = useState(initialTitle ?? draftNumber("sales-quotation-entry"));
   const [customerId, setCustomerId] = useState("");
@@ -184,7 +184,6 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
     if (isSaved) return;
     if (!customerId) {
       setError("Pilih pelanggan untuk penawaran harga ini.");
-      setActiveTab("header");
       return;
     }
     const payloadLines: QuotationLineInput[] = lines
@@ -199,7 +198,6 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
       }));
     if (payloadLines.length === 0) {
       setError("Tambahkan minimal 1 baris item produk.");
-      setActiveTab("items");
       return;
     }
     setSaving(true);
@@ -312,147 +310,126 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
         </div>
       </header>
 
-      {/* Zone 2: Dynamic Form Body with Corporate Multi-Tab Navigation */}
+      {/* Zone 2: Dynamic Form Body */}
       <main className="form-zone-2">
         {error && <FormError message={error} />}
 
-        {/* Corporate Form Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-subtle pb-1">
+        {/* 2.A Essential Document Meta Card (Always Visible on Top) */}
+        <div className="form-card form-grid-2col">
+          <div className="flex flex-col gap-3">
+            <div className="auth-field">
+              <label>Pelanggan / Prospek (Customer) *</label>
+              <select
+                className="input-base font-semibold"
+                value={customerId}
+                disabled={isSaved}
+                onChange={(e) => setCustomerId(e.target.value)}
+              >
+                <option value="">-- Pilih Pelanggan / Mitra Usaha --</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code ? `${c.code} - ` : ""}{c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {selectedCustomer && (
+              <div className="text-xs text-muted flex items-center gap-4 px-1">
+                <span>Alamat: <strong className="text-secondary">{selectedCustomer.address || "—"}</strong></span>
+                <span>Kontak: <strong className="text-secondary">{selectedCustomer.email || selectedCustomer.phone || "—"}</strong></span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <div className="grid-2col gap-3">
+              <div className="auth-field">
+                <label>Tanggal Dokumen *</label>
+                <input
+                  type="date"
+                  className="input-base font-mono"
+                  value={date}
+                  disabled={isSaved}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+              </div>
+              <div className="auth-field">
+                <label>Berlaku Hingga</label>
+                <input
+                  type="date"
+                  className="input-base font-mono"
+                  value={validUntil}
+                  disabled={isSaved}
+                  onChange={(e) => setValidUntil(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="auth-field">
+              <TaxRateSelector
+                value={taxRate}
+                onChange={setTaxRate}
+                disabled={isSaved}
+                label="Skema Pajak Pertambahan Nilai (PPN)"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 2.B Corporate Tab Navigation for Detailed Sections */}
+        <div className="form-nav-tabs">
           <button
             type="button"
-            className={`tabpill ${activeTab === "header" ? "is-active" : ""}`}
-            onClick={() => setActiveTab("header")}
-          >
-            <Icon name="building" size={14} />
-            <span>Tab 1: Informasi Header & Pihak Utama</span>
-          </button>
-          <button
-            type="button"
-            className={`tabpill ${activeTab === "items" ? "is-active" : ""}`}
+            className={`form-nav-tab ${activeTab === "items" ? "is-active" : ""}`}
             onClick={() => setActiveTab("items")}
           >
-            <Icon name="package" size={14} />
-            <span>Tab 2: Rincian Item Barang / Jasa</span>
-            <span className="text-xs font-mono font-bold ml-1 opacity-75">({lines.filter(l => l.itemId).length})</span>
+            <Icon name="package" size={15} />
+            <span>Rincian Item Barang & Jasa</span>
+            <span className="text-xs font-mono px-1.5 py-0.5 rounded-full bg-surface-secondary text-secondary">
+              {lines.filter(l => l.itemId).length}
+            </span>
           </button>
           <button
             type="button"
-            className={`tabpill ${activeTab === "additional" ? "is-active" : ""}`}
+            className={`form-nav-tab ${activeTab === "additional" ? "is-active" : ""}`}
             onClick={() => setActiveTab("additional")}
           >
-            <Icon name="book_open" size={14} />
-            <span>Tab 3: Syarat, Ketentuan & Info Tambahan</span>
+            <Icon name="description" size={15} />
+            <span>Syarat, Ketentuan & Info Tambahan</span>
           </button>
         </div>
 
-        {/* TAB 1: INFORMASI HEADER & PELANGGAN */}
-        {activeTab === "header" && (
-          <div className="form-card form-grid-2col">
-            <div className="flex flex-col gap-3">
-              <div className="auth-field">
-                <label>Pelanggan / Mitra Usaha (Customer) *</label>
-                <select
-                  className="input-base font-semibold"
-                  value={customerId}
-                  disabled={isSaved}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                >
-                  <option value="">-- Pilih Pelanggan / Mitra Usaha --</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code ? `${c.code} - ` : ""}{c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="auth-field">
-                <label>Alamat Penagihan / Korespondensi</label>
-                <input
-                  type="text"
-                  className="input-base input-computed"
-                  readOnly
-                  value={selectedCustomer ? (selectedCustomer.address || "Alamat belum disetel") : "Pilih pelanggan untuk melihat alamat"}
-                />
-              </div>
-
-              <div className="auth-field">
-                <label>Kontak / Email Pelanggan</label>
-                <input
-                  type="text"
-                  className="input-base input-computed"
-                  readOnly
-                  value={selectedCustomer ? (selectedCustomer.email || selectedCustomer.phone || "—") : "—"}
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <div className="grid-2col gap-3">
-                <div className="auth-field">
-                  <label>Tanggal Dokumen *</label>
-                  <input
-                    type="date"
-                    className="input-base font-mono"
-                    value={date}
-                    disabled={isSaved}
-                    onChange={(e) => setDate(e.target.value)}
-                  />
-                </div>
-                <div className="auth-field">
-                  <label>Berlaku Hingga (Masa Berlaku)</label>
-                  <input
-                    type="date"
-                    className="input-base font-mono"
-                    value={validUntil}
-                    disabled={isSaved}
-                    onChange={(e) => setValidUntil(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="auth-field">
-                <TaxRateSelector
-                  value={taxRate}
-                  onChange={setTaxRate}
-                  disabled={isSaved}
-                  label="Skema Pajak Pertambahan Nilai (PPN)"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 2: RINCIAN ITEM PRODUK */}
+        {/* TAB 1: RINCIAN ITEM PRODUK (DEFAULT) */}
         {activeTab === "items" && (
-          <div className="form-card">
-            <div className="flex-between mb-3">
+          <div className="form-card" style={{ padding: "0", overflow: "hidden" }}>
+            <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)" }}>
               <div>
-                <h2 className="text-sm font-bold text-primary">Rincian Barang / Jasa yang Ditawarkan</h2>
-                <p className="text-xs text-muted">Daftar item produk, kuantitas, harga penawaran komersial, dan diskon.</p>
+                <h2 className="text-sm font-bold text-primary">Line Items Transaksi Penawaran</h2>
+                <p className="text-xs text-muted mt-0.5">Tentukan rincian barang/jasa, kuantitas penawaran, dan diskon per baris.</p>
               </div>
               {!isSaved && (
                 <button
                   type="button"
-                  className="btn-dash-secondary text-xs"
+                  className="btn-dash-primary text-xs"
                   onClick={addLine}
                 >
                   <Icon name="plus" size={14} />
-                  <span>+ Tambah Baris Produk</span>
+                  <span>+ Tambah Baris Item</span>
                 </button>
               )}
             </div>
 
-            <div className="datatable-wrapper">
+            <div className="datatable-wrapper" style={{ border: "none", borderRadius: "0" }}>
               <table className="datatable">
                 <thead>
                   <tr>
-                    <th style={{ width: "35%" }}>Item / Produk *</th>
+                    <th style={{ width: "38%" }}>Item Produk / Jasa *</th>
                     <th className="num" style={{ width: "10%" }}>Qty</th>
-                    <th className="num" style={{ width: "20%" }}>Harga Satuan (Rp)</th>
-                    <th className="num" style={{ width: "15%" }}>Diskon (Rp)</th>
-                    <th className="num" style={{ width: "16%" }}>Total Baris (Rp)</th>
-                    {!isSaved && <th style={{ width: "40px" }}>Aksi</th>}
+                    <th className="num" style={{ width: "18%" }}>Harga Satuan (Rp)</th>
+                    <th className="num" style={{ width: "14%" }}>Diskon (Rp)</th>
+                    <th className="num" style={{ width: "16%" }}>Total Subtotal (Rp)</th>
+                    {!isSaved && <th style={{ width: "40px" }} />}
                   </tr>
                 </thead>
                 <tbody>
@@ -465,7 +442,7 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
                           disabled={isSaved}
                           onChange={(e) => setItem(line.id, e.target.value)}
                         >
-                          <option value="">-- Pilih Produk/Jasa --</option>
+                          <option value="">-- Pilih Item Produk / Jasa --</option>
                           {items.map((i) => (
                             <option key={i.id} value={i.id}>
                               {i.code} - {i.name} ({i.unit || "Pcs"})
@@ -521,8 +498,8 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="total-rule-top total-double">
-                    <td colSpan={4} className="text-right font-bold text-xs">
+                  <tr className="total-rule-top">
+                    <td colSpan={4} className="text-right font-semibold text-xs text-secondary">
                       Dasar Pengenaan Pajak (DPP Subtotal):
                     </td>
                     <td className="num font-mono font-bold text-primary text-sm">
@@ -539,7 +516,7 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
                     </td>
                     {!isSaved && <td />}
                   </tr>
-                  <tr className="total-double">
+                  <tr className="total-double" style={{ backgroundColor: "var(--bg-surface)" }}>
                     <td colSpan={4} className="text-right font-bold text-xs text-brand">
                       Total Penawaran (Grand Total):
                     </td>
@@ -554,7 +531,7 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
           </div>
         )}
 
-        {/* TAB 3: SYARAT & INFORMASI TAMBAHAN */}
+        {/* TAB 2: SYARAT & INFORMASI TAMBAHAN */}
         {activeTab === "additional" && (
           <div className="form-card form-grid-2col">
             <div className="flex flex-col gap-3">
@@ -563,7 +540,7 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
                 <textarea
                   className="input-base"
                   rows={4}
-                  placeholder="Contoh: Harga franco gudang, pembayaran 30 hari setelah invoice, garansi resmi 12 bulan..."
+                  placeholder="Contoh: Harga franco Jakarta, pembayaran 30 hari setelah invoice, garansi resmi 12 bulan..."
                   value={notes}
                   disabled={isSaved}
                   onChange={(e) => setNotes(e.target.value)}
@@ -584,11 +561,11 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
                 />
               </div>
               <div className="auth-field">
-                <label>Catatan Internal (Tidak Dicetak pada Penawaran Resmi)</label>
+                <label>Catatan Internal (Tidak Tercetak pada Penawaran)</label>
                 <textarea
                   className="input-base"
                   rows={2}
-                  placeholder="Catatan tim internal mengenai diskon khusus atau histori negosiasi..."
+                  placeholder="Catatan tim internal mengenai histori penawaran atau kesepakatan khusus..."
                   value={internalRemarks}
                   disabled={isSaved}
                   onChange={(e) => setInternalRemarks(e.target.value)}
@@ -655,7 +632,7 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
       <footer className="form-zone-3">
         <div className="flex items-center gap-4">
           <span className="status-badge status-draft text-xs">
-            <Icon name="check" size={12} /> PENYIMPANAN PENAWARAN (TIDAK MEM-POSTING BUKU BESAR)
+            <Icon name="check" size={12} /> DOKUMEN PENAWARAN (TIDAK MEM-POSTING BUKU BESAR)
           </span>
           <span className="text-xs text-muted">
             [Ctrl+S] Simpan Penawaran &bull; [Esc] Tutup
@@ -692,7 +669,7 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
                 ) : (
                   <>
                     <Icon name="check" size={16} />
-                    <span>SIMPAN PENAWARAN HARGA (Ctrl+S)</span>
+                    <span>SIMPAN PENAWARAN (Ctrl+S)</span>
                   </>
                 )}
               </button>
