@@ -353,9 +353,9 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
         {error && <FormError message={error} />}
 
         {/* 2.A Primary Header Card: Customer Selection First */}
-        <div className="form-primary-header-card form-grid-2col">
-          <div className="flex flex-col gap-2.5">
-            <div className="auth-field">
+        <div className="form-primary-header-card">
+          <div className="form-header-grid">
+            <div className="auth-field" style={{ gridColumn: "span 2" }}>
               <label>Pelanggan (Customer) *</label>
               <select
                 className="input-base font-semibold"
@@ -372,36 +372,26 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
               </select>
             </div>
 
-            {selectedCustomer && (
-              <div className="text-[11.5px] text-muted flex items-center gap-3 px-1">
-                <span>Alamat: <strong className="text-secondary">{selectedCustomer.address || "—"}</strong></span>
-                <span>Kontak: <strong className="text-secondary">{selectedCustomer.phone || selectedCustomer.email || "—"}</strong></span>
-              </div>
-            )}
-          </div>
+            <div className="auth-field">
+              <label>Tanggal Order *</label>
+              <input
+                type="date"
+                className="input-base font-mono"
+                value={date}
+                disabled={isExisting}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </div>
 
-          <div className="flex flex-col gap-2.5">
-            <div className="grid-2col gap-2.5">
-              <div className="auth-field">
-                <label>Tanggal Order *</label>
-                <input
-                  type="date"
-                  className="input-base font-mono"
-                  value={date}
-                  disabled={isExisting}
-                  onChange={(e) => setDate(e.target.value)}
-                />
-              </div>
-              <div className="auth-field">
-                <label>Target Pengiriman</label>
-                <input
-                  type="date"
-                  className="input-base font-mono"
-                  value={requestedDeliveryDate}
-                  disabled={isExisting}
-                  onChange={(e) => setRequestedDeliveryDate(e.target.value)}
-                />
-              </div>
+            <div className="auth-field">
+              <label>Target Pengiriman</label>
+              <input
+                type="date"
+                className="input-base font-mono"
+                value={requestedDeliveryDate}
+                disabled={isExisting}
+                onChange={(e) => setRequestedDeliveryDate(e.target.value)}
+              />
             </div>
 
             <div className="auth-field">
@@ -409,10 +399,17 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
                 value={taxRate}
                 onChange={setTaxRate}
                 disabled={isExisting}
-                label="Skema Pajak Pertambahan Nilai (PPN)"
+                label="Skema PPN"
               />
             </div>
           </div>
+
+          {selectedCustomer && (
+            <div className="form-header-meta">
+              <span>Alamat: <strong>{selectedCustomer.address || "—"}</strong></span>
+              <span>Kontak: <strong>{selectedCustomer.phone || selectedCustomer.email || "—"}</strong></span>
+            </div>
+          )}
         </div>
 
         {/* 2.B Side-Tab Icon Rail + Tabbed Content Area */}
@@ -444,34 +441,27 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
           <div className="form-tab-content">
             {/* TAB 1: RINCIAN ITEM BARANG / JASA (DEFAULT) */}
             {activeTab === "items" && (
-              <div className="form-card-compact" style={{ padding: "0", overflow: "hidden" }}>
-                <div className="form-card-header" style={{ padding: "10px 16px", margin: "0" }}>
-                  <div>
-                    <h2 className="form-card-title">Line Items Pesanan Penjualan</h2>
-                  </div>
+              <div className="form-card-compact p-0 overflow-hidden">
+                <div className="form-card-header" style={{ padding: "8px 10px", marginBottom: 0 }}>
+                  <h2 className="form-card-title">Line Items Pesanan Penjualan</h2>
                   {!isExisting && (
-                    <button
-                      type="button"
-                      className="btn-dash-primary text-xs"
-                      style={{ padding: "4px 10px" }}
-                      onClick={addLine}
-                    >
-                      <Icon name="plus" size={13} />
-                      <span>Tambah Baris Item</span>
+                    <button type="button" className="btn-dash-primary" onClick={addLine}>
+                      <Icon name="plus" size={12} />
+                      <span>Tambah Baris</span>
                     </button>
                   )}
                 </div>
 
-                <div className="datatable-wrapper" style={{ border: "none", borderRadius: "0" }}>
+                <div className="datatable-wrapper" style={{ border: "none", borderRadius: 0 }}>
                   <table className="datatable">
                     <thead>
                       <tr>
-                        <th style={{ width: "38%" }}>Item Produk / Jasa *</th>
-                        <th className="num" style={{ width: "10%" }}>Qty</th>
-                        <th className="num" style={{ width: "18%" }}>Harga Satuan (Rp)</th>
-                        <th className="num" style={{ width: "14%" }}>Diskon (Rp)</th>
-                        <th className="num" style={{ width: "16%" }}>Total Subtotal (Rp)</th>
-                        {!isExisting && <th style={{ width: "36px" }} />}
+                        <th style={{ width: "40%" }}>Item Produk / Jasa *</th>
+                        <th className="num" style={{ width: "9%" }}>Qty</th>
+                        <th className="num" style={{ width: "17%" }}>Harga Satuan</th>
+                        <th className="num" style={{ width: "14%" }}>Diskon</th>
+                        <th className="num" style={{ width: "17%" }}>Subtotal</th>
+                        {!isExisting && <th style={{ width: "34px" }} />}
                       </tr>
                     </thead>
                     <tbody>
@@ -520,7 +510,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
                               onChange={(e) => setDiscount(line.id, parseCents(e.target.value))}
                             />
                           </td>
-                          <td className="num font-mono font-bold text-primary text-xs">
+                          <td className="num font-mono font-bold text-primary">
                             {formatIDR(line.lineTotalCents)}
                           </td>
                           {!isExisting && (
@@ -532,7 +522,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
                                 onClick={() => removeLine(line.id)}
                                 title="Hapus baris"
                               >
-                                <Icon name="trash" size={13} />
+                                <Icon name="trash" size={12} />
                               </button>
                             </td>
                           )}
@@ -541,26 +531,26 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
                     </tbody>
                     <tfoot>
                       <tr className="total-rule-top">
-                        <td colSpan={4} className="text-right font-semibold text-xs text-secondary">
-                          Dasar Pengenaan Pajak (DPP Subtotal):
+                        <td colSpan={4} className="text-right font-semibold text-secondary">
+                          DPP (Subtotal)
                         </td>
-                        <td className="num font-mono font-bold text-primary text-xs">
+                        <td className="num font-mono font-bold text-primary">
                           {formatIDR(subtotalCents)}
                         </td>
                         {!isExisting && <td />}
                       </tr>
                       <tr>
-                        <td colSpan={4} className="text-right font-semibold text-xs text-muted">
-                          PPN {taxRate > 0 ? `(${taxRate}%)` : ""}:
+                        <td colSpan={4} className="text-right font-semibold text-muted">
+                          PPN {taxRate > 0 ? `${taxRate}%` : ""}
                         </td>
-                        <td className="num font-mono font-semibold text-secondary text-xs">
+                        <td className="num font-mono font-semibold text-secondary">
                           {formatIDR(ppnCents)}
                         </td>
                         {!isExisting && <td />}
                       </tr>
-                      <tr className="total-double" style={{ backgroundColor: "var(--bg-surface)" }}>
-                        <td colSpan={4} className="text-right font-bold text-xs text-brand">
-                          Total Pesanan (Grand Total):
+                      <tr className="total-double">
+                        <td colSpan={4} className="text-right font-bold text-brand">
+                          Total Pesanan
                         </td>
                         <td className="num font-mono font-bold text-brand text-sm">
                           {formatIDR(totalCents)}
@@ -664,64 +654,59 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
         </div>
       </main>
 
-      {/* Zone 3: Sticky Bottom Footer (Subtotal, Total & Action Buttons) */}
+      {/* Zone 3: Sticky Bottom Footer (Subtotal, Total & Primary Actions) */}
       <footer className="form-zone-3">
         <div className="form-zone-3__summary">
-          <div className="text-xs text-muted">
-            DPP: <strong className="font-mono text-secondary">{formatIDR(subtotalCents)}</strong> &bull; PPN: <strong className="font-mono text-secondary">{formatIDR(ppnCents)}</strong>
-          </div>
+          <span className="text-xs text-muted">
+            DPP <strong className="font-mono text-secondary">{formatIDR(subtotalCents)}</strong>
+            {"  ·  "}
+            PPN <strong className="font-mono text-secondary">{formatIDR(ppnCents)}</strong>
+          </span>
           <div className="form-zone-3__total-block">
-            <span className="form-zone-3__total-label">Total Pesanan:</span>
+            <span className="form-zone-3__total-label">Total</span>
             <span className="form-zone-3__total-val">{formatIDR(totalCents)}</span>
           </div>
         </div>
 
         <div className="form-zone-3__actions">
-          <button
-            type="button"
-            className="btn-dash-secondary text-xs"
-            onClick={() => workbench.close(tabId)}
-          >
-            Tutup
-          </button>
-
-          {!isExisting && (
+          {!isExisting ? (
             <button
               type="button"
-              className="btn-dash-primary text-xs"
+              className="btn-dash-primary"
               disabled={totalCents <= 0 || saving}
               onClick={() => void handleSubmit()}
             >
               {saving ? (
-                <span>Mengonfirmasi...</span>
+                <span>Mengonfirmasi…</span>
               ) : (
                 <>
-                  <Icon name="check" size={14} />
-                  <span>Konfirmasi Sales Order (Ctrl+S)</span>
+                  <Icon name="check" size={13} />
+                  <span>Konfirmasi Sales Order</span>
+                  <kbd className="btn-kbd">Ctrl+S</kbd>
                 </>
               )}
             </button>
-          )}
-
-          {isExisting && orderStatus === "CONFIRMED" && (
-            <>
-              <button
-                type="button"
-                className="btn-dash-primary text-xs"
-                onClick={handleCreateDelivery}
-              >
-                <Icon name="package" size={14} />
-                <span>Buat Surat Jalan</span>
-              </button>
-              <button
-                type="button"
-                className="btn-dash-secondary text-xs"
-                onClick={handleCreateInvoice}
-              >
-                <Icon name="receipt" size={13} />
-                <span>Terbitkan Faktur</span>
-              </button>
-            </>
+          ) : (
+            orderStatus === "CONFIRMED" && (
+              <>
+                <button
+                  type="button"
+                  className="btn-dash-secondary"
+                  onClick={handleCreateInvoice}
+                >
+                  <Icon name="receipt" size={12} />
+                  <span>Terbitkan Faktur</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn-dash-primary"
+                  onClick={handleCreateDelivery}
+                >
+                  <Icon name="package" size={13} />
+                  <span>Buat Surat Jalan</span>
+                </button>
+              </>
+            )
           )}
         </div>
       </footer>

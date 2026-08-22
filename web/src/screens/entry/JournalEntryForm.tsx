@@ -639,13 +639,6 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn-dash-secondary"
-              onClick={() => workbench.close(tabId)}
-            >
-              Tutup
-            </button>
             {!isDetail && !saved && (
               <button
                 type="button"
@@ -657,8 +650,9 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
                   <span>Mem-posting Jurnal...</span>
                 ) : (
                   <>
-                    <Icon name="check" size={16} />
-                    <span>POSTING JURNAL UMUM (Ctrl+S)</span>
+                    <Icon name="check" size={14} />
+                    <span>Posting Jurnal Umum</span>
+                    <kbd className="btn-kbd">Ctrl+S</kbd>
                   </>
                 )}
               </button>

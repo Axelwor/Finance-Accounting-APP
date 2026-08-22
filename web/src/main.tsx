@@ -8,6 +8,7 @@ import "./styles/base.css";
 import "./styles/components.css";
 import "./styles/screens.css";
 import "./styles/legacy-forms.css";
+import "./styles/utilities.css";
 import "./styles/print.css";
 import App from "./App";
 

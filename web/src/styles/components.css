@@ -26,36 +26,67 @@
 }
 
 .btn-dash-primary {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  background: linear-gradient(180deg, var(--brand-primary), var(--brand-primary-hover));
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: var(--brand-primary);
   color: #fff;
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 600;
-  border-radius: var(--radius-sm);
+  line-height: 1.4;
+  white-space: nowrap;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--brand-primary-hover);
   cursor: pointer;
-  box-shadow: var(--shadow-xs);
+}
+
+.btn-dash-primary:hover:not(:disabled) {
+  background: var(--brand-primary-hover);
+}
+
+.btn-dash-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .btn-dash-secondary {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 10px;
   background-color: var(--bg-surface);
   color: var(--text-primary);
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 600;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-color);
+  line-height: 1.4;
+  white-space: nowrap;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-strong);
   cursor: pointer;
 }
 
-.btn-dash-secondary:hover {
+.btn-dash-secondary:hover:not(:disabled) {
   background-color: var(--bg-surface-secondary);
+}
+
+.btn-dash-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Inline keyboard hint inside a button */
+.btn-kbd {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 0 4px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  line-height: 1.5;
 }
 
 .dashboard-main-grid {
@@ -99,11 +130,11 @@
 
 .grid-2col {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
-.gap-4 { gap: 16px; }
-.mt-4 { margin-top: 16px; }
+.gap-4 { gap: 14px; }
+.mt-4 { margin-top: 14px; }
 .mt-1 { margin-top: 4px; }
 .mt-0\.5 { margin-top: 2px; }
 

@@ -570,13 +570,6 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn-dash-secondary"
-              onClick={() => workbench.close(tabId)}
-            >
-              Batal
-            </button>
             {!isDetail && !saved && (
               <button
                 type="button"
@@ -588,8 +581,9 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
                   <span>Menerbitkan Faktur...</span>
                 ) : (
                   <>
-                    <Icon name="check" size={16} />
-                    <span>POSTING FAKTUR PENJUALAN</span>
+                    <Icon name="check" size={14} />
+                    <span>Posting Faktur Penjualan</span>
+                    <kbd className="btn-kbd">Ctrl+S</kbd>
                   </>
                 )}
               </button>
