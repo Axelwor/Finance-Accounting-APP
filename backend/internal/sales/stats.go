@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // ConversionStats returns quotation funnel statistics (i-005).
@@ -25,7 +27,8 @@ func (service *Service) ConversionStats(writer http.ResponseWriter, request *htt
 	counts := []statusCount{}
 	var total, converted, sent, draft, expired, cancelled int64
 
-	err = service.pool.QueryRow(request.Context(), `
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(request.Context(), `
 		SELECT
 			COUNT(*),
 			COUNT(*) FILTER (WHERE status = $2),
@@ -36,7 +39,8 @@ func (service *Service) ConversionStats(writer http.ResponseWriter, request *htt
 		FROM sales_quotations
 		WHERE tenant_id = $1
 	`, tenant, statusConverted, statusSent, statusDraft, statusExpired, statusCancelled).
-		Scan(&total, &converted, &sent, &draft, &expired, &cancelled)
+			Scan(&total, &converted, &sent, &draft, &expired, &cancelled)
+	})
 	if err != nil && !isNoRows(err) {
 		writeError(writer, http.StatusInternalServerError, "CONVERSION_STATS_FAILED", err.Error())
 		return

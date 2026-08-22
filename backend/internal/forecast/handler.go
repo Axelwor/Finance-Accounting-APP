@@ -7,9 +7,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/auth"
+	"finance-accounting-app/backend/internal/db"
 )
 
 // ---------------------------------------------------------------------------
@@ -73,7 +75,8 @@ func (s *Service) GetCashFlowForecast(w http.ResponseWriter, r *http.Request) {
 
 	// 1. Get starting balance (sum of all CASH/BANK account balances)
 	var startingBalance int64
-	err := s.pool.QueryRow(ctx, `
+	err := db.WithTenantData(ctx, s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
 		SELECT COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0)
 		FROM journal_lines jl
 		JOIN journal_entries je ON je.id = jl.entry_id AND je.tenant_id = jl.tenant_id
@@ -81,6 +84,7 @@ func (s *Service) GetCashFlowForecast(w http.ResponseWriter, r *http.Request) {
 		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
 		  AND a.account_type IN ('CASH', 'BANK')
 	`, tid).Scan(&startingBalance)
+	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
 		return
@@ -92,27 +96,28 @@ func (s *Service) GetCashFlowForecast(w http.ResponseWriter, r *http.Request) {
 		amount  int64
 	}
 	arFlows := []arFlow{}
-	rows, err := s.pool.Query(ctx, `
+	err = db.WithTenantData(ctx, s.pool, tid, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
 		SELECT i.due_date, i.receivable_cents
 		FROM invoices i
 		WHERE i.tenant_id = $1 AND i.status = 'POSTED' AND i.receivable_cents > 0
 		  AND i.due_date >= CURRENT_DATE
 		ORDER BY i.due_date
 	`, tid)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
-		return
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var f arFlow
-		if err := rows.Scan(&f.dueDate, &f.amount); err != nil {
-			writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
-			return
+		if err != nil {
+			return err
 		}
-		arFlows = append(arFlows, f)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var f arFlow
+			if err := rows.Scan(&f.dueDate, &f.amount); err != nil {
+				return err
+			}
+			arFlows = append(arFlows, f)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
 		return
 	}
@@ -123,27 +128,28 @@ func (s *Service) GetCashFlowForecast(w http.ResponseWriter, r *http.Request) {
 		amount  int64
 	}
 	apFlows := []apFlow{}
-	rows2, err := s.pool.Query(ctx, `
+	err = db.WithTenantData(ctx, s.pool, tid, func(tx pgx.Tx) error {
+		rows2, err := tx.Query(ctx, `
 		SELECT si.due_date, si.amount_due_cents
 		FROM supplier_invoices si
 		WHERE si.tenant_id = $1 AND si.status = 'POSTED' AND si.amount_due_cents > 0
 		  AND si.due_date >= CURRENT_DATE
 		ORDER BY si.due_date
 	`, tid)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
-		return
-	}
-	defer rows2.Close()
-	for rows2.Next() {
-		var f apFlow
-		if err := rows2.Scan(&f.dueDate, &f.amount); err != nil {
-			writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
-			return
+		if err != nil {
+			return err
 		}
-		apFlows = append(apFlows, f)
-	}
-	if err := rows2.Err(); err != nil {
+		defer rows2.Close()
+		for rows2.Next() {
+			var f apFlow
+			if err := rows2.Scan(&f.dueDate, &f.amount); err != nil {
+				return err
+			}
+			apFlows = append(apFlows, f)
+		}
+		return rows2.Err()
+	})
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
 		return
 	}
@@ -155,26 +161,27 @@ func (s *Service) GetCashFlowForecast(w http.ResponseWriter, r *http.Request) {
 		isInflow bool
 	}
 	recFlows := []recFlow{}
-	rows3, err := s.pool.Query(ctx, `
+	err = db.WithTenantData(ctx, s.pool, tid, func(tx pgx.Tx) error {
+		rows3, err := tx.Query(ctx, `
 		SELECT next_date, amount_cents,
 		       CASE WHEN intent_type IN ('CASH_IN', 'LEASE_PAYMENT') THEN true ELSE false END
 		FROM recurring_transactions
 		WHERE tenant_id = $1 AND is_active = true AND next_date >= CURRENT_DATE
 	`, tid)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
-		return
-	}
-	defer rows3.Close()
-	for rows3.Next() {
-		var f recFlow
-		if err := rows3.Scan(&f.nextDate, &f.amount, &f.isInflow); err != nil {
-			writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
-			return
+		if err != nil {
+			return err
 		}
-		recFlows = append(recFlows, f)
-	}
-	if err := rows3.Err(); err != nil {
+		defer rows3.Close()
+		for rows3.Next() {
+			var f recFlow
+			if err := rows3.Scan(&f.nextDate, &f.amount, &f.isInflow); err != nil {
+				return err
+			}
+			recFlows = append(recFlows, f)
+		}
+		return rows3.Err()
+	})
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errBody{"FORECAST_FAILED", err.Error()})
 		return
 	}

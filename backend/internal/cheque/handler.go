@@ -190,7 +190,8 @@ func (s *Service) Create(w http.ResponseWriter, r *http.Request) {
 		dueDate = pgtype.Date{Time: d, Valid: true}
 	}
 	var resp ChequeResponse
-	err = s.pool.QueryRow(r.Context(), `
+	err = db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
 		INSERT INTO cheques (
 			tenant_id, cheque_number, cheque_type, direction, bank_name,
 			bank_account_number, payee, drawer, amount_cents, issue_date,
@@ -198,19 +199,20 @@ func (s *Service) Create(w http.ResponseWriter, r *http.Request) {
 		)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'REGISTERED',$12,$13,$14)
 		RETURNING `+chequeSelectColumns,
-		tid, strings.TrimSpace(req.ChequeNumber),
-		strings.ToUpper(strings.TrimSpace(req.ChequeType)),
-		strings.ToUpper(strings.TrimSpace(req.Direction)),
-		req.BankName, req.BankAccountNumber, req.Payee, req.Drawer,
-		req.AmountCents, issueDate, dueDate, req.JournalEntryID, req.PaymentID,
-		req.Description,
-	).Scan(
-		&resp.ID, &resp.ChequeNumber, &resp.ChequeType, &resp.Direction,
-		&resp.BankName, &resp.BankAccountNumber, &resp.Payee, &resp.Drawer,
-		&resp.AmountCents, &resp.IssueDate, &resp.DueDate, &resp.ClearingDate,
-		&resp.Status, &resp.BouncedReason, &resp.JournalEntryID, &resp.PaymentID,
-		&resp.Description, &resp.CreatedAt, &resp.UpdatedAt,
-	)
+			tid, strings.TrimSpace(req.ChequeNumber),
+			strings.ToUpper(strings.TrimSpace(req.ChequeType)),
+			strings.ToUpper(strings.TrimSpace(req.Direction)),
+			req.BankName, req.BankAccountNumber, req.Payee, req.Drawer,
+			req.AmountCents, issueDate, dueDate, req.JournalEntryID, req.PaymentID,
+			req.Description,
+		).Scan(
+			&resp.ID, &resp.ChequeNumber, &resp.ChequeType, &resp.Direction,
+			&resp.BankName, &resp.BankAccountNumber, &resp.Payee, &resp.Drawer,
+			&resp.AmountCents, &resp.IssueDate, &resp.DueDate, &resp.ClearingDate,
+			&resp.Status, &resp.BouncedReason, &resp.JournalEntryID, &resp.PaymentID,
+			&resp.Description, &resp.CreatedAt, &resp.UpdatedAt,
+		)
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "failed to create cheque")
 		return
@@ -239,23 +241,33 @@ func (s *Service) List(w http.ResponseWriter, r *http.Request) {
 	}
 	query += " ORDER BY issue_date DESC, id DESC"
 
-	rows, err := s.pool.Query(r.Context(), query, args...)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "failed to list cheques")
-		return
-	}
-	defer rows.Close()
 	results := make([]ChequeResponse, 0)
-	for rows.Next() {
-		c, err := scanCheque(rows)
+	errList := errors.New("failed to list cheques")
+	errRead := errors.New("failed to read cheques")
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), query, args...)
 		if err != nil {
+			return errList
+		}
+		defer rows.Close()
+		for rows.Next() {
+			c, err := scanCheque(rows)
+			if err != nil {
+				return errRead
+			}
+			results = append(results, *c.formatDates())
+		}
+		if err := rows.Err(); err != nil {
+			return errRead
+		}
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, errRead) {
 			writeErr(w, http.StatusInternalServerError, "DB_ERROR", "failed to read cheques")
 			return
 		}
-		results = append(results, *c.formatDates())
-	}
-	if err := rows.Err(); err != nil {
-		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "failed to read cheques")
+		writeErr(w, http.StatusInternalServerError, "DB_ERROR", "failed to list cheques")
 		return
 	}
 	writeJSON(w, http.StatusOK, results)
@@ -273,15 +285,17 @@ func (s *Service) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var resp ChequeResponse
-	err := s.pool.QueryRow(r.Context(), `
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
 		SELECT `+chequeSelectColumns+` FROM cheques WHERE tenant_id = $1 AND id = $2
 	`, tid, id).Scan(
-		&resp.ID, &resp.ChequeNumber, &resp.ChequeType, &resp.Direction,
-		&resp.BankName, &resp.BankAccountNumber, &resp.Payee, &resp.Drawer,
-		&resp.AmountCents, &resp.IssueDate, &resp.DueDate, &resp.ClearingDate,
-		&resp.Status, &resp.BouncedReason, &resp.JournalEntryID, &resp.PaymentID,
-		&resp.Description, &resp.CreatedAt, &resp.UpdatedAt,
-	)
+			&resp.ID, &resp.ChequeNumber, &resp.ChequeType, &resp.Direction,
+			&resp.BankName, &resp.BankAccountNumber, &resp.Payee, &resp.Drawer,
+			&resp.AmountCents, &resp.IssueDate, &resp.DueDate, &resp.ClearingDate,
+			&resp.Status, &resp.BouncedReason, &resp.JournalEntryID, &resp.PaymentID,
+			&resp.Description, &resp.CreatedAt, &resp.UpdatedAt,
+		)
+	})
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "NOT_FOUND", "cheque not found")
 		return
@@ -375,17 +389,19 @@ func (s *Service) Update(w http.ResponseWriter, r *http.Request) {
 	sets = append(sets, "updated_at = now()")
 
 	var resp ChequeResponse
-	err := s.pool.QueryRow(r.Context(), `
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
 		UPDATE cheques SET `+strings.Join(sets, ", ")+`
 		WHERE tenant_id = $1 AND id = $2
 		RETURNING `+chequeSelectColumns,
-		args...).Scan(
-		&resp.ID, &resp.ChequeNumber, &resp.ChequeType, &resp.Direction,
-		&resp.BankName, &resp.BankAccountNumber, &resp.Payee, &resp.Drawer,
-		&resp.AmountCents, &resp.IssueDate, &resp.DueDate, &resp.ClearingDate,
-		&resp.Status, &resp.BouncedReason, &resp.JournalEntryID, &resp.PaymentID,
-		&resp.Description, &resp.CreatedAt, &resp.UpdatedAt,
-	)
+			args...).Scan(
+			&resp.ID, &resp.ChequeNumber, &resp.ChequeType, &resp.Direction,
+			&resp.BankName, &resp.BankAccountNumber, &resp.Payee, &resp.Drawer,
+			&resp.AmountCents, &resp.IssueDate, &resp.DueDate, &resp.ClearingDate,
+			&resp.Status, &resp.BouncedReason, &resp.JournalEntryID, &resp.PaymentID,
+			&resp.Description, &resp.CreatedAt, &resp.UpdatedAt,
+		)
+	})
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "NOT_FOUND", "cheque not found")
 		return

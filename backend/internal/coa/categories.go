@@ -8,6 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // category is the JSON representation of a categories row.
@@ -27,31 +29,32 @@ func (service *Service) ListCategories(writer http.ResponseWriter, request *http
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	rows, err := service.pool.Query(request.Context(), `
+	categories := make([]category, 0)
+	err = db.WithTenantData(request.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
 		SELECT id, name, direction, default_debit_account_id, default_credit_account_id, is_active
 		FROM categories
 		WHERE tenant_id = $1
 		ORDER BY name, direction
 	`, tenantID)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "CATEGORIES_LIST_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
-	categories := make([]category, 0)
-	for rows.Next() {
-		var item category
-		var debitID, creditID pgtype.Int8
-		if err := rows.Scan(&item.ID, &item.Name, &item.Direction, &debitID, &creditID, &item.IsActive); err != nil {
-			writeError(writer, http.StatusInternalServerError, "CATEGORIES_LIST_FAILED", err.Error())
-			return
+		if err != nil {
+			return err
 		}
-		item.DefaultDebitAccountID = nullableInt64(debitID)
-		item.DefaultCreditAccountID = nullableInt64(creditID)
-		categories = append(categories, item)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+
+		for rows.Next() {
+			var item category
+			var debitID, creditID pgtype.Int8
+			if err := rows.Scan(&item.ID, &item.Name, &item.Direction, &debitID, &creditID, &item.IsActive); err != nil {
+				return err
+			}
+			item.DefaultDebitAccountID = nullableInt64(debitID)
+			item.DefaultCreditAccountID = nullableInt64(creditID)
+			categories = append(categories, item)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "CATEGORIES_LIST_FAILED", err.Error())
 		return
 	}
