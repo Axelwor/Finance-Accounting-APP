@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
-import { FormError } from "../../components/ui";
+import { FormError, LoadingState } from "../../components/ui";
 import { NextStepsBar } from "../../components/NextSteps";
 import { useToast } from "../../components/Toast";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
-import { openPrintWindow } from "../../lib/print";
 import { draftNumber } from "../../workbench/modules";
 import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
+import { Icon } from "../../components/m3/Icon";
 import type { Customer, Item, QuotationLineInput } from "../../types";
-import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
@@ -28,15 +27,34 @@ interface Line {
   lineTotalCents: number;
 }
 
-/**
- * Quotation (SQ) entry form. SQ is a commitment — it does NOT post any
- * journal. On save it POSTs /quotations with customers + items picked from
- * the live backend.
- */
+let lineSeq = 0;
+function seedLine(): Line {
+  lineSeq += 1;
+  return {
+    id: `ln-${Date.now()}-${lineSeq}`,
+    itemId: "",
+    itemCode: "",
+    itemName: "",
+    qty: 1,
+    unitPriceCents: 0,
+    discountCents: 0,
+    lineTotalCents: 0,
+  };
+}
+
+function parseCents(raw: string): number {
+  const digits = (raw || "").replace(/[^\d]/g, "");
+  return digits ? parseInt(digits, 10) : 0;
+}
+
+function lineTotal(qty: number, unitPriceCents: number, discountCents: number): number {
+  return Math.round((qty > 0 ? qty : 1) * unitPriceCents) - discountCents;
+}
+
 export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
   const workbench = useWorkbench();
   const toast = useToast();
-  const [date, setDate] = useState(todayISO());
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [number, setNumber] = useState(initialTitle ?? draftNumber("sales-quotation-entry"));
   const [customerId, setCustomerId] = useState("");
   const [validUntil, setValidUntil] = useState("");
@@ -44,31 +62,25 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
   const [lines, setLines] = useState<Line[]>([seedLine()]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [items, setItems] = useState<Item[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [taxRate, setTaxRate] = useState(0);
   const [sending, setSending] = useState(false);
-  /** Backend id once the quotation is saved (this tab or opened existing). */
   const [savedId, setSavedId] = useState<number | null>(
-    entryId != null && !Number.isNaN(Number(entryId)) ? Number(entryId) : null,
+    entryId != null && !Number.isNaN(Number(entryId)) ? Number(entryId) : null
   );
   const [savedStatus, setSavedStatus] = useState<string>("");
 
-  useEffect(() => {
-    workbench.markUnsaved(tabId, true);
-  }, [tabId, date, number, customerId, validUntil, notes, lines, taxRate, workbench.markUnsaved]);
+  const isSaved = savedId !== null;
 
   useEffect(() => {
-    void api.listCustomers().then(setCustomers);
-    void api.listItems().then(setItems);
+    void Promise.all([
+      api.listCustomers().then(setCustomers),
+      api.listItems().then(setItems),
+    ]).finally(() => setLoading(false));
   }, []);
 
-  const subtotalCents = useMemo(() => lines.reduce((sum, l) => sum + l.lineTotalCents, 0), [lines]);
-  const ppnCents = useMemo(
-    () => lines.reduce((sum, l) => sum + taxForLine(l.lineTotalCents, taxRate), 0),
-    [lines, taxRate],
-  );
-  // Load an existing quotation opened from a list or reactivated after save.
   useEffect(() => {
     if (!entryId) return;
     const id = Number(entryId);
@@ -93,51 +105,81 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
                 discountCents: l.discount_cents,
                 lineTotalCents: l.line_total_cents,
               }))
-            : [seedLine()],
+            : [seedLine()]
         );
         workbench.markUnsaved(tabId, false);
       })
       .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entryId]);
+  }, [entryId, tabId, workbench]);
 
-  const isSaved = savedId !== null;
-
+  const subtotalCents = useMemo(() => lines.reduce((sum, l) => sum + l.lineTotalCents, 0), [lines]);
+  const ppnCents = useMemo(
+    () => lines.reduce((sum, l) => sum + taxForLine(l.lineTotalCents, taxRate), 0),
+    [lines, taxRate]
+  );
   const totalCents = subtotalCents + ppnCents;
 
   const setItem = (id: string, itemId: string) => {
     const item = items.find((i) => String(i.id) === itemId);
+    const price = (item as any)?.selling_price_cents ?? (item as any)?.unit_price_cents ?? 0;
     setLines((cur) =>
       cur.map((l) =>
-        l.id === id ? { ...l, itemId, itemCode: item?.code ?? "", itemName: item?.name ?? "" } : l,
-      ),
+        l.id === id
+          ? {
+              ...l,
+              itemId,
+              itemCode: item?.code ?? "",
+              itemName: item?.name ?? "",
+              unitPriceCents: price,
+              lineTotalCents: lineTotal(l.qty, price, l.discountCents),
+            }
+          : l
+      )
     );
   };
 
   const setPrice = (id: string, unitPriceCents: number) => {
     setLines((cur) =>
-      cur.map((l) => (l.id === id ? { ...l, unitPriceCents, lineTotalCents: lineTotal(l.qty, unitPriceCents, l.discountCents) } : l)),
+      cur.map((l) =>
+        l.id === id
+          ? { ...l, unitPriceCents, lineTotalCents: lineTotal(l.qty, unitPriceCents, l.discountCents) }
+          : l
+      )
     );
   };
 
   const setQty = (id: string, qty: number) => {
     setLines((cur) =>
-      cur.map((l) => (l.id === id ? { ...l, qty, lineTotalCents: lineTotal(qty, l.unitPriceCents, l.discountCents) } : l)),
+      cur.map((l) =>
+        l.id === id
+          ? { ...l, qty: qty > 0 ? qty : 1, lineTotalCents: lineTotal(qty, l.unitPriceCents, l.discountCents) }
+          : l
+      )
     );
   };
 
   const setDiscount = (id: string, discountCents: number) => {
     setLines((cur) =>
-      cur.map((l) => (l.id === id ? { ...l, discountCents, lineTotalCents: lineTotal(l.qty, l.unitPriceCents, discountCents) } : l)),
+      cur.map((l) =>
+        l.id === id
+          ? { ...l, discountCents, lineTotalCents: lineTotal(l.qty, l.unitPriceCents, discountCents) }
+          : l
+      )
     );
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const addLine = () => setLines((prev) => [...prev, seedLine()]);
+  const removeLine = (id: string) => {
+    if (lines.length <= 1) return;
+    setLines((cur) => cur.filter((l) => l.id !== id));
+  };
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setError(null);
     if (isSaved) return;
     if (!customerId) {
-      setError("Pick a customer for this quotation.");
+      setError("Pilih pelanggan untuk penawaran harga ini.");
       return;
     }
     const payloadLines: QuotationLineInput[] = lines
@@ -151,7 +193,7 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
         description: undefined,
       }));
     if (payloadLines.length === 0) {
-      setError("Add at least one item line.");
+      setError("Tambahkan minimal 1 baris item produk.");
       return;
     }
     setSaving(true);
@@ -168,15 +210,14 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
       setSavedId(created.id);
       setSavedStatus("DRAFT");
       setNumber(created.number);
-      toast.success(`✓ Saved ${created.number}`);
+      toast.success(`✓ Tersimpan — ${created.number}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the quotation.");
+      setError(err instanceof Error ? err.message : "Gagal menyimpan penawaran harga.");
     } finally {
       setSaving(false);
     }
   };
 
-  /** Workflow chain: open a Sales Order draft pre-filled from this quote. */
   const handleConvertToSO = () => {
     if (!savedId) return;
     workbench.openEntryDraftFromParent("sales-order-entry", { kind: "quotation", id: savedId });
@@ -189,295 +230,384 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
       const res = await api.sendQuotation(savedId);
       setSavedStatus(res.status);
       workbench.replaceDraft(tabId, number, res.status);
-      toast.success(`Quotation ${number} sent to customer`);
+      toast.success(`Penawaran ${number} berhasil dikirim ke pelanggan`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not send the quotation.");
+      toast.error(err instanceof Error ? err.message : "Gagal mengirim penawaran.");
     } finally {
       setSending(false);
     }
   };
 
-  const handlePrint = () => {
-    const customer = customers.find((c) => String(c.id) === customerId);
-    openPrintWindow({
-      title: `Quotation ${number}`,
-      subtitle: savedStatus || "DRAFT",
-      meta: [
-        ["Customer", customer ? `${customer.code} · ${customer.name}` : "-"],
-        ["Date", formatDateID(date)],
-        ["Valid until", validUntil ? formatDateID(validUntil) : "-"],
-        ["Notes", notes || "-"],
-      ],
-      columns: [
-        { label: "Item" },
-        { label: "Qty", right: true },
-        { label: "Unit Price", right: true },
-        { label: "Discount", right: true },
-        { label: "Line Total", right: true },
-      ],
-      rows: lines
-        .filter((l) => l.itemId)
-        .map((l) => [
-          `${l.itemCode || l.itemId}${l.itemName ? ` · ${l.itemName}` : ""}`,
-          l.qty,
-          formatIDR(l.unitPriceCents),
-          formatIDR(l.discountCents),
-          formatIDR(l.lineTotalCents),
-        ]),
-      totals: [["Total", formatIDR(totalCents)]],
-    });
-  };
+  // Keyboard shortcuts: Ctrl+S to save/post, Esc to close
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (workbench.activeNested?.id && workbench.activeNested.id !== tabId) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (!saving && !isSaved && totalCents > 0) {
+          void handleSubmit();
+        }
+      } else if (e.key === "Escape") {
+        if (!saving) {
+          workbench.close(tabId);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [workbench.activeNested?.id, saving, isSaved, tabId, totalCents, lines, date, customerId, validUntil, notes, taxRate]);
+
+  if (loading) return <LoadingState label="Memuat formulir penawaran..." />;
+
+  const statusLabel = isSaved ? savedStatus || "DRAFT" : "DRAFT";
 
   return (
-    <form className="entrytab entrytab--accurate" onSubmit={handleSubmit} noValidate>
-      <div className="entrytab__head">
-        <div className="entrytab__title">
-          <span>Quotation</span>
-          <span className={`entrytab__status ${isSaved ? "" : "entrytab__status--draft"}`}>
-            {isSaved ? savedStatus || "DRAFT" : "DRAFT"}
-          </span>
-          <span className="entrytab__number">{number}</span>
-          <span className="entrytab__date">{formatDateID(date)}</span>
+    <div className="enterprise-form">
+      {/* Zone 1: Sticky Document Header */}
+      <header className="form-zone-1">
+        <div className="form-header__title-group">
+          <div className="form-header__icon-box">
+            <Icon name="description" size={20} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="form-header__title">Penawaran Penjualan (Sales Quotation)</h1>
+              <span className="form-header__doc-number">{number}</span>
+              <span className={`form-header__status-badge status-${statusLabel.toLowerCase()}`}>
+                {statusLabel}
+              </span>
+            </div>
+            <p className="text-xs text-muted mt-0.5">
+              Komitmen penawaran harga & estimasi resmi kepada prospek atau pelanggan
+            </p>
+          </div>
         </div>
-      </div>
 
-      <div className="entrytab__body">
-        <div className="entrytab__main">
-          <div className="entrytab__header-grid">
-            <div className="entrytab__header-col">
-              <label className="field">
-                <span className="field__label">Customer</span>
-                <select className="input" value={customerId} onChange={(e) => setCustomerId(e.target.value)} disabled={isSaved}>
-                  <option value="">Choose customer...</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code} · {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span className="field__label">Date</span>
-                <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={isSaved} />
-              </label>
-              <label className="field">
-                <span className="field__label">Valid until</span>
-                <input className="input" type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} disabled={isSaved} />
-              </label>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="topbar__icon-btn"
+            onClick={() => window.print()}
+            title="Cetak Penawaran (Print)"
+          >
+            <Icon name="print" size={16} />
+          </button>
+          <button
+            type="button"
+            className="topbar__icon-btn"
+            onClick={() => workbench.close(tabId)}
+            title="Tutup Tab"
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+      </header>
+
+      {/* Zone 2: Dynamic Form Body */}
+      <main className="form-zone-2">
+        {error && <FormError message={error} />}
+
+        {/* 2.A Primary Entity & Meta */}
+        <div className="form-card form-grid-2col">
+          <div className="flex flex-col gap-3">
+            <div className="auth-field">
+              <label>Pelanggan / Prospek (Customer) *</label>
+              <select
+                className="input-base font-semibold"
+                value={customerId}
+                disabled={isSaved}
+                onChange={(e) => setCustomerId(e.target.value)}
+              >
+                <option value="">-- Pilih Pelanggan / Mitra --</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code ? `${c.code} - ` : ""}{c.name}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="entrytab__header-col">
-              <label className="field">
-                <span className="field__label">No</span>
-                <input className="input" value={number} onChange={(e) => setNumber(e.target.value)} disabled={isSaved} />
-              </label>
-              <TaxRateSelector value={taxRate} onChange={setTaxRate} />
+
+            <div className="auth-field">
+              <label>Catatan Syarat & Ketentuan (Terms & Validity)</label>
+              <textarea
+                className="input-base"
+                rows={3}
+                placeholder="Contoh: Harga berlaku 14 hari, franco Jakarta, termasuk garansi 1 tahun..."
+                value={notes}
+                disabled={isSaved}
+                onChange={(e) => setNotes(e.target.value)}
+              />
             </div>
           </div>
 
-          <label className="field">
-            <span className="field__label">Notes</span>
-            <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Terms, validity, references..." disabled={isSaved} />
-          </label>
-
-          <div className="entrytab__detail">
-            <div className="entrytab__detail-title">Item lines *</div>
-            <div className="detail-grid detail-grid--quote">
-              <div className="detail-grid__head">
-                <div>Item</div>
-                <div>Qty</div>
-                <div className="right">Unit Price</div>
-                <div className="right">Discount</div>
-                <div className="right">Line Total</div>
-                <div aria-hidden="true" />
+          <div className="flex flex-col gap-3">
+            <div className="grid-2col gap-3">
+              <div className="auth-field">
+                <label>Tanggal Penawaran *</label>
+                <input
+                  type="date"
+                  className="input-base font-mono"
+                  value={date}
+                  disabled={isSaved}
+                  onChange={(e) => setDate(e.target.value)}
+                />
               </div>
-              {lines.map((line) => (
-                <div className="detail-grid__row" key={line.id}>
-                  <div>
-                    <select className="input" value={line.itemId} onChange={(e) => setItem(line.id, e.target.value)} disabled={isSaved}>
-                      <option value="">Choose item...</option>
-                      {items.map((i) => (
-                        <option key={i.id} value={i.id}>
-                          {i.code} · {i.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <input
-                      className="amount"
-                      type="number"
-                      min={1}
-                      step="any"
-                      value={line.qty || ""}
-                      onChange={(e) => setQty(line.id, Number(e.target.value))}
-                      placeholder="1"
-                      disabled={isSaved}
-                    />
-                  </div>
-                  <div>
-                    <input
-                      className="amount right"
-                      type="text"
-                      inputMode="numeric"
-                      value={centsInput(line.unitPriceCents)}
-                      onChange={(e) => setPrice(line.id, parseCents(e.target.value))}
-                      placeholder="0"
-                      disabled={isSaved}
-                    />
-                  </div>
-                  <div>
-                    <input
-                      className="amount right"
-                      type="text"
-                      inputMode="numeric"
-                      value={centsInput(line.discountCents)}
-                      onChange={(e) => setDiscount(line.id, parseCents(e.target.value))}
-                      placeholder="0"
-                      disabled={isSaved}
-                    />
-                  </div>
-                  <div className="right">
-                    <span className="ledger-table__amount">{formatIDR(line.lineTotalCents)}</span>
-                  </div>
-                  <div>
-                    <button
-                      type="button"
-                      className="detail-grid__remove"
-                      onClick={() => setLines((cur) => (cur.length > 1 ? cur.filter((l) => l.id !== line.id) : cur))}
-                      aria-label="Remove line"
-                      disabled={isSaved || lines.length === 1}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {!isSaved && (
-                <div className="detail-grid__row detail-grid__row--add">
-                  <div>
-                    <Button
-                      variant="outlined"
-                      size="sm"
-                      onClick={() => setLines((cur) => [...cur, seedLine()])}
-                    >
-                      + Add item
-                    </Button>
-                  </div>
-                  <div />
-                  <div />
-                  <div />
-                  <div />
-                  <div />
-                </div>
-              )}
+              <div className="auth-field">
+                <label>Berlaku Hingga (Valid Until)</label>
+                <input
+                  type="date"
+                  className="input-base font-mono"
+                  value={validUntil}
+                  disabled={isSaved}
+                  onChange={(e) => setValidUntil(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="auth-field">
+              <TaxRateSelector
+                value={taxRate}
+                onChange={setTaxRate}
+                disabled={isSaved}
+                label="Skema Pajak Pertambahan Nilai (PPN)"
+              />
             </div>
           </div>
+        </div>
 
-          <div className="entrytab__total">
-            <span className="entrytab__total-label">DPP (Subtotal)</span>
-            <span className="entrytab__total-value">{formatIDR(subtotalCents)}</span>
-          </div>
-          <div className="entrytab__total" style={{ marginTop: 8 }}>
-            <span className="entrytab__total-label">PPN {taxRate > 0 ? `(${taxRate}%)` : ""}</span>
-            <span className="entrytab__total-value">{formatIDR(ppnCents)}</span>
-          </div>
-          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 8 }}>
-            <span className="entrytab__total-label">Total</span>
-            <span className="entrytab__total-value">{formatIDR(totalCents)}</span>
+        {/* 2.B Line Items Table Grid */}
+        <div className="form-card">
+          <div className="flex-between mb-3">
+            <div>
+              <h2 className="text-sm font-bold text-primary">Rincian Barang / Jasa yang Ditawarkan</h2>
+              <p className="text-xs text-muted">Daftar item produk, kuantitas, harga penawaran, dan potongan harga.</p>
+            </div>
+            {!isSaved && (
+              <button
+                type="button"
+                className="btn-dash-secondary text-xs"
+                onClick={addLine}
+              >
+                <Icon name="plus" size={14} />
+                <span>+ Tambah Baris Produk</span>
+              </button>
+            )}
           </div>
 
-          {isSaved && (
+          <div className="datatable-wrapper">
+            <table className="datatable">
+              <thead>
+                <tr>
+                  <th style={{ width: "35%" }}>Item / Produk *</th>
+                  <th className="num" style={{ width: "10%" }}>Qty</th>
+                  <th className="num" style={{ width: "20%" }}>Harga Satuan (Rp)</th>
+                  <th className="num" style={{ width: "15%" }}>Diskon (Rp)</th>
+                  <th className="num" style={{ width: "16%" }}>Total Baris (Rp)</th>
+                  {!isSaved && <th style={{ width: "40px" }}>Aksi</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line) => (
+                  <tr key={line.id}>
+                    <td>
+                      <select
+                        className="input-base text-xs w-full font-semibold"
+                        value={line.itemId}
+                        disabled={isSaved}
+                        onChange={(e) => setItem(line.id, e.target.value)}
+                      >
+                        <option value="">-- Pilih Produk/Jasa --</option>
+                        {items.map((i) => (
+                          <option key={i.id} value={i.id}>
+                            {i.code} - {i.name} ({i.unit || "Pcs"})
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="num">
+                      <input
+                        type="number"
+                        min="1"
+                        className="input-base text-xs text-right font-mono w-full"
+                        value={line.qty}
+                        disabled={isSaved}
+                        onChange={(e) => setQty(line.id, Number(e.target.value))}
+                      />
+                    </td>
+                    <td className="num">
+                      <input
+                        type="number"
+                        className="input-base text-xs text-right font-mono font-semibold w-full"
+                        value={line.unitPriceCents}
+                        disabled={isSaved}
+                        onChange={(e) => setPrice(line.id, parseCents(e.target.value))}
+                      />
+                    </td>
+                    <td className="num">
+                      <input
+                        type="number"
+                        className="input-base text-xs text-right font-mono w-full"
+                        value={line.discountCents}
+                        disabled={isSaved}
+                        onChange={(e) => setDiscount(line.id, parseCents(e.target.value))}
+                      />
+                    </td>
+                    <td className="num font-mono font-bold text-primary">
+                      {formatIDR(line.lineTotalCents)}
+                    </td>
+                    {!isSaved && (
+                      <td className="text-center">
+                        <button
+                          type="button"
+                          className="topbar__icon-btn text-danger"
+                          disabled={lines.length <= 1}
+                          onClick={() => removeLine(line.id)}
+                          title="Hapus baris"
+                        >
+                          <Icon name="trash" size={14} />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="total-rule-top total-double">
+                  <td colSpan={4} className="text-right font-bold text-xs">
+                    Dasar Pengenaan Pajak (DPP Subtotal):
+                  </td>
+                  <td className="num font-mono font-bold text-primary text-sm">
+                    {formatIDR(subtotalCents)}
+                  </td>
+                  {!isSaved && <td />}
+                </tr>
+                <tr>
+                  <td colSpan={4} className="text-right font-semibold text-xs text-muted">
+                    PPN {taxRate > 0 ? `(${taxRate}%)` : ""}:
+                  </td>
+                  <td className="num font-mono font-semibold text-secondary text-xs">
+                    {formatIDR(ppnCents)}
+                  </td>
+                  {!isSaved && <td />}
+                </tr>
+                <tr className="total-double">
+                  <td colSpan={4} className="text-right font-bold text-xs text-brand">
+                    Total Penawaran (Grand Total):
+                  </td>
+                  <td className="num font-mono font-bold text-brand text-base">
+                    {formatIDR(totalCents)}
+                  </td>
+                  {!isSaved && <td />}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        {/* 2.C Post-Save Workflow Chain Actions */}
+        {isSaved && (
+          <div className="form-card bg-surface-secondary">
             <NextStepsBar number={number} hint={savedStatus || undefined}>
-              <button type="button" className="next-steps__btn next-steps__btn--primary" onClick={handleConvertToSO}>
-                Convert to Sales Order
+              <button
+                type="button"
+                className="btn-dash-primary"
+                onClick={handleConvertToSO}
+              >
+                <Icon name="shopping_cart" size={16} />
+                <span>Konversi Menjadi Sales Order (SO)</span>
               </button>
-              <button type="button" className="next-steps__btn" onClick={handlePrint}>
-                Print
+              <button
+                type="button"
+                className="btn-dash-secondary"
+                onClick={() => window.print()}
+              >
+                <Icon name="print" size={16} />
+                <span>Cetak Lembar Penawaran</span>
               </button>
-              <button type="button" className="next-steps__btn" onClick={() => void handleSend()} disabled={sending || savedStatus === "SENT" || savedStatus === "CONVERTED"}>
-                {sending ? "Sending..." : "Send to Customer"}
-              </button>
-              <button type="button" className="next-steps__btn" onClick={() => workbench.close(tabId)}>
-                Close
+              <button
+                type="button"
+                className="btn-dash-secondary"
+                onClick={() => void handleSend()}
+                disabled={sending || savedStatus === "SENT" || savedStatus === "CONVERTED"}
+              >
+                <Icon name="send" size={16} />
+                <span>{sending ? "Mengirim..." : "Kirim ke Pelanggan"}</span>
               </button>
             </NextStepsBar>
-          )}
+          </div>
+        )}
+
+        {/* Official Print Signature Sign-off Box */}
+        <div className="print-signoff">
+          <div className="print-signoff-box">
+            <div className="sign-role">Dibuat Oleh</div>
+            <div className="sign-space" />
+            <div className="sign-name">( Bagian Penjualan / Sales Rep )</div>
+          </div>
+          <div className="print-signoff-box">
+            <div className="sign-role">Disetujui Oleh</div>
+            <div className="sign-space" />
+            <div className="sign-name">( Manajer Pemasaran / Sales Mgr )</div>
+          </div>
+          <div className="print-signoff-box">
+            <div className="sign-role">Diterima &amp; Disetujui Oleh</div>
+            <div className="sign-space" />
+            <div className="sign-name">( Pelanggan / Prospek )</div>
+          </div>
+        </div>
+      </main>
+
+      {/* Zone 3: Sticky Summary & Action Footer */}
+      <footer className="form-zone-3">
+        <div className="flex items-center gap-4">
+          <span className="status-badge status-draft text-xs">
+            <Icon name="check" size={12} /> PENYIMPANAN PENAWARAN (TIDAK MEM-POSTING BUKU BESAR)
+          </span>
+          <span className="text-xs text-muted">
+            [Ctrl+S] Simpan Penawaran &bull; [Esc] Tutup
+          </span>
         </div>
 
-        <aside className="action-rail" aria-label="Form actions">
-          {!isSaved && (
-            <button type="submit" className="action-rail__btn action-rail__btn--primary" disabled={saving} title="Save quotation (posts no journal)">
-              <DiskIcon />
-              <span>{saving ? "Saving..." : "Save"}</span>
+        <div className="flex items-center gap-6">
+          <div className="text-right">
+            <div className="text-xs text-muted">
+              DPP: <span className="font-mono">{formatIDR(subtotalCents)}</span> &bull; PPN: <span className="font-mono">{formatIDR(ppnCents)}</span>
+            </div>
+            <div className="text-sm font-bold text-primary">
+              TOTAL PENAWARAN: <span className="font-mono text-xl text-brand">{formatIDR(totalCents)}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn-dash-secondary"
+              onClick={() => workbench.close(tabId)}
+            >
+              Tutup
             </button>
-          )}
-          {isSaved && savedStatus !== "SENT" && savedStatus !== "CONVERTED" && (
-            <button type="button" className="action-rail__btn" onClick={() => void handleSend()} disabled={sending} title="Mark quotation as sent">
-              <PlaneIcon />
-              <span>{sending ? "Sending..." : "Send"}</span>
-            </button>
-          )}
-        </aside>
-
-        <FormError message={error} />
-      </div>
-    </form>
-  );
-}
-
-function lineTotal(qty: number, unitPriceCents: number, discountCents: number): number {
-  return Math.round((qty > 0 ? qty : 1) * unitPriceCents) - discountCents;
-}
-
-function parseCents(raw: string): number {
-  const digits = (raw || "").replace(/[^\d]/g, "");
-  return digits ? parseInt(digits, 10) : 0;
-}
-
-function centsInput(cents: number): string {
-  if (!cents) return "";
-  return new Intl.NumberFormat("en-US").format(cents);
-}
-
-function seedLine(): Line {
-  return {
-    id: `ln-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    itemId: "",
-    itemCode: "",
-    itemName: "",
-    qty: 1,
-    unitPriceCents: 0,
-    discountCents: 0,
-    lineTotalCents: 0,
-  };
-}
-
-function todayISO(): string {
-  const d = new Date();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${day}`;
-}
-
-function formatDateID(iso: string): string {
-  if (!iso) return "";
-  const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${y}`;
-}
-
-function DiskIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" fill="currentColor" />
-      <path d="M12 7v5l3 2" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-    </svg>
-  );
-}
-function PlaneIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <path d="M2 12l20-8-6 18-4-7-8-3z" fill="currentColor" />
-      <path d="M12 15l10-11" stroke="#fff" strokeWidth="1.2" />
-    </svg>
+            {!isSaved && (
+              <button
+                type="button"
+                className="btn-dash-primary"
+                disabled={totalCents <= 0 || saving}
+                onClick={() => void handleSubmit()}
+              >
+                {saving ? (
+                  <span>Menyimpan Penawaran...</span>
+                ) : (
+                  <>
+                    <Icon name="check" size={16} />
+                    <span>SIMPAN PENAWARAN HARGA (Ctrl+S)</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }

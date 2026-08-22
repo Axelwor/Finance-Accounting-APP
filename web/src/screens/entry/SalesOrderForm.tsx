@@ -1,21 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
-import { FormError } from "../../components/ui";
+import { FormError, LoadingState } from "../../components/ui";
 import { NextStepsBar } from "../../components/NextSteps";
 import { useToast } from "../../components/Toast";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
+import { Icon } from "../../components/m3/Icon";
 import type { Customer, Item, SalesOrderLineInput, DownPayment, SalesOrder } from "../../types";
 import type { PrefillRef } from "../../workbench/types";
-import { Button } from "../../components/m3";
 
 interface Props {
   tabId: string;
   entryId?: string | number;
   initialTitle?: string;
-  /** Workflow-chain prefill: {kind:"quotation", id} copies quote lines. */
   prefill?: PrefillRef;
 }
 
@@ -30,11 +29,36 @@ interface Line {
   lineTotalCents: number;
 }
 
+let lineSeq = 0;
+function seedLine(): Line {
+  lineSeq += 1;
+  return {
+    id: `so-ln-${Date.now()}-${lineSeq}`,
+    itemId: "",
+    itemCode: "",
+    itemName: "",
+    qty: 1,
+    unitPriceCents: 0,
+    discountCents: 0,
+    lineTotalCents: 0,
+  };
+}
+
+function parseCents(raw: string): number {
+  const digits = (raw || "").replace(/[^\d]/g, "");
+  return digits ? parseInt(digits, 10) : 0;
+}
+
+function lineTotal(qty: number, unitPriceCents: number, discountCents: number): number {
+  return Math.round((qty > 0 ? qty : 1) * unitPriceCents) - discountCents;
+}
+
 export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props) {
   const workbench = useWorkbench();
   const toast = useToast();
   const dpSectionRef = useRef<HTMLDivElement>(null);
-  const [date, setDate] = useState(todayISO());
+  const [activeSubTab, setActiveSubTab] = useState<"items" | "shipping" | "dp">("items");
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [number, setNumber] = useState(initialTitle ?? draftNumber("sales-order-entry"));
   const [customerId, setCustomerId] = useState("");
   const [notes, setNotes] = useState("");
@@ -42,17 +66,18 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [cashAccounts, setCashAccounts] = useState<{ id: number; name: string }[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [orderId, setOrderId] = useState<number | null>(
-    typeof entryId === "number" ? entryId : null,
+    typeof entryId === "number" ? entryId : null
   );
   const [orderStatus, setOrderStatus] = useState<string>(initialTitle ? "" : "DRAFT");
   const [orderTotal, setOrderTotal] = useState(0);
   const [dpReceived, setDpReceived] = useState(0);
   const [downPayments, setDownPayments] = useState<DownPayment[]>([]);
   const [dpAmount, setDpAmount] = useState(0);
-  const [dpDate, setDpDate] = useState(todayISO());
+  const [dpDate, setDpDate] = useState(new Date().toISOString().split("T")[0]);
   const [dpCashAccount, setDpCashAccount] = useState(0);
   const [dpDesc, setDpDesc] = useState("");
   const [dpError, setDpError] = useState<string | null>(null);
@@ -64,24 +89,23 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
   const [shipToAddress, setShipToAddress] = useState("");
   const [salespersonId, setSalespersonId] = useState("");
   const [taxRate, setTaxRate] = useState(0);
-  /** Source quotation when this order was created via "Convert to SO". */
   const [quotationId, setQuotationId] = useState<number | null>(null);
   const [cancelling, setCancelling] = useState(false);
 
-  useEffect(() => {
-    workbench.markUnsaved(tabId, true);
-  }, [tabId, date, number, customerId, notes, lines, taxRate, workbench]);
+  const isExisting = orderId !== null;
 
   useEffect(() => {
-    void api.listCustomers().then(setCustomers);
-    void api.listItems().then(setItems);
-    void api.listAccounts().then((accs) => {
-      setCashAccounts(accs.map((a) => ({ id: Number(a.id), name: a.name })));
-      if (accs.length > 0) setDpCashAccount(Number(accs[0].id));
-    });
+    void Promise.all([
+      api.listCustomers().then(setCustomers),
+      api.listItems().then(setItems),
+      api.listAccounts().then((accs) => {
+        setCashAccounts(accs.map((a) => ({ id: Number(a.id), name: a.name })));
+        if (accs.length > 0) setDpCashAccount(Number(accs[0].id));
+      }),
+    ]).finally(() => setLoading(false));
   }, []);
 
-  // Workflow chain: pre-fill from the source quotation ("Convert to SO").
+  // Workflow chain: pre-fill from quotation
   useEffect(() => {
     if (!prefill || prefill.kind !== "quotation" || entryId) return;
     let cancelled = false;
@@ -91,7 +115,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
         if (cancelled) return;
         setQuotationId(q.id);
         setCustomerId(String(q.customer_id));
-        setNotes(q.number ? `Quotation ${q.number}` : "");
+        setNotes(q.number ? `Berdasarkan Penawaran ${q.number}` : "");
         setLines(
           q.lines.length > 0
             ? q.lines.map((l) => ({
@@ -99,105 +123,127 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
                 itemId: String(l.item_id ?? ""),
                 itemCode: l.item_code ?? "",
                 itemName: l.item_name ?? "",
-                qty: Number(l.qty) || 1,
+                qty: Number(l.qty),
                 unitPriceCents: l.unit_price_cents,
                 discountCents: l.discount_cents,
                 lineTotalCents: l.line_total_cents,
               }))
-            : [seedLine()],
+            : [seedLine()]
         );
-        toast.info(`Loaded ${q.lines.length} line(s) from quotation ${q.number}`);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefill?.kind, prefill?.id, entryId]);
+  }, [prefill, entryId]);
 
+  // Load existing sales order
   useEffect(() => {
-    if (orderId) {
-      void loadOrder(orderId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId]);
-
-  const loadOrder = async (id: number) => {
-    try {
-      const order = await api.getSalesOrder(id);
-      setNumber(order.number);
-      setOrderStatus(order.status);
-      setOrderTotal(order.total_cents);
-      setDpReceived(order.dp_received_cents);
-      setDownPayments(order.down_payments ?? []);
-      setDate(order.order_date);
-      setCustomerId(String(order.customer_id));
-      setNotes(order.notes ?? "");
-      setCustomerPONumber(order.customer_po_number ?? "");
-      setCustomerPODate(order.customer_po_date ?? "");
-      setRequestedDeliveryDate(order.requested_delivery_date ?? "");
-      setShippingTerms(order.shipping_terms);
-      setShipToAddress(order.ship_to_address ?? "");
-      setSalespersonId(order.salesperson_id ? String(order.salesperson_id) : "");
-      const firstRate = order.lines.find((l) => Number(l.tax_rate) > 0);
-      setTaxRate(firstRate ? Number(firstRate.tax_rate) : Number(order.lines[0]?.tax_rate ?? 0) || 0);
-      setLines(
-        order.lines.map((l) => ({
-          id: `ln-${l.id}`,
-          itemId: String(l.item_id),
-          itemCode: l.item_code ?? "",
-          itemName: l.item_name ?? "",
-          qty: Number(l.qty),
-          unitPriceCents: l.unit_price_cents,
-          discountCents: l.discount_cents,
-          lineTotalCents: l.line_total_cents,
-        })),
-      );
-      workbench.markUnsaved(tabId, false);
-    } catch {
-      // new order or fetch failed
-    }
-  };
+    if (!entryId) return;
+    const id = Number(entryId);
+    if (!Number.isFinite(id)) return;
+    void api
+      .getSalesOrder(id)
+      .then((so) => {
+        setOrderId(so.id);
+        setNumber(so.number);
+        setOrderStatus(so.status);
+        setDate(so.order_date);
+        setCustomerId(String(so.customer_id));
+        setNotes(so.notes ?? "");
+        setOrderTotal(so.total_cents);
+        setCustomerPONumber(so.customer_po_number ?? "");
+        setCustomerPODate(so.customer_po_date ?? "");
+        setRequestedDeliveryDate(so.requested_delivery_date ?? "");
+        setShippingTerms(so.shipping_terms ?? undefined);
+        setShipToAddress(so.ship_to_address ?? "");
+        setSalespersonId(so.salesperson_id ? String(so.salesperson_id) : "");
+        setLines(
+          so.lines.map((l) => ({
+            id: `ln-${l.id}`,
+            itemId: String(l.item_id),
+            itemCode: l.item_code ?? "",
+            itemName: l.item_name ?? "",
+            qty: Number(l.qty),
+            unitPriceCents: l.unit_price_cents,
+            discountCents: l.discount_cents,
+            lineTotalCents: l.line_total_cents,
+          }))
+        );
+        workbench.markUnsaved(tabId, false);
+      })
+      .catch(() => {});
+  }, [entryId, tabId, workbench]);
 
   const subtotalCents = useMemo(() => lines.reduce((sum, l) => sum + l.lineTotalCents, 0), [lines]);
   const ppnCents = useMemo(
     () => lines.reduce((sum, l) => sum + taxForLine(l.lineTotalCents, taxRate), 0),
-    [lines, taxRate],
+    [lines, taxRate]
   );
-  const totalCents = subtotalCents + ppnCents;
+  const totalCents = isExisting ? orderTotal : subtotalCents + ppnCents;
+  const remaining = totalCents - dpReceived;
 
   const setItem = (id: string, itemId: string) => {
     const item = items.find((i) => String(i.id) === itemId);
+    const price = (item as any)?.selling_price_cents ?? (item as any)?.unit_price_cents ?? 0;
     setLines((cur) =>
       cur.map((l) =>
-        l.id === id ? { ...l, itemId, itemCode: item?.code ?? "", itemName: item?.name ?? "" } : l,
-      ),
+        l.id === id
+          ? {
+              ...l,
+              itemId,
+              itemCode: item?.code ?? "",
+              itemName: item?.name ?? "",
+              unitPriceCents: price,
+              lineTotalCents: lineTotal(l.qty, price, l.discountCents),
+            }
+          : l
+      )
     );
   };
 
   const setPrice = (id: string, unitPriceCents: number) => {
     setLines((cur) =>
-      cur.map((l) => (l.id === id ? { ...l, unitPriceCents, lineTotalCents: lineTotal(l.qty, unitPriceCents, l.discountCents) } : l)),
+      cur.map((l) =>
+        l.id === id
+          ? { ...l, unitPriceCents, lineTotalCents: lineTotal(l.qty, unitPriceCents, l.discountCents) }
+          : l
+      )
     );
   };
 
   const setQty = (id: string, qty: number) => {
     setLines((cur) =>
-      cur.map((l) => (l.id === id ? { ...l, qty, lineTotalCents: lineTotal(qty, l.unitPriceCents, l.discountCents) } : l)),
+      cur.map((l) =>
+        l.id === id
+          ? { ...l, qty: qty > 0 ? qty : 1, lineTotalCents: lineTotal(qty, l.unitPriceCents, l.discountCents) }
+          : l
+      )
     );
   };
 
   const setDiscount = (id: string, discountCents: number) => {
     setLines((cur) =>
-      cur.map((l) => (l.id === id ? { ...l, discountCents, lineTotalCents: lineTotal(l.qty, l.unitPriceCents, discountCents) } : l)),
+      cur.map((l) =>
+        l.id === id
+          ? { ...l, discountCents, lineTotalCents: lineTotal(l.qty, l.unitPriceCents, discountCents) }
+          : l
+      )
     );
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const addLine = () => setLines((prev) => [...prev, seedLine()]);
+  const removeLine = (id: string) => {
+    if (lines.length <= 1) return;
+    setLines((cur) => cur.filter((l) => l.id !== id));
+  };
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setError(null);
+    if (isExisting) return;
     if (!customerId) {
-      setError("Pick a customer for this order.");
+      setError("Pilih pelanggan untuk sales order ini.");
       return;
     }
     const payloadLines: SalesOrderLineInput[] = lines
@@ -211,487 +257,495 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
         description: undefined,
       }));
     if (payloadLines.length === 0) {
-      setError("Add at least one item line.");
+      setError("Tambahkan minimal 1 baris item produk.");
       return;
     }
     setSaving(true);
     try {
       const created = await api.createSalesOrder({
         customer_id: Number(customerId),
-        quotation_id: quotationId ?? undefined,
         order_date: date,
         notes: notes.trim() || undefined,
+        lines: payloadLines,
         customer_po_number: customerPONumber.trim() || undefined,
         customer_po_date: customerPODate || undefined,
         requested_delivery_date: requestedDeliveryDate || undefined,
-        salesperson_id: salespersonId ? Number(salespersonId) : undefined,
-        ship_to_address: shipToAddress.trim() || undefined,
         shipping_terms: shippingTerms,
-        lines: payloadLines,
+        ship_to_address: shipToAddress.trim() || undefined,
+        salesperson_id: salespersonId ? Number(salespersonId) : undefined,
+        quotation_id: quotationId ?? undefined,
       });
-      setOrderId(created.id);
-      setOrderStatus(created.status);
-      setOrderTotal(created.total_cents);
-      setNumber(created.number);
-      workbench.replaceDraft(tabId, created.number, created.status);
+      workbench.replaceDraft(tabId, created.number, "CONFIRMED");
       workbench.markUnsaved(tabId, false);
-      toast.success(`✓ Saved ${created.number} (${created.status})`);
+      setOrderId(created.id);
+      setOrderStatus("CONFIRMED");
+      setNumber(created.number);
+      setOrderTotal(created.total_cents);
+      toast.success(`✓ Sales Order ${created.number} Berhasil Dikonfirmasi`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the sales order.");
+      setError(err instanceof Error ? err.message : "Gagal menyimpan Sales Order.");
     } finally {
       setSaving(false);
     }
   };
 
-  /** Workflow chain: open a Delivery Order draft against this order. */
   const handleCreateDelivery = () => {
     if (!orderId) return;
     workbench.openEntryDraftFromParent("delivery-order-entry", { kind: "sales-order", id: orderId });
   };
 
-  const handleCancelOrder = async () => {
+  const handleCreateInvoice = () => {
     if (!orderId) return;
-    if (!window.confirm(`Cancel sales order ${number}? This cannot be undone.`)) return;
-    setCancelling(true);
-    try {
-      const res = await api.cancelSalesOrder(orderId);
-      setOrderStatus(res.status);
-      workbench.replaceDraft(tabId, number, res.status);
-      toast.success(`Sales order ${number} cancelled`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not cancel the sales order.");
-    } finally {
-      setCancelling(false);
-    }
+    workbench.openEntryDraftFromParent("sales-invoice", { kind: "sales-order", id: orderId });
   };
 
-  /** Scroll to the inline down-payment panel (Receive DP next step). */
-  const handleReceiveDP = () => {
-    dpSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  // Keyboard shortcuts: Ctrl+S to save/post, Esc to close
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (workbench.activeNested?.id && workbench.activeNested.id !== tabId) return;
 
-  const handlePostDP = async () => {
-    if (!orderId) return;
-    setDpError(null);
-    if (dpAmount <= 0) {
-      setDpError("Down payment amount must be greater than zero.");
-      return;
-    }
-    if (!dpCashAccount) {
-      setDpError("Pick a cash/bank account.");
-      return;
-    }
-    const remaining = orderTotal - dpReceived;
-    if (dpAmount > remaining) {
-      setDpError(`Down payment exceeds remaining order total (${formatIDR(remaining)}).`);
-      return;
-    }
-    setPostingDP(true);
-    try {
-      await api.createDownPayment(orderId, {
-        cash_account_id: dpCashAccount,
-        amount_cents: dpAmount,
-        dp_date: dpDate,
-        description: dpDesc.trim() || undefined,
-      });
-      await loadOrder(orderId);
-      setDpAmount(0);
-      setDpDesc("");
-      toast.success(`✓ Down payment of ${formatIDR(dpAmount)} received`);
-    } catch (err) {
-      setDpError(err instanceof Error ? err.message : "Could not post the down payment.");
-    } finally {
-      setPostingDP(false);
-    }
-  };
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (!saving && !isExisting && totalCents > 0) {
+          void handleSubmit();
+        }
+      } else if (e.key === "Escape") {
+        if (!saving) {
+          workbench.close(tabId);
+        }
+      }
+    };
 
-  const handleRefundDP = async (dpId: number) => {
-    setDpError(null);
-    try {
-      await api.refundDownPayment(dpId);
-      if (orderId) await loadOrder(orderId);
-    } catch (err) {
-      setDpError(err instanceof Error ? err.message : "Could not refund the down payment.");
-    }
-  };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [workbench.activeNested?.id, saving, isExisting, tabId, totalCents, lines, date, customerId, notes, taxRate]);
 
-  const isExisting = orderId !== null;
-  const remaining = orderTotal - dpReceived;
+  if (loading) return <LoadingState label="Memuat formulir Sales Order..." />;
+
+  const statusLabel = isExisting ? orderStatus || "CONFIRMED" : "DRAFT";
 
   return (
-    <form className="entrytab entrytab--accurate" onSubmit={handleSubmit} noValidate>
-      <div className="entrytab__head">
-        <div className="entrytab__title">
-          <span>Sales Order</span>
-          <span className={`entrytab__status ${isExisting ? "" : "entrytab__status--draft"}`}>
-            {isExisting ? orderStatus : "DRAFT"}
-          </span>
-          <span className="entrytab__number">{number}</span>
-          <span className="entrytab__date">{formatDateID(date)}</span>
-        </div>
-      </div>
-
-      <div className="entrytab__body">
-        <div className="entrytab__main">
-          <div className="entrytab__header-grid">
-            <div className="entrytab__header-col">
-              <label className="field">
-                <span className="field__label">Customer</span>
-                <select className="input" value={customerId} onChange={(e) => setCustomerId(e.target.value)} disabled={isExisting}>
-                  <option value="">Choose customer...</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code} · {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span className="field__label">Date</span>
-                <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={isExisting} />
-              </label>
+    <div className="enterprise-form">
+      {/* Zone 1: Sticky Document Header */}
+      <header className="form-zone-1">
+        <div className="form-header__title-group">
+          <div className="form-header__icon-box">
+            <Icon name="shopping_cart" size={20} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="form-header__title">Pesanan Penjualan (Sales Order)</h1>
+              <span className="form-header__doc-number">{number}</span>
+              <span className={`form-header__status-badge status-${statusLabel.toLowerCase()}`}>
+                {statusLabel}
+              </span>
             </div>
-            <div className="entrytab__header-col">
-              <label className="field">
-                <span className="field__label">No</span>
-                <input className="input" value={number} onChange={(e) => setNumber(e.target.value)} />
-              </label>
-              <TaxRateSelector value={taxRate} onChange={setTaxRate} disabled={isExisting} />
+            <p className="text-xs text-muted mt-0.5">
+              Penerimaan & konfirmasi pesanan resmi dari pelanggan
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="topbar__icon-btn"
+            onClick={() => window.print()}
+            title="Cetak Sales Order (Print)"
+          >
+            <Icon name="print" size={16} />
+          </button>
+          <button
+            type="button"
+            className="topbar__icon-btn"
+            onClick={() => workbench.close(tabId)}
+            title="Tutup Tab"
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+      </header>
+
+      {/* Zone 2: Dynamic Form Body */}
+      <main className="form-zone-2">
+        {error && <FormError message={error} />}
+
+        {/* 2.A Primary Entity & Meta */}
+        <div className="form-card form-grid-2col">
+          <div className="flex flex-col gap-3">
+            <div className="auth-field">
+              <label>Pelanggan (Customer) *</label>
+              <select
+                className="input-base font-semibold"
+                value={customerId}
+                disabled={isExisting}
+                onChange={(e) => setCustomerId(e.target.value)}
+              >
+                <option value="">-- Pilih Pelanggan --</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code ? `${c.code} - ` : ""}{c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="auth-field">
+              <label>Catatan & Instruksi Khusus Pesanan</label>
+              <textarea
+                className="input-base"
+                rows={3}
+                placeholder="Instruksi pengemasan, referensi kontrak, dll..."
+                value={notes}
+                disabled={isExisting}
+                onChange={(e) => setNotes(e.target.value)}
+              />
             </div>
           </div>
 
-          <label className="field">
-            <span className="field__label">Notes</span>
-            <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Terms, delivery instructions, references..." disabled={isExisting} />
-          </label>
+          <div className="flex flex-col gap-3">
+            <div className="grid-2col gap-3">
+              <div className="auth-field">
+                <label>Tanggal Order *</label>
+                <input
+                  type="date"
+                  className="input-base font-mono"
+                  value={date}
+                  disabled={isExisting}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+              </div>
+              <div className="auth-field">
+                <label>Tgl Target Pengiriman</label>
+                <input
+                  type="date"
+                  className="input-base font-mono"
+                  value={requestedDeliveryDate}
+                  disabled={isExisting}
+                  onChange={(e) => setRequestedDeliveryDate(e.target.value)}
+                />
+              </div>
+            </div>
 
-          <fieldset className="fieldset">
-            <legend className="fieldset__legend">Referensi Customer</legend>
-            <div className="entrytab__detail-title" style={{ marginBottom: "8px" }}>
-              <div className="entrytab__header-grid">
-                <div className="entrytab__header-col">
-                  <label className="field">
-                    <span className="field__label">Customer PO Number</span>
-                    <input className="input" type="text" value={customerPONumber} onChange={(e) => setCustomerPONumber(e.target.value)} placeholder="PO-12345" disabled={isExisting} />
-                  </label>
-                </div>
-                <div className="entrytab__header-col">
-                  <label className="field">
-                    <span className="field__label">Customer PO Date</span>
-                    <input className="input" type="date" value={customerPODate} onChange={(e) => setCustomerPODate(e.target.value)} disabled={isExisting} />
-                  </label>
-                </div>
-                <div className="entrytab__header-col">
-                  <label className="field">
-                    <span className="field__label">Requested Delivery Date</span>
-                    <input className="input" type="date" value={requestedDeliveryDate} onChange={(e) => setRequestedDeliveryDate(e.target.value)} disabled={isExisting} />
-                  </label>
-                </div>
-              </div>
+            <div className="auth-field">
+              <TaxRateSelector
+                value={taxRate}
+                onChange={setTaxRate}
+                disabled={isExisting}
+                label="Skema Pajak Pertambahan Nilai (PPN)"
+              />
             </div>
-            <div className="entrytab__detail-title" style={{ marginTop: "8px", marginBottom: "8px" }}>
-              <div className="entrytab__header-grid">
-                <div className="entrytab__header-col">
-                  <label className="field">
-                    <span className="field__label">Shipping Terms</span>
-                    <select className="input" value={shippingTerms ?? ""} onChange={(e) => setShippingTerms(e.target.value ? (e.target.value as NonNullable<SalesOrder["shipping_terms"]>) : undefined)} disabled={isExisting}>
-                      <option value="">None</option>
-                      <option value="FOB">FOB</option>
-                      <option value="CIF">CIF</option>
-                      <option value="EXW">EXW</option>
-                      <option value="CFR">CFR</option>
-                      <option value="DAP">DAP</option>
-                    </select>
-                  </label>
-                </div>
-                <div className="entrytab__header-col">
-                  <label className="field">
-                    <span className="field__label">Salesperson ID</span>
-                    <input className="input" type="number" value={salespersonId} onChange={(e) => setSalespersonId(e.target.value)} placeholder="e.g., 1" disabled={isExisting} />
-                  </label>
-                </div>
-              </div>
-            </div>
-            <div className="field">
-              <label className="field">
-                <span className="field__label">Ship To Address</span>
-                <textarea className="input" rows={2} value={shipToAddress} onChange={(e) => setShipToAddress(e.target.value)} placeholder="Full delivery address..." disabled={isExisting} />
-              </label>
-            </div>
-          </fieldset>
+          </div>
+        </div>
 
-          <div className="entrytab__detail">
-            <div className="entrytab__detail-title">Item lines *</div>
-            <div className="detail-grid detail-grid--quote">
-              <div className="detail-grid__head" role="row">
-                <div role="columnheader">Item</div>
-                <div role="columnheader">Qty</div>
-                <div role="columnheader" className="right">Unit Price</div>
-                <div role="columnheader" className="right">Discount</div>
-                <div role="columnheader" className="right">Line Total</div>
-                <div aria-hidden="true" />
+        {/* Sub-Tab Navigation for Complex Commercial Information */}
+        <div className="flex items-center gap-2 border-b border-subtle pb-1">
+          <button
+            type="button"
+            className={`tabpill ${activeSubTab === "items" ? "is-active" : ""}`}
+            onClick={() => setActiveSubTab("items")}
+          >
+            <Icon name="package" size={14} />
+            <span>Rincian Barang / Jasa</span>
+          </button>
+          <button
+            type="button"
+            className={`tabpill ${activeSubTab === "shipping" ? "is-active" : ""}`}
+            onClick={() => setActiveSubTab("shipping")}
+          >
+            <Icon name="building" size={14} />
+            <span>Pengiriman & PO Pelanggan</span>
+          </button>
+        </div>
+
+        {activeSubTab === "items" && (
+          <div className="form-card">
+            <div className="flex-between mb-3">
+              <div>
+                <h2 className="text-sm font-bold text-primary">Line Items Pesanan Penjualan</h2>
+                <p className="text-xs text-muted">Daftar item produk yang dipesan beserta kuantitas dan harga jual.</p>
               </div>
-              {lines.map((line) => (
-                <div className="detail-grid__row" key={line.id} role="row">
-                  <div role="cell">
-                    <select
-                      className="input"
-                      value={line.itemId}
-                      onChange={(e) => setItem(line.id, e.target.value)}
-                      disabled={isExisting}
-                      aria-label={`Item for line ${line.id}`}
-                    >
-                      <option value="">Choose item...</option>
-                      {items.map((i) => (
-                        <option key={i.id} value={i.id}>
-                          {i.code} · {i.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div role="cell">
-                    <input
-                      className="amount"
-                      type="number"
-                      min={1}
-                      step="any"
-                      value={line.qty || ""}
-                      onChange={(e) => setQty(line.id, Number(e.target.value))}
-                      placeholder="1"
-                      disabled={isExisting}
-                      aria-label={`Quantity for line ${line.id}`}
-                    />
-                  </div>
-                  <div role="cell">
-                    <input
-                      className="amount right"
-                      type="text"
-                      inputMode="numeric"
-                      value={centsInput(line.unitPriceCents)}
-                      onChange={(e) => setPrice(line.id, parseCents(e.target.value))}
-                      placeholder="0"
-                      disabled={isExisting}
-                      aria-label={`Unit price for line ${line.id}`}
-                    />
-                  </div>
-                  <div role="cell">
-                    <input
-                      className="amount right"
-                      type="text"
-                      inputMode="numeric"
-                      value={centsInput(line.discountCents)}
-                      onChange={(e) => setDiscount(line.id, parseCents(e.target.value))}
-                      placeholder="0"
-                      disabled={isExisting}
-                      aria-label={`Discount for line ${line.id}`}
-                    />
-                  </div>
-                  <div role="cell" className="right">
-                    <span className="ledger-table__amount">{formatIDR(line.lineTotalCents)}</span>
-                  </div>
-                  <div role="cell">
-                    <button
-                      type="button"
-                      className="detail-grid__remove"
-                      onClick={() => setLines((cur) => (cur.length > 1 ? cur.filter((l) => l.id !== line.id) : cur))}
-                      aria-label={`Remove line ${line.id}`}
-                      disabled={isExisting || lines.length === 1}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              ))}
               {!isExisting && (
-                <div className="detail-grid__row detail-grid__row--add">
-                  <div>
-                    <Button
-                      variant="outlined"
-                      size="sm"
-                      onClick={() => setLines((cur) => [...cur, seedLine()])}
-                    >
-                      + Add item
-                    </Button>
-                  </div>
-                  <div />
-                  <div />
-                  <div />
-                  <div />
-                  <div />
-                </div>
+                <button
+                  type="button"
+                  className="btn-dash-secondary text-xs"
+                  onClick={addLine}
+                >
+                  <Icon name="plus" size={14} />
+                  <span>+ Tambah Baris Produk</span>
+                </button>
               )}
             </div>
-          </div>
 
-          <div className="entrytab__total">
-            <span className="entrytab__total-label">DPP (Subtotal)</span>
-            <span className="entrytab__total-value">{formatIDR(isExisting ? subtotalCents : subtotalCents)}</span>
-          </div>
-          <div className="entrytab__total" style={{ marginTop: 8 }}>
-            <span className="entrytab__total-label">PPN {taxRate > 0 ? `(${taxRate}%)` : ""}</span>
-            <span className="entrytab__total-value">{formatIDR(ppnCents)}</span>
-          </div>
-          <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 8 }}>
-            <span className="entrytab__total-label">Total</span>
-            <span className="entrytab__total-value">{formatIDR(isExisting ? subtotalCents + ppnCents : totalCents)}</span>
-          </div>
-
-          {isExisting && orderStatus === "CONFIRMED" && (
-            <NextStepsBar number={number} hint={orderStatus}>
-              <button type="button" className="next-steps__btn next-steps__btn--primary" onClick={handleReceiveDP} disabled={remaining <= 0}>
-                Receive DP
-              </button>
-              <button type="button" className="next-steps__btn" onClick={handleCreateDelivery}>
-                Create Delivery Order
-              </button>
-              <button type="button" className="next-steps__btn next-steps__btn--danger" onClick={() => void handleCancelOrder()} disabled={cancelling || dpReceived > 0} title={dpReceived > 0 ? "Orders with a down payment cannot be cancelled" : undefined}>
-                {cancelling ? "Cancelling..." : "Cancel SO"}
-              </button>
-              <button type="button" className="next-steps__btn" onClick={() => workbench.close(tabId)}>
-                Close
-              </button>
-            </NextStepsBar>
-          )}
-        </div>
-
-        <aside className="action-rail" aria-label="Form actions">
-          {!isExisting && (
-            <button type="submit" className="action-rail__btn action-rail__btn--primary" disabled={saving} title="Save sales order (posts no journal)">
-              <DiskIcon />
-              <span>{saving ? "Saving..." : "Save"}</span>
-            </button>
-          )}
-        </aside>
-
-        <FormError message={error} />
-      </div>
-
-      {isExisting && (
-        <div ref={dpSectionRef} className="entrytab__dp-section" style={{ marginTop: 16, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 12 }}>
-          <div className="entrytab__detail-title" style={{ marginBottom: 8 }}>
-            Down Payments — DP Received: <strong>{formatIDR(dpReceived)}</strong> / Remaining: <strong>{formatIDR(remaining)}</strong>
-          </div>
-
-          {downPayments.length > 0 && (
-            <div className="ledger-table" style={{ marginBottom: 12 }}>
-              <div className="ledger-table__head">
-                <span>Number</span>
-                <span>Date</span>
-                <span className="right">Amount</span>
-                <span>Status</span>
-                <span aria-hidden="true" />
-              </div>
-              {downPayments.map((dp) => (
-                <div className="ledger-table__row" key={dp.id}>
-                  <span className="ledger-table__no">{dp.number}</span>
-                  <span className="ledger-table__date">{dp.dp_date}</span>
-                  <span className="ledger-table__amount right">{formatIDR(dp.amount_cents)}</span>
-                  <span>
-                    <span className={`kind-mark ${dp.status === "RECEIVED" ? "is-positive" : "is-negative"}`}>{dp.status}</span>
-                  </span>
-                  <span>
-                    {dp.status === "RECEIVED" && (
-                      <Button
-                        variant="outlined"
-                        size="sm"
-                        onClick={() => void handleRefundDP(dp.id)}
-                      >
-                        Refund
-                      </Button>
-                    )}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {orderStatus === "CONFIRMED" && remaining > 0 && (
-            <div className="detail-grid detail-grid--quote" style={{ gridTemplateColumns: "1fr 1fr 2fr" }}>
-              <div className="field">
-                <span className="field__label">Amount</span>
-                <input className="amount input" type="text" inputMode="numeric" value={centsInput(dpAmount)} onChange={(e) => setDpAmount(parseCents(e.target.value))} placeholder="0" />
-              </div>
-              <div className="field">
-                <span className="field__label">Cash/Bank</span>
-                <select className="input" value={dpCashAccount} onChange={(e) => setDpCashAccount(Number(e.target.value))}>
-                  {cashAccounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
+            <div className="datatable-wrapper">
+              <table className="datatable">
+                <thead>
+                  <tr>
+                    <th style={{ width: "35%" }}>Item / Produk *</th>
+                    <th className="num" style={{ width: "10%" }}>Qty</th>
+                    <th className="num" style={{ width: "20%" }}>Harga Satuan (Rp)</th>
+                    <th className="num" style={{ width: "15%" }}>Diskon (Rp)</th>
+                    <th className="num" style={{ width: "16%" }}>Total Baris (Rp)</th>
+                    {!isExisting && <th style={{ width: "40px" }}>Aksi</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((line) => (
+                    <tr key={line.id}>
+                      <td>
+                        <select
+                          className="input-base text-xs w-full font-semibold"
+                          value={line.itemId}
+                          disabled={isExisting}
+                          onChange={(e) => setItem(line.id, e.target.value)}
+                        >
+                          <option value="">-- Pilih Produk/Jasa --</option>
+                          {items.map((i) => (
+                            <option key={i.id} value={i.id}>
+                              {i.code} - {i.name} ({i.unit || "Pcs"})
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="num">
+                        <input
+                          type="number"
+                          min="1"
+                          className="input-base text-xs text-right font-mono w-full"
+                          value={line.qty}
+                          disabled={isExisting}
+                          onChange={(e) => setQty(line.id, Number(e.target.value))}
+                        />
+                      </td>
+                      <td className="num">
+                        <input
+                          type="number"
+                          className="input-base text-xs text-right font-mono font-semibold w-full"
+                          value={line.unitPriceCents}
+                          disabled={isExisting}
+                          onChange={(e) => setPrice(line.id, parseCents(e.target.value))}
+                        />
+                      </td>
+                      <td className="num">
+                        <input
+                          type="number"
+                          className="input-base text-xs text-right font-mono w-full"
+                          value={line.discountCents}
+                          disabled={isExisting}
+                          onChange={(e) => setDiscount(line.id, parseCents(e.target.value))}
+                        />
+                      </td>
+                      <td className="num font-mono font-bold text-primary">
+                        {formatIDR(line.lineTotalCents)}
+                      </td>
+                      {!isExisting && (
+                        <td className="text-center">
+                          <button
+                            type="button"
+                            className="topbar__icon-btn text-danger"
+                            disabled={lines.length <= 1}
+                            onClick={() => removeLine(line.id)}
+                            title="Hapus baris"
+                          >
+                            <Icon name="trash" size={14} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
                   ))}
+                </tbody>
+                <tfoot>
+                  <tr className="total-rule-top total-double">
+                    <td colSpan={4} className="text-right font-bold text-xs">
+                      Dasar Pengenaan Pajak (DPP Subtotal):
+                    </td>
+                    <td className="num font-mono font-bold text-primary text-sm">
+                      {formatIDR(subtotalCents)}
+                    </td>
+                    {!isExisting && <td />}
+                  </tr>
+                  <tr>
+                    <td colSpan={4} className="text-right font-semibold text-xs text-muted">
+                      PPN {taxRate > 0 ? `(${taxRate}%)` : ""}:
+                    </td>
+                    <td className="num font-mono font-semibold text-secondary text-xs">
+                      {formatIDR(ppnCents)}
+                    </td>
+                    {!isExisting && <td />}
+                  </tr>
+                  <tr className="total-double">
+                    <td colSpan={4} className="text-right font-bold text-xs text-brand">
+                      Total Pesanan (Grand Total):
+                    </td>
+                    <td className="num font-mono font-bold text-brand text-base">
+                      {formatIDR(totalCents)}
+                    </td>
+                    {!isExisting && <td />}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeSubTab === "shipping" && (
+          <div className="form-card form-grid-2col">
+            <div className="flex flex-col gap-3">
+              <div className="auth-field">
+                <label>Nomor Purchase Order Pelanggan (Customer PO)</label>
+                <input
+                  type="text"
+                  className="input-base font-mono"
+                  placeholder="Contoh: PO-CUST-8891"
+                  value={customerPONumber}
+                  disabled={isExisting}
+                  onChange={(e) => setCustomerPONumber(e.target.value)}
+                />
+              </div>
+              <div className="auth-field">
+                <label>Tanggal PO Pelanggan</label>
+                <input
+                  type="date"
+                  className="input-base font-mono"
+                  value={customerPODate}
+                  disabled={isExisting}
+                  onChange={(e) => setCustomerPODate(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="auth-field">
+                <label>Syarat Pengiriman (Incoterms)</label>
+                <select
+                  className="input-base"
+                  value={shippingTerms ?? ""}
+                  disabled={isExisting}
+                  onChange={(e) => setShippingTerms(e.target.value ? (e.target.value as NonNullable<SalesOrder["shipping_terms"]>) : undefined)}
+                >
+                  <option value="">-- Tanpa Ketentuan Khusus --</option>
+                  <option value="FOB">FOB (Free On Board)</option>
+                  <option value="CIF">CIF (Cost, Insurance & Freight)</option>
+                  <option value="EXW">EXW (Ex Works / Ambil di Gudang)</option>
+                  <option value="DAP">DAP (Delivered at Place)</option>
                 </select>
               </div>
-              <div className="field">
-                <span className="field__label">Description</span>
-                <input className="input" type="text" value={dpDesc} onChange={(e) => setDpDesc(e.target.value)} placeholder="Down payment description..." />
-              </div>
-              <div className="field">
-                <span className="field__label">Date</span>
-                <input className="input" type="date" value={dpDate} onChange={(e) => setDpDate(e.target.value)} />
-              </div>
-              <div />
-              <div style={{ display: "flex", alignItems: "flex-end" }}>
-                <Button
-                  variant="filled"
-                  size="sm"
-                  onClick={() => void handlePostDP()}
-                  disabled={postingDP}
-                >
-                  {postingDP ? "Posting..." : "Receive DP"}
-                </Button>
+              <div className="auth-field">
+                <label>Alamat Pengiriman Barang</label>
+                <textarea
+                  className="input-base"
+                  rows={2}
+                  placeholder="Alamat lengkap penerimaan barang..."
+                  value={shipToAddress}
+                  disabled={isExisting}
+                  onChange={(e) => setShipToAddress(e.target.value)}
+                />
               </div>
             </div>
-          )}
-          <FormError message={dpError} />
+          </div>
+        )}
+
+        {/* Post-Save Next Steps Actions */}
+        {isExisting && orderStatus === "CONFIRMED" && (
+          <div className="form-card bg-surface-secondary">
+            <NextStepsBar number={number} hint={orderStatus}>
+              <button
+                type="button"
+                className="btn-dash-primary"
+                onClick={handleCreateDelivery}
+              >
+                <Icon name="package" size={16} />
+                <span>Buat Surat Jalan (Delivery Order)</span>
+              </button>
+              <button
+                type="button"
+                className="btn-dash-secondary"
+                onClick={handleCreateInvoice}
+              >
+                <Icon name="receipt" size={16} />
+                <span>Terbitkan Faktur Penjualan (Sales Invoice)</span>
+              </button>
+              <button
+                type="button"
+                className="btn-dash-secondary"
+                onClick={() => window.print()}
+              >
+                <Icon name="print" size={16} />
+                <span>Cetak Sales Order</span>
+              </button>
+            </NextStepsBar>
+          </div>
+        )}
+
+        {/* Official Print Signature Sign-off Box */}
+        <div className="print-signoff">
+          <div className="print-signoff-box">
+            <div className="sign-role">Diterima Oleh</div>
+            <div className="sign-space" />
+            <div className="sign-name">( Bagian Penjualan / Sales Admin )</div>
+          </div>
+          <div className="print-signoff-box">
+            <div className="sign-role">Disetujui Oleh</div>
+            <div className="sign-space" />
+            <div className="sign-name">( Manajer Penjualan / Sales Head )</div>
+          </div>
+          <div className="print-signoff-box">
+            <div className="sign-role">Pemesan (Customer)</div>
+            <div className="sign-space" />
+            <div className="sign-name">( Penanggung Jawab Order )</div>
+          </div>
         </div>
-      )}
-    </form>
-  );
-}
+      </main>
 
-function lineTotal(qty: number, unitPriceCents: number, discountCents: number): number {
-  return Math.round((qty > 0 ? qty : 1) * unitPriceCents) - discountCents;
-}
+      {/* Zone 3: Sticky Summary & Action Footer */}
+      <footer className="form-zone-3">
+        <div className="flex items-center gap-4">
+          <span className="status-badge status-draft text-xs">
+            <Icon name="check" size={12} /> DOKUMEN PESANAN PENJUALAN (SALES ORDER)
+          </span>
+          <span className="text-xs text-muted">
+            [Ctrl+S] Simpan Order &bull; [Esc] Tutup
+          </span>
+        </div>
 
-function parseCents(raw: string): number {
-  const digits = (raw || "").replace(/[^\d]/g, "");
-  return digits ? parseInt(digits, 10) : 0;
-}
+        <div className="flex items-center gap-6">
+          <div className="text-right">
+            <div className="text-xs text-muted">
+              DPP: <span className="font-mono">{formatIDR(subtotalCents)}</span> &bull; PPN: <span className="font-mono">{formatIDR(ppnCents)}</span>
+            </div>
+            <div className="text-sm font-bold text-primary">
+              TOTAL PESANAN: <span className="font-mono text-xl text-brand">{formatIDR(totalCents)}</span>
+            </div>
+          </div>
 
-function centsInput(cents: number): string {
-  if (!cents) return "";
-  return new Intl.NumberFormat("en-US").format(cents);
-}
-
-function seedLine(): Line {
-  return {
-    id: `ln-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    itemId: "",
-    itemCode: "",
-    itemName: "",
-    qty: 1,
-    unitPriceCents: 0,
-    discountCents: 0,
-    lineTotalCents: 0,
-  };
-}
-
-function todayISO(): string {
-  const d = new Date();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${day}`;
-}
-
-function formatDateID(iso: string): string {
-  if (!iso) return "";
-  const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${y}`;
-}
-
-function DiskIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <circle cx="12" cy="12" r="10" fill="currentColor" />
-      <path d="M12 7v5l3 2" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-    </svg>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn-dash-secondary"
+              onClick={() => workbench.close(tabId)}
+            >
+              Tutup
+            </button>
+            {!isExisting && (
+              <button
+                type="button"
+                className="btn-dash-primary"
+                disabled={totalCents <= 0 || saving}
+                onClick={() => void handleSubmit()}
+              >
+                {saving ? (
+                  <span>Mengonfirmasi Pesanan...</span>
+                ) : (
+                  <>
+                    <Icon name="check" size={16} />
+                    <span>KONFIRMASI SALES ORDER (Ctrl+S)</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }

@@ -7,6 +7,7 @@ import { initM3Theme } from "./lib/m3-theme";
 import "./styles/base.css";
 import "./styles/components.css";
 import "./styles/screens.css";
+import "./styles/legacy-forms.css";
 import "./styles/print.css";
 import App from "./App";
 

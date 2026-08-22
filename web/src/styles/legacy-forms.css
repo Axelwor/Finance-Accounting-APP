@@ -1,0 +1,325 @@
+/* ============================================================
+   Ledgerly — Legacy Form Compatibility Layer (Accurate/EntryTab)
+   Translates legacy .entrytab, .field, .detail-grid into 
+   Standardized 3-Zone Enterprise Cards
+   ============================================================ */
+
+.entrytab {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  background-color: var(--bg-canvas);
+}
+
+.entrytab__head {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-xs);
+}
+
+.entrytab__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.entrytab__number {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background-color: var(--bg-surface-secondary);
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-color);
+}
+
+.entrytab__status {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
+  border: 1px solid var(--color-success-border);
+}
+
+.entrytab__status--draft {
+  background-color: var(--bg-surface-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.entrytab__date {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.entrytab__body {
+  flex: 1;
+  padding: 16px 20px;
+  display: flex;
+  gap: 16px;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.entrytab__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.entrytab__header-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+  padding: 16px;
+}
+
+.entrytab__header-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Fields & Labels */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.field__label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.2px;
+}
+
+.field__error {
+  font-size: 11px;
+  color: var(--color-danger);
+  font-weight: 500;
+}
+
+/* Inputs within legacy forms */
+.entrytab input.input,
+.entrytab select.input,
+.entrytab textarea.input,
+.field input.input,
+.field select.input,
+.field textarea.input,
+.field select,
+.input {
+  width: 100%;
+  padding: 8px 12px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.entrytab input.input:focus,
+.entrytab select.input:focus,
+.entrytab textarea.input:focus,
+.field input.input:focus,
+.field select.input:focus,
+.field textarea.input:focus {
+  border-color: var(--brand-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--brand-primary);
+}
+
+.entrytab input.amount {
+  padding: 8px 10px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+  text-align: right;
+  width: 100%;
+}
+
+.entrytab input.amount:focus {
+  border-color: var(--brand-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--brand-primary);
+}
+
+/* Line Item Details Grid */
+.entrytab__detail {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.entrytab__detail-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.detail-grid {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.detail-grid__head {
+  display: grid;
+  grid-template-columns: 2fr 80px 140px 140px 150px 40px;
+  gap: 8px;
+  background-color: var(--bg-surface-secondary);
+  border-bottom: 1px solid var(--border-color);
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  align-items: center;
+}
+
+.detail-grid__row {
+  display: grid;
+  grid-template-columns: 2fr 80px 140px 140px 150px 40px;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  align-items: center;
+  background-color: var(--bg-surface);
+}
+
+.detail-grid__row:last-child {
+  border-bottom: none;
+}
+
+.detail-grid__row--add {
+  background-color: var(--bg-surface-secondary);
+  padding: 8px 12px;
+}
+
+.detail-grid__remove {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-danger);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.detail-grid__remove:hover:not(:disabled) {
+  background-color: var(--color-danger-bg);
+}
+
+/* Totals Summary */
+.entrytab__total {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 6px 16px;
+  font-size: 13px;
+}
+
+.entrytab__total-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.entrytab__total-value {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-primary);
+  min-width: 140px;
+  text-align: right;
+}
+
+/* Action Rail Sidebar */
+.action-rail {
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action-rail__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-xs);
+  transition: all 0.15s ease;
+}
+
+.action-rail__btn:hover:not(:disabled) {
+  background-color: var(--bg-surface-secondary);
+}
+
+.action-rail__btn--primary {
+  background: linear-gradient(180deg, var(--brand-primary), var(--brand-primary-hover));
+  color: #fff;
+  border-color: var(--brand-primary-hover);
+}
+
+.action-rail__btn--primary:hover:not(:disabled) {
+  background: var(--brand-primary-hover);
+}
+
+.action-rail__btn--danger {
+  color: var(--color-danger);
+  border-color: var(--color-danger-border);
+  background-color: var(--color-danger-bg);
+}
+
+.action-rail__btn--danger:hover:not(:disabled) {
+  background-color: var(--color-danger);
+  color: #fff;
+}
