@@ -1,10 +1,14 @@
 package auth
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/hex"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func TestIssueAndParseToken(t *testing.T) {
@@ -28,6 +32,41 @@ func TestParseRejectsInvalidToken(t *testing.T) {
 	service := NewService(nil, "test-secret")
 	if _, err := service.parseToken("not-a-token"); err == nil {
 		t.Fatal("expected error for invalid token")
+	}
+}
+
+// F-13: a token signed with a different algorithm must be rejected even when
+// the signature is valid for its own key (alg confusion / none-attack guard).
+func TestParseRejectsWrongAlgorithm(t *testing.T) {
+	service := NewService(nil, "test-secret")
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims := Claims{
+		UserID:   1,
+		TenantID: 2,
+		Role:     RoleOwner,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+	rsToken, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.parseToken(rsToken); err == nil {
+		t.Fatal("expected RS256 token to be rejected, got valid claims")
+	}
+
+	noneToken, err := jwt.NewWithClaims(jwt.SigningMethodNone, claims).SignedString(jwt.UnsafeAllowNoneSignatureType)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.parseToken(noneToken); err == nil {
+		t.Fatal("expected alg=none token to be rejected, got valid claims")
 	}
 }
 

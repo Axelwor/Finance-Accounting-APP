@@ -1,8 +1,10 @@
 package email
 
 import (
+	"net"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSplitAddresses(t *testing.T) {
@@ -144,5 +146,53 @@ func TestTruncate(t *testing.T) {
 	long := strings.Repeat("x", 600)
 	if got := truncate(long, 500); len(got) != 500 {
 		t.Errorf("truncate should cap at n, got %d", len(got))
+	}
+}
+
+// F-12: an SMTP server that accepts the TCP connection but never answers
+// must not freeze SendMail. The session deadline (default 60s, shortened
+// here) must abort it well under a worker-hostile hang; in production the
+// timeout error feeds the existing retry queue path.
+func TestSendMail_SilentServerTimesOut(t *testing.T) {
+	// Listener that accepts connections but never writes a byte.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+
+	var held []net.Conn
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				for _, c := range held {
+					_ = c.Close()
+				}
+				return
+			}
+			// Hold the connection open, silent.
+			held = append(held, conn)
+		}
+	}()
+
+	cfg := SMTPConfig{
+		Host:            "127.0.0.1",
+		Port:            listener.Addr().(*net.TCPAddr).Port,
+		From:            "no-reply@test.local",
+		Helo:            "localhost",
+		DialTimeout:     500 * time.Millisecond,
+		SessionDeadline: 800 * time.Millisecond,
+	}
+
+	start := time.Now()
+	err = SendMail(cfg, "dest@x.com", "", "", "subject", "<p>b</p>", "b")
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected timeout error against a silent server")
+	}
+	if elapsed > 5*time.Second {
+		t.Errorf("SendMail took %s, want well under the 60s default deadline", elapsed)
 	}
 }

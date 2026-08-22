@@ -3,11 +3,14 @@ package dashboard
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/auth"
@@ -494,9 +497,17 @@ func (service *Service) GetWidgetData(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// widgetUnavailable answers 503 when the backing query for a widget fails
+// (F-08). Dashboards must fail visibly: a silent zero/empty payload looks
+// exactly like real data and misleads the user.
+func widgetUnavailable(w http.ResponseWriter, err error) {
+	slog.Error("dashboard widget query failed", "error", err)
+	writeErr(w, http.StatusServiceUnavailable, "WIDGET_DATA_UNAVAILABLE", "widget data source is temporarily unavailable")
+}
+
 func (service *Service) fetchCashBalanceData(w http.ResponseWriter, r *http.Request, tenantID int64) {
 	var cashInflow, cashOutflow, cashBalance int64
-	_ = service.pool.QueryRow(r.Context(), `
+	if err := service.pool.QueryRow(r.Context(), `
 		SELECT
 		  COALESCE(SUM(CASE WHEN jl.debit_cents > 0 THEN jl.debit_cents ELSE 0 END), 0),
 		  COALESCE(SUM(CASE WHEN jl.credit_cents > 0 THEN jl.credit_cents ELSE 0 END), 0),
@@ -506,7 +517,10 @@ func (service *Service) fetchCashBalanceData(w http.ResponseWriter, r *http.Requ
 		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
 		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
 		  AND a.account_type IN ('CASH', 'BANK')
-	`, tenantID).Scan(&cashInflow, &cashOutflow, &cashBalance)
+	`, tenantID).Scan(&cashInflow, &cashOutflow, &cashBalance); err != nil {
+		widgetUnavailable(w, err)
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"widget_type":   WidgetCashBalance,
@@ -518,7 +532,7 @@ func (service *Service) fetchCashBalanceData(w http.ResponseWriter, r *http.Requ
 
 func (service *Service) fetchPLSnapshotData(w http.ResponseWriter, r *http.Request, tenantID int64) {
 	var revenue, expense int64
-	_ = service.pool.QueryRow(r.Context(), `
+	if err := service.pool.QueryRow(r.Context(), `
 		SELECT
 		  COALESCE(SUM(CASE WHEN a.report_group = 'revenue' THEN jl.credit_cents - jl.debit_cents ELSE 0 END), 0),
 		  COALESCE(SUM(CASE WHEN a.report_group = 'expense' THEN jl.debit_cents - jl.credit_cents ELSE 0 END), 0)
@@ -527,7 +541,10 @@ func (service *Service) fetchPLSnapshotData(w http.ResponseWriter, r *http.Reque
 		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
 		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
 		  AND a.report_group IN ('revenue', 'expense')
-	`, tenantID).Scan(&revenue, &expense)
+	`, tenantID).Scan(&revenue, &expense); err != nil {
+		widgetUnavailable(w, err)
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"widget_type":   WidgetPLSnapshot,
@@ -559,19 +576,8 @@ func (service *Service) fetchARAgingData(w http.ResponseWriter, r *http.Request,
 		GROUP BY bucket
 	`, tenantID)
 	if err != nil {
-		// Fallback: simple total if the bucket query fails.
-		var totalReceivable int64
-		_ = service.pool.QueryRow(r.Context(), `
-			SELECT COALESCE(SUM(receivable_cents), 0)
-			FROM invoices
-			WHERE tenant_id = $1 AND status IN ('ISSUED', 'PARTIALLY_PAID')
-			  AND receivable_cents > 0
-		`, tenantID).Scan(&totalReceivable)
-		writeJSON(w, http.StatusOK, map[string]any{
-			"widget_type": WidgetARAging,
-			"total_cents": totalReceivable,
-			"buckets":     []any{},
-		})
+		// F-08: no fallback total — a partial number looks like real data.
+		widgetUnavailable(w, err)
 		return
 	}
 	defer rows.Close()
@@ -622,19 +628,8 @@ func (service *Service) fetchAPAgingData(w http.ResponseWriter, r *http.Request,
 		GROUP BY bucket
 	`, tenantID)
 	if err != nil {
-		// Fallback: simple total.
-		var totalPayable int64
-		_ = service.pool.QueryRow(r.Context(), `
-			SELECT COALESCE(SUM(payable_cents), 0)
-			FROM supplier_invoices
-			WHERE tenant_id = $1 AND status IN ('ISSUED', 'PARTIALLY_PAID')
-			  AND payable_cents > 0
-		`, tenantID).Scan(&totalPayable)
-		writeJSON(w, http.StatusOK, map[string]any{
-			"widget_type": WidgetAPAging,
-			"total_cents": totalPayable,
-			"buckets":     []any{},
-		})
+		// F-08: no fallback total — a partial number looks like real data.
+		widgetUnavailable(w, err)
 		return
 	}
 	defer rows.Close()
@@ -675,10 +670,7 @@ func (service *Service) fetchLowStockData(w http.ResponseWriter, r *http.Request
 		LIMIT 10
 	`, tenantID)
 	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"widget_type": WidgetLowStock,
-			"items":       []any{},
-		})
+		widgetUnavailable(w, err)
 		return
 	}
 	defer rows.Close()
@@ -724,10 +716,7 @@ func (service *Service) fetchRecentTxnsData(w http.ResponseWriter, r *http.Reque
 		LIMIT 10
 	`, tenantID)
 	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"widget_type":  WidgetRecentTxns,
-			"transactions": []any{},
-		})
+		widgetUnavailable(w, err)
 		return
 	}
 	defer rows.Close()
@@ -763,12 +752,17 @@ func (service *Service) fetchRecentTxnsData(w http.ResponseWriter, r *http.Reque
 func (service *Service) fetchPeriodStatusData(w http.ResponseWriter, r *http.Request, tenantID int64) {
 	var status, periodStart, periodEnd string
 	var periodID int64
-	_ = service.pool.QueryRow(r.Context(), `
+	if err := service.pool.QueryRow(r.Context(), `
 		SELECT id, status, period_start::text, period_end::text
 		FROM accounting_periods
 		WHERE tenant_id = $1 AND status IN ('OPEN', 'REOPENED')
 		ORDER BY period_start DESC LIMIT 1
-	`, tenantID).Scan(&periodID, &status, &periodStart, &periodEnd)
+	`, tenantID).Scan(&periodID, &status, &periodStart, &periodEnd); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		// No open period is a legitimate empty state; anything else is a
+		// real failure and must be surfaced (F-08).
+		widgetUnavailable(w, err)
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"widget_type":  WidgetPeriodStatus,
@@ -791,10 +785,7 @@ func (service *Service) fetchOutstandingInvoicesData(w http.ResponseWriter, r *h
 		LIMIT 10
 	`, tenantID)
 	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"widget_type": WidgetOutstandingInvoices,
-			"invoices":    []any{},
-		})
+		widgetUnavailable(w, err)
 		return
 	}
 	defer rows.Close()
@@ -833,7 +824,7 @@ func (service *Service) fetchOutstandingInvoicesData(w http.ResponseWriter, r *h
 // widget dispatch does not need to import the tax package.
 func (service *Service) fetchTaxSummaryData(w http.ResponseWriter, r *http.Request, tenantID int64) {
 	var ppnKeluaran, ppnMasukan int64
-	_ = service.pool.QueryRow(r.Context(), `
+	if err := service.pool.QueryRow(r.Context(), `
 		SELECT
 		  COALESCE(SUM(CASE WHEN a.code = '2202' THEN jl.credit_cents - jl.debit_cents ELSE 0 END), 0),
 		  COALESCE(SUM(CASE WHEN a.code = '1203' THEN jl.debit_cents - jl.credit_cents ELSE 0 END), 0)
@@ -842,7 +833,10 @@ func (service *Service) fetchTaxSummaryData(w http.ResponseWriter, r *http.Reque
 		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
 		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
 		  AND a.code IN ('2202', '1203')
-	`, tenantID).Scan(&ppnKeluaran, &ppnMasukan)
+	`, tenantID).Scan(&ppnKeluaran, &ppnMasukan); err != nil {
+		widgetUnavailable(w, err)
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"widget_type":        WidgetTaxSummary,

@@ -47,6 +47,30 @@ func TestCORS_AllowAll(t *testing.T) {
 	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5173" {
 		t.Errorf("expected http://localhost:5173, got %s", got)
 	}
+	// F-14: allowed responses must declare Origin as a varying header so
+	// shared caches never serve one origin's CORS response to another.
+	if got := rr.Header().Get("Vary"); got != "Origin" {
+		t.Errorf("Vary = %q, want Origin", got)
+	}
+}
+
+// F-14: disallowed origins get no CORS headers and no Vary: Origin (the
+// response is origin-independent because it carries no allow-* headers).
+func TestCORS_DisallowedOriginNoVary(t *testing.T) {
+	cfg := DefaultCORSConfig()
+	handler := CORS(cfg)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	handler.ServeHTTP(rr, req)
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("expected no ACAO header, got %s", got)
+	}
+	if got := rr.Header().Get("Vary"); got != "" {
+		t.Errorf("Vary = %q, want empty for disallowed origin", got)
+	}
 }
 
 func TestCORS_Options(t *testing.T) {

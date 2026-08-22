@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Audit Fixes Phase B — Auth & Worker Hardening (F-06, F-08, F-09, F-12, F-13, F-14, F-15; plan `1787414685590-audit-fix-implementation-plan.md`):**
+  - **Refresh-token rotation atomic + replay detection:** rotation now runs inside one transaction with `FOR UPDATE`; presenting an already-revoked refresh token (replay/theft evidence) revokes the ENTIRE token family and answers the same generic 401 `INVALID_REFRESH`. Applies to `/auth/refresh` and `/auth/switch-tenant`. Concurrent double-rotation yields exactly one winner. Affected users are forced back to login by design.
+  - **Dashboard fails visibly:** widget data fetchers (cash balance, P&L snapshot, AR/AP aging, low stock, recent transactions, period status, outstanding invoices, tax summary) now answer 503 `WIDGET_DATA_UNAVAILABLE` on query failure instead of silently rendering zeros/empty lists; the partial AR/AP "simple total" fallbacks were removed because a partial number reads as real data. No open accounting period remains a legitimate empty state.
+  - **Cash flow multi-cash-leg guard:** split payments across cash+bank (e.g. Dr Expense 10.000 / Cr Cash 6.000 / Cr Bank 4.000) now count each offsetting line exactly once — operating outflow is 10.000, previously double-counted as 20.000; pure cash↔bank transfers contribute zero to all activities. Dimension filters on cash flow now target the offsetting leg.
+  - **SMTP deadlines:** dial timeout 10s + whole-session deadline 60s (configurable via `SMTPConfig`) so one unresponsive MX cannot freeze the sequential delivery worker; timeouts feed the existing retry queue.
+  - **JWT algorithm pinning:** tokens signed with any algorithm other than HS256 (RS256/none confusion) are rejected at parse time.
+  - **CORS cache safety:** allowed CORS responses carry `Vary: Origin`.
+  - **Register role consistency:** registration now issues `role: owner` claims/tokens matching its `'owner'` membership row (was `admin`).
+  - Removed stray orphan file cleanup target (`CashEntryForm.tsx.new` was already absent).
+
 - **Audit Fixes Phase A — Correctness & Security (F-02, F-03, F-04, F-05, F-07; plan `1787414685590-audit-fix-implementation-plan.md`):**
   - **Trial balance POSTED-only (Critical):** `fetchTrialBalance` LEFT JOINs converted to INNER JOINs — lines belonging to non-POSTED (VOID/unposted) journal entries no longer leak into totals when no date filter is supplied. Regression-tested with a live-DB integration test (POSTED + VOID entry on the same account → only posted amounts counted).
   - **Stored-XSS hardening (High):** Email template HTML preview is now sanitized client-side via DOMPurify (`<script>`, inline event handlers, and `javascript:` URLs stripped before render); all `/email/templates` + `/email/queue` endpoints moved from the staff-writable group to the Owner/Admin-only RBAC group (staff/accountant/manager/viewer now receive 403).

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/smtp"
 	"os"
 	"strconv"
@@ -44,7 +45,9 @@ func tlsConfigFor(host string) tls.Config {
 //   - a row locked FOR UPDATE SKIP LOCKED by another worker pass is skipped
 // ---------------------------------------------------------------------------
 
-// SMTPConfig holds the worker's environment-derived settings.
+// SMTPConfig holds the worker's environment-derived settings. DialTimeout
+// and SessionDeadline default to 10s / 60s when zero (F-12: one slow MX must
+// never freeze the sequential worker loop); tests may shorten them.
 type SMTPConfig struct {
 	Host     string
 	Port     int
@@ -53,6 +56,9 @@ type SMTPConfig struct {
 	From     string
 	Helo     string
 	Interval time.Duration
+
+	DialTimeout     time.Duration // TCP connect timeout; 0 → 10s
+	SessionDeadline time.Duration // whole SMTP session deadline; 0 → 60s
 }
 
 // SMTPConfigFromEnv builds the config from the environment. When Host is
@@ -229,7 +235,7 @@ func SendMail(cfg SMTPConfig, to, cc, bcc, subject, bodyHTML, bodyText string) e
 	if cfg.Host == "" {
 		return fmt.Errorf("smtp disabled: SMTP_HOST not configured")
 	}
-	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 
 	recipients := splitAddresses(to, cc, bcc)
 	if len(recipients) == 0 {
@@ -242,11 +248,30 @@ func SendMail(cfg SMTPConfig, to, cc, bcc, subject, bodyHTML, bodyText string) e
 	if cfg.User != "" {
 		auth = smtp.PlainAuth("", cfg.User, cfg.Pass, cfg.Host)
 	}
-	conn, err := smtp.Dial(addr)
+
+	// F-12: bound the dial and the whole SMTP session. Previously smtp.Dial
+	// had no timeout, so an unresponsive MX could block the sequential
+	// worker loop indefinitely.
+	dialTimeout := cfg.DialTimeout
+	if dialTimeout <= 0 {
+		dialTimeout = 10 * time.Second
+	}
+	sessionDeadline := cfg.SessionDeadline
+	if sessionDeadline <= 0 {
+		sessionDeadline = 60 * time.Second
+	}
+
+	rawConn, err := net.DialTimeout("tcp", addr, dialTimeout)
 	if err != nil {
 		return fmt.Errorf("dial %s: %w", addr, err)
 	}
-	defer conn.Close()
+	defer rawConn.Close()
+	// The deadline covers the entire session (helo/tls/auth/mail/rcpt/data).
+	_ = rawConn.SetDeadline(time.Now().Add(sessionDeadline))
+	conn, err := smtp.NewClient(rawConn, cfg.Host)
+	if err != nil {
+		return fmt.Errorf("client %s: %w", addr, err)
+	}
 
 	if err := conn.Hello(cfg.Helo); err != nil {
 		return fmt.Errorf("helo: %w", err)

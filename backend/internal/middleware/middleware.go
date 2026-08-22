@@ -131,6 +131,9 @@ func CORS(cfg CORSConfig) func(http.Handler) http.Handler {
 				}
 			}
 			if allowed {
+				// F-14: caches must not serve a CORS-enabled response to a
+				// different origin — declare Origin as a varying header.
+				w.Header().Add("Vary", "Origin")
 				if len(cfg.AllowedOrigins) == 1 && cfg.AllowedOrigins[0] == "*" {
 					w.Header().Set("Access-Control-Allow-Origin", "*")
 				} else {

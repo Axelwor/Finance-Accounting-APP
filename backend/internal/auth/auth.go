@@ -125,7 +125,10 @@ func (service *Service) Register(writer http.ResponseWriter, request *http.Reque
 		return
 	}
 
-	accessToken, err := service.issueToken(userID, tenantID, RoleAdmin, 15*time.Minute)
+	// F-15: issue the session as RoleOwner — the membership row created above
+	// says 'owner', and every RequireRole group in cmd/api pairs owner with
+	// admin, so the claim must match the row.
+	accessToken, err := service.issueToken(userID, tenantID, RoleOwner, 15*time.Minute)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue token")
 		return
@@ -133,7 +136,7 @@ func (service *Service) Register(writer http.ResponseWriter, request *http.Reque
 	// Issue a refresh token alongside the access token so the new session can
 	// survive access-token expiry (and so /auth/switch-tenant, which requires
 	// a refresh token, works right after onboarding creates the tenant).
-	refreshToken, familyID, err := service.issueRefreshToken(request.Context(), userID, tenantID, RoleAdmin, request.RemoteAddr, request.UserAgent())
+	refreshToken, familyID, err := service.issueRefreshToken(request.Context(), userID, tenantID, RoleOwner, request.RemoteAddr, request.UserAgent())
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not issue refresh token")
 		return
@@ -142,7 +145,7 @@ func (service *Service) Register(writer http.ResponseWriter, request *http.Reque
 		"id":            userID,
 		"email":         req.Email,
 		"tenant_id":     tenantID,
-		"role":          RoleAdmin,
+		"role":          RoleOwner,
 		"access_token":  accessToken,
 		"refresh_token": refreshToken,
 		"family_id":     familyID,
@@ -286,12 +289,15 @@ func (service *Service) Refresh(writer http.ResponseWriter, request *http.Reques
 	var familyID string
 	var expiresAt time.Time
 	var role string
+	var revokedAt pgtype.Timestamptz
 	// The tenant + role are taken from the token row itself (set at login or
 	// tenant switch) so a refreshed session stays on the ACTIVE tenant even
 	// when the user has several tenants. Legacy rows without tenant_id fall
-	// back to the user's first membership.
+	// back to the user's first membership. Revoked rows are deliberately
+	// INCLUDED in this lookup: presenting one is replay evidence (F-06) and
+	// handled below.
 	err := service.pool.QueryRow(request.Context(), `
-		SELECT t.id, t.user_id, t.family_id, t.expires_at,
+		SELECT t.id, t.user_id, t.family_id, t.expires_at, t.revoked_at,
 		       COALESCE(t.tenant_id, (
 		           SELECT ut.tenant_id FROM user_tenants ut
 		            WHERE ut.user_id = t.user_id
@@ -305,15 +311,30 @@ func (service *Service) Refresh(writer http.ResponseWriter, request *http.Reques
 		            LIMIT 1
 		       ), 'viewer')
 		  FROM user_tokens t
-		 WHERE t.token_hash = $1 AND t.token_type = 'refresh' AND t.revoked_at IS NULL
-	`, hash).Scan(&tokenID, &userID, &familyID, &expiresAt, &tenantID, &role)
+		 WHERE t.token_hash = $1 AND t.token_type = 'refresh'
+	`, hash).Scan(&tokenID, &userID, &familyID, &expiresAt, &revokedAt, &tenantID, &role)
 	if err != nil || time.Now().After(expiresAt) {
+		writeError(writer, http.StatusUnauthorized, "INVALID_REFRESH", "refresh token is invalid or expired")
+		return
+	}
+	// F-06: presenting an already-revoked token means either a duplicated
+	// in-flight request or a stolen token chain. Kill the entire family so
+	// every descendant becomes unusable, then answer with the same generic
+	// 401 as any other bad token — never disclose the reason.
+	if revokedAt.Valid {
+		_ = service.revokeTokenFamily(request.Context(), familyID)
 		writeError(writer, http.StatusUnauthorized, "INVALID_REFRESH", "refresh token is invalid or expired")
 		return
 	}
 	// Rotate: revoke the old token and store a new one in the same family.
 	newRefresh, newFamily, err := service.rotateRefreshToken(request.Context(), tokenID, userID, tenantID, role, familyID, request.RemoteAddr, request.UserAgent())
 	if err != nil {
+		// F-06: a replay detected under lock (concurrent rotations) revokes
+		// the whole family inside rotateRefreshToken; answer generically.
+		if errors.Is(err, ErrRefreshReuse) {
+			writeError(writer, http.StatusUnauthorized, "INVALID_REFRESH", "refresh token is invalid or expired")
+			return
+		}
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not rotate refresh token")
 		return
 	}
@@ -380,12 +401,20 @@ func (service *Service) SwitchTenant(writer http.ResponseWriter, request *http.R
 	var tokenID, userID int64
 	var familyID string
 	var expiresAt time.Time
+	var revokedAt pgtype.Timestamptz
+	// Revoked rows are included so a replayed switch request is detected and
+	// kills the family, mirroring the Refresh handler (F-06).
 	err := service.pool.QueryRow(request.Context(), `
-		SELECT id, user_id, family_id, expires_at
+		SELECT id, user_id, family_id, expires_at, revoked_at
 		FROM user_tokens
-		WHERE token_hash = $1 AND token_type = 'refresh' AND revoked_at IS NULL
-	`, hash).Scan(&tokenID, &userID, &familyID, &expiresAt)
+		WHERE token_hash = $1 AND token_type = 'refresh'
+	`, hash).Scan(&tokenID, &userID, &familyID, &expiresAt, &revokedAt)
 	if err != nil || time.Now().After(expiresAt) {
+		writeError(writer, http.StatusUnauthorized, "INVALID_REFRESH", "refresh token is invalid or expired")
+		return
+	}
+	if revokedAt.Valid {
+		_ = service.revokeTokenFamily(request.Context(), familyID)
 		writeError(writer, http.StatusUnauthorized, "INVALID_REFRESH", "refresh token is invalid or expired")
 		return
 	}
@@ -404,6 +433,10 @@ func (service *Service) SwitchTenant(writer http.ResponseWriter, request *http.R
 	// newly-active tenant on the new row.
 	newRefresh, newFamily, err := service.rotateRefreshToken(request.Context(), tokenID, userID, req.TenantID, role, familyID, request.RemoteAddr, request.UserAgent())
 	if err != nil {
+		if errors.Is(err, ErrRefreshReuse) {
+			writeError(writer, http.StatusUnauthorized, "INVALID_REFRESH", "refresh token is invalid or expired")
+			return
+		}
 		writeError(writer, http.StatusInternalServerError, "TOKEN_FAILED", "could not rotate refresh token")
 		return
 	}
@@ -576,20 +609,69 @@ func (service *Service) issueRefreshToken(ctx context.Context, userID, tenantID 
 	return token, family, nil
 }
 
+// ErrRefreshReuse is returned by rotateRefreshToken when the presented
+// refresh token has already been revoked — evidence of a replayed (stolen or
+// retried) token. Before returning, the entire token family is revoked so
+// every descendant of the compromised chain becomes unusable. Handlers must
+// answer this with 401 INVALID_REFRESH without disclosing the reason.
+var ErrRefreshReuse = errors.New("refresh token reuse detected")
+
 func (service *Service) rotateRefreshToken(ctx context.Context, oldID, userID, tenantID int64, role, family, ip, agent string) (token, newFamily string, err error) {
+	tx, err := service.pool.Begin(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	defer tx.Rollback(ctx) // no-op after a successful commit
+
+	// Lock the old token row FOR UPDATE so concurrent rotations of the same
+	// token serialize: exactly one wins, the rest observe revoked_at set.
+	var revokedAt pgtype.Timestamptz
+	if err = tx.QueryRow(ctx,
+		`SELECT revoked_at FROM user_tokens WHERE id = $1 FOR UPDATE`, oldID,
+	).Scan(&revokedAt); err != nil {
+		return "", "", err
+	}
+	if revokedAt.Valid {
+		// Replay detected: kill the whole family, then reject. The caller
+		// must not learn more than "invalid refresh" from the response.
+		if _, err = tx.Exec(ctx,
+			`UPDATE user_tokens SET revoked_at = now() WHERE family_id = $1 AND revoked_at IS NULL`, family,
+		); err != nil {
+			return "", "", err
+		}
+		if err = tx.Commit(ctx); err != nil {
+			return "", "", err
+		}
+		return "", "", ErrRefreshReuse
+	}
+
 	token = randomToken()
 	newFamily = family
-	if _, err = service.pool.Exec(ctx, `
+	if _, err = tx.Exec(ctx, `
 		INSERT INTO user_tokens (user_id, token_type, token_hash, family_id, expires_at, replaced_by, ip_address, user_agent, tenant_id, role)
 		VALUES ($1, 'refresh', $2, $3, now() + interval '30 days', $4, $5, $6, $7, $8)
 	`, userID, hashToken(token), family, oldID, ip, agent, tenantID, role); err != nil {
 		return "", "", err
 	}
-	if _, err = service.pool.Exec(ctx,
+	if _, err = tx.Exec(ctx,
 		`UPDATE user_tokens SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL`, oldID); err != nil {
 		return "", "", err
 	}
+	if err = tx.Commit(ctx); err != nil {
+		return "", "", err
+	}
 	return token, newFamily, nil
+}
+
+// revokeTokenFamily revokes every still-active token in a family. Used by
+// the Refresh/SwitchTenant handlers when a presented token turns out to be
+// already revoked (replay evidence, F-06). rotateRefreshToken performs the
+// same revocation inside its own transaction when it detects reuse under
+// lock.
+func (service *Service) revokeTokenFamily(ctx context.Context, family string) error {
+	_, err := service.pool.Exec(ctx,
+		`UPDATE user_tokens SET revoked_at = now() WHERE family_id = $1 AND revoked_at IS NULL`, family)
+	return err
 }
 
 func (service *Service) issueToken(userID, tenantID int64, role string, duration time.Duration) (string, error) {
@@ -649,9 +731,11 @@ func validatePassword(password string) error {
 }
 
 func (service *Service) parseToken(tokenString string) (*Claims, error) {
+	// F-13: pin the algorithm so a token signed with a different alg (e.g.
+	// RS256/none confusion attacks) is rejected before the keyfunc runs.
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
 		return service.jwtSecret, nil
-	})
+	}, jwt.WithValidMethods([]string{"HS256"}))
 	if err != nil {
 		return nil, err
 	}

@@ -27,24 +27,26 @@ func (service *Service) fetchReportData(r *http.Request, rtype reportType, f rep
 	}
 }
 
-// dimensionJoin returns a JOIN fragment that restricts journal_lines to lines
-// tagged with any of f.dimensionIDs (cabang / proyek). The id slice is
-// appended to args as a single array parameter and the new base arg offset
-// (for subsequent date args) is returned. When no dimension is selected, the
-// fragment is empty and the offset is unchanged.
+// dimensionJoin returns a JOIN fragment that restricts journal lines to lines
+// tagged with any of f.dimensionIDs (cabang / proyek). lineAlias is the query
+// alias of the journal_lines table being filtered ("jl" everywhere except the
+// cash-flow fetcher, which aggregates over the offsetting leg "ol"). The id
+// slice is appended to args as a single array parameter and the new base arg
+// offset (for subsequent date args) is returned. When no dimension is
+// selected, the fragment is empty and the offset is unchanged.
 //
 // The join targets a DISTINCT subquery rather than journal_line_dimensions
 // directly: a journal line tagged with two of the selected dimensions would
 // otherwise match twice and double-count in the SUM aggregates.
-func dimensionJoin(f reportFilter, baseArg int, args *[]any) (string, int) {
+func dimensionJoin(f reportFilter, baseArg int, lineAlias string, args *[]any) (string, int) {
 	if len(f.dimensionIDs) == 0 {
 		return "", baseArg
 	}
 	*args = append(*args, f.dimensionIDs)
 	return fmt.Sprintf(
 		" JOIN (SELECT DISTINCT tenant_id, journal_line_id FROM journal_line_dimensions WHERE dimension_id = ANY($%d)) jld"+
-			" ON jld.tenant_id = jl.tenant_id AND jld.journal_line_id = jl.id",
-		baseArg), baseArg + 1
+			" ON jld.tenant_id = %s.tenant_id AND jld.journal_line_id = %s.id",
+		baseArg, lineAlias, lineAlias), baseArg + 1
 }
 
 // fetchTrialBalance returns per-account debit/credit totals across all posted
@@ -54,7 +56,7 @@ func dimensionJoin(f reportFilter, baseArg int, args *[]any) (string, int) {
 // dimensions are aggregated.
 func (service *Service) fetchTrialBalance(ctx context.Context, tenantID int64, f reportFilter) (TrialBalanceResult, error) {
 	args := []any{tenantID}
-	join, dateBase := dimensionJoin(f, 2, &args)
+	join, dateBase := dimensionJoin(f, 2, "jl", &args)
 	rows, err := service.pool.Query(ctx, `
 		SELECT a.id, a.code, a.name,
 		       COALESCE(SUM(jl.debit_cents), 0), COALESCE(SUM(jl.credit_cents), 0)
@@ -96,7 +98,7 @@ func (service *Service) fetchTrialBalance(ctx context.Context, tenantID int64, f
 // returned as framework-grouped Sections (same data, different presentation).
 func (service *Service) fetchProfitLoss(ctx context.Context, tenantID int64, f reportFilter) (ProfitLossResult, error) {
 	args := []any{tenantID}
-	join, dateBase := dimensionJoin(f, 2, &args)
+	join, dateBase := dimensionJoin(f, 2, "jl", &args)
 	rows, err := service.pool.Query(ctx, `
 		SELECT a.report_group, COALESCE(SUM(CASE
 			WHEN a.report_group IN ('revenue') THEN jl.credit_cents - jl.debit_cents
@@ -148,7 +150,7 @@ func (service *Service) fetchProfitLoss(ctx context.Context, tenantID int64, f r
 // credit − debit); expense accounts are debit-led (net = debit − credit).
 func (service *Service) fetchFrameworkSections(ctx context.Context, tenantID int64, f reportFilter) ([]ProfitLossSection, error) {
 	args := []any{tenantID}
-	join, dateBase := dimensionJoin(f, 2, &args)
+	join, dateBase := dimensionJoin(f, 2, "jl", &args)
 	rows, err := service.pool.Query(ctx, `
 		SELECT a.account_type, a.report_group,
 		       COALESCE(SUM(CASE
@@ -277,7 +279,7 @@ func buildFrameworkSections(framework string, byType map[string]int64, groupByTy
 // real-time). With to_date supplied the snapshot is taken as of that date.
 func (service *Service) fetchBalanceSheet(ctx context.Context, tenantID int64, f reportFilter) (BalanceSheetResult, error) {
 	args := []any{tenantID}
-	join, dateBase := dimensionJoin(f, 2, &args)
+	join, dateBase := dimensionJoin(f, 2, "jl", &args)
 	rows, err := service.pool.Query(ctx, `
 		SELECT a.report_group, COALESCE(SUM(CASE
 			WHEN a.report_group = 'asset' THEN jl.debit_cents - jl.credit_cents
@@ -316,7 +318,7 @@ func (service *Service) fetchBalanceSheet(ctx context.Context, tenantID int64, f
 	// Revenue normally credits, expense normally debits, so (credit − debit)
 	// summed across both groups yields revenue − expense.
 	profitArgs := []any{tenantID}
-	profitJoin, profitDateBase := dimensionJoin(f, 2, &profitArgs)
+	profitJoin, profitDateBase := dimensionJoin(f, 2, "jl", &profitArgs)
 	err = service.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(jl.credit_cents - jl.debit_cents), 0)
 		FROM journal_lines jl
@@ -336,17 +338,19 @@ func (service *Service) fetchBalanceSheet(ctx context.Context, tenantID int64, f
 // fetchCashFlow classifies cash movements into operating, investing, and
 // financing activities per ACCOUNTING_ENGINE §17.
 //
-// Classification rules (based on the offsetting account — the non-cash leg):
-//   - Revenue/Expense accounts → Operating
-//   - AR/AP accounts            → Operating
-//   - Inventory/WIP accounts    → Operating
-//   - Asset (fixed/intangible)  → Investing
-//   - Liability (loans/leases)  → Financing
-//   - Equity accounts           → Financing
-//   - Cash-to-Cash (transfers)  → Not classified (internal movement)
+// The aggregation is offsetting-leg centric (F-09): each non-cash journal
+// line of an entry that also carries at least one CASH/BANK leg contributes
+// exactly once, keyed on its own direction (credit → inflow, debit →
+// outflow). This is what keeps multi-cash-leg entries correct:
+//
+//   - Split payment Dr Expense 10.000 / Cr Cash 6.000 + Cr Bank 4.000 counts
+//     the expense line once → operating outflow 10.000 (the previous
+//     pair-join counted it once per cash leg → 20.000).
+//   - A pure cash↔bank transfer has no non-cash offsetting line at all, so
+//     it contributes zero to every activity (internal movement).
 func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f reportFilter) (CashFlowResult, error) {
 	args := []any{tenantID}
-	join, dateBase := dimensionJoin(f, 2, &args)
+	join, dateBase := dimensionJoin(f, 2, "ol", &args)
 	query := `
 		SELECT
 			-- Operating: revenue, expense, AR, AP, inventory, WIP
@@ -361,7 +365,7 @@ func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f rep
 			      OR ca.code LIKE '2105%'  -- Uninvoiced Payables
 			      OR ca.code LIKE '2202%'  -- Output VAT
 			      OR ca.code LIKE '1103%'  -- VAT Input
-				THEN CASE WHEN jl.debit_cents > 0 THEN ol.credit_cents ELSE 0 END
+				THEN CASE WHEN ol.credit_cents > 0 THEN ol.credit_cents ELSE 0 END
 			END), 0),
 			COALESCE(SUM(CASE
 				WHEN ca.account_type IN ('REVENUE','EXPENSE','COGS','DEPRECIATION_EXPENSE',
@@ -374,7 +378,7 @@ func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f rep
 			      OR ca.code LIKE '2105%'
 			      OR ca.code LIKE '2202%'
 			      OR ca.code LIKE '1103%'
-				THEN CASE WHEN jl.credit_cents > 0 THEN ol.debit_cents ELSE 0 END
+				THEN CASE WHEN ol.debit_cents > 0 THEN ol.debit_cents ELSE 0 END
 			END), 0),
 			-- Investing: fixed assets, intangible assets, RoU
 			COALESCE(SUM(CASE
@@ -384,7 +388,7 @@ func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f rep
 			      OR ca.code LIKE '1501%'  -- Fixed Assets
 			      OR ca.code LIKE '1502%'  -- Accumulated Depreciation
 			      OR ca.code LIKE '1601%'  -- Intangible
-				THEN CASE WHEN jl.debit_cents > 0 THEN ol.credit_cents ELSE 0 END
+				THEN CASE WHEN ol.credit_cents > 0 THEN ol.credit_cents ELSE 0 END
 			END), 0),
 			COALESCE(SUM(CASE
 				WHEN ca.account_type IN ('FIXED_ASSET','INTANGIBLE_ASSET','ACCUMULATED_DEPRECIATION')
@@ -393,7 +397,7 @@ func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f rep
 			      OR ca.code LIKE '1501%'
 			      OR ca.code LIKE '1502%'
 			      OR ca.code LIKE '1601%'
-				THEN CASE WHEN jl.credit_cents > 0 THEN ol.debit_cents ELSE 0 END
+				THEN CASE WHEN ol.debit_cents > 0 THEN ol.debit_cents ELSE 0 END
 			END), 0),
 			-- Financing: loans, leases, equity, dividends
 			COALESCE(SUM(CASE
@@ -404,7 +408,7 @@ func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f rep
 			      OR ca.code LIKE '3201%'  -- Retained Earnings
 			      OR ca.code LIKE '3301%'  -- Current Earnings
 			      OR ca.code LIKE '3302%'  -- Dividends Payable
-				THEN CASE WHEN jl.debit_cents > 0 THEN ol.credit_cents ELSE 0 END
+				THEN CASE WHEN ol.credit_cents > 0 THEN ol.credit_cents ELSE 0 END
 			END), 0),
 			COALESCE(SUM(CASE
 				WHEN ca.account_type IN ('EQUITY','LOAN_PAYABLE')
@@ -414,18 +418,26 @@ func (service *Service) fetchCashFlow(ctx context.Context, tenantID int64, f rep
 			      OR ca.code LIKE '3201%'
 			      OR ca.code LIKE '3301%'
 			      OR ca.code LIKE '3302%'
-				THEN CASE WHEN jl.credit_cents > 0 THEN ol.debit_cents ELSE 0 END
+				THEN CASE WHEN ol.debit_cents > 0 THEN ol.debit_cents ELSE 0 END
 			END), 0)
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		-- Join the offsetting account (the non-cash leg) to classify the activity.
-		JOIN journal_lines ol ON ol.tenant_id = jl.tenant_id AND ol.entry_id = jl.entry_id
-		                       AND ol.account_id != jl.account_id
-		JOIN accounts ca ON ca.tenant_id = jl.tenant_id AND ca.id = ol.account_id
+		FROM journal_lines ol
+		JOIN journal_entries je ON je.tenant_id = ol.tenant_id AND je.id = ol.entry_id
+		JOIN accounts ca ON ca.tenant_id = ol.tenant_id AND ca.id = ol.account_id
 		` + join + `
-		WHERE jl.tenant_id = $1 AND je.status = 'POSTED'
-		  AND a.account_type IN ('CASH', 'BANK')` + dateFilter(f.dateRange, dateBase, &args) + `
+		-- F-09: cash×cash pairs are internal transfers and must never enter
+		-- any classification; requiring a same-entry cash leg via EXISTS keeps
+		-- each offsetting line counted once regardless of how many cash legs
+		-- the entry splits across.
+		WHERE ol.tenant_id = $1 AND je.status = 'POSTED'
+		  AND ca.account_type NOT IN ('CASH', 'BANK')
+		  AND EXISTS (
+			SELECT 1
+			FROM journal_lines jl
+			JOIN accounts ja ON ja.tenant_id = jl.tenant_id AND ja.id = jl.account_id
+			WHERE jl.tenant_id = ol.tenant_id AND jl.entry_id = ol.entry_id
+			  AND jl.id != ol.id
+			  AND ja.account_type IN ('CASH', 'BANK')
+		  )` + dateFilter(f.dateRange, dateBase, &args) + `
 	`
 	var r CashFlowResult
 	err := service.pool.QueryRow(ctx, query, args...).Scan(

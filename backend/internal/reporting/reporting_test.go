@@ -552,7 +552,7 @@ func TestDimensionJoin(t *testing.T) {
 
 	t.Run("no dimension", func(t *testing.T) {
 		args := []any{int64(1)} // tenant
-		frag, next := dimensionJoin(reportFilter{}, 2, &args)
+		frag, next := dimensionJoin(reportFilter{}, 2, "jl", &args)
 		if frag != "" {
 			t.Errorf("frag = %q, want empty", frag)
 		}
@@ -566,7 +566,7 @@ func TestDimensionJoin(t *testing.T) {
 
 	t.Run("single dimension", func(t *testing.T) {
 		args := []any{int64(1)} // tenant
-		frag, next := dimensionJoin(reportFilter{dimensionIDs: []int64{7}}, 2, &args)
+		frag, next := dimensionJoin(reportFilter{dimensionIDs: []int64{7}}, 2, "jl", &args)
 		if frag != wantFrag {
 			t.Errorf("frag = %q, want %q", frag, wantFrag)
 		}
@@ -580,7 +580,7 @@ func TestDimensionJoin(t *testing.T) {
 
 	t.Run("multiple dimensions use one array arg", func(t *testing.T) {
 		args := []any{int64(1)} // tenant
-		frag, next := dimensionJoin(reportFilter{dimensionIDs: []int64{7, 8, 9}}, 2, &args)
+		frag, next := dimensionJoin(reportFilter{dimensionIDs: []int64{7, 8, 9}}, 2, "jl", &args)
 		if frag != wantFrag {
 			t.Errorf("frag = %q, want %q", frag, wantFrag)
 		}
@@ -589,6 +589,19 @@ func TestDimensionJoin(t *testing.T) {
 		}
 		if len(args) != 2 || !reflect.DeepEqual(args[1], []int64{7, 8, 9}) {
 			t.Errorf("args = %v, want [1 [7 8 9]]", args)
+		}
+	})
+
+	t.Run("custom line alias targets that alias", func(t *testing.T) {
+		args := []any{int64(1)} // tenant
+		frag, next := dimensionJoin(reportFilter{dimensionIDs: []int64{7}}, 2, "ol", &args)
+		wantAlias := " JOIN (SELECT DISTINCT tenant_id, journal_line_id FROM journal_line_dimensions WHERE dimension_id = ANY($2)) jld" +
+			" ON jld.tenant_id = ol.tenant_id AND jld.journal_line_id = ol.id"
+		if frag != wantAlias {
+			t.Errorf("frag = %q, want %q", frag, wantAlias)
+		}
+		if next != 3 {
+			t.Errorf("next = %d, want 3", next)
 		}
 	})
 }
