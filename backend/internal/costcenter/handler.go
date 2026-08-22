@@ -128,23 +128,25 @@ func (s *Service) Create(w http.ResponseWriter, r *http.Request) {
 		active = *req.IsActive
 	}
 	var resp CostCenterResponse
-	err := s.pool.QueryRow(r.Context(), `
-		INSERT INTO cost_centers (
-			tenant_id, code, name, center_type, parent_id,
-			manager_user_id, is_active, description
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			INSERT INTO cost_centers (
+				tenant_id, code, name, center_type, parent_id,
+				manager_user_id, is_active, description
+			)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+			RETURNING id, code, name, center_type, parent_id, manager_user_id,
+				is_active, description, created_at, updated_at
+		`,
+			tid, strings.TrimSpace(req.Code), strings.TrimSpace(req.Name),
+			strings.ToUpper(strings.TrimSpace(req.CenterType)), req.ParentID,
+			req.ManagerUserID, active, req.Description,
+		).Scan(
+			&resp.ID, &resp.Code, &resp.Name, &resp.CenterType, &resp.ParentID,
+			&resp.ManagerUserID, &resp.IsActive, &resp.Description, &resp.CreatedAt,
+			&resp.UpdatedAt,
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-		RETURNING id, code, name, center_type, parent_id, manager_user_id,
-			is_active, description, created_at, updated_at
-	`,
-		tid, strings.TrimSpace(req.Code), strings.TrimSpace(req.Name),
-		strings.ToUpper(strings.TrimSpace(req.CenterType)), req.ParentID,
-		req.ManagerUserID, active, req.Description,
-	).Scan(
-		&resp.ID, &resp.Code, &resp.Name, &resp.CenterType, &resp.ParentID,
-		&resp.ManagerUserID, &resp.IsActive, &resp.Description, &resp.CreatedAt,
-		&resp.UpdatedAt,
-	)
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
 		return
@@ -158,32 +160,33 @@ func (s *Service) List(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "TENANT_REQUIRED", "tenant context is required")
 		return
 	}
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT id, code, name, center_type, parent_id, manager_user_id,
-			is_active, description, created_at, updated_at
-		FROM cost_centers
-		WHERE tenant_id = $1
-		ORDER BY code
-	`, tid)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
-		return
-	}
-	defer rows.Close()
 	results := make([]CostCenterResponse, 0)
-	for rows.Next() {
-		var c CostCenterResponse
-		if err := rows.Scan(
-			&c.ID, &c.Code, &c.Name, &c.CenterType, &c.ParentID,
-			&c.ManagerUserID, &c.IsActive, &c.Description, &c.CreatedAt,
-			&c.UpdatedAt,
-		); err != nil {
-			writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
-			return
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT id, code, name, center_type, parent_id, manager_user_id,
+				is_active, description, created_at, updated_at
+			FROM cost_centers
+			WHERE tenant_id = $1
+			ORDER BY code
+		`, tid)
+		if err != nil {
+			return err
 		}
-		results = append(results, c)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var c CostCenterResponse
+			if err := rows.Scan(
+				&c.ID, &c.Code, &c.Name, &c.CenterType, &c.ParentID,
+				&c.ManagerUserID, &c.IsActive, &c.Description, &c.CreatedAt,
+				&c.UpdatedAt,
+			); err != nil {
+				return err
+			}
+			results = append(results, c)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
 		return
 	}
@@ -202,16 +205,18 @@ func (s *Service) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var resp CostCenterResponse
-	err := s.pool.QueryRow(r.Context(), `
-		SELECT id, code, name, center_type, parent_id, manager_user_id,
-			is_active, description, created_at, updated_at
-		FROM cost_centers
-		WHERE tenant_id = $1 AND id = $2
-	`, tid, id).Scan(
-		&resp.ID, &resp.Code, &resp.Name, &resp.CenterType, &resp.ParentID,
-		&resp.ManagerUserID, &resp.IsActive, &resp.Description, &resp.CreatedAt,
-		&resp.UpdatedAt,
-	)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT id, code, name, center_type, parent_id, manager_user_id,
+				is_active, description, created_at, updated_at
+			FROM cost_centers
+			WHERE tenant_id = $1 AND id = $2
+		`, tid, id).Scan(
+			&resp.ID, &resp.Code, &resp.Name, &resp.CenterType, &resp.ParentID,
+			&resp.ManagerUserID, &resp.IsActive, &resp.Description, &resp.CreatedAt,
+			&resp.UpdatedAt,
+		)
+	})
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "NOT_FOUND", "cost center not found")
 		return
@@ -284,16 +289,18 @@ func (s *Service) Update(w http.ResponseWriter, r *http.Request) {
 	sets = append(sets, "updated_at = now()")
 
 	var resp CostCenterResponse
-	err := s.pool.QueryRow(r.Context(), `
-		UPDATE cost_centers SET `+strings.Join(sets, ", ")+`
-		WHERE tenant_id = $1 AND id = $2
-		RETURNING id, code, name, center_type, parent_id, manager_user_id,
-			is_active, description, created_at, updated_at
-	`, args...).Scan(
-		&resp.ID, &resp.Code, &resp.Name, &resp.CenterType, &resp.ParentID,
-		&resp.ManagerUserID, &resp.IsActive, &resp.Description, &resp.CreatedAt,
-		&resp.UpdatedAt,
-	)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			UPDATE cost_centers SET `+strings.Join(sets, ", ")+`
+			WHERE tenant_id = $1 AND id = $2
+			RETURNING id, code, name, center_type, parent_id, manager_user_id,
+				is_active, description, created_at, updated_at
+		`, args...).Scan(
+			&resp.ID, &resp.Code, &resp.Name, &resp.CenterType, &resp.ParentID,
+			&resp.ManagerUserID, &resp.IsActive, &resp.Description, &resp.CreatedAt,
+			&resp.UpdatedAt,
+		)
+	})
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "NOT_FOUND", "cost center not found")
 		return
@@ -313,17 +320,19 @@ func (s *Service) Deactivate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var resp CostCenterResponse
-	err := s.pool.QueryRow(r.Context(), `
-		UPDATE cost_centers
-		SET is_active = false, updated_at = now()
-		WHERE tenant_id = $1 AND id = $2
-		RETURNING id, code, name, center_type, parent_id, manager_user_id,
-			is_active, description, created_at, updated_at
-	`, tid, id).Scan(
-		&resp.ID, &resp.Code, &resp.Name, &resp.CenterType, &resp.ParentID,
-		&resp.ManagerUserID, &resp.IsActive, &resp.Description, &resp.CreatedAt,
-		&resp.UpdatedAt,
-	)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			UPDATE cost_centers
+			SET is_active = false, updated_at = now()
+			WHERE tenant_id = $1 AND id = $2
+			RETURNING id, code, name, center_type, parent_id, manager_user_id,
+				is_active, description, created_at, updated_at
+		`, tid, id).Scan(
+			&resp.ID, &resp.Code, &resp.Name, &resp.CenterType, &resp.ParentID,
+			&resp.ManagerUserID, &resp.IsActive, &resp.Description, &resp.CreatedAt,
+			&resp.UpdatedAt,
+		)
+	})
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "NOT_FOUND", "cost center not found")
 		return
@@ -357,21 +366,23 @@ func (s *Service) CreateAllocation(w http.ResponseWriter, r *http.Request) {
 		active = *req.IsActive
 	}
 	var resp AllocationResponse
-	err := s.pool.QueryRow(r.Context(), `
-		INSERT INTO cost_center_allocations (
-			tenant_id, source_cost_center_id, target_cost_center_id,
-			allocation_percentage, allocation_basis, is_active
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			INSERT INTO cost_center_allocations (
+				tenant_id, source_cost_center_id, target_cost_center_id,
+				allocation_percentage, allocation_basis, is_active
+			)
+			VALUES ($1,$2,$3,$4,$5,$6)
+			RETURNING id, source_cost_center_id, target_cost_center_id,
+				allocation_percentage, allocation_basis, is_active, created_at
+		`, tid, req.SourceCostCenterID, req.TargetCostCenterID,
+			req.AllocationPercentage, basis, active,
+		).Scan(
+			&resp.ID, &resp.SourceCostCenterID, &resp.TargetCostCenterID,
+			&resp.AllocationPercentage, &resp.AllocationBasis, &resp.IsActive,
+			&resp.CreatedAt,
 		)
-		VALUES ($1,$2,$3,$4,$5,$6)
-		RETURNING id, source_cost_center_id, target_cost_center_id,
-			allocation_percentage, allocation_basis, is_active, created_at
-	`, tid, req.SourceCostCenterID, req.TargetCostCenterID,
-		req.AllocationPercentage, basis, active,
-	).Scan(
-		&resp.ID, &resp.SourceCostCenterID, &resp.TargetCostCenterID,
-		&resp.AllocationPercentage, &resp.AllocationBasis, &resp.IsActive,
-		&resp.CreatedAt,
-	)
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
 		return
@@ -390,33 +401,34 @@ func (s *Service) ListAllocations(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "INVALID_REQUEST", "id must be a positive integer")
 		return
 	}
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT id, source_cost_center_id, target_cost_center_id,
-			allocation_percentage, allocation_basis, is_active, created_at
-		FROM cost_center_allocations
-		WHERE tenant_id = $1
-		  AND (source_cost_center_id = $2 OR target_cost_center_id = $2)
-		ORDER BY created_at
-	`, tid, id)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
-		return
-	}
-	defer rows.Close()
 	results := make([]AllocationResponse, 0)
-	for rows.Next() {
-		var a AllocationResponse
-		if err := rows.Scan(
-			&a.ID, &a.SourceCostCenterID, &a.TargetCostCenterID,
-			&a.AllocationPercentage, &a.AllocationBasis, &a.IsActive,
-			&a.CreatedAt,
-		); err != nil {
-			writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
-			return
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT id, source_cost_center_id, target_cost_center_id,
+				allocation_percentage, allocation_basis, is_active, created_at
+			FROM cost_center_allocations
+			WHERE tenant_id = $1
+			  AND (source_cost_center_id = $2 OR target_cost_center_id = $2)
+			ORDER BY created_at
+		`, tid, id)
+		if err != nil {
+			return err
 		}
-		results = append(results, a)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var a AllocationResponse
+			if err := rows.Scan(
+				&a.ID, &a.SourceCostCenterID, &a.TargetCostCenterID,
+				&a.AllocationPercentage, &a.AllocationBasis, &a.IsActive,
+				&a.CreatedAt,
+			); err != nil {
+				return err
+			}
+			results = append(results, a)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
 		return
 	}
@@ -442,9 +454,11 @@ func (s *Service) PnL(w http.ResponseWriter, r *http.Request) {
 
 	// Ensure the cost center exists for this tenant before computing P&L.
 	var exists bool
-	err := s.pool.QueryRow(r.Context(), `
-		SELECT EXISTS(SELECT 1 FROM cost_centers WHERE tenant_id = $1 AND id = $2)
-	`, tid, id).Scan(&exists)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT EXISTS(SELECT 1 FROM cost_centers WHERE tenant_id = $1 AND id = $2)
+		`, tid, id).Scan(&exists)
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
 		return
@@ -458,28 +472,30 @@ func (s *Service) PnL(w http.ResponseWriter, r *http.Request) {
 	resp.CostCenterID = id
 	// Join journal_lines → journal_line_dimensions → dimensions → accounts,
 	// scoping to the cost center's matching dimension and only POSTED entries.
-	err = s.pool.QueryRow(r.Context(), `
-		SELECT
-			COALESCE(SUM(CASE WHEN a.report_group = 'revenue'
-				THEN jl.credit_cents - jl.debit_cents ELSE 0 END), 0) AS revenue_cents,
-			COALESCE(SUM(CASE WHEN a.report_group = 'expense'
-				THEN jl.debit_cents - jl.credit_cents ELSE 0 END), 0) AS expense_cents,
-			COUNT(DISTINCT jl.id) AS line_count
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		JOIN journal_line_dimensions jld
-			ON jld.tenant_id = jl.tenant_id AND jld.journal_line_id = jl.id
-		JOIN dimensions d
-			ON d.tenant_id = jld.tenant_id AND d.id = jld.dimension_id
-		JOIN cost_centers cc
-			ON cc.tenant_id = d.tenant_id AND cc.code = d.code
-		JOIN accounts a
-			ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		WHERE jl.tenant_id = $1
-		  AND cc.id = $2
-		  AND d.dimension_type = 'cost_center'
-		  AND je.status = 'POSTED'
-	`, tid, id).Scan(&resp.RevenueCents, &resp.ExpenseCents, &resp.LineCount)
+	err = db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT
+				COALESCE(SUM(CASE WHEN a.report_group = 'revenue'
+					THEN jl.credit_cents - jl.debit_cents ELSE 0 END), 0) AS revenue_cents,
+				COALESCE(SUM(CASE WHEN a.report_group = 'expense'
+					THEN jl.debit_cents - jl.credit_cents ELSE 0 END), 0) AS expense_cents,
+				COUNT(DISTINCT jl.id) AS line_count
+			FROM journal_lines jl
+			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
+			JOIN journal_line_dimensions jld
+				ON jld.tenant_id = jl.tenant_id AND jld.journal_line_id = jl.id
+			JOIN dimensions d
+				ON d.tenant_id = jld.tenant_id AND d.id = jld.dimension_id
+			JOIN cost_centers cc
+				ON cc.tenant_id = d.tenant_id AND cc.code = d.code
+			JOIN accounts a
+				ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+			WHERE jl.tenant_id = $1
+			  AND cc.id = $2
+			  AND d.dimension_type = 'cost_center'
+			  AND je.status = 'POSTED'
+		`, tid, id).Scan(&resp.RevenueCents, &resp.ExpenseCents, &resp.LineCount)
+	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
 		return
