@@ -69,12 +69,12 @@
 
 .entrytab__body {
   flex: 1;
-  padding: 16px 20px;
+  padding: 20px 28px;
   display: flex;
-  gap: 16px;
-  max-width: 1400px;
+  gap: 20px;
   width: 100%;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
 }
 
 .entrytab__main {

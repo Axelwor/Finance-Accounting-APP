@@ -668,6 +668,7 @@ export interface QuotationListItem {
   payment_term_id?: number | null;
   status: "DRAFT" | "SENT" | "CONVERTED" | "EXPIRED" | "CANCELLED";
   total_cents: number;
+  notes?: string | null;
 }
 /** A quotation line as returned by GET /api/v1/quotations/{id}. */
 export interface QuotationLine {

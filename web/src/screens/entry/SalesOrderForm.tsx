@@ -56,8 +56,7 @@ function lineTotal(qty: number, unitPriceCents: number, discountCents: number): 
 export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props) {
   const workbench = useWorkbench();
   const toast = useToast();
-  const dpSectionRef = useRef<HTMLDivElement>(null);
-  const [activeSubTab, setActiveSubTab] = useState<"items" | "shipping" | "dp">("items");
+  const [activeTab, setActiveTab] = useState<"header" | "items" | "additional">("items");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [number, setNumber] = useState(initialTitle ?? draftNumber("sales-order-entry"));
   const [customerId, setCustomerId] = useState("");
@@ -65,7 +64,6 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
   const [lines, setLines] = useState<Line[]>([seedLine()]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [items, setItems] = useState<Item[]>([]);
-  const [cashAccounts, setCashAccounts] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -74,14 +72,6 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
   );
   const [orderStatus, setOrderStatus] = useState<string>(initialTitle ? "" : "DRAFT");
   const [orderTotal, setOrderTotal] = useState(0);
-  const [dpReceived, setDpReceived] = useState(0);
-  const [downPayments, setDownPayments] = useState<DownPayment[]>([]);
-  const [dpAmount, setDpAmount] = useState(0);
-  const [dpDate, setDpDate] = useState(new Date().toISOString().split("T")[0]);
-  const [dpCashAccount, setDpCashAccount] = useState(0);
-  const [dpDesc, setDpDesc] = useState("");
-  const [dpError, setDpError] = useState<string | null>(null);
-  const [postingDP, setPostingDP] = useState(false);
   const [customerPONumber, setCustomerPONumber] = useState("");
   const [customerPODate, setCustomerPODate] = useState("");
   const [requestedDeliveryDate, setRequestedDeliveryDate] = useState("");
@@ -90,7 +80,6 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
   const [salespersonId, setSalespersonId] = useState("");
   const [taxRate, setTaxRate] = useState(0);
   const [quotationId, setQuotationId] = useState<number | null>(null);
-  const [cancelling, setCancelling] = useState(false);
 
   const isExisting = orderId !== null;
 
@@ -98,10 +87,6 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
     void Promise.all([
       api.listCustomers().then(setCustomers),
       api.listItems().then(setItems),
-      api.listAccounts().then((accs) => {
-        setCashAccounts(accs.map((a) => ({ id: Number(a.id), name: a.name })));
-        if (accs.length > 0) setDpCashAccount(Number(accs[0].id));
-      }),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -181,7 +166,6 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
     [lines, taxRate]
   );
   const totalCents = isExisting ? orderTotal : subtotalCents + ppnCents;
-  const remaining = totalCents - dpReceived;
 
   const setItem = (id: string, itemId: string) => {
     const item = items.find((i) => String(i.id) === itemId);
@@ -244,6 +228,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
     if (isExisting) return;
     if (!customerId) {
       setError("Pilih pelanggan untuk sales order ini.");
+      setActiveTab("header");
       return;
     }
     const payloadLines: SalesOrderLineInput[] = lines
@@ -258,6 +243,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
       }));
     if (payloadLines.length === 0) {
       setError("Tambahkan minimal 1 baris item produk.");
+      setActiveTab("items");
       return;
     }
     setSaving(true);
@@ -323,6 +309,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
   if (loading) return <LoadingState label="Memuat formulir Sales Order..." />;
 
   const statusLabel = isExisting ? orderStatus || "CONFIRMED" : "DRAFT";
+  const selectedCustomer = customers.find((c) => String(c.id) === customerId);
 
   return (
     <div className="enterprise-form">
@@ -341,7 +328,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
               </span>
             </div>
             <p className="text-xs text-muted mt-0.5">
-              Penerimaan & konfirmasi pesanan resmi dari pelanggan
+              Penerimaan & konfirmasi pesanan komersial resmi dari pelanggan
             </p>
           </div>
         </div>
@@ -366,104 +353,124 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
         </div>
       </header>
 
-      {/* Zone 2: Dynamic Form Body */}
+      {/* Zone 2: Dynamic Form Body with Corporate Multi-Tab Navigation */}
       <main className="form-zone-2">
         {error && <FormError message={error} />}
 
-        {/* 2.A Primary Entity & Meta */}
-        <div className="form-card form-grid-2col">
-          <div className="flex flex-col gap-3">
-            <div className="auth-field">
-              <label>Pelanggan (Customer) *</label>
-              <select
-                className="input-base font-semibold"
-                value={customerId}
-                disabled={isExisting}
-                onChange={(e) => setCustomerId(e.target.value)}
-              >
-                <option value="">-- Pilih Pelanggan --</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code ? `${c.code} - ` : ""}{c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="auth-field">
-              <label>Catatan & Instruksi Khusus Pesanan</label>
-              <textarea
-                className="input-base"
-                rows={3}
-                placeholder="Instruksi pengemasan, referensi kontrak, dll..."
-                value={notes}
-                disabled={isExisting}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <div className="grid-2col gap-3">
-              <div className="auth-field">
-                <label>Tanggal Order *</label>
-                <input
-                  type="date"
-                  className="input-base font-mono"
-                  value={date}
-                  disabled={isExisting}
-                  onChange={(e) => setDate(e.target.value)}
-                />
-              </div>
-              <div className="auth-field">
-                <label>Tgl Target Pengiriman</label>
-                <input
-                  type="date"
-                  className="input-base font-mono"
-                  value={requestedDeliveryDate}
-                  disabled={isExisting}
-                  onChange={(e) => setRequestedDeliveryDate(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="auth-field">
-              <TaxRateSelector
-                value={taxRate}
-                onChange={setTaxRate}
-                disabled={isExisting}
-                label="Skema Pajak Pertambahan Nilai (PPN)"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Sub-Tab Navigation for Complex Commercial Information */}
+        {/* Corporate Form Navigation Tabs */}
         <div className="flex items-center gap-2 border-b border-subtle pb-1">
           <button
             type="button"
-            className={`tabpill ${activeSubTab === "items" ? "is-active" : ""}`}
-            onClick={() => setActiveSubTab("items")}
+            className={`tabpill ${activeTab === "header" ? "is-active" : ""}`}
+            onClick={() => setActiveTab("header")}
           >
-            <Icon name="package" size={14} />
-            <span>Rincian Barang / Jasa</span>
+            <Icon name="building" size={14} />
+            <span>Tab 1: Informasi Header & Pihak Pemesan</span>
           </button>
           <button
             type="button"
-            className={`tabpill ${activeSubTab === "shipping" ? "is-active" : ""}`}
-            onClick={() => setActiveSubTab("shipping")}
+            className={`tabpill ${activeTab === "items" ? "is-active" : ""}`}
+            onClick={() => setActiveTab("items")}
           >
-            <Icon name="building" size={14} />
-            <span>Pengiriman & PO Pelanggan</span>
+            <Icon name="package" size={14} />
+            <span>Tab 2: Rincian Item Barang / Jasa</span>
+            <span className="text-xs font-mono font-bold ml-1 opacity-75">({lines.filter(l => l.itemId).length})</span>
+          </button>
+          <button
+            type="button"
+            className={`tabpill ${activeTab === "additional" ? "is-active" : ""}`}
+            onClick={() => setActiveTab("additional")}
+          >
+            <Icon name="receipt" size={14} />
+            <span>Tab 3: PO Pelanggan, Pengiriman & Catatan</span>
           </button>
         </div>
 
-        {activeSubTab === "items" && (
+        {/* TAB 1: INFORMASI HEADER & PELANGGAN */}
+        {activeTab === "header" && (
+          <div className="form-card form-grid-2col">
+            <div className="flex flex-col gap-3">
+              <div className="auth-field">
+                <label>Pelanggan (Customer) *</label>
+                <select
+                  className="input-base font-semibold"
+                  value={customerId}
+                  disabled={isExisting}
+                  onChange={(e) => setCustomerId(e.target.value)}
+                >
+                  <option value="">-- Pilih Pelanggan --</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.code ? `${c.code} - ` : ""}{c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="auth-field">
+                <label>Alamat Penagihan Pelanggan</label>
+                <input
+                  type="text"
+                  className="input-base input-computed"
+                  readOnly
+                  value={selectedCustomer ? (selectedCustomer.address || "Alamat belum disetel") : "Pilih pelanggan untuk melihat alamat"}
+                />
+              </div>
+
+              <div className="auth-field">
+                <label>Kontak / Telepon</label>
+                <input
+                  type="text"
+                  className="input-base input-computed"
+                  readOnly
+                  value={selectedCustomer ? (selectedCustomer.phone || selectedCustomer.email || "—") : "—"}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="grid-2col gap-3">
+                <div className="auth-field">
+                  <label>Tanggal Order *</label>
+                  <input
+                    type="date"
+                    className="input-base font-mono"
+                    value={date}
+                    disabled={isExisting}
+                    onChange={(e) => setDate(e.target.value)}
+                  />
+                </div>
+                <div className="auth-field">
+                  <label>Target Tanggal Pengiriman</label>
+                  <input
+                    type="date"
+                    className="input-base font-mono"
+                    value={requestedDeliveryDate}
+                    disabled={isExisting}
+                    onChange={(e) => setRequestedDeliveryDate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="auth-field">
+                <TaxRateSelector
+                  value={taxRate}
+                  onChange={setTaxRate}
+                  disabled={isExisting}
+                  label="Skema Pajak Pertambahan Nilai (PPN)"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: RINCIAN ITEM BARANG / JASA */}
+        {activeTab === "items" && (
           <div className="form-card">
             <div className="flex-between mb-3">
               <div>
                 <h2 className="text-sm font-bold text-primary">Line Items Pesanan Penjualan</h2>
-                <p className="text-xs text-muted">Daftar item produk yang dipesan beserta kuantitas dan harga jual.</p>
+                <p className="text-xs text-muted">Daftar item produk yang dipesan beserta kuantitas, harga jual, dan diskon.</p>
               </div>
               {!isExisting && (
                 <button
@@ -588,7 +595,8 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
           </div>
         )}
 
-        {activeSubTab === "shipping" && (
+        {/* TAB 3: PO PELANGGAN, PENGIRIMAN & INFORMASI TAMBAHAN */}
+        {activeTab === "additional" && (
           <div className="form-card form-grid-2col">
             <div className="flex flex-col gap-3">
               <div className="auth-field">
@@ -612,6 +620,17 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
                   onChange={(e) => setCustomerPODate(e.target.value)}
                 />
               </div>
+              <div className="auth-field">
+                <label>Catatan & Instruksi Khusus Pesanan</label>
+                <textarea
+                  className="input-base"
+                  rows={2}
+                  placeholder="Instruksi pengemasan, referensi kontrak, dll..."
+                  value={notes}
+                  disabled={isExisting}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </div>
             </div>
 
             <div className="flex flex-col gap-3">
@@ -631,10 +650,10 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
                 </select>
               </div>
               <div className="auth-field">
-                <label>Alamat Pengiriman Barang</label>
+                <label>Alamat Pengiriman Barang (Ship-To Address)</label>
                 <textarea
                   className="input-base"
-                  rows={2}
+                  rows={3}
                   placeholder="Alamat lengkap penerimaan barang..."
                   value={shipToAddress}
                   disabled={isExisting}
