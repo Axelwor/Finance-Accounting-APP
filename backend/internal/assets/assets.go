@@ -399,34 +399,38 @@ func (service *Service) ListAssets(writer http.ResponseWriter, request *http.Req
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT id, code, name, acquisition_date, acquisition_cost_cents, salvage_value_cents,
-		       useful_life_months, depreciation_method, status, book_value_cents, accum_dep_cents,
-		       journal_entry_id
-		FROM fixed_assets
-		WHERE tenant_id = $1
-		ORDER BY code
-	`, tenant)
+	items := make([]assetResponse, 0)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT id, code, name, acquisition_date, acquisition_cost_cents, salvage_value_cents,
+			       useful_life_months, depreciation_method, status, book_value_cents, accum_dep_cents,
+			       journal_entry_id
+			FROM fixed_assets
+			WHERE tenant_id = $1
+			ORDER BY code
+		`, tenant)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var a assetResponse
+			var acqDate pgtype.Date
+			var journalID pgtype.Int8
+			if err := rows.Scan(&a.ID, &a.Code, &a.Name, &acqDate, &a.AcquisitionCostCents,
+				&a.SalvageValueCents, &a.UsefulLifeMonths, &a.DepreciationMethod, &a.Status,
+				&a.BookValueCents, &a.AccumDepCents, &journalID); err != nil {
+				return err
+			}
+			a.AcquisitionDate = dateString(acqDate)
+			a.JournalEntryID = int8ValueRaw(journalID)
+			items = append(items, a)
+		}
+		return nil
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "LIST_FAILED", err.Error())
 		return
-	}
-	defer rows.Close()
-
-	items := make([]assetResponse, 0)
-	for rows.Next() {
-		var a assetResponse
-		var acqDate pgtype.Date
-		var journalID pgtype.Int8
-		if err := rows.Scan(&a.ID, &a.Code, &a.Name, &acqDate, &a.AcquisitionCostCents,
-			&a.SalvageValueCents, &a.UsefulLifeMonths, &a.DepreciationMethod, &a.Status,
-			&a.BookValueCents, &a.AccumDepCents, &journalID); err != nil {
-			writeError(writer, http.StatusInternalServerError, "LIST_FAILED", err.Error())
-			return
-		}
-		a.AcquisitionDate = dateString(acqDate)
-		a.JournalEntryID = int8ValueRaw(journalID)
-		items = append(items, a)
 	}
 	writeJSON(writer, http.StatusOK, items)
 }
@@ -443,68 +447,83 @@ func (service *Service) GetAsset(writer http.ResponseWriter, request *http.Reque
 		return
 	}
 
-	asset, err := fetchAssetByID(request.Context(), service.pool, tenant, id)
+	var asset *assetResponse
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		var err error
+		asset, err = fetchAssetByID(request.Context(), tx, tenant, id)
+		return err
+	})
 	if err != nil {
 		writeError(writer, http.StatusNotFound, "NOT_FOUND", err.Error())
 		return
 	}
 
 	// Load schedule.
-	schedRows, err := service.pool.Query(request.Context(), `
-		SELECT id, period_year, period_month, depreciation_cents, journal_entry_id, posted, posted_at
-		FROM asset_depreciation_schedule
-		WHERE tenant_id = $1 AND asset_id = $2
-		ORDER BY period_year, period_month
-	`, tenant, id)
+	schedule := make([]assetScheduleResponse, 0)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		schedRows, err := tx.Query(request.Context(), `
+			SELECT id, period_year, period_month, depreciation_cents, journal_entry_id, posted, posted_at
+			FROM asset_depreciation_schedule
+			WHERE tenant_id = $1 AND asset_id = $2
+			ORDER BY period_year, period_month
+		`, tenant, id)
+		if err != nil {
+			return err
+		}
+		defer schedRows.Close()
+		for schedRows.Next() {
+			var s assetScheduleResponse
+			var journalID pgtype.Int8
+			var postedAt pgtype.Timestamptz
+			if err := schedRows.Scan(&s.ID, &s.PeriodYear, &s.PeriodMonth, &s.DepreciationCents,
+				&journalID, &s.Posted, &postedAt); err != nil {
+				return err
+			}
+			s.JournalEntryID = int8ValueRaw(journalID)
+			if postedAt.Valid {
+				s.PostedAt = postedAt.Time.Format("2006-01-02T15:04:05Z07:00")
+			}
+			schedule = append(schedule, s)
+		}
+		return nil
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "LOAD_FAILED", err.Error())
 		return
-	}
-	defer schedRows.Close()
-	schedule := make([]assetScheduleResponse, 0)
-	for schedRows.Next() {
-		var s assetScheduleResponse
-		var journalID pgtype.Int8
-		var postedAt pgtype.Timestamptz
-		if err := schedRows.Scan(&s.ID, &s.PeriodYear, &s.PeriodMonth, &s.DepreciationCents,
-			&journalID, &s.Posted, &postedAt); err != nil {
-			writeError(writer, http.StatusInternalServerError, "LOAD_FAILED", err.Error())
-			return
-		}
-		s.JournalEntryID = int8ValueRaw(journalID)
-		if postedAt.Valid {
-			s.PostedAt = postedAt.Time.Format("2006-01-02T15:04:05Z07:00")
-		}
-		schedule = append(schedule, s)
 	}
 	asset.Schedule = schedule
 
 	// Load transactions.
-	txRows, err := service.pool.Query(request.Context(), `
-		SELECT id, tx_type, tx_date, amount_cents, journal_entry_id, description
-		FROM asset_transactions
-		WHERE tenant_id = $1 AND asset_id = $2
-		ORDER BY tx_date, id
-	`, tenant, id)
+	transactions := make([]assetTransactionResponse, 0)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		txRows, err := tx.Query(request.Context(), `
+			SELECT id, tx_type, tx_date, amount_cents, journal_entry_id, description
+			FROM asset_transactions
+			WHERE tenant_id = $1 AND asset_id = $2
+			ORDER BY tx_date, id
+		`, tenant, id)
+		if err != nil {
+			return err
+		}
+		defer txRows.Close()
+		for txRows.Next() {
+			var t assetTransactionResponse
+			var txDate pgtype.Date
+			var journalID pgtype.Int8
+			var desc pgtype.Text
+			if err := txRows.Scan(&t.ID, &t.TxType, &txDate, &t.AmountCents, &journalID, &desc); err != nil {
+				return err
+			}
+			t.TxDate = dateString(txDate)
+			t.JournalEntryID = int8ValueRaw(journalID)
+			t.Description = textValue(desc)
+			transactions = append(transactions, t)
+		}
+		return nil
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "LOAD_FAILED", err.Error())
 		return
-	}
-	defer txRows.Close()
-	transactions := make([]assetTransactionResponse, 0)
-	for txRows.Next() {
-		var t assetTransactionResponse
-		var txDate pgtype.Date
-		var journalID pgtype.Int8
-		var desc pgtype.Text
-		if err := txRows.Scan(&t.ID, &t.TxType, &txDate, &t.AmountCents, &journalID, &desc); err != nil {
-			writeError(writer, http.StatusInternalServerError, "LOAD_FAILED", err.Error())
-			return
-		}
-		t.TxDate = dateString(txDate)
-		t.JournalEntryID = int8ValueRaw(journalID)
-		t.Description = textValue(desc)
-		transactions = append(transactions, t)
 	}
 	asset.Transactions = transactions
 

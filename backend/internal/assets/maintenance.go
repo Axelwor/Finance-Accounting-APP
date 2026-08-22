@@ -157,31 +157,31 @@ func (service *Service) ListMaintenance(writer http.ResponseWriter, request *htt
 	}
 	query += ` ORDER BY m.maintenance_date DESC, m.id DESC LIMIT 200`
 
-	rows, err := service.pool.Query(request.Context(), query, args...)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "MAINTENANCE_LIST_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
 	list := []maintenanceResponse{}
-	for rows.Next() {
-		var row maintenanceResponse
-		var maintDate pgtype.Date
-		var performedBy pgtype.Text
-		var nextDue pgtype.Date
-		if err := rows.Scan(&row.ID, &row.AssetID, &row.AssetCode, &row.AssetName,
-			&maintDate, &row.MaintenanceType, &row.Description, &row.CostCents,
-			&performedBy, &nextDue); err != nil {
-			writeError(writer, http.StatusInternalServerError, "MAINTENANCE_LIST_FAILED", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), query, args...)
+		if err != nil {
+			return err
 		}
-		row.MaintenanceDate = dateString(maintDate)
-		row.PerformedBy = textValue(performedBy)
-		row.NextDueDate = dateString(nextDue)
-		list = append(list, row)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var row maintenanceResponse
+			var maintDate pgtype.Date
+			var performedBy pgtype.Text
+			var nextDue pgtype.Date
+			if err := rows.Scan(&row.ID, &row.AssetID, &row.AssetCode, &row.AssetName,
+				&maintDate, &row.MaintenanceType, &row.Description, &row.CostCents,
+				&performedBy, &nextDue); err != nil {
+				return err
+			}
+			row.MaintenanceDate = dateString(maintDate)
+			row.PerformedBy = textValue(performedBy)
+			row.NextDueDate = dateString(nextDue)
+			list = append(list, row)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "MAINTENANCE_LIST_FAILED", err.Error())
 		return
 	}
@@ -202,36 +202,36 @@ func (service *Service) UpcomingMaintenance(writer http.ResponseWriter, request 
 			days = parsed
 		}
 	}
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT m.id, m.asset_id, a.code, a.name, m.next_due_date, m.maintenance_type, m.description
-		FROM asset_maintenance m
-		JOIN fixed_assets a ON a.tenant_id = m.tenant_id AND a.id = m.asset_id
-		WHERE m.tenant_id = $1
-		  AND m.next_due_date IS NOT NULL
-		  AND m.next_due_date <= CURRENT_DATE + $2
-		ORDER BY m.next_due_date
-	`, tenant, days)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "MAINTENANCE_DUE_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
 	list := []map[string]any{}
-	for rows.Next() {
-		var id, assetID int64
-		var code, name, mType, desc string
-		var nextDue pgtype.Date
-		if err := rows.Scan(&id, &assetID, &code, &name, &nextDue, &mType, &desc); err != nil {
-			writeError(writer, http.StatusInternalServerError, "MAINTENANCE_DUE_FAILED", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT m.id, m.asset_id, a.code, a.name, m.next_due_date, m.maintenance_type, m.description
+			FROM asset_maintenance m
+			JOIN fixed_assets a ON a.tenant_id = m.tenant_id AND a.id = m.asset_id
+			WHERE m.tenant_id = $1
+			  AND m.next_due_date IS NOT NULL
+			  AND m.next_due_date <= CURRENT_DATE + $2
+			ORDER BY m.next_due_date
+		`, tenant, days)
+		if err != nil {
+			return err
 		}
-		list = append(list, map[string]any{
-			"id": id, "asset_id": assetID, "asset_code": code, "asset_name": name,
-			"next_due_date": dateString(nextDue), "maintenance_type": mType, "description": desc,
-		})
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var id, assetID int64
+			var code, name, mType, desc string
+			var nextDue pgtype.Date
+			if err := rows.Scan(&id, &assetID, &code, &name, &nextDue, &mType, &desc); err != nil {
+				return err
+			}
+			list = append(list, map[string]any{
+				"id": id, "asset_id": assetID, "asset_code": code, "asset_name": name,
+				"next_due_date": dateString(nextDue), "maintenance_type": mType, "description": desc,
+			})
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "MAINTENANCE_DUE_FAILED", err.Error())
 		return
 	}

@@ -1,10 +1,14 @@
 package assets
 
 import (
+	"github.com/jackc/pgx/v5"
+
 	"net/http"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // F-13: Asset Register & Maintenance report.
@@ -71,34 +75,34 @@ func (service *Service) AssetRegister(writer http.ResponseWriter, request *http.
 	}
 	query += ` ORDER BY code`
 
-	rows, err := service.pool.Query(request.Context(), query, args...)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "REGISTER_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
 	response := registerResponse{Assets: make([]registerAssetRow, 0)}
-	for rows.Next() {
-		var row registerAssetRow
-		var acqDate pgtype.Date
-		if err := rows.Scan(&row.ID, &row.Code, &row.Name, &acqDate,
-			&row.AcquisitionCostCents, &row.SalvageValueCents,
-			&row.DepreciationMethod, &row.UsefulLifeMonths,
-			&row.AccumulatedDepCents, &row.Status); err != nil {
-			writeError(writer, http.StatusInternalServerError, "REGISTER_FAILED", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), query, args...)
+		if err != nil {
+			return err
 		}
-		row.AcquisitionDate = dateString(acqDate)
-		row.NetBookValueCents = computeNBV(row.AcquisitionCostCents, row.AccumulatedDepCents)
+		defer rows.Close()
+		for rows.Next() {
+			var row registerAssetRow
+			var acqDate pgtype.Date
+			if err := rows.Scan(&row.ID, &row.Code, &row.Name, &acqDate,
+				&row.AcquisitionCostCents, &row.SalvageValueCents,
+				&row.DepreciationMethod, &row.UsefulLifeMonths,
+				&row.AccumulatedDepCents, &row.Status); err != nil {
+				return err
+			}
+			row.AcquisitionDate = dateString(acqDate)
+			row.NetBookValueCents = computeNBV(row.AcquisitionCostCents, row.AccumulatedDepCents)
 
-		response.Totals.TotalCostCents += row.AcquisitionCostCents
-		response.Totals.TotalAccumulatedCents += row.AccumulatedDepCents
-		response.Totals.TotalNBVCents += row.NetBookValueCents
-		response.Totals.AssetCount++
-		response.Assets = append(response.Assets, row)
-	}
-	if err := rows.Err(); err != nil {
+			response.Totals.TotalCostCents += row.AcquisitionCostCents
+			response.Totals.TotalAccumulatedCents += row.AccumulatedDepCents
+			response.Totals.TotalNBVCents += row.NetBookValueCents
+			response.Totals.AssetCount++
+			response.Assets = append(response.Assets, row)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REGISTER_FAILED", err.Error())
 		return
 	}
