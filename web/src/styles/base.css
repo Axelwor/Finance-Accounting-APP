@@ -673,7 +673,7 @@ table.datatable thead th {
 }
 
 /* ------------------------------------------------------------
-   5. Standard 3-Zone Enterprise Form & Compact Workspace Layout
+   5. Standard Corporate Enterprise Form Architecture
    ------------------------------------------------------------ */
 .enterprise-form {
   display: flex;
@@ -682,14 +682,14 @@ table.datatable thead th {
   background-color: var(--bg-canvas);
 }
 
-/* Zone 1: Document Header (Compact) */
+/* Zone 1: Document Header (Compact Corporate Bar) */
 .form-zone-1 {
   position: sticky;
   top: 0;
   z-index: 30;
   background-color: var(--bg-surface);
   border-bottom: 1px solid var(--border-color);
-  padding: 8px 20px;
+  padding: 8px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -703,8 +703,8 @@ table.datatable thead th {
 }
 
 .form-header__icon-box {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   background-color: var(--brand-primary-light);
   color: var(--brand-primary);
   border-radius: var(--radius-sm);
@@ -715,7 +715,7 @@ table.datatable thead th {
 }
 
 .form-header__title {
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.2px;
   color: var(--text-primary);
@@ -727,15 +727,15 @@ table.datatable thead th {
   font-weight: 600;
   color: var(--text-secondary);
   background-color: var(--bg-surface-secondary);
-  padding: 1px 6px;
+  padding: 2px 8px;
   border-radius: var(--radius-xs);
   border: 1px solid var(--border-color);
 }
 
 .form-header__status-badge {
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 700;
-  padding: 1px 6px;
+  padding: 2px 8px;
   border-radius: var(--radius-full);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -746,91 +746,110 @@ table.datatable thead th {
 .status-void { background: var(--color-danger-bg); color: var(--color-danger-text); border: 1px solid var(--color-danger-border); text-decoration: line-through; }
 .status-pending { background: var(--color-warning-bg); color: var(--color-warning-text); border: 1px solid var(--color-warning-border); }
 
-/* 3-Column Compact Workspace Layout */
-.form-workspace-layout {
-  display: grid;
-  grid-template-columns: 210px 1fr 270px;
+/* Zone 2: Main Form Body */
+.form-zone-2 {
+  flex: 1;
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
-  padding: 14px 20px;
+  width: 100%;
+}
+
+/* Primary Header Card (Pelanggan / Counterparty Selection First) */
+.form-primary-header-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+}
+
+/* Side-Tab Icon Rail + Main Grid Area */
+.form-tabbed-body {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 14px;
   align-items: start;
   width: 100%;
 }
 
-/* Left Side Tabs Rail */
-.form-side-nav {
+/* Compact Icon-Only Side Rail */
+.form-side-icon-rail {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 6px;
+  padding: 6px 4px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 6px;
+  align-items: center;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
   position: sticky;
   top: 56px;
 }
 
-.form-side-tab {
+.form-side-icon-btn {
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
+  justify-content: center;
   border-radius: var(--radius-sm);
   background: transparent;
-  border: none;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  border: 1px solid transparent;
+  color: var(--text-muted);
   cursor: pointer;
-  text-align: left;
-  transition: all 0.12s ease;
+  position: relative;
+  transition: all 0.15s ease;
 }
 
-.form-side-tab:hover {
+.form-side-icon-btn:hover {
   background-color: var(--bg-surface-secondary);
   color: var(--text-primary);
 }
 
-.form-side-tab.is-active {
+.form-side-icon-btn.is-active {
   background-color: var(--brand-primary-light);
   color: var(--brand-primary);
-  font-weight: 600;
+  border-color: var(--brand-primary-border);
 }
 
-.form-side-tab__label {
+.form-side-icon-btn__badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  width: 15px;
+  height: 15px;
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.form-side-tab__badge {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 5px;
-  border-radius: var(--radius-full);
+  justify-content: center;
+  border-radius: 50%;
   background-color: var(--bg-surface-secondary);
   color: var(--text-secondary);
 }
 
-.form-side-tab.is-active .form-side-tab__badge {
+.form-side-icon-btn.is-active .form-side-icon-btn__badge {
   background-color: var(--brand-primary);
   color: #fff;
 }
 
-/* Center Content Pane */
-.form-center-pane {
+/* Form Content Panel */
+.form-tab-content {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-width: 0;
 }
 
 .form-card-compact {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 14px 16px;
+  padding: 14px 18px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
 }
 
@@ -838,7 +857,7 @@ table.datatable thead th {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -849,103 +868,50 @@ table.datatable thead th {
   color: var(--text-primary);
 }
 
-/* Right Action & Summary Sidebar */
-.form-action-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* Zone 3: Sticky Bottom Footer (Total, Subtotal & Actions) */
+.form-zone-3 {
   position: sticky;
-  top: 56px;
-}
-
-.form-summary-card {
+  bottom: 0;
+  z-index: 30;
   background-color: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 14px;
+  border-top: 1px solid var(--border-color);
+  padding: 10px 24px;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 -3px 10px rgba(15, 23, 42, 0.04);
 }
 
-.form-summary-total {
-  background: var(--bg-surface-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
+.form-zone-3__summary {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 20px;
 }
 
-.form-summary-total__label {
-  font-size: 10.5px;
+.form-zone-3__total-block {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.form-zone-3__total-label {
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   color: var(--text-muted);
 }
 
-.form-summary-total__val {
+.form-zone-3__total-val {
   font-family: var(--font-mono);
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 800;
   color: var(--brand-primary);
 }
 
-.form-action-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-action-btn-primary {
-  width: 100%;
-  padding: 9px 14px;
-  background-color: var(--brand-primary);
-  color: #ffffff;
-  border: 1px solid var(--brand-primary-hover);
-  border-radius: var(--radius-sm);
-  font-size: 12.5px;
-  font-weight: 600;
+.form-zone-3__actions {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  cursor: pointer;
-  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
-  transition: all 0.12s ease;
-}
-
-.form-action-btn-primary:hover:not(:disabled) {
-  background-color: var(--brand-primary-hover);
-}
-
-.form-action-btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.form-action-btn-secondary {
-  width: 100%;
-  padding: 8px 12px;
-  background-color: var(--bg-surface);
-  color: var(--text-primary);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  cursor: pointer;
-  transition: all 0.12s ease;
-}
-
-.form-action-btn-secondary:hover:not(:disabled) {
-  background-color: var(--bg-surface-secondary);
-  border-color: var(--border-color);
+  gap: 8px;
 }
 
 /* Compact Inputs & Form Controls */
@@ -963,11 +929,11 @@ table.datatable thead th {
 
 .input-base {
   width: 100%;
-  padding: 6px 10px;
+  padding: 7px 10px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-primary);
   font-family: inherit;
   transition: all 0.12s ease;
@@ -979,13 +945,50 @@ table.datatable thead th {
   outline: none;
 }
 
-@media (max-width: 1024px) {
-  .form-workspace-layout {
-    grid-template-columns: 1fr;
-  }
-  .form-side-nav, .form-action-sidebar {
-    position: static;
-  }
+/* ------------------------------------------------------------
+   6. Data Table Engine (High Density)
+   ------------------------------------------------------------ */
+.datatable-wrapper {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.datatable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.datatable th {
+  background-color: var(--bg-surface-secondary);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-strong);
+  white-space: nowrap;
+}
+
+.datatable td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.datatable tfoot tr {
+  background-color: var(--bg-surface-secondary);
+}
+
+.datatable tfoot td {
+  padding: 8px 12px;
+  border-bottom: none;
 }
 
 /* ------------------------------------------------------------
