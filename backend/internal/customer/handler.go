@@ -1,6 +1,9 @@
 package customer
 
 import (
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"context"
 	"net/http"
 	"sort"
@@ -10,6 +13,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // Service exposes the customer and payment-term endpoints. Tenant id comes
@@ -187,32 +192,33 @@ func (service *Service) ListCustomers(writer http.ResponseWriter, request *http.
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT id, code, name, npwp, contact_person, phone, email, address, city,
-		       province, postal_code, payment_term_id, credit_limit_cents,
-		       default_revenue_account_id, default_receivable_account_id, is_active,
-		       billing_address, shipping_address, customer_group, price_level, currency_code,
-		       is_pkp, credit_hold, website, fax, contact_person_2, phone_2, npwp_name,
-		       opening_balance_cents, opening_balance_date
-		FROM customers
-		WHERE tenant_id = $1 AND is_active = true
-		ORDER BY code
-	`, tenant)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "CUSTOMER_LIST_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
 	customers := []Customer{}
-	for rows.Next() {
-		customer, err := scanCustomer(rows)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT id, code, name, npwp, contact_person, phone, email, address, city,
+			       province, postal_code, payment_term_id, credit_limit_cents,
+			       default_revenue_account_id, default_receivable_account_id, is_active,
+			       billing_address, shipping_address, customer_group, price_level, currency_code,
+			       is_pkp, credit_hold, website, fax, contact_person_2, phone_2, npwp_name,
+			       opening_balance_cents, opening_balance_date
+			FROM customers
+			WHERE tenant_id = $1 AND is_active = true
+			ORDER BY code
+		`, tenant)
 		if err != nil {
-			writeError(writer, http.StatusInternalServerError, "CUSTOMER_LIST_FAILED", err.Error())
-			return
+			return err
 		}
-		customers = append(customers, customer)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			customer, err := scanCustomer(rows)
+			if err != nil {
+				return err
+			}
+			customers = append(customers, customer)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "CUSTOMER_LIST_FAILED", err.Error())
 		return
 	}
@@ -241,16 +247,18 @@ func (service *Service) CustomerStatement(writer http.ResponseWriter, request *h
 	}
 
 	var customer Customer
-	err = service.pool.QueryRow(request.Context(), `
-		SELECT id, code, name, npwp, contact_person, phone, email, address, city,
-		       province, postal_code, payment_term_id, credit_limit_cents, is_active
-		FROM customers
-		WHERE tenant_id = $1 AND id = $2
-	`, tenant, id).Scan(
-		&customer.ID, &customer.Code, &customer.Name, &customer.NPWP, &customer.ContactPerson,
-		&customer.Phone, &customer.Email, &customer.Address, &customer.City, &customer.Province,
-		&customer.PostalCode, &customer.PaymentTermID, &customer.CreditLimitCents, &customer.IsActive,
-	)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(request.Context(), `
+			SELECT id, code, name, npwp, contact_person, phone, email, address, city,
+			       province, postal_code, payment_term_id, credit_limit_cents, is_active
+			FROM customers
+			WHERE tenant_id = $1 AND id = $2
+		`, tenant, id).Scan(
+			&customer.ID, &customer.Code, &customer.Name, &customer.NPWP, &customer.ContactPerson,
+			&customer.Phone, &customer.Email, &customer.Address, &customer.City, &customer.Province,
+			&customer.PostalCode, &customer.PaymentTermID, &customer.CreditLimitCents, &customer.IsActive,
+		)
+	})
 	if err != nil {
 		if isNoRows(err) {
 			writeError(writer, http.StatusNotFound, "CUSTOMER_NOT_FOUND", "customer does not exist for this tenant")
@@ -261,83 +269,83 @@ func (service *Service) CustomerStatement(writer http.ResponseWriter, request *h
 	}
 
 	var opening int64
-	err = service.pool.QueryRow(request.Context(), `
-		SELECT COALESCE((
-			SELECT SUM(total_cents) FROM invoices
-			WHERE tenant_id = $1 AND customer_id = $2 AND status <> 'VOID'
-			  AND invoice_date < $3::date
-		), 0) - COALESCE((
-			SELECT SUM(amount_cents) FROM invoice_payments
-			WHERE tenant_id = $1 AND customer_id = $2 AND status = 'RECEIVED'
-			  AND payment_date < $3::date
-		), 0)
-	`, tenant, id, fromDate).Scan(&opening)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(request.Context(), `
+			SELECT COALESCE((
+				SELECT SUM(total_cents) FROM invoices
+				WHERE tenant_id = $1 AND customer_id = $2 AND status <> 'VOID'
+				  AND invoice_date < $3::date
+			), 0) - COALESCE((
+				SELECT SUM(amount_cents) FROM invoice_payments
+				WHERE tenant_id = $1 AND customer_id = $2 AND status = 'RECEIVED'
+				  AND payment_date < $3::date
+			), 0)
+		`, tenant, id, fromDate).Scan(&opening)
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "STATEMENT_FAILED", err.Error())
 		return
 	}
 
 	invoices := []statementRow{}
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT id, invoice_date::text, number, COALESCE(notes, ''), total_cents
-		FROM invoices
-		WHERE tenant_id = $1 AND customer_id = $2 AND status <> 'VOID'
-		  AND invoice_date >= $3::date AND invoice_date <= $4::date
-		ORDER BY invoice_date, id
-	`, tenant, id, fromDate, toDate)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT id, invoice_date::text, number, COALESCE(notes, ''), total_cents
+			FROM invoices
+			WHERE tenant_id = $1 AND customer_id = $2 AND status <> 'VOID'
+			  AND invoice_date >= $3::date AND invoice_date <= $4::date
+			ORDER BY invoice_date, id
+		`, tenant, id, fromDate, toDate)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var row statementRow
+			var total int64
+			if err := rows.Scan(&row.ID, &row.Date, &row.Reference, &row.Description, &total); err != nil {
+				return err
+			}
+			row.Type = "invoice"
+			row.DebitCents = total
+			invoices = append(invoices, row)
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "STATEMENT_FAILED", err.Error())
 		return
 	}
-	for rows.Next() {
-		var row statementRow
-		var total int64
-		if err := rows.Scan(&row.ID, &row.Date, &row.Reference, &row.Description, &total); err != nil {
-			rows.Close()
-			writeError(writer, http.StatusInternalServerError, "STATEMENT_FAILED", err.Error())
-			return
-		}
-		row.Type = "invoice"
-		row.DebitCents = total
-		invoices = append(invoices, row)
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		writeError(writer, http.StatusInternalServerError, "STATEMENT_FAILED", err.Error())
-		return
-	}
-	rows.Close()
 
 	payments := []statementRow{}
-	rows, err = service.pool.Query(request.Context(), `
-		SELECT id, payment_date::text, number, COALESCE(description, ''), amount_cents
-		FROM invoice_payments
-		WHERE tenant_id = $1 AND customer_id = $2 AND status = 'RECEIVED'
-		  AND payment_date >= $3::date AND payment_date <= $4::date
-		ORDER BY payment_date, id
-	`, tenant, id, fromDate, toDate)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT id, payment_date::text, number, COALESCE(description, ''), amount_cents
+			FROM invoice_payments
+			WHERE tenant_id = $1 AND customer_id = $2 AND status = 'RECEIVED'
+			  AND payment_date >= $3::date AND payment_date <= $4::date
+			ORDER BY payment_date, id
+		`, tenant, id, fromDate, toDate)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var row statementRow
+			var amount int64
+			if err := rows.Scan(&row.ID, &row.Date, &row.Reference, &row.Description, &amount); err != nil {
+				return err
+			}
+			row.Type = "payment"
+			row.CreditCents = amount
+			payments = append(payments, row)
+		}
+		return rows.Err()
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "STATEMENT_FAILED", err.Error())
 		return
 	}
-	for rows.Next() {
-		var row statementRow
-		var amount int64
-		if err := rows.Scan(&row.ID, &row.Date, &row.Reference, &row.Description, &amount); err != nil {
-			rows.Close()
-			writeError(writer, http.StatusInternalServerError, "STATEMENT_FAILED", err.Error())
-			return
-		}
-		row.Type = "payment"
-		row.CreditCents = amount
-		payments = append(payments, row)
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		writeError(writer, http.StatusInternalServerError, "STATEMENT_FAILED", err.Error())
-		return
-	}
-	rows.Close()
 
 	lines, invoiced, paid := buildStatementLines(invoices, payments, opening)
 
@@ -439,25 +447,27 @@ func (service *Service) CreateCustomer(writer http.ResponseWriter, request *http
 		writeError(writer, http.StatusBadRequest, "CUSTOMER_INVALID_FIELD", "opening_balance_date must be a valid YYYY-MM-DD date")
 		return
 	}
-	err = service.pool.QueryRow(request.Context(), `
-		INSERT INTO customers (
-			tenant_id, code, name, npwp, contact_person, phone, email, address,
-			city, province, postal_code, payment_term_id, credit_limit_cents,
-			default_revenue_account_id, default_receivable_account_id,
-			billing_address, shipping_address, customer_group, price_level, currency_code,
-			is_pkp, credit_hold, website, fax, contact_person_2, phone_2, npwp_name,
-			opening_balance_cents, opening_balance_date
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-			$16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
-		RETURNING id
-	`, tenant, req.Code, req.Name, req.NPWP, req.ContactPerson, req.Phone,
-		req.Email, req.Address, req.City, req.Province, req.PostalCode,
-		req.PaymentTermID, req.CreditLimitCents, req.DefaultRevenueAccountID,
-		req.DefaultReceivableAccountID,
-		req.BillingAddress, req.ShippingAddress, req.CustomerGroup, req.PriceLevel, req.CurrencyCode,
-		boolOrFalse(req.IsPKP), boolOrFalse(req.CreditHold), req.Website, req.Fax,
-		req.ContactPerson2, req.Phone2, req.NpwpName,
-		int64OrZero(req.OpeningBalanceCents), openingBalanceDate).Scan(&id)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(request.Context(), `
+			INSERT INTO customers (
+				tenant_id, code, name, npwp, contact_person, phone, email, address,
+				city, province, postal_code, payment_term_id, credit_limit_cents,
+				default_revenue_account_id, default_receivable_account_id,
+				billing_address, shipping_address, customer_group, price_level, currency_code,
+				is_pkp, credit_hold, website, fax, contact_person_2, phone_2, npwp_name,
+				opening_balance_cents, opening_balance_date
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+				$16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
+			RETURNING id
+		`, tenant, req.Code, req.Name, req.NPWP, req.ContactPerson, req.Phone,
+			req.Email, req.Address, req.City, req.Province, req.PostalCode,
+			req.PaymentTermID, req.CreditLimitCents, req.DefaultRevenueAccountID,
+			req.DefaultReceivableAccountID,
+			req.BillingAddress, req.ShippingAddress, req.CustomerGroup, req.PriceLevel, req.CurrencyCode,
+			boolOrFalse(req.IsPKP), boolOrFalse(req.CreditHold), req.Website, req.Fax,
+			req.ContactPerson2, req.Phone2, req.NpwpName,
+			int64OrZero(req.OpeningBalanceCents), openingBalanceDate).Scan(&id)
+	})
 	if err != nil {
 		if isCheckViolation(err) {
 			writeError(writer, http.StatusBadRequest, "CUSTOMER_INVALID_FIELD", "invalid field value (check price_level/currency_code)")
@@ -485,17 +495,22 @@ func (service *Service) GetCustomer(writer http.ResponseWriter, request *http.Re
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	row := service.pool.QueryRow(request.Context(), `
-		SELECT id, code, name, npwp, contact_person, phone, email, address, city,
-		       province, postal_code, payment_term_id, credit_limit_cents,
-		       default_revenue_account_id, default_receivable_account_id, is_active,
-		       billing_address, shipping_address, customer_group, price_level, currency_code,
-		       is_pkp, credit_hold, website, fax, contact_person_2, phone_2, npwp_name,
-		       opening_balance_cents, opening_balance_date
-		FROM customers
-		WHERE tenant_id = $1 AND id = $2
-	`, tenant, id)
-	customer, err := scanCustomer(row)
+	var customer Customer
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		row := tx.QueryRow(request.Context(), `
+			SELECT id, code, name, npwp, contact_person, phone, email, address, city,
+			       province, postal_code, payment_term_id, credit_limit_cents,
+			       default_revenue_account_id, default_receivable_account_id, is_active,
+			       billing_address, shipping_address, customer_group, price_level, currency_code,
+			       is_pkp, credit_hold, website, fax, contact_person_2, phone_2, npwp_name,
+			       opening_balance_cents, opening_balance_date
+			FROM customers
+			WHERE tenant_id = $1 AND id = $2
+		`, tenant, id)
+		var err error
+		customer, err = scanCustomer(row)
+		return err
+	})
 	if err != nil {
 		if isNoRows(err) {
 			writeError(writer, http.StatusNotFound, "CUSTOMER_NOT_FOUND", "customer does not exist for this tenant")
@@ -540,7 +555,9 @@ func (service *Service) UpdateCustomer(writer http.ResponseWriter, request *http
 		writeError(writer, http.StatusConflict, code, message)
 		return
 	}
-	row := service.pool.QueryRow(request.Context(), `
+	var customer Customer
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		row := tx.QueryRow(request.Context(), `
 		UPDATE customers SET
 			code = $3, name = $4, npwp = $5, contact_person = $6, phone = $7,
 			email = $8, address = $9, city = $10, province = $11, postal_code = $12,
@@ -558,14 +575,17 @@ func (service *Service) UpdateCustomer(writer http.ResponseWriter, request *http
 			billing_address, shipping_address, customer_group, price_level, currency_code,
 			is_pkp, credit_hold, website, fax, contact_person_2, phone_2, npwp_name,
 			opening_balance_cents, opening_balance_date
-	`, tenant, id, req.Code, req.Name, req.NPWP, req.ContactPerson, req.Phone,
-		req.Email, req.Address, req.City, req.Province, req.PostalCode,
-		req.PaymentTermID, req.CreditLimitCents, req.DefaultRevenueAccountID,
-		req.DefaultReceivableAccountID, req.IsActive,
-		req.BillingAddress, req.ShippingAddress, req.CustomerGroup, req.PriceLevel, req.CurrencyCode,
-		boolOrFalse(req.IsPKP), boolOrFalse(req.CreditHold), req.Website, req.Fax,
-		req.ContactPerson2, req.Phone2, req.NpwpName)
-	customer, err := scanCustomer(row)
+		`, tenant, id, req.Code, req.Name, req.NPWP, req.ContactPerson, req.Phone,
+			req.Email, req.Address, req.City, req.Province, req.PostalCode,
+			req.PaymentTermID, req.CreditLimitCents, req.DefaultRevenueAccountID,
+			req.DefaultReceivableAccountID, req.IsActive,
+			req.BillingAddress, req.ShippingAddress, req.CustomerGroup, req.PriceLevel, req.CurrencyCode,
+			boolOrFalse(req.IsPKP), boolOrFalse(req.CreditHold), req.Website, req.Fax,
+			req.ContactPerson2, req.Phone2, req.NpwpName)
+		var err error
+		customer, err = scanCustomer(row)
+		return err
+	})
 	if err != nil {
 		if isNoRows(err) {
 			writeError(writer, http.StatusNotFound, "CUSTOMER_NOT_FOUND", "customer does not exist for this tenant")
@@ -597,11 +617,16 @@ func (service *Service) DeactivateCustomer(writer http.ResponseWriter, request *
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	command, err := service.pool.Exec(request.Context(), `
-		UPDATE customers
-		SET is_active = false, updated_at = now()
-		WHERE tenant_id = $1 AND id = $2
-	`, tenant, id)
+	var command pgconn.CommandTag
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		var err error
+		command, err = tx.Exec(request.Context(), `
+			UPDATE customers
+			SET is_active = false, updated_at = now()
+			WHERE tenant_id = $1 AND id = $2
+		`, tenant, id)
+		return err
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "CUSTOMER_DEACTIVATE_FAILED", err.Error())
 		return
@@ -620,30 +645,31 @@ func (service *Service) ListPaymentTerms(writer http.ResponseWriter, request *ht
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT id, code, name, due_days, discount_days, discount_percent::text, is_active
-		FROM payment_terms
-		WHERE tenant_id = $1
-		ORDER BY code
-	`, tenant)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "PAYMENT_TERM_LIST_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
 	terms := []PaymentTerm{}
-	for rows.Next() {
-		var term PaymentTerm
-		var discountPercent pgtype.Text
-		if err := rows.Scan(&term.ID, &term.Code, &term.Name, &term.DueDays,
-			&term.DiscountDays, &discountPercent, &term.IsActive); err != nil {
-			writeError(writer, http.StatusInternalServerError, "PAYMENT_TERM_LIST_FAILED", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT id, code, name, due_days, discount_days, discount_percent::text, is_active
+			FROM payment_terms
+			WHERE tenant_id = $1
+			ORDER BY code
+		`, tenant)
+		if err != nil {
+			return err
 		}
-		term.DiscountPercent = textOrNil(discountPercent)
-		terms = append(terms, term)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var term PaymentTerm
+			var discountPercent pgtype.Text
+			if err := rows.Scan(&term.ID, &term.Code, &term.Name, &term.DueDays,
+				&term.DiscountDays, &discountPercent, &term.IsActive); err != nil {
+				return err
+			}
+			term.DiscountPercent = textOrNil(discountPercent)
+			terms = append(terms, term)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "PAYMENT_TERM_LIST_FAILED", err.Error())
 		return
 	}
@@ -667,13 +693,15 @@ func (service *Service) CreatePaymentTerm(writer http.ResponseWriter, request *h
 		return
 	}
 	var id int64
-	err = service.pool.QueryRow(request.Context(), `
-		INSERT INTO payment_terms (
-			tenant_id, code, name, due_days, discount_days, discount_percent, cash_flow_category
-		) VALUES ($1, $2, $3, COALESCE($4, 30), $5, $6, $7)
-		RETURNING id
-	`, tenant, req.Code, req.Name, req.DueDays, req.DiscountDays,
-		req.DiscountPercent, req.CashFlowCategory).Scan(&id)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(request.Context(), `
+			INSERT INTO payment_terms (
+				tenant_id, code, name, due_days, discount_days, discount_percent, cash_flow_category
+			) VALUES ($1, $2, $3, COALESCE($4, 30), $5, $6, $7)
+			RETURNING id
+		`, tenant, req.Code, req.Name, req.DueDays, req.DiscountDays,
+			req.DiscountPercent, req.CashFlowCategory).Scan(&id)
+	})
 	if err != nil {
 		if isUniqueViolation(err) {
 			writeError(writer, http.StatusConflict, "PAYMENT_TERM_CODE_EXISTS", "a payment term with this code already exists for this tenant")
@@ -707,16 +735,20 @@ func (service *Service) checkCustomerDuplicates(ctx context.Context, tenantID in
 	code = strings.TrimSpace(code)
 	name = strings.TrimSpace(name)
 	var existingCode bool
-	if err := service.pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM customers WHERE tenant_id = $1 AND code = $2 AND id <> $3)`,
-		tenantID, code, excludeID).Scan(&existingCode); err == nil && existingCode {
+	if err := db.WithTenantData(ctx, service.pool, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM customers WHERE tenant_id = $1 AND code = $2 AND id <> $3)`,
+			tenantID, code, excludeID).Scan(&existingCode)
+	}); err == nil && existingCode {
 		return "CUSTOMER_CODE_EXISTS", "a customer with this code already exists for this tenant"
 	}
 	if name != "" {
 		var existingName bool
-		if err := service.pool.QueryRow(ctx,
-			`SELECT EXISTS(SELECT 1 FROM customers WHERE tenant_id = $1 AND is_active = true AND LOWER(name) = LOWER($2) AND id <> $3)`,
-			tenantID, name, excludeID).Scan(&existingName); err == nil && existingName {
+		if err := db.WithTenantData(ctx, service.pool, tenantID, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx,
+				`SELECT EXISTS(SELECT 1 FROM customers WHERE tenant_id = $1 AND is_active = true AND LOWER(name) = LOWER($2) AND id <> $3)`,
+				tenantID, name, excludeID).Scan(&existingName)
+		}); err == nil && existingName {
 			return "CUSTOMER_NAME_EXISTS", "an active customer with this name already exists for this tenant"
 		}
 	}
@@ -798,9 +830,11 @@ func scanCustomer(row scannable) (Customer, error) {
 func (service *Service) validateReferenceIDs(ctx context.Context, tenant int64, req CreateCustomerRequest) (string, string) {
 	if req.PaymentTermID != nil && *req.PaymentTermID > 0 {
 		var ok bool
-		if err := service.pool.QueryRow(ctx,
-			`SELECT EXISTS(SELECT 1 FROM payment_terms WHERE tenant_id = $1 AND id = $2)`,
-			tenant, *req.PaymentTermID).Scan(&ok); err != nil {
+		if err := db.WithTenantData(ctx, service.pool, tenant, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx,
+				`SELECT EXISTS(SELECT 1 FROM payment_terms WHERE tenant_id = $1 AND id = $2)`,
+				tenant, *req.PaymentTermID).Scan(&ok)
+		}); err != nil {
 			return "CUSTOMER_INVALID_REFERENCE", "failed to validate payment_term_id"
 		}
 		if !ok {
@@ -812,9 +846,11 @@ func (service *Service) validateReferenceIDs(ctx context.Context, tenant int64, 
 			continue
 		}
 		var ok bool
-		if err := service.pool.QueryRow(ctx,
-			`SELECT EXISTS(SELECT 1 FROM accounts WHERE tenant_id = $1 AND id = $2)`,
-			tenant, *accountID).Scan(&ok); err != nil {
+		if err := db.WithTenantData(ctx, service.pool, tenant, func(tx pgx.Tx) error {
+			return tx.QueryRow(ctx,
+				`SELECT EXISTS(SELECT 1 FROM accounts WHERE tenant_id = $1 AND id = $2)`,
+				tenant, *accountID).Scan(&ok)
+		}); err != nil {
 			return "CUSTOMER_INVALID_REFERENCE", "failed to validate account reference"
 		}
 		if !ok {

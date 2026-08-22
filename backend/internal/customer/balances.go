@@ -5,6 +5,9 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // M-007: AR sub-ledger reporting. The customer_balances table is maintained
@@ -42,49 +45,48 @@ func (service *Service) ARBalances(writer http.ResponseWriter, request *http.Req
 
 	// Per-customer balances from the sub-ledger, joined with overdue amounts
 	// derived from invoices past their due date.
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT b.customer_id, c.code, c.name, b.ar_cents,
-		       COALESCE((
-		           SELECT SUM(i.receivable_cents)
-		           FROM invoices i
-		           WHERE i.tenant_id = b.tenant_id AND i.customer_id = b.customer_id
-		             AND i.status IN ('ISSUED','PARTIALLY_PAID')
-		             AND i.due_date < CURRENT_DATE
-		       ), 0)
-		FROM customer_balances b
-		JOIN customers c ON c.tenant_id = b.tenant_id AND c.id = b.customer_id
-		WHERE b.tenant_id = $1 AND b.ar_cents > 0
-		ORDER BY b.ar_cents DESC, c.code
-	`, tenant)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "AR_BALANCES_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
 	resp := arBalancesResponse{Balances: []customerBalanceRow{}}
-	for rows.Next() {
-		var row customerBalanceRow
-		if err := rows.Scan(&row.CustomerID, &row.Code, &row.Name, &row.ARCents, &row.OverdueCents); err != nil {
-			writeError(writer, http.StatusInternalServerError, "AR_BALANCES_FAILED", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT b.customer_id, c.code, c.name, b.ar_cents,
+			       COALESCE((
+			           SELECT SUM(i.receivable_cents)
+			           FROM invoices i
+			           WHERE i.tenant_id = b.tenant_id AND i.customer_id = b.customer_id
+			             AND i.status IN ('ISSUED','PARTIALLY_PAID')
+			             AND i.due_date < CURRENT_DATE
+			       ), 0)
+			FROM customer_balances b
+			JOIN customers c ON c.tenant_id = b.tenant_id AND c.id = b.customer_id
+			WHERE b.tenant_id = $1 AND b.ar_cents > 0
+			ORDER BY b.ar_cents DESC, c.code
+		`, tenant)
+		if err != nil {
+			return err
 		}
-		resp.TotalARCents += row.ARCents
-		resp.Balances = append(resp.Balances, row)
-	}
-	if err := rows.Err(); err != nil {
-		writeError(writer, http.StatusInternalServerError, "AR_BALANCES_FAILED", err.Error())
-		return
-	}
+		defer rows.Close()
+		for rows.Next() {
+			var row customerBalanceRow
+			if err := rows.Scan(&row.CustomerID, &row.Code, &row.Name, &row.ARCents, &row.OverdueCents); err != nil {
+				return err
+			}
+			resp.TotalARCents += row.ARCents
+			resp.Balances = append(resp.Balances, row)
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
 
-	// GL AR balance (account code 1201): debit - credit across posted journals.
-	if err := service.pool.QueryRow(request.Context(), `
-		SELECT COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0)
-		FROM journal_lines jl
-		JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-		JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-		WHERE jl.tenant_id = $1 AND a.code = $2 AND je.status = 'POSTED'
-	`, tenant, arAccountCode).Scan(&resp.GLARCents); err != nil {
+		// GL AR balance (account code 1201): debit - credit across posted journals.
+		return tx.QueryRow(request.Context(), `
+			SELECT COALESCE(SUM(jl.debit_cents - jl.credit_cents), 0)
+			FROM journal_lines jl
+			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
+			JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
+			WHERE jl.tenant_id = $1 AND a.code = $2 AND je.status = 'POSTED'
+		`, tenant, arAccountCode).Scan(&resp.GLARCents)
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "AR_BALANCES_FAILED", err.Error())
 		return
 	}
@@ -108,10 +110,12 @@ func (service *Service) ARBalance(writer http.ResponseWriter, request *http.Requ
 		return
 	}
 	var arCents int64
-	err = service.pool.QueryRow(request.Context(), `
-		SELECT COALESCE(ar_cents, 0) FROM customer_balances
-		WHERE tenant_id = $1 AND customer_id = $2
-	`, tenant, id).Scan(&arCents)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(request.Context(), `
+			SELECT COALESCE(ar_cents, 0) FROM customer_balances
+			WHERE tenant_id = $1 AND customer_id = $2
+		`, tenant, id).Scan(&arCents)
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "AR_BALANCE_FAILED", err.Error())
 		return
