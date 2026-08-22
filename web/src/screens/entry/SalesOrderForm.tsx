@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
 import { FormError, LoadingState } from "../../components/ui";
-import { NextStepsBar } from "../../components/NextSteps";
 import { useToast } from "../../components/Toast";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
@@ -313,11 +312,11 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
 
   return (
     <div className="enterprise-form">
-      {/* Zone 1: Sticky Document Header */}
+      {/* Zone 1: Sticky Document Header (Compact) */}
       <header className="form-zone-1">
         <div className="form-header__title-group">
           <div className="form-header__icon-box">
-            <Icon name="shopping_cart" size={20} />
+            <Icon name="shopping_cart" size={16} />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -327,20 +326,17 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
                 {statusLabel}
               </span>
             </div>
-            <p className="text-xs text-muted mt-0.5">
-              Penerimaan & konfirmasi pesanan komersial resmi dari pelanggan
-            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             className="topbar__icon-btn"
             onClick={() => window.print()}
             title="Cetak Sales Order (Print)"
           >
-            <Icon name="print" size={16} />
+            <Icon name="print" size={14} />
           </button>
           <button
             type="button"
@@ -348,402 +344,420 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
             onClick={() => workbench.close(tabId)}
             title="Tutup Tab"
           >
-            <Icon name="close" size={16} />
+            <Icon name="close" size={14} />
           </button>
         </div>
       </header>
 
-      {/* Zone 2: Dynamic Form Body */}
-      <main className="form-zone-2">
-        {error && <FormError message={error} />}
-
-        {/* 2.A Essential Document Meta Card (Always Visible on Top) */}
-        <div className="form-card form-grid-2col">
-          <div className="flex flex-col gap-3">
-            <div className="auth-field">
-              <label>Pelanggan (Customer) *</label>
-              <select
-                className="input-base font-semibold"
-                value={customerId}
-                disabled={isExisting}
-                onChange={(e) => setCustomerId(e.target.value)}
-              >
-                <option value="">-- Pilih Pelanggan --</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code ? `${c.code} - ` : ""}{c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {selectedCustomer && (
-              <div className="text-xs text-muted flex items-center gap-4 px-1">
-                <span>Alamat: <strong className="text-secondary">{selectedCustomer.address || "—"}</strong></span>
-                <span>Kontak: <strong className="text-secondary">{selectedCustomer.email || selectedCustomer.phone || "—"}</strong></span>
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <div className="grid-2col gap-3">
-              <div className="auth-field">
-                <label>Tanggal Order *</label>
-                <input
-                  type="date"
-                  className="input-base font-mono"
-                  value={date}
-                  disabled={isExisting}
-                  onChange={(e) => setDate(e.target.value)}
-                />
-              </div>
-              <div className="auth-field">
-                <label>Target Pengiriman</label>
-                <input
-                  type="date"
-                  className="input-base font-mono"
-                  value={requestedDeliveryDate}
-                  disabled={isExisting}
-                  onChange={(e) => setRequestedDeliveryDate(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="auth-field">
-              <TaxRateSelector
-                value={taxRate}
-                onChange={setTaxRate}
-                disabled={isExisting}
-                label="Skema Pajak Pertambahan Nilai (PPN)"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 2.B Corporate Tab Navigation for Detailed Sections */}
-        <div className="form-nav-tabs">
+      {/* 3-Column Compact Workspace Layout */}
+      <div className="form-workspace-layout">
+        {/* Left Column: Side Tabs Rail */}
+        <aside className="form-side-nav">
           <button
             type="button"
-            className={`form-nav-tab ${activeTab === "items" ? "is-active" : ""}`}
+            className={`form-side-tab ${activeTab === "items" ? "is-active" : ""}`}
             onClick={() => setActiveTab("items")}
           >
-            <Icon name="package" size={15} />
-            <span>Rincian Barang & Jasa</span>
-            <span className="text-xs font-mono px-1.5 py-0.5 rounded-full bg-surface-secondary text-secondary">
+            <span className="form-side-tab__label">
+              <Icon name="package" size={15} />
+              <span>Rincian Item</span>
+            </span>
+            <span className="form-side-tab__badge">
               {lines.filter(l => l.itemId).length}
             </span>
           </button>
           <button
             type="button"
-            className={`form-nav-tab ${activeTab === "additional" ? "is-active" : ""}`}
+            className={`form-side-tab ${activeTab === "header" ? "is-active" : ""}`}
+            onClick={() => setActiveTab("header")}
+          >
+            <span className="form-side-tab__label">
+              <Icon name="building" size={15} />
+              <span>Info Pelanggan & Pajak</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`form-side-tab ${activeTab === "additional" ? "is-active" : ""}`}
             onClick={() => setActiveTab("additional")}
           >
-            <Icon name="receipt" size={15} />
-            <span>PO Pelanggan, Pengiriman & Catatan</span>
+            <span className="form-side-tab__label">
+              <Icon name="receipt" size={15} />
+              <span>PO, Alamat & Kirim</span>
+            </span>
           </button>
-        </div>
+        </aside>
 
-        {/* TAB 1: RINCIAN ITEM BARANG / JASA (DEFAULT) */}
-        {activeTab === "items" && (
-          <div className="form-card" style={{ padding: "0", overflow: "hidden" }}>
-            <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)" }}>
-              <div>
-                <h2 className="text-sm font-bold text-primary">Line Items Pesanan Penjualan</h2>
-                <p className="text-xs text-muted mt-0.5">Daftar item produk yang dipesan beserta kuantitas, harga jual, dan diskon.</p>
+        {/* Center Column: Form Panels */}
+        <main className="form-center-pane">
+          {error && <FormError message={error} />}
+
+          {/* Quick Header Strip */}
+          <div className="form-card-compact" style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted">Pelanggan:</span>
+              <strong className="text-xs text-primary font-semibold">
+                {selectedCustomer ? `${selectedCustomer.code ? selectedCustomer.code + " - " : ""}${selectedCustomer.name}` : "— Belum dipilih —"}
+              </strong>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-muted font-mono">
+              <span>Tgl: <strong className="text-secondary">{date}</strong></span>
+              <span>Kirim: <strong className="text-secondary">{requestedDeliveryDate || "—"}</strong></span>
+            </div>
+          </div>
+
+          {/* TAB 1: RINCIAN ITEM BARANG / JASA (DEFAULT) */}
+          {activeTab === "items" && (
+            <div className="form-card-compact" style={{ padding: "0", overflow: "hidden" }}>
+              <div className="form-card-header" style={{ padding: "12px 16px", margin: "0" }}>
+                <div>
+                  <h2 className="form-card-title">Line Items Pesanan Penjualan</h2>
+                </div>
+                {!isExisting && (
+                  <button
+                    type="button"
+                    className="btn-dash-primary text-xs"
+                    style={{ padding: "4px 10px" }}
+                    onClick={addLine}
+                  >
+                    <Icon name="plus" size={13} />
+                    <span>Tambah Item</span>
+                  </button>
+                )}
               </div>
+
+              <div className="datatable-wrapper" style={{ border: "none", borderRadius: "0" }}>
+                <table className="datatable">
+                  <thead>
+                    <tr>
+                      <th style={{ width: "40%" }}>Item Produk / Jasa *</th>
+                      <th className="num" style={{ width: "10%" }}>Qty</th>
+                      <th className="num" style={{ width: "18%" }}>Harga Satuan (Rp)</th>
+                      <th className="num" style={{ width: "14%" }}>Diskon (Rp)</th>
+                      <th className="num" style={{ width: "18%" }}>Total Subtotal (Rp)</th>
+                      {!isExisting && <th style={{ width: "36px" }} />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((line) => (
+                      <tr key={line.id}>
+                        <td>
+                          <select
+                            className="input-base font-semibold"
+                            value={line.itemId}
+                            disabled={isExisting}
+                            onChange={(e) => setItem(line.id, e.target.value)}
+                          >
+                            <option value="">-- Pilih Produk / Jasa --</option>
+                            {items.map((i) => (
+                              <option key={i.id} value={i.id}>
+                                {i.code} - {i.name} ({i.unit || "Pcs"})
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="num">
+                          <input
+                            type="number"
+                            min="1"
+                            className="input-base text-right font-mono"
+                            value={line.qty}
+                            disabled={isExisting}
+                            onChange={(e) => setQty(line.id, Number(e.target.value))}
+                          />
+                        </td>
+                        <td className="num">
+                          <input
+                            type="number"
+                            className="input-base text-right font-mono font-semibold"
+                            value={line.unitPriceCents}
+                            disabled={isExisting}
+                            onChange={(e) => setPrice(line.id, parseCents(e.target.value))}
+                          />
+                        </td>
+                        <td className="num">
+                          <input
+                            type="number"
+                            className="input-base text-right font-mono"
+                            value={line.discountCents}
+                            disabled={isExisting}
+                            onChange={(e) => setDiscount(line.id, parseCents(e.target.value))}
+                          />
+                        </td>
+                        <td className="num font-mono font-bold text-primary text-xs">
+                          {formatIDR(line.lineTotalCents)}
+                        </td>
+                        {!isExisting && (
+                          <td className="text-center">
+                            <button
+                              type="button"
+                              className="topbar__icon-btn text-danger"
+                              disabled={lines.length <= 1}
+                              onClick={() => removeLine(line.id)}
+                              title="Hapus baris"
+                            >
+                              <Icon name="trash" size={13} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: INFORMASI HEADER & PELANGGAN */}
+          {activeTab === "header" && (
+            <div className="form-card-compact form-grid-2col">
+              <div className="flex flex-col gap-2.5">
+                <div className="auth-field">
+                  <label>Pelanggan (Customer) *</label>
+                  <select
+                    className="input-base font-semibold"
+                    value={customerId}
+                    disabled={isExisting}
+                    onChange={(e) => setCustomerId(e.target.value)}
+                  >
+                    <option value="">-- Pilih Pelanggan --</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.code ? `${c.code} - ` : ""}{c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="auth-field">
+                  <label>Alamat Penagihan Pelanggan</label>
+                  <input
+                    type="text"
+                    className="input-base input-computed"
+                    readOnly
+                    value={selectedCustomer ? (selectedCustomer.address || "Alamat belum disetel") : "Pilih pelanggan untuk melihat alamat"}
+                  />
+                </div>
+
+                <div className="auth-field">
+                  <label>Kontak / Telepon</label>
+                  <input
+                    type="text"
+                    className="input-base input-computed"
+                    readOnly
+                    value={selectedCustomer ? (selectedCustomer.phone || selectedCustomer.email || "—") : "—"}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2.5">
+                <div className="grid-2col gap-2.5">
+                  <div className="auth-field">
+                    <label>Tanggal Order *</label>
+                    <input
+                      type="date"
+                      className="input-base font-mono"
+                      value={date}
+                      disabled={isExisting}
+                      onChange={(e) => setDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="auth-field">
+                    <label>Target Pengiriman</label>
+                    <input
+                      type="date"
+                      className="input-base font-mono"
+                      value={requestedDeliveryDate}
+                      disabled={isExisting}
+                      onChange={(e) => setRequestedDeliveryDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="auth-field">
+                  <TaxRateSelector
+                    value={taxRate}
+                    onChange={setTaxRate}
+                    disabled={isExisting}
+                    label="Skema Pajak Pertambahan Nilai (PPN)"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: PO PELANGGAN, PENGIRIMAN & INFORMASI TAMBAHAN */}
+          {activeTab === "additional" && (
+            <div className="form-card-compact form-grid-2col">
+              <div className="flex flex-col gap-2.5">
+                <div className="auth-field">
+                  <label>Nomor Purchase Order Pelanggan (Customer PO)</label>
+                  <input
+                    type="text"
+                    className="input-base font-mono"
+                    placeholder="Contoh: PO-CUST-8891"
+                    value={customerPONumber}
+                    disabled={isExisting}
+                    onChange={(e) => setCustomerPONumber(e.target.value)}
+                  />
+                </div>
+                <div className="auth-field">
+                  <label>Tanggal PO Pelanggan</label>
+                  <input
+                    type="date"
+                    className="input-base font-mono"
+                    value={customerPODate}
+                    disabled={isExisting}
+                    onChange={(e) => setCustomerPODate(e.target.value)}
+                  />
+                </div>
+                <div className="auth-field">
+                  <label>Catatan & Instruksi Khusus Pesanan</label>
+                  <textarea
+                    className="input-base"
+                    rows={2}
+                    placeholder="Instruksi pengemasan, referensi kontrak..."
+                    value={notes}
+                    disabled={isExisting}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2.5">
+                <div className="auth-field">
+                  <label>Syarat Pengiriman (Incoterms)</label>
+                  <select
+                    className="input-base"
+                    value={shippingTerms ?? ""}
+                    disabled={isExisting}
+                    onChange={(e) => setShippingTerms(e.target.value ? (e.target.value as NonNullable<SalesOrder["shipping_terms"]>) : undefined)}
+                  >
+                    <option value="">-- Tanpa Ketentuan Khusus --</option>
+                    <option value="FOB">FOB (Free On Board)</option>
+                    <option value="CIF">CIF (Cost, Insurance & Freight)</option>
+                    <option value="EXW">EXW (Ex Works / Ambil di Gudang)</option>
+                    <option value="DAP">DAP (Delivered at Place)</option>
+                  </select>
+                </div>
+                <div className="auth-field">
+                  <label>Alamat Pengiriman Barang (Ship-To Address)</label>
+                  <textarea
+                    className="input-base"
+                    rows={3}
+                    placeholder="Alamat lengkap penerimaan barang..."
+                    value={shipToAddress}
+                    disabled={isExisting}
+                    onChange={(e) => setShipToAddress(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Official Print Signature Sign-off Box */}
+          <div className="print-signoff">
+            <div className="print-signoff-box">
+              <div className="sign-role">Diterima Oleh</div>
+              <div className="sign-space" />
+              <div className="sign-name">( Bagian Penjualan / Sales Admin )</div>
+            </div>
+            <div className="print-signoff-box">
+              <div className="sign-role">Disetujui Oleh</div>
+              <div className="sign-space" />
+              <div className="sign-name">( Manajer Penjualan / Sales Head )</div>
+            </div>
+            <div className="print-signoff-box">
+              <div className="sign-role">Pemesan (Customer)</div>
+              <div className="sign-space" />
+              <div className="sign-name">( Penanggung Jawab Order )</div>
+            </div>
+          </div>
+        </main>
+
+        {/* Right Column: Action & Summary Sidebar */}
+        <aside className="form-action-sidebar">
+          {/* Summary Card */}
+          <div className="form-summary-card">
+            <div className="flex-between text-xs pb-1 border-b border-subtle">
+              <span className="text-muted">DPP Subtotal:</span>
+              <strong className="font-mono text-primary">{formatIDR(subtotalCents)}</strong>
+            </div>
+            <div className="flex-between text-xs pb-1 border-b border-subtle">
+              <span className="text-muted">PPN {taxRate > 0 ? `(${taxRate}%)` : ""}:</span>
+              <strong className="font-mono text-secondary">{formatIDR(ppnCents)}</strong>
+            </div>
+
+            <div className="form-summary-total">
+              <span className="form-summary-total__label">Total Pesanan</span>
+              <span className="form-summary-total__val">{formatIDR(totalCents)}</span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="form-action-stack mt-2">
               {!isExisting && (
                 <button
                   type="button"
-                  className="btn-dash-primary text-xs"
-                  onClick={addLine}
+                  className="form-action-btn-primary"
+                  disabled={totalCents <= 0 || saving}
+                  onClick={() => void handleSubmit()}
                 >
-                  <Icon name="plus" size={14} />
-                  <span>+ Tambah Baris Item</span>
+                  {saving ? (
+                    <span>Mengonfirmasi...</span>
+                  ) : (
+                    <>
+                      <Icon name="check" size={15} />
+                      <span>Konfirmasi Order</span>
+                    </>
+                  )}
                 </button>
               )}
-            </div>
 
-            <div className="datatable-wrapper" style={{ border: "none", borderRadius: "0" }}>
-              <table className="datatable">
-                <thead>
-                  <tr>
-                    <th style={{ width: "38%" }}>Item / Produk *</th>
-                    <th className="num" style={{ width: "10%" }}>Qty</th>
-                    <th className="num" style={{ width: "18%" }}>Harga Satuan (Rp)</th>
-                    <th className="num" style={{ width: "14%" }}>Diskon (Rp)</th>
-                    <th className="num" style={{ width: "16%" }}>Total Baris (Rp)</th>
-                    {!isExisting && <th style={{ width: "40px" }} />}
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((line) => (
-                    <tr key={line.id}>
-                      <td>
-                        <select
-                          className="input-base text-xs w-full font-semibold"
-                          value={line.itemId}
-                          disabled={isExisting}
-                          onChange={(e) => setItem(line.id, e.target.value)}
-                        >
-                          <option value="">-- Pilih Produk / Jasa --</option>
-                          {items.map((i) => (
-                            <option key={i.id} value={i.id}>
-                              {i.code} - {i.name} ({i.unit || "Pcs"})
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="num">
-                        <input
-                          type="number"
-                          min="1"
-                          className="input-base text-xs text-right font-mono w-full"
-                          value={line.qty}
-                          disabled={isExisting}
-                          onChange={(e) => setQty(line.id, Number(e.target.value))}
-                        />
-                      </td>
-                      <td className="num">
-                        <input
-                          type="number"
-                          className="input-base text-xs text-right font-mono font-semibold w-full"
-                          value={line.unitPriceCents}
-                          disabled={isExisting}
-                          onChange={(e) => setPrice(line.id, parseCents(e.target.value))}
-                        />
-                      </td>
-                      <td className="num">
-                        <input
-                          type="number"
-                          className="input-base text-xs text-right font-mono w-full"
-                          value={line.discountCents}
-                          disabled={isExisting}
-                          onChange={(e) => setDiscount(line.id, parseCents(e.target.value))}
-                        />
-                      </td>
-                      <td className="num font-mono font-bold text-primary">
-                        {formatIDR(line.lineTotalCents)}
-                      </td>
-                      {!isExisting && (
-                        <td className="text-center">
-                          <button
-                            type="button"
-                            className="topbar__icon-btn text-danger"
-                            disabled={lines.length <= 1}
-                            onClick={() => removeLine(line.id)}
-                            title="Hapus baris"
-                          >
-                            <Icon name="trash" size={14} />
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="total-rule-top">
-                    <td colSpan={4} className="text-right font-semibold text-xs text-secondary">
-                      Dasar Pengenaan Pajak (DPP Subtotal):
-                    </td>
-                    <td className="num font-mono font-bold text-primary text-sm">
-                      {formatIDR(subtotalCents)}
-                    </td>
-                    {!isExisting && <td />}
-                  </tr>
-                  <tr>
-                    <td colSpan={4} className="text-right font-semibold text-xs text-muted">
-                      PPN {taxRate > 0 ? `(${taxRate}%)` : ""}:
-                    </td>
-                    <td className="num font-mono font-semibold text-secondary text-xs">
-                      {formatIDR(ppnCents)}
-                    </td>
-                    {!isExisting && <td />}
-                  </tr>
-                  <tr className="total-double" style={{ backgroundColor: "var(--bg-surface)" }}>
-                    <td colSpan={4} className="text-right font-bold text-xs text-brand">
-                      Total Pesanan (Grand Total):
-                    </td>
-                    <td className="num font-mono font-bold text-brand text-base">
-                      {formatIDR(totalCents)}
-                    </td>
-                    {!isExisting && <td />}
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        )}
+              {isExisting && orderStatus === "CONFIRMED" && (
+                <>
+                  <button
+                    type="button"
+                    className="form-action-btn-primary"
+                    onClick={handleCreateDelivery}
+                  >
+                    <Icon name="package" size={15} />
+                    <span>Buat Surat Jalan</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="form-action-btn-secondary"
+                    onClick={handleCreateInvoice}
+                  >
+                    <Icon name="receipt" size={14} />
+                    <span>Terbitkan Faktur</span>
+                  </button>
+                </>
+              )}
 
-        {/* TAB 2: PO PELANGGAN, PENGIRIMAN & INFORMASI TAMBAHAN */}
-        {activeTab === "additional" && (
-          <div className="form-card form-grid-2col">
-            <div className="flex flex-col gap-3">
-              <div className="auth-field">
-                <label>Nomor Purchase Order Pelanggan (Customer PO)</label>
-                <input
-                  type="text"
-                  className="input-base font-mono"
-                  placeholder="Contoh: PO-CUST-8891"
-                  value={customerPONumber}
-                  disabled={isExisting}
-                  onChange={(e) => setCustomerPONumber(e.target.value)}
-                />
-              </div>
-              <div className="auth-field">
-                <label>Tanggal PO Pelanggan</label>
-                <input
-                  type="date"
-                  className="input-base font-mono"
-                  value={customerPODate}
-                  disabled={isExisting}
-                  onChange={(e) => setCustomerPODate(e.target.value)}
-                />
-              </div>
-              <div className="auth-field">
-                <label>Catatan & Instruksi Khusus Pesanan</label>
-                <textarea
-                  className="input-base"
-                  rows={2}
-                  placeholder="Instruksi pengemasan, referensi kontrak, dll..."
-                  value={notes}
-                  disabled={isExisting}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <div className="auth-field">
-                <label>Syarat Pengiriman (Incoterms)</label>
-                <select
-                  className="input-base"
-                  value={shippingTerms ?? ""}
-                  disabled={isExisting}
-                  onChange={(e) => setShippingTerms(e.target.value ? (e.target.value as NonNullable<SalesOrder["shipping_terms"]>) : undefined)}
-                >
-                  <option value="">-- Tanpa Ketentuan Khusus --</option>
-                  <option value="FOB">FOB (Free On Board)</option>
-                  <option value="CIF">CIF (Cost, Insurance & Freight)</option>
-                  <option value="EXW">EXW (Ex Works / Ambil di Gudang)</option>
-                  <option value="DAP">DAP (Delivered at Place)</option>
-                </select>
-              </div>
-              <div className="auth-field">
-                <label>Alamat Pengiriman Barang (Ship-To Address)</label>
-                <textarea
-                  className="input-base"
-                  rows={3}
-                  placeholder="Alamat lengkap penerimaan barang..."
-                  value={shipToAddress}
-                  disabled={isExisting}
-                  onChange={(e) => setShipToAddress(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Post-Save Next Steps Actions */}
-        {isExisting && orderStatus === "CONFIRMED" && (
-          <div className="form-card bg-surface-secondary">
-            <NextStepsBar number={number} hint={orderStatus}>
               <button
                 type="button"
-                className="btn-dash-primary"
-                onClick={handleCreateDelivery}
-              >
-                <Icon name="package" size={16} />
-                <span>Buat Surat Jalan (Delivery Order)</span>
-              </button>
-              <button
-                type="button"
-                className="btn-dash-secondary"
-                onClick={handleCreateInvoice}
-              >
-                <Icon name="receipt" size={16} />
-                <span>Terbitkan Faktur Penjualan (Sales Invoice)</span>
-              </button>
-              <button
-                type="button"
-                className="btn-dash-secondary"
+                className="form-action-btn-secondary"
                 onClick={() => window.print()}
               >
-                <Icon name="print" size={16} />
-                <span>Cetak Sales Order</span>
+                <Icon name="print" size={14} />
+                <span>Cetak Lembar SO</span>
               </button>
-            </NextStepsBar>
-          </div>
-        )}
 
-        {/* Official Print Signature Sign-off Box */}
-        <div className="print-signoff">
-          <div className="print-signoff-box">
-            <div className="sign-role">Diterima Oleh</div>
-            <div className="sign-space" />
-            <div className="sign-name">( Bagian Penjualan / Sales Admin )</div>
-          </div>
-          <div className="print-signoff-box">
-            <div className="sign-role">Disetujui Oleh</div>
-            <div className="sign-space" />
-            <div className="sign-name">( Manajer Penjualan / Sales Head )</div>
-          </div>
-          <div className="print-signoff-box">
-            <div className="sign-role">Pemesan (Customer)</div>
-            <div className="sign-space" />
-            <div className="sign-name">( Penanggung Jawab Order )</div>
-          </div>
-        </div>
-      </main>
-
-      {/* Zone 3: Sticky Summary & Action Footer */}
-      <footer className="form-zone-3">
-        <div className="flex items-center gap-4">
-          <span className="status-badge status-draft text-xs">
-            <Icon name="check" size={12} /> DOKUMEN PESANAN PENJUALAN (SALES ORDER)
-          </span>
-          <span className="text-xs text-muted">
-            [Ctrl+S] Simpan Order &bull; [Esc] Tutup
-          </span>
-        </div>
-
-        <div className="flex items-center gap-6">
-          <div className="text-right">
-            <div className="text-xs text-muted">
-              DPP: <span className="font-mono">{formatIDR(subtotalCents)}</span> &bull; PPN: <span className="font-mono">{formatIDR(ppnCents)}</span>
-            </div>
-            <div className="text-sm font-bold text-primary">
-              TOTAL PESANAN: <span className="font-mono text-xl text-brand">{formatIDR(totalCents)}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn-dash-secondary"
-              onClick={() => workbench.close(tabId)}
-            >
-              Tutup
-            </button>
-            {!isExisting && (
               <button
                 type="button"
-                className="btn-dash-primary"
-                disabled={totalCents <= 0 || saving}
-                onClick={() => void handleSubmit()}
+                className="form-action-btn-secondary text-muted"
+                onClick={() => workbench.close(tabId)}
               >
-                {saving ? (
-                  <span>Mengonfirmasi Pesanan...</span>
-                ) : (
-                  <>
-                    <Icon name="check" size={16} />
-                    <span>KONFIRMASI SALES ORDER (Ctrl+S)</span>
-                  </>
-                )}
+                <span>Tutup Tab Form</span>
               </button>
-            )}
+            </div>
+
+            <div className="text-[11px] text-muted text-center mt-2 leading-tight">
+              Pintasan: <strong>Ctrl+S</strong> simpan &bull; <strong>Esc</strong> tutup
+            </div>
           </div>
-        </div>
-      </footer>
+        </aside>
+      </div>
     </div>
   );
 }

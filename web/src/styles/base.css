@@ -673,7 +673,7 @@ table.datatable thead th {
 }
 
 /* ------------------------------------------------------------
-   5. Standard 3-Zone Enterprise Form Architecture
+   5. Standard 3-Zone Enterprise Form & Compact Workspace Layout
    ------------------------------------------------------------ */
 .enterprise-form {
   display: flex;
@@ -682,32 +682,32 @@ table.datatable thead th {
   background-color: var(--bg-canvas);
 }
 
-/* Zone 1: Sticky Document Header */
+/* Zone 1: Document Header (Compact) */
 .form-zone-1 {
   position: sticky;
   top: 0;
   z-index: 30;
   background-color: var(--bg-surface);
   border-bottom: 1px solid var(--border-color);
-  padding: 12px 28px;
+  padding: 8px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .form-header__title-group {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
 }
 
 .form-header__icon-box {
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   background-color: var(--brand-primary-light);
   color: var(--brand-primary);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -715,7 +715,7 @@ table.datatable thead th {
 }
 
 .form-header__title {
-  font-size: 16px;
+  font-size: 14.5px;
   font-weight: 700;
   letter-spacing: -0.2px;
   color: var(--text-primary);
@@ -723,19 +723,19 @@ table.datatable thead th {
 
 .form-header__doc-number {
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
   background-color: var(--bg-surface-secondary);
-  padding: 2px 8px;
+  padding: 1px 6px;
   border-radius: var(--radius-xs);
   border: 1px solid var(--border-color);
 }
 
 .form-header__status-badge {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 700;
-  padding: 2px 8px;
+  padding: 1px 6px;
   border-radius: var(--radius-full);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -746,113 +746,246 @@ table.datatable thead th {
 .status-void { background: var(--color-danger-bg); color: var(--color-danger-text); border: 1px solid var(--color-danger-border); text-decoration: line-through; }
 .status-pending { background: var(--color-warning-bg); color: var(--color-warning-text); border: 1px solid var(--color-warning-border); }
 
-/* Form Nav Segmented Control */
-.form-nav-tabs {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background-color: var(--bg-surface-secondary);
-  padding: 4px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-  width: fit-content;
+/* 3-Column Compact Workspace Layout */
+.form-workspace-layout {
+  display: grid;
+  grid-template-columns: 210px 1fr 270px;
+  gap: 14px;
+  padding: 14px 20px;
+  align-items: start;
+  width: 100%;
 }
 
-.form-nav-tab {
+/* Left Side Tabs Rail */
+.form-side-nav {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+  position: sticky;
+  top: 56px;
+}
+
+.form-side-tab {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
+  justify-content: space-between;
+  padding: 8px 10px;
   border-radius: var(--radius-sm);
   background: transparent;
   border: none;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  text-align: left;
+  transition: all 0.12s ease;
 }
 
-.form-nav-tab:hover {
+.form-side-tab:hover {
+  background-color: var(--bg-surface-secondary);
   color: var(--text-primary);
 }
 
-.form-nav-tab.is-active {
-  background-color: var(--bg-surface);
+.form-side-tab.is-active {
+  background-color: var(--brand-primary-light);
   color: var(--brand-primary);
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
-/* Zone 2: Dynamic Form Body */
-.form-zone-2 {
-  flex: 1;
-  padding: 24px 32px;
+.form-side-tab__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-side-tab__badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: var(--radius-full);
+  background-color: var(--bg-surface-secondary);
+  color: var(--text-secondary);
+}
+
+.form-side-tab.is-active .form-side-tab__badge {
+  background-color: var(--brand-primary);
+  color: #fff;
+}
+
+/* Center Content Pane */
+.form-center-pane {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  width: 100%;
-  max-width: 1600px;
-  margin: 0 auto;
+  gap: 12px;
+  min-width: 0;
 }
 
-.form-card {
+.form-card-compact {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 1px 2px -1px rgba(15, 23, 42, 0.03);
-  padding: 20px 24px;
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
 }
 
-.form-grid-2col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
+.form-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-/* Inputs & Form Controls */
-.auth-field {
+.form-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Right Action & Summary Sidebar */
+.form-action-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 56px;
+}
+
+.form-summary-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+}
+
+.form-summary-total {
+  background: var(--bg-surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.form-summary-total__label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.form-summary-total__val {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--brand-primary);
+}
+
+.form-action-stack {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.auth-field label {
+.form-action-btn-primary {
+  width: 100%;
+  padding: 9px 14px;
+  background-color: var(--brand-primary);
+  color: #ffffff;
+  border: 1px solid var(--brand-primary-hover);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+  transition: all 0.12s ease;
+}
+
+.form-action-btn-primary:hover:not(:disabled) {
+  background-color: var(--brand-primary-hover);
+}
+
+.form-action-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.form-action-btn-secondary {
+  width: 100%;
+  padding: 8px 12px;
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.form-action-btn-secondary:hover:not(:disabled) {
+  background-color: var(--bg-surface-secondary);
+  border-color: var(--border-color);
+}
+
+/* Compact Inputs & Form Controls */
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.auth-field label {
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--text-secondary);
 }
 
 .input-base {
   width: 100%;
-  padding: 9px 12px;
+  padding: 6px 10px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  font-size: 13px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
   color: var(--text-primary);
   font-family: inherit;
-  transition: all 0.15s ease;
+  transition: all 0.12s ease;
 }
 
 .input-base:focus {
   border-color: var(--brand-primary);
-  box-shadow: 0 0 0 3px var(--brand-primary-light);
+  box-shadow: 0 0 0 2px var(--brand-primary-light);
   outline: none;
 }
 
-/* Zone 3: Sticky Summary & Action Footer */
-.form-zone-3 {
-  position: sticky;
-  bottom: 0;
-  z-index: 30;
-  background-color: var(--bg-surface);
-  border-top: 1px solid var(--border-color);
-  padding: 12px 32px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.04);
+@media (max-width: 1024px) {
+  .form-workspace-layout {
+    grid-template-columns: 1fr;
+  }
+  .form-side-nav, .form-action-sidebar {
+    position: static;
+  }
 }
 
 /* ------------------------------------------------------------

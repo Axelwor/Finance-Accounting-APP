@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
 import { FormError, LoadingState } from "../../components/ui";
-import { NextStepsBar } from "../../components/NextSteps";
 import { useToast } from "../../components/Toast";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
@@ -184,6 +183,7 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
     if (isSaved) return;
     if (!customerId) {
       setError("Pilih pelanggan untuk penawaran harga ini.");
+      setActiveTab("header");
       return;
     }
     const payloadLines: QuotationLineInput[] = lines
@@ -198,6 +198,7 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
       }));
     if (payloadLines.length === 0) {
       setError("Tambahkan minimal 1 baris item produk.");
+      setActiveTab("items");
       return;
     }
     setSaving(true);
@@ -270,11 +271,11 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
 
   return (
     <div className="enterprise-form">
-      {/* Zone 1: Sticky Document Header */}
+      {/* Zone 1: Sticky Document Header (Compact) */}
       <header className="form-zone-1">
         <div className="form-header__title-group">
           <div className="form-header__icon-box">
-            <Icon name="description" size={20} />
+            <Icon name="description" size={16} />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -284,20 +285,17 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
                 {statusLabel}
               </span>
             </div>
-            <p className="text-xs text-muted mt-0.5">
-              Komitmen penawaran harga & estimasi resmi kepada prospek atau pelanggan
-            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             className="topbar__icon-btn"
             onClick={() => window.print()}
             title="Cetak Penawaran (Print)"
           >
-            <Icon name="print" size={16} />
+            <Icon name="print" size={14} />
           </button>
           <button
             type="button"
@@ -305,378 +303,396 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
             onClick={() => workbench.close(tabId)}
             title="Tutup Tab"
           >
-            <Icon name="close" size={16} />
+            <Icon name="close" size={14} />
           </button>
         </div>
       </header>
 
-      {/* Zone 2: Dynamic Form Body */}
-      <main className="form-zone-2">
-        {error && <FormError message={error} />}
-
-        {/* 2.A Essential Document Meta Card (Always Visible on Top) */}
-        <div className="form-card form-grid-2col">
-          <div className="flex flex-col gap-3">
-            <div className="auth-field">
-              <label>Pelanggan / Prospek (Customer) *</label>
-              <select
-                className="input-base font-semibold"
-                value={customerId}
-                disabled={isSaved}
-                onChange={(e) => setCustomerId(e.target.value)}
-              >
-                <option value="">-- Pilih Pelanggan / Mitra Usaha --</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code ? `${c.code} - ` : ""}{c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {selectedCustomer && (
-              <div className="text-xs text-muted flex items-center gap-4 px-1">
-                <span>Alamat: <strong className="text-secondary">{selectedCustomer.address || "—"}</strong></span>
-                <span>Kontak: <strong className="text-secondary">{selectedCustomer.email || selectedCustomer.phone || "—"}</strong></span>
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <div className="grid-2col gap-3">
-              <div className="auth-field">
-                <label>Tanggal Dokumen *</label>
-                <input
-                  type="date"
-                  className="input-base font-mono"
-                  value={date}
-                  disabled={isSaved}
-                  onChange={(e) => setDate(e.target.value)}
-                />
-              </div>
-              <div className="auth-field">
-                <label>Berlaku Hingga</label>
-                <input
-                  type="date"
-                  className="input-base font-mono"
-                  value={validUntil}
-                  disabled={isSaved}
-                  onChange={(e) => setValidUntil(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="auth-field">
-              <TaxRateSelector
-                value={taxRate}
-                onChange={setTaxRate}
-                disabled={isSaved}
-                label="Skema Pajak Pertambahan Nilai (PPN)"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 2.B Corporate Tab Navigation for Detailed Sections */}
-        <div className="form-nav-tabs">
+      {/* 3-Column Compact Workspace Layout */}
+      <div className="form-workspace-layout">
+        {/* Left Column: Side Tabs Rail */}
+        <aside className="form-side-nav">
           <button
             type="button"
-            className={`form-nav-tab ${activeTab === "items" ? "is-active" : ""}`}
+            className={`form-side-tab ${activeTab === "items" ? "is-active" : ""}`}
             onClick={() => setActiveTab("items")}
           >
-            <Icon name="package" size={15} />
-            <span>Rincian Item Barang & Jasa</span>
-            <span className="text-xs font-mono px-1.5 py-0.5 rounded-full bg-surface-secondary text-secondary">
+            <span className="form-side-tab__label">
+              <Icon name="package" size={15} />
+              <span>Rincian Item</span>
+            </span>
+            <span className="form-side-tab__badge">
               {lines.filter(l => l.itemId).length}
             </span>
           </button>
           <button
             type="button"
-            className={`form-nav-tab ${activeTab === "additional" ? "is-active" : ""}`}
+            className={`form-side-tab ${activeTab === "header" ? "is-active" : ""}`}
+            onClick={() => setActiveTab("header")}
+          >
+            <span className="form-side-tab__label">
+              <Icon name="building" size={15} />
+              <span>Info Pelanggan & Pajak</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`form-side-tab ${activeTab === "additional" ? "is-active" : ""}`}
             onClick={() => setActiveTab("additional")}
           >
-            <Icon name="description" size={15} />
-            <span>Syarat, Ketentuan & Info Tambahan</span>
+            <span className="form-side-tab__label">
+              <Icon name="description" size={15} />
+              <span>Syarat & Catatan</span>
+            </span>
           </button>
-        </div>
+        </aside>
 
-        {/* TAB 1: RINCIAN ITEM PRODUK (DEFAULT) */}
-        {activeTab === "items" && (
-          <div className="form-card" style={{ padding: "0", overflow: "hidden" }}>
-            <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)" }}>
-              <div>
-                <h2 className="text-sm font-bold text-primary">Line Items Transaksi Penawaran</h2>
-                <p className="text-xs text-muted mt-0.5">Tentukan rincian barang/jasa, kuantitas penawaran, dan diskon per baris.</p>
+        {/* Center Column: Form Panels */}
+        <main className="form-center-pane">
+          {error && <FormError message={error} />}
+
+          {/* Quick Header Strip */}
+          <div className="form-card-compact" style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted">Pelanggan:</span>
+              <strong className="text-xs text-primary font-semibold">
+                {selectedCustomer ? `${selectedCustomer.code ? selectedCustomer.code + " - " : ""}${selectedCustomer.name}` : "— Belum dipilih —"}
+              </strong>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-muted font-mono">
+              <span>Tgl: <strong className="text-secondary">{date}</strong></span>
+              <span>Exp: <strong className="text-secondary">{validUntil || "—"}</strong></span>
+            </div>
+          </div>
+
+          {/* TAB 1: RINCIAN ITEM PRODUK (DEFAULT) */}
+          {activeTab === "items" && (
+            <div className="form-card-compact" style={{ padding: "0", overflow: "hidden" }}>
+              <div className="form-card-header" style={{ padding: "12px 16px", margin: "0" }}>
+                <div>
+                  <h2 className="form-card-title">Daftar Barang / Jasa yang Ditawarkan</h2>
+                </div>
+                {!isSaved && (
+                  <button
+                    type="button"
+                    className="btn-dash-primary text-xs"
+                    style={{ padding: "4px 10px" }}
+                    onClick={addLine}
+                  >
+                    <Icon name="plus" size={13} />
+                    <span>Tambah Item</span>
+                  </button>
+                )}
               </div>
+
+              <div className="datatable-wrapper" style={{ border: "none", borderRadius: "0" }}>
+                <table className="datatable">
+                  <thead>
+                    <tr>
+                      <th style={{ width: "40%" }}>Item Produk / Jasa *</th>
+                      <th className="num" style={{ width: "10%" }}>Qty</th>
+                      <th className="num" style={{ width: "18%" }}>Harga Satuan (Rp)</th>
+                      <th className="num" style={{ width: "14%" }}>Diskon (Rp)</th>
+                      <th className="num" style={{ width: "18%" }}>Total Subtotal (Rp)</th>
+                      {!isSaved && <th style={{ width: "36px" }} />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((line) => (
+                      <tr key={line.id}>
+                        <td>
+                          <select
+                            className="input-base font-semibold"
+                            value={line.itemId}
+                            disabled={isSaved}
+                            onChange={(e) => setItem(line.id, e.target.value)}
+                          >
+                            <option value="">-- Pilih Item Produk / Jasa --</option>
+                            {items.map((i) => (
+                              <option key={i.id} value={i.id}>
+                                {i.code} - {i.name} ({i.unit || "Pcs"})
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="num">
+                          <input
+                            type="number"
+                            min="1"
+                            className="input-base text-right font-mono"
+                            value={line.qty}
+                            disabled={isSaved}
+                            onChange={(e) => setQty(line.id, Number(e.target.value))}
+                          />
+                        </td>
+                        <td className="num">
+                          <input
+                            type="number"
+                            className="input-base text-right font-mono font-semibold"
+                            value={line.unitPriceCents}
+                            disabled={isSaved}
+                            onChange={(e) => setPrice(line.id, parseCents(e.target.value))}
+                          />
+                        </td>
+                        <td className="num">
+                          <input
+                            type="number"
+                            className="input-base text-right font-mono"
+                            value={line.discountCents}
+                            disabled={isSaved}
+                            onChange={(e) => setDiscount(line.id, parseCents(e.target.value))}
+                          />
+                        </td>
+                        <td className="num font-mono font-bold text-primary text-xs">
+                          {formatIDR(line.lineTotalCents)}
+                        </td>
+                        {!isSaved && (
+                          <td className="text-center">
+                            <button
+                              type="button"
+                              className="topbar__icon-btn text-danger"
+                              disabled={lines.length <= 1}
+                              onClick={() => removeLine(line.id)}
+                              title="Hapus baris"
+                            >
+                              <Icon name="trash" size={13} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: INFORMASI HEADER & PELANGGAN */}
+          {activeTab === "header" && (
+            <div className="form-card-compact form-grid-2col">
+              <div className="flex flex-col gap-2.5">
+                <div className="auth-field">
+                  <label>Pelanggan / Mitra Usaha (Customer) *</label>
+                  <select
+                    className="input-base font-semibold"
+                    value={customerId}
+                    disabled={isSaved}
+                    onChange={(e) => setCustomerId(e.target.value)}
+                  >
+                    <option value="">-- Pilih Pelanggan / Mitra Usaha --</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.code ? `${c.code} - ` : ""}{c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="auth-field">
+                  <label>Alamat Penagihan / Korespondensi</label>
+                  <input
+                    type="text"
+                    className="input-base input-computed"
+                    readOnly
+                    value={selectedCustomer ? (selectedCustomer.address || "Alamat belum disetel") : "Pilih pelanggan untuk melihat alamat"}
+                  />
+                </div>
+
+                <div className="auth-field">
+                  <label>Kontak / Email Pelanggan</label>
+                  <input
+                    type="text"
+                    className="input-base input-computed"
+                    readOnly
+                    value={selectedCustomer ? (selectedCustomer.email || selectedCustomer.phone || "—") : "—"}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2.5">
+                <div className="grid-2col gap-2.5">
+                  <div className="auth-field">
+                    <label>Tanggal Dokumen *</label>
+                    <input
+                      type="date"
+                      className="input-base font-mono"
+                      value={date}
+                      disabled={isSaved}
+                      onChange={(e) => setDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="auth-field">
+                    <label>Berlaku Hingga</label>
+                    <input
+                      type="date"
+                      className="input-base font-mono"
+                      value={validUntil}
+                      disabled={isSaved}
+                      onChange={(e) => setValidUntil(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="auth-field">
+                  <TaxRateSelector
+                    value={taxRate}
+                    onChange={setTaxRate}
+                    disabled={isSaved}
+                    label="Skema Pajak Pertambahan Nilai (PPN)"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: SYARAT & CATATAN */}
+          {activeTab === "additional" && (
+            <div className="form-card-compact form-grid-2col">
+              <div className="flex flex-col gap-2.5">
+                <div className="auth-field">
+                  <label>Catatan Syarat & Ketentuan (Terms & Conditions)</label>
+                  <textarea
+                    className="input-base"
+                    rows={3}
+                    placeholder="Contoh: Harga franco Jakarta, pembayaran 30 hari..."
+                    value={notes}
+                    disabled={isSaved}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2.5">
+                <div className="auth-field">
+                  <label>Ketentuan Pengiriman / Franco</label>
+                  <input
+                    type="text"
+                    className="input-base"
+                    placeholder="Contoh: Franco Jakarta"
+                    value={shippingTerms}
+                    disabled={isSaved}
+                    onChange={(e) => setShippingTerms(e.target.value)}
+                  />
+                </div>
+                <div className="auth-field">
+                  <label>Catatan Internal</label>
+                  <textarea
+                    className="input-base"
+                    rows={2}
+                    placeholder="Catatan tim internal..."
+                    value={internalRemarks}
+                    disabled={isSaved}
+                    onChange={(e) => setInternalRemarks(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Official Print Signature Sign-off Box */}
+          <div className="print-signoff">
+            <div className="print-signoff-box">
+              <div className="sign-role">Dibuat Oleh</div>
+              <div className="sign-space" />
+              <div className="sign-name">( Bagian Penjualan / Sales Rep )</div>
+            </div>
+            <div className="print-signoff-box">
+              <div className="sign-role">Disetujui Oleh</div>
+              <div className="sign-space" />
+              <div className="sign-name">( Manajer Pemasaran / Sales Mgr )</div>
+            </div>
+            <div className="print-signoff-box">
+              <div className="sign-role">Diterima &amp; Disetujui Oleh</div>
+              <div className="sign-space" />
+              <div className="sign-name">( Pelanggan / Prospek )</div>
+            </div>
+          </div>
+        </main>
+
+        {/* Right Column: Action & Summary Sidebar */}
+        <aside className="form-action-sidebar">
+          {/* Summary Card */}
+          <div className="form-summary-card">
+            <div className="flex-between text-xs pb-1 border-b border-subtle">
+              <span className="text-muted">DPP Subtotal:</span>
+              <strong className="font-mono text-primary">{formatIDR(subtotalCents)}</strong>
+            </div>
+            <div className="flex-between text-xs pb-1 border-b border-subtle">
+              <span className="text-muted">PPN {taxRate > 0 ? `(${taxRate}%)` : ""}:</span>
+              <strong className="font-mono text-secondary">{formatIDR(ppnCents)}</strong>
+            </div>
+
+            <div className="form-summary-total">
+              <span className="form-summary-total__label">Total Penawaran</span>
+              <span className="form-summary-total__val">{formatIDR(totalCents)}</span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="form-action-stack mt-2">
               {!isSaved && (
                 <button
                   type="button"
-                  className="btn-dash-primary text-xs"
-                  onClick={addLine}
+                  className="form-action-btn-primary"
+                  disabled={totalCents <= 0 || saving}
+                  onClick={() => void handleSubmit()}
                 >
-                  <Icon name="plus" size={14} />
-                  <span>+ Tambah Baris Item</span>
+                  {saving ? (
+                    <span>Menyimpan...</span>
+                  ) : (
+                    <>
+                      <Icon name="check" size={15} />
+                      <span>Simpan Penawaran</span>
+                    </>
+                  )}
                 </button>
               )}
-            </div>
 
-            <div className="datatable-wrapper" style={{ border: "none", borderRadius: "0" }}>
-              <table className="datatable">
-                <thead>
-                  <tr>
-                    <th style={{ width: "38%" }}>Item Produk / Jasa *</th>
-                    <th className="num" style={{ width: "10%" }}>Qty</th>
-                    <th className="num" style={{ width: "18%" }}>Harga Satuan (Rp)</th>
-                    <th className="num" style={{ width: "14%" }}>Diskon (Rp)</th>
-                    <th className="num" style={{ width: "16%" }}>Total Subtotal (Rp)</th>
-                    {!isSaved && <th style={{ width: "40px" }} />}
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((line) => (
-                    <tr key={line.id}>
-                      <td>
-                        <select
-                          className="input-base text-xs w-full font-semibold"
-                          value={line.itemId}
-                          disabled={isSaved}
-                          onChange={(e) => setItem(line.id, e.target.value)}
-                        >
-                          <option value="">-- Pilih Item Produk / Jasa --</option>
-                          {items.map((i) => (
-                            <option key={i.id} value={i.id}>
-                              {i.code} - {i.name} ({i.unit || "Pcs"})
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="num">
-                        <input
-                          type="number"
-                          min="1"
-                          className="input-base text-xs text-right font-mono w-full"
-                          value={line.qty}
-                          disabled={isSaved}
-                          onChange={(e) => setQty(line.id, Number(e.target.value))}
-                        />
-                      </td>
-                      <td className="num">
-                        <input
-                          type="number"
-                          className="input-base text-xs text-right font-mono font-semibold w-full"
-                          value={line.unitPriceCents}
-                          disabled={isSaved}
-                          onChange={(e) => setPrice(line.id, parseCents(e.target.value))}
-                        />
-                      </td>
-                      <td className="num">
-                        <input
-                          type="number"
-                          className="input-base text-xs text-right font-mono w-full"
-                          value={line.discountCents}
-                          disabled={isSaved}
-                          onChange={(e) => setDiscount(line.id, parseCents(e.target.value))}
-                        />
-                      </td>
-                      <td className="num font-mono font-bold text-primary">
-                        {formatIDR(line.lineTotalCents)}
-                      </td>
-                      {!isSaved && (
-                        <td className="text-center">
-                          <button
-                            type="button"
-                            className="topbar__icon-btn text-danger"
-                            disabled={lines.length <= 1}
-                            onClick={() => removeLine(line.id)}
-                            title="Hapus baris"
-                          >
-                            <Icon name="trash" size={14} />
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="total-rule-top">
-                    <td colSpan={4} className="text-right font-semibold text-xs text-secondary">
-                      Dasar Pengenaan Pajak (DPP Subtotal):
-                    </td>
-                    <td className="num font-mono font-bold text-primary text-sm">
-                      {formatIDR(subtotalCents)}
-                    </td>
-                    {!isSaved && <td />}
-                  </tr>
-                  <tr>
-                    <td colSpan={4} className="text-right font-semibold text-xs text-muted">
-                      PPN {taxRate > 0 ? `(${taxRate}%)` : ""}:
-                    </td>
-                    <td className="num font-mono font-semibold text-secondary text-xs">
-                      {formatIDR(ppnCents)}
-                    </td>
-                    {!isSaved && <td />}
-                  </tr>
-                  <tr className="total-double" style={{ backgroundColor: "var(--bg-surface)" }}>
-                    <td colSpan={4} className="text-right font-bold text-xs text-brand">
-                      Total Penawaran (Grand Total):
-                    </td>
-                    <td className="num font-mono font-bold text-brand text-base">
-                      {formatIDR(totalCents)}
-                    </td>
-                    {!isSaved && <td />}
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        )}
+              {isSaved && (
+                <>
+                  <button
+                    type="button"
+                    className="form-action-btn-primary"
+                    onClick={handleConvertToSO}
+                  >
+                    <Icon name="shopping_cart" size={15} />
+                    <span>Konversi ke SO</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="form-action-btn-secondary"
+                    onClick={() => void handleSend()}
+                    disabled={sending || savedStatus === "SENT" || savedStatus === "CONVERTED"}
+                  >
+                    <Icon name="send" size={14} />
+                    <span>{sending ? "Mengirim..." : "Kirim Penawaran"}</span>
+                  </button>
+                </>
+              )}
 
-        {/* TAB 2: SYARAT & INFORMASI TAMBAHAN */}
-        {activeTab === "additional" && (
-          <div className="form-card form-grid-2col">
-            <div className="flex flex-col gap-3">
-              <div className="auth-field">
-                <label>Catatan Syarat & Ketentuan (Terms & Conditions)</label>
-                <textarea
-                  className="input-base"
-                  rows={4}
-                  placeholder="Contoh: Harga franco Jakarta, pembayaran 30 hari setelah invoice, garansi resmi 12 bulan..."
-                  value={notes}
-                  disabled={isSaved}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <div className="auth-field">
-                <label>Ketentuan Pengiriman / Franco</label>
-                <input
-                  type="text"
-                  className="input-base"
-                  placeholder="Contoh: Franco Jakarta / Pengiriman via Ekspedisi Rekanan"
-                  value={shippingTerms}
-                  disabled={isSaved}
-                  onChange={(e) => setShippingTerms(e.target.value)}
-                />
-              </div>
-              <div className="auth-field">
-                <label>Catatan Internal (Tidak Tercetak pada Penawaran)</label>
-                <textarea
-                  className="input-base"
-                  rows={2}
-                  placeholder="Catatan tim internal mengenai histori penawaran atau kesepakatan khusus..."
-                  value={internalRemarks}
-                  disabled={isSaved}
-                  onChange={(e) => setInternalRemarks(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Post-Save Workflow Chain Actions */}
-        {isSaved && (
-          <div className="form-card bg-surface-secondary">
-            <NextStepsBar number={number} hint={savedStatus || undefined}>
               <button
                 type="button"
-                className="btn-dash-primary"
-                onClick={handleConvertToSO}
-              >
-                <Icon name="shopping_cart" size={16} />
-                <span>Konversi Menjadi Sales Order (SO)</span>
-              </button>
-              <button
-                type="button"
-                className="btn-dash-secondary"
+                className="form-action-btn-secondary"
                 onClick={() => window.print()}
               >
-                <Icon name="print" size={16} />
-                <span>Cetak Lembar Penawaran</span>
+                <Icon name="print" size={14} />
+                <span>Cetak Lembar PDF</span>
               </button>
+
               <button
                 type="button"
-                className="btn-dash-secondary"
-                onClick={() => void handleSend()}
-                disabled={sending || savedStatus === "SENT" || savedStatus === "CONVERTED"}
+                className="form-action-btn-secondary text-muted"
+                onClick={() => workbench.close(tabId)}
               >
-                <Icon name="send" size={16} />
-                <span>{sending ? "Mengirim..." : "Kirim ke Pelanggan"}</span>
+                <span>Tutup Tab Form</span>
               </button>
-            </NextStepsBar>
-          </div>
-        )}
-
-        {/* Official Print Signature Sign-off Box */}
-        <div className="print-signoff">
-          <div className="print-signoff-box">
-            <div className="sign-role">Dibuat Oleh</div>
-            <div className="sign-space" />
-            <div className="sign-name">( Bagian Penjualan / Sales Rep )</div>
-          </div>
-          <div className="print-signoff-box">
-            <div className="sign-role">Disetujui Oleh</div>
-            <div className="sign-space" />
-            <div className="sign-name">( Manajer Pemasaran / Sales Mgr )</div>
-          </div>
-          <div className="print-signoff-box">
-            <div className="sign-role">Diterima &amp; Disetujui Oleh</div>
-            <div className="sign-space" />
-            <div className="sign-name">( Pelanggan / Prospek )</div>
-          </div>
-        </div>
-      </main>
-
-      {/* Zone 3: Sticky Summary & Action Footer */}
-      <footer className="form-zone-3">
-        <div className="flex items-center gap-4">
-          <span className="status-badge status-draft text-xs">
-            <Icon name="check" size={12} /> DOKUMEN PENAWARAN (TIDAK MEM-POSTING BUKU BESAR)
-          </span>
-          <span className="text-xs text-muted">
-            [Ctrl+S] Simpan Penawaran &bull; [Esc] Tutup
-          </span>
-        </div>
-
-        <div className="flex items-center gap-6">
-          <div className="text-right">
-            <div className="text-xs text-muted">
-              DPP: <span className="font-mono">{formatIDR(subtotalCents)}</span> &bull; PPN: <span className="font-mono">{formatIDR(ppnCents)}</span>
             </div>
-            <div className="text-sm font-bold text-primary">
-              TOTAL PENAWARAN: <span className="font-mono text-xl text-brand">{formatIDR(totalCents)}</span>
+
+            <div className="text-[11px] text-muted text-center mt-2 leading-tight">
+              Pintasan: <strong>Ctrl+S</strong> simpan &bull; <strong>Esc</strong> tutup
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn-dash-secondary"
-              onClick={() => workbench.close(tabId)}
-            >
-              Tutup
-            </button>
-            {!isSaved && (
-              <button
-                type="button"
-                className="btn-dash-primary"
-                disabled={totalCents <= 0 || saving}
-                onClick={() => void handleSubmit()}
-              >
-                {saving ? (
-                  <span>Menyimpan Penawaran...</span>
-                ) : (
-                  <>
-                    <Icon name="check" size={16} />
-                    <span>SIMPAN PENAWARAN (Ctrl+S)</span>
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-      </footer>
+        </aside>
+      </div>
     </div>
   );
 }
