@@ -111,33 +111,65 @@ type dueTx struct {
 }
 
 // listDue returns every active recurring transaction whose next_date <= today
-// (and, when end_date is set, has not yet passed it). Scanning across tenants
-// is intentional: the scheduler serves the whole deployment, and each posting
+// (and, when end_date is set, has not yet passed it). recurring_transactions
+// is RLS-scoped with fail-closed policies, so a restricted role sees nothing
+// without the tenant GUC. The scheduler serves the whole deployment, so
+// tenants are enumerated from the (not RLS-scoped) tenants table and due rows
+// are collected per tenant inside tenant transactions; each posting still
 // re-scopes RLS to the owning tenant inside its own transaction.
 func (service *Service) listDue(ctx context.Context) ([]dueTx, error) {
-	rows, err := service.pool.Query(ctx, `
-		SELECT tenant_id, id
-		FROM recurring_transactions
-		WHERE is_active = true
-		  AND from_account_id > 0 AND to_account_id > 0
-		  AND next_date <= CURRENT_DATE
-		  AND (end_date IS NULL OR next_date <= end_date)
-		LIMIT 500
-	`)
+	tenantIDs, err := service.allTenantIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var due []dueTx
+	for _, tenantID := range tenantIDs {
+		if err := db.WithTenantData(ctx, service.pool, tenantID, func(tx pgx.Tx) error {
+			rows, err := tx.Query(ctx, `
+				SELECT id
+				FROM recurring_transactions
+				WHERE is_active = true
+				  AND from_account_id > 0 AND to_account_id > 0
+				  AND next_date <= CURRENT_DATE
+				  AND (end_date IS NULL OR next_date <= end_date)
+				LIMIT 500
+			`)
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				d := dueTx{tenantID: tenantID}
+				if err := rows.Scan(&d.id); err != nil {
+					return err
+				}
+				due = append(due, d)
+			}
+			return rows.Err()
+		}); err != nil {
+			return nil, err
+		}
+	}
+	return due, nil
+}
+
+// allTenantIDs enumerates deployment tenants. The tenants table carries no
+// RLS policy, so this works under the restricted application role too.
+func (service *Service) allTenantIDs(ctx context.Context) ([]int64, error) {
+	rows, err := service.pool.Query(ctx, `SELECT id FROM tenants ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
-	var due []dueTx
+	var ids []int64
 	for rows.Next() {
-		var d dueTx
-		if err := rows.Scan(&d.tenantID, &d.id); err != nil {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		due = append(due, d)
+		ids = append(ids, id)
 	}
-	return due, rows.Err()
+	return ids, rows.Err()
 }
 
 // postDueOne posts a single due transaction in its own transaction. A closed

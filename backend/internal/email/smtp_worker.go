@@ -1,6 +1,8 @@
 package email
 
 import (
+	"github.com/jackc/pgx/v5"
+
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -11,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // tlsConfigFor builds the STARTTLS config. ServerName from the host; modern
@@ -151,13 +155,13 @@ func (s *Service) RunDeliveryPass(ctx context.Context, cfg SMTPConfig) (sent, fa
 		switch {
 		case sendErr == nil:
 			sent++
-			s.markResult(ctx, e.id, true, "")
+			s.markResult(ctx, e.tenantID, e.id, true, "")
 		case e.retryCount+1 >= e.maxRetries:
 			failed++
-			s.markResult(ctx, e.id, false, sendErr.Error())
+			s.markResult(ctx, e.tenantID, e.id, false, sendErr.Error())
 		default:
 			retried++
-			s.markRetry(ctx, e.id, sendErr.Error())
+			s.markRetry(ctx, e.tenantID, e.id, sendErr.Error())
 		}
 	}
 	if sent+failed+retried > 0 {
@@ -166,66 +170,102 @@ func (s *Service) RunDeliveryPass(ctx context.Context, cfg SMTPConfig) (sent, fa
 	return sent, failed, retried
 }
 
-// claimPending claims PENDING rows that still have retries left. The
-// status flip to SEND-ing is atomic via UPDATE … WHERE status='PENDING' so
-// concurrent workers cannot double-send; SKIP LOCKED keeps passes parallel.
+// claimPending claims PENDING rows that still have retries left. The status
+// flip to SENDING is atomic via UPDATE … WHERE id IN (…FOR UPDATE SKIP
+// LOCKED) so concurrent workers cannot double-send. email_queue is
+// RLS-scoped with fail-closed policies, so claims run per tenant (tenants
+// themselves are not RLS-scoped); the per-tenant LIMIT keeps each pass fair.
 func (s *Service) claimPending(ctx context.Context) ([]queuedEmail, error) {
-	rows, err := s.pool.Query(ctx, `
-		UPDATE email_queue q
-		SET status = 'SENDING', updated_at = now()
-		WHERE q.id IN (
-			SELECT id FROM email_queue
-			WHERE status = 'PENDING' AND retry_count < max_retries
-			ORDER BY created_at
-			LIMIT 25
-			FOR UPDATE SKIP LOCKED
-		)
-		RETURNING q.id, q.tenant_id, q.to_email, COALESCE(q.cc_email, ''), COALESCE(q.bcc_email, ''),
-		          q.subject, COALESCE(q.body_html, ''), COALESCE(q.body_text, ''),
-		          q.retry_count, q.max_retries
-	`)
+	tenantIDs, err := s.tenantIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []queuedEmail
+	for _, tenantID := range tenantIDs {
+		if err := db.WithTenantData(ctx, s.pool, tenantID, func(tx pgx.Tx) error {
+			rows, err := tx.Query(ctx, `
+				UPDATE email_queue q
+				SET status = 'SENDING', updated_at = now()
+				WHERE q.id IN (
+					SELECT id FROM email_queue
+					WHERE status = 'PENDING' AND retry_count < max_retries
+					ORDER BY created_at
+					LIMIT 25
+					FOR UPDATE SKIP LOCKED
+				)
+				RETURNING q.id, q.tenant_id, q.to_email, COALESCE(q.cc_email, ''), COALESCE(q.bcc_email, ''),
+				          q.subject, COALESCE(q.body_html, ''), COALESCE(q.body_text, ''),
+				          q.retry_count, q.max_retries
+			`)
+			if err != nil {
+				return err
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var e queuedEmail
+				if err := rows.Scan(&e.id, &e.tenantID, &e.to, &e.cc, &e.bcc,
+					&e.subject, &e.bodyHTML, &e.bodyText, &e.retryCount, &e.maxRetries); err != nil {
+					return err
+				}
+				out = append(out, e)
+			}
+			return rows.Err()
+		}); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// tenantIDs enumerates deployment tenants for cross-tenant worker passes.
+func (s *Service) tenantIDs(ctx context.Context) ([]int64, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id FROM tenants ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
-	var out []queuedEmail
+	var ids []int64
 	for rows.Next() {
-		var e queuedEmail
-		if err := rows.Scan(&e.id, &e.tenantID, &e.to, &e.cc, &e.bcc,
-			&e.subject, &e.bodyHTML, &e.bodyText, &e.retryCount, &e.maxRetries); err != nil {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		out = append(out, e)
+		ids = append(ids, id)
 	}
-	return out, rows.Err()
+	return ids, rows.Err()
 }
 
 // markResult records the terminal outcome of a delivery attempt. On success
 // last_error is cleared; on failure the status becomes FAILED.
-func (s *Service) markResult(ctx context.Context, id int64, ok bool, errMsg string) {
-	if ok {
-		_, _ = s.pool.Exec(ctx, `
+func (s *Service) markResult(ctx context.Context, tenantID, id int64, ok bool, errMsg string) {
+	_ = db.WithTenantData(ctx, s.pool, tenantID, func(tx pgx.Tx) error {
+		if ok {
+			_, err := tx.Exec(ctx, `
+				UPDATE email_queue
+				SET status = 'SENT', sent_at = now(), last_error = NULL, updated_at = now()
+				WHERE id = $1
+			`, id)
+			return err
+		}
+		_, err := tx.Exec(ctx, `
 			UPDATE email_queue
-			SET status = 'SENT', sent_at = now(), last_error = NULL, updated_at = now()
+			SET status = 'FAILED', last_error = $2, updated_at = now()
 			WHERE id = $1
-		`, id)
-		return
-	}
-	_, _ = s.pool.Exec(ctx, `
-		UPDATE email_queue
-		SET status = 'FAILED', last_error = $2, updated_at = now()
-		WHERE id = $1
-	`, id, truncate(errMsg, 500))
+		`, id, truncate(errMsg, 500))
+		return err
+	})
 }
 
 // markRetry schedules another attempt: back to PENDING with retry_count+1.
-func (s *Service) markRetry(ctx context.Context, id int64, errMsg string) {
-	_, _ = s.pool.Exec(ctx, `
-		UPDATE email_queue
-		SET status = 'PENDING', retry_count = retry_count + 1, last_error = $2, updated_at = now()
-		WHERE id = $1
-	`, id, truncate(errMsg, 500))
+func (s *Service) markRetry(ctx context.Context, tenantID, id int64, errMsg string) {
+	_ = db.WithTenantData(ctx, s.pool, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `
+			UPDATE email_queue
+			SET status = 'PENDING', retry_count = retry_count + 1, last_error = $2, updated_at = now()
+			WHERE id = $1
+		`, id, truncate(errMsg, 500))
+		return err
+	})
 }
 
 // SendMail delivers one message via SMTP. HTML alternative + plain text are
