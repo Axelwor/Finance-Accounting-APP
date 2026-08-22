@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Audit Fixes Phase C — RLS Activation (in progress; plan `1787414685590-audit-fix-implementation-plan.md`):**
+  - **C1 batch 1:** new `db.WithTenantData` helper (tenant-scoped transaction via `set_config('app.tenant_id', …, true)`) — every RLS policy is fail-closed, so pool-direct queries return zero rows for a restricted role without it. Reporting (all report fetchers + exports) and the whole dashboard package (layout CRUD, widget CRUD, widget data fetchers) now run inside tenant transactions. No schema/policy changes; remaining packages tracked in TASK_LEDGER before the restricted-role shadow run and cutover.
+
 - **Audit Fixes Phase D — Observability Baseline (plan `1787414685590-audit-fix-implementation-plan.md`):**
   - **pg_stat_statements:** Postgres container now preloads `pg_stat_statements` (one-time `CREATE EXTENSION` applied on the server) so slow-query baselines can be inspected live.
   - **Pool stats in health:** `/healthz/detail` now reports a `pool` block (`max_conns`, `total_conns`, `acquired_conns`, `idle_conns`, `acquire_count`, `acquire_duration_ms`) from `pgxpool.Stat()`.
