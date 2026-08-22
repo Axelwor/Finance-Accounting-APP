@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Audit Fixes Phase D — Observability Baseline (plan `1787414685590-audit-fix-implementation-plan.md`):**
+  - **pg_stat_statements:** Postgres container now preloads `pg_stat_statements` (one-time `CREATE EXTENSION` applied on the server) so slow-query baselines can be inspected live.
+  - **Pool stats in health:** `/healthz/detail` now reports a `pool` block (`max_conns`, `total_conns`, `acquired_conns`, `idle_conns`, `acquire_count`, `acquire_duration_ms`) from `pgxpool.Stat()`.
+  - **Scheduler pass duration:** recurring-post scheduler summary logs now include `duration_ms` per pass.
+  - **Request-log sampling:** access logs are sampled — errors (status ≥ 400), slow requests (> 300 ms), and ~1% of fast successes are kept at 100%/1% respectively instead of logging every request synchronously.
+
 - **Audit Fixes Phase B — Auth & Worker Hardening (F-06, F-08, F-09, F-12, F-13, F-14, F-15; plan `1787414685590-audit-fix-implementation-plan.md`):**
   - **Refresh-token rotation atomic + replay detection:** rotation now runs inside one transaction with `FOR UPDATE`; presenting an already-revoked refresh token (replay/theft evidence) revokes the ENTIRE token family and answers the same generic 401 `INVALID_REFRESH`. Applies to `/auth/refresh` and `/auth/switch-tenant`. Concurrent double-rotation yields exactly one winner. Affected users are forced back to login by design.
   - **Dashboard fails visibly:** widget data fetchers (cash balance, P&L snapshot, AR/AP aging, low stock, recent transactions, period status, outstanding invoices, tax summary) now answer 503 `WIDGET_DATA_UNAVAILABLE` on query failure instead of silently rendering zeros/empty lists; the partial AR/AP "simple total" fallbacks were removed because a partial number reads as real data. No open accounting period remains a legitimate empty state.

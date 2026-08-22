@@ -264,5 +264,18 @@ func (service *Service) HealthDetailed(writer http.ResponseWriter, request *http
 		result["nextreport"] = map[string]any{"status": "not_configured"}
 	}
 
+	// Connection-pool utilization (Phase D): a pgxpool.Stat() snapshot so
+	// pool saturation shows up in health checks instead of staying invisible
+	// until queries start timing out at MaxConns.
+	stat := service.pool.Stat()
+	result["pool"] = map[string]any{
+		"max_conns":           stat.MaxConns(),
+		"total_conns":         stat.TotalConns(),
+		"acquired_conns":      stat.AcquiredConns(),
+		"idle_conns":          stat.IdleConns(),
+		"acquire_count":       stat.AcquireCount(),
+		"acquire_duration_ms": float64(stat.AcquireDuration().Microseconds()) / 1000.0,
+	}
+
 	writeJSON(writer, http.StatusOK, result)
 }

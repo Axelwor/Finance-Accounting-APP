@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
+	mathrand "math/rand"
 	"net"
 	"net/http"
 	"runtime/debug"
@@ -72,16 +73,37 @@ func Recover(next http.Handler) http.Handler {
 }
 
 // ---------------------------------------------------------------------------
-// i-009: RequestLogger — structured logging per request.
+// i-009: RequestLogger — structured logging per request (sampled).
 // ---------------------------------------------------------------------------
 
-// RequestLogger logs method, path, status, and duration for every request
+// Phase D sampling policy: errors and slow requests are always logged;
+// fast successes are sampled at ~1%. Synchronous JSON logging on every
+// request otherwise dominates tail latency at volume, while the interesting
+// signals (4xx/5xx, latency outliers) keep 100% coverage.
+const (
+	slowRequestThreshold = 300 * time.Millisecond
+	requestSampleRate    = 0.01
+)
+
+// sampleRandom is a seam so tests can make sampling deterministic.
+var sampleRandom = mathrand.Float64
+
+func shouldLogRequest(status int, duration time.Duration) bool {
+	return status >= http.StatusBadRequest ||
+		duration > slowRequestThreshold ||
+		sampleRandom() < requestSampleRate
+}
+
+// RequestLogger logs method, path, status, and duration for sampled requests
 // using structured logging (slog) with the request_id for traceability.
 func RequestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		next.ServeHTTP(ww, r)
+		if !shouldLogRequest(ww.Status(), time.Since(start)) {
+			return
+		}
 		slog.Info("request",
 			"method", r.Method,
 			"path", r.URL.Path,

@@ -176,6 +176,9 @@ func (service *Service) StartScheduler(ctx context.Context, interval time.Durati
 // It is exported so tests can drive a pass directly without waiting on the
 // ticker.
 func (service *Service) RunOnce(ctx context.Context) (posted, skipped int) {
+	// Phase D: measure every pass — the loop posts sequentially per row, so
+	// pass duration is the first place backlog growth becomes visible.
+	start := time.Now()
 	due, err := service.listDue(ctx)
 	if err != nil {
 		slog.Error("recurring scheduler: list due failed", "error", err)
@@ -196,7 +199,9 @@ func (service *Service) RunOnce(ctx context.Context) (posted, skipped int) {
 		}
 	}
 	if posted > 0 || skipped > 0 {
-		slog.Info("recurring scheduler pass", "posted", posted, "skipped", skipped)
+		slog.Info("recurring scheduler pass",
+			"posted", posted, "skipped", skipped,
+			"duration_ms", time.Since(start).Milliseconds())
 	}
 	return posted, skipped
 }

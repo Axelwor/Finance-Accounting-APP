@@ -1,8 +1,10 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -375,4 +377,90 @@ func TestLimitBody_ExactlyAtCap(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", rr.Code)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Phase D: request-log sampling.
+// ---------------------------------------------------------------------------
+
+func TestShouldLogRequest(t *testing.T) {
+	original := sampleRandom
+	t.Cleanup(func() { sampleRandom = original })
+	sampleRandom = func() float64 { return 0.99 } // never sampled
+
+	cases := []struct {
+		name     string
+		status   int
+		duration time.Duration
+		want     bool
+	}{
+		{name: "fast success not logged", status: 200, duration: 5 * time.Millisecond, want: false},
+		{name: "4xx always logged", status: 400, duration: time.Millisecond, want: true},
+		{name: "5xx always logged", status: 500, duration: time.Millisecond, want: true},
+		{name: "slow success always logged", status: 200, duration: slowRequestThreshold + time.Millisecond, want: true},
+		{name: "exactly at threshold not logged", status: 200, duration: slowRequestThreshold, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := shouldLogRequest(tc.status, tc.duration); got != tc.want {
+				t.Errorf("shouldLogRequest(%d, %s) = %v, want %v", tc.status, tc.duration, got, tc.want)
+			}
+		})
+	}
+
+	t.Run("lucky sample logs fast success", func(t *testing.T) {
+		sampleRandom = func() float64 { return 0.001 }
+		if !shouldLogRequest(200, time.Millisecond) {
+			t.Error("expected sample to log")
+		}
+	})
+}
+
+func captureSlog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return &buf
+}
+
+func TestRequestLogger_Sampling(t *testing.T) {
+	original := sampleRandom
+	t.Cleanup(func() { sampleRandom = original })
+	sampleRandom = func() float64 { return 0.99 } // deterministic: no luck
+
+	t.Run("fast 2xx suppressed", func(t *testing.T) {
+		buf := captureSlog(t)
+		handler := RequestLogger(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/ok", nil))
+		if strings.Contains(buf.String(), "request") {
+			t.Errorf("expected suppression, got %q", buf.String())
+		}
+	})
+
+	t.Run("5xx logged", func(t *testing.T) {
+		buf := captureSlog(t)
+		handler := RequestLogger(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/boom", nil))
+		if !strings.Contains(buf.String(), `status=500`) || !strings.Contains(buf.String(), `path=/boom`) {
+			t.Errorf("expected error line, got %q", buf.String())
+		}
+	})
+
+	t.Run("slow 2xx logged", func(t *testing.T) {
+		buf := captureSlog(t)
+		handler := RequestLogger(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(slowRequestThreshold + 20*time.Millisecond)
+			w.WriteHeader(http.StatusOK)
+		}))
+		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/slow", nil))
+		if !strings.Contains(buf.String(), `path=/slow`) {
+			t.Errorf("expected slow-request line, got %q", buf.String())
+		}
+	})
 }
