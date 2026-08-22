@@ -15,6 +15,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/auth"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // =====================================================================
@@ -39,16 +41,6 @@ func (s *Service) ListTemplates(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, errResp{"TENANT_REQUIRED", "tenant context is required"})
 		return
 	}
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT id, code, name, document_type, is_default, is_active
-		FROM report_templates WHERE tenant_id IN ($1, 0)
-		ORDER BY document_type, name
-	`, tid)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errResp{"QUERY_FAILED", err.Error()})
-		return
-	}
-	defer rows.Close()
 	type tmpl struct {
 		ID           int64  `json:"id"`
 		Code         string `json:"code"`
@@ -58,13 +50,28 @@ func (s *Service) ListTemplates(w http.ResponseWriter, r *http.Request) {
 		IsActive     bool   `json:"is_active"`
 	}
 	result := []tmpl{}
-	for rows.Next() {
-		var t tmpl
-		if err := rows.Scan(&t.ID, &t.Code, &t.Name, &t.DocumentType, &t.IsDefault, &t.IsActive); err != nil {
-			writeJSON(w, http.StatusInternalServerError, errResp{"SCAN_FAILED", err.Error()})
-			return
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		rows, err := tx.Query(r.Context(), `
+			SELECT id, code, name, document_type, is_default, is_active
+			FROM report_templates WHERE tenant_id IN ($1, 0)
+			ORDER BY document_type, name
+		`, tid)
+		if err != nil {
+			return err
 		}
-		result = append(result, t)
+		defer rows.Close()
+		for rows.Next() {
+			var t tmpl
+			if err := rows.Scan(&t.ID, &t.Code, &t.Name, &t.DocumentType, &t.IsDefault, &t.IsActive); err != nil {
+				return err
+			}
+			result = append(result, t)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errResp{"QUERY_FAILED", err.Error()})
+		return
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -100,11 +107,13 @@ func (s *Service) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var id int64
-	err := s.pool.QueryRow(r.Context(), `
-		INSERT INTO report_templates (tenant_id, code, name, document_type, template_yaml, is_default, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id
-	`, tid, req.Code, req.Name, req.DocumentType, req.TemplateYAML, req.IsDefault, uid).Scan(&id)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			INSERT INTO report_templates (tenant_id, code, name, document_type, template_yaml, is_default, created_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			RETURNING id
+		`, tid, req.Code, req.Name, req.DocumentType, req.TemplateYAML, req.IsDefault, uid).Scan(&id)
+	})
 	if err != nil {
 		writeJSON(w, http.StatusConflict, errResp{"CREATE_FAILED", err.Error()})
 		return
@@ -121,10 +130,12 @@ func (s *Service) GetTemplate(w http.ResponseWriter, r *http.Request) {
 	id := pathID(chi.URLParam(r, "id"))
 	var code, name, docType, yaml string
 	var isDefault, isActive bool
-	err := s.pool.QueryRow(r.Context(), `
-		SELECT code, name, document_type, template_yaml, is_default, is_active
-		FROM report_templates WHERE tenant_id IN ($1, 0) AND id = $2
-	`, tid, id).Scan(&code, &name, &docType, &yaml, &isDefault, &isActive)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `
+			SELECT code, name, document_type, template_yaml, is_default, is_active
+			FROM report_templates WHERE tenant_id IN ($1, 0) AND id = $2
+		`, tid, id).Scan(&code, &name, &docType, &yaml, &isDefault, &isActive)
+	})
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, errResp{"NOT_FOUND", "template not found"})
 		return
@@ -147,10 +158,13 @@ func (s *Service) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errResp{"INVALID_REQUEST", err.Error()})
 		return
 	}
-	_, err := s.pool.Exec(r.Context(), `
-		UPDATE report_templates SET code=$3, name=$4, document_type=$5, template_yaml=$6, is_default=$7, updated_at=now()
-		WHERE tenant_id=$1 AND id=$2
-	`, tid, id, req.Code, req.Name, req.DocumentType, req.TemplateYAML, req.IsDefault)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		_, err := tx.Exec(r.Context(), `
+			UPDATE report_templates SET code=$3, name=$4, document_type=$5, template_yaml=$6, is_default=$7, updated_at=now()
+			WHERE tenant_id=$1 AND id=$2
+		`, tid, id, req.Code, req.Name, req.DocumentType, req.TemplateYAML, req.IsDefault)
+		return err
+	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errResp{"UPDATE_FAILED", err.Error()})
 		return
@@ -165,7 +179,10 @@ func (s *Service) DeleteTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := pathID(chi.URLParam(r, "id"))
-	_, err := s.pool.Exec(r.Context(), `DELETE FROM report_templates WHERE tenant_id=$1 AND id=$2`, tid, id)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		_, err := tx.Exec(r.Context(), `DELETE FROM report_templates WHERE tenant_id=$1 AND id=$2`, tid, id)
+		return err
+	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errResp{"DELETE_FAILED", err.Error()})
 		return
@@ -189,7 +206,9 @@ func (s *Service) RenderReport(w http.ResponseWriter, r *http.Request) {
 		format = "pdf"
 	}
 	var yaml string
-	err := s.pool.QueryRow(r.Context(), `SELECT template_yaml FROM report_templates WHERE tenant_id IN ($1, 0) AND id=$2`, tid, id).Scan(&yaml)
+	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
+		return tx.QueryRow(r.Context(), `SELECT template_yaml FROM report_templates WHERE tenant_id IN ($1, 0) AND id=$2`, tid, id).Scan(&yaml)
+	})
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, errResp{"NOT_FOUND", "template not found"})
 		return
