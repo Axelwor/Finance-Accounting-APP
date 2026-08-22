@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/auth"
+	"finance-accounting-app/backend/internal/db"
 	"finance-accounting-app/backend/internal/httperr"
 )
 
@@ -161,27 +162,31 @@ func (service *Service) List(writer http.ResponseWriter, request *http.Request) 
 	}
 	query += ` ORDER BY code`
 
-	rows, err := service.pool.Query(request.Context(), query, args...)
+	items := []itemRow{}
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), query, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var it itemRow
+			if err := rows.Scan(&it.ID, &it.Code, &it.Name, &it.ItemType, &it.UOM,
+				&it.CostingMethod, &it.SaleAccountID, &it.CogsAccountID, &it.InventoryAccountID,
+				&it.RevenueRecognitionMethod, &it.IsTrackedStock, &it.MinStockQty, &it.IsActive,
+				&it.Barcode, &it.SecondaryUOM, &it.UOMConversionFactor, &it.Brand, &it.Category,
+				&it.WeightGrams, &it.VolumeCC, &it.DescriptionLong, &it.ImageURL,
+				&it.ReorderPoint, &it.ReorderQty, &it.LeadTimeDays, &it.PreferredSupplierID,
+				&it.ABCClassification, &it.SaleUOM, &it.PurchaseUOM); err != nil {
+				return err
+			}
+			items = append(items, it)
+		}
+		return nil
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "ITEM_LIST_FAILED", err.Error())
 		return
-	}
-	defer rows.Close()
-
-	items := []itemRow{}
-	for rows.Next() {
-		var it itemRow
-		if err := rows.Scan(&it.ID, &it.Code, &it.Name, &it.ItemType, &it.UOM,
-			&it.CostingMethod, &it.SaleAccountID, &it.CogsAccountID, &it.InventoryAccountID,
-			&it.RevenueRecognitionMethod, &it.IsTrackedStock, &it.MinStockQty, &it.IsActive,
-			&it.Barcode, &it.SecondaryUOM, &it.UOMConversionFactor, &it.Brand, &it.Category,
-			&it.WeightGrams, &it.VolumeCC, &it.DescriptionLong, &it.ImageURL,
-			&it.ReorderPoint, &it.ReorderQty, &it.LeadTimeDays, &it.PreferredSupplierID,
-			&it.ABCClassification, &it.SaleUOM, &it.PurchaseUOM); err != nil {
-			writeError(writer, http.StatusInternalServerError, "ITEM_LIST_FAILED", err.Error())
-			return
-		}
-		items = append(items, it)
 	}
 	writeJSON(writer, http.StatusOK, items)
 }
@@ -292,8 +297,13 @@ func (service *Service) Deactivate(writer http.ResponseWriter, request *http.Req
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	tag, err := service.pool.Exec(request.Context(),
-		`UPDATE items SET is_active = false WHERE tenant_id = $1 AND id = $2`, tenant, id)
+	var tag pgconn.CommandTag
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		var err error
+		tag, err = tx.Exec(request.Context(),
+			`UPDATE items SET is_active = false WHERE tenant_id = $1 AND id = $2`, tenant, id)
+		return err
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "ITEM_DEACTIVATE_FAILED", err.Error())
 		return
@@ -316,28 +326,32 @@ func (service *Service) ListPrices(writer http.ResponseWriter, request *http.Req
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT id, item_id, price_list_name, customer_group, customer_id,
-		       unit_price_cents, currency_code, effective_from::text, effective_to::text, is_active
-		FROM item_price_lists
-		WHERE tenant_id = $1 AND item_id = $2
-		ORDER BY price_list_name, effective_from NULLS LAST`, tenant, itemID)
+	prices := []priceRow{}
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT id, item_id, price_list_name, customer_group, customer_id,
+			       unit_price_cents, currency_code, effective_from::text, effective_to::text, is_active
+			FROM item_price_lists
+			WHERE tenant_id = $1 AND item_id = $2
+			ORDER BY price_list_name, effective_from NULLS LAST`, tenant, itemID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var p priceRow
+			if err := rows.Scan(&p.ID, &p.ItemID, &p.PriceListName, &p.CustomerGroup,
+				&p.CustomerID, &p.UnitPriceCents, &p.CurrencyCode, &p.EffectiveFrom,
+				&p.EffectiveTo, &p.IsActive); err != nil {
+				return err
+			}
+			prices = append(prices, p)
+		}
+		return nil
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "ITEM_PRICE_LIST_FAILED", err.Error())
 		return
-	}
-	defer rows.Close()
-
-	prices := []priceRow{}
-	for rows.Next() {
-		var p priceRow
-		if err := rows.Scan(&p.ID, &p.ItemID, &p.PriceListName, &p.CustomerGroup,
-			&p.CustomerID, &p.UnitPriceCents, &p.CurrencyCode, &p.EffectiveFrom,
-			&p.EffectiveTo, &p.IsActive); err != nil {
-			writeError(writer, http.StatusInternalServerError, "ITEM_PRICE_LIST_FAILED", err.Error())
-			return
-		}
-		prices = append(prices, p)
 	}
 	writeJSON(writer, http.StatusOK, prices)
 }

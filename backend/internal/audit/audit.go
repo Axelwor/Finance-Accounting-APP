@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"finance-accounting-app/backend/internal/db"
 )
 
 // Action is the set of mutating actions recorded in the audit trail. These
@@ -144,27 +146,27 @@ func (service *Service) ListAuditLogs(writer http.ResponseWriter, request *http.
 		LIMIT 200
 	`, joinAnd(clauses))
 
-	rows, err := service.pool.Query(request.Context(), sql, args...)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "AUDIT_QUERY_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
 	logs := make([]auditLogRow, 0)
-	for rows.Next() {
-		var row auditLogRow
-		var before, after []byte
-		if err := rows.Scan(&row.ID, &row.TenantID, &row.UserID, &row.UserName,
-			&row.EntityType, &row.EntityID, &row.Action, &before, &after, &row.CreatedAt); err != nil {
-			writeError(writer, http.StatusInternalServerError, "AUDIT_QUERY_FAILED", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), sql, args...)
+		if err != nil {
+			return err
 		}
-		row.BeforeData = jsonNull(before)
-		row.AfterData = jsonNull(after)
-		logs = append(logs, row)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var row auditLogRow
+			var before, after []byte
+			if err := rows.Scan(&row.ID, &row.TenantID, &row.UserID, &row.UserName,
+				&row.EntityType, &row.EntityID, &row.Action, &before, &after, &row.CreatedAt); err != nil {
+				return err
+			}
+			row.BeforeData = jsonNull(before)
+			row.AfterData = jsonNull(after)
+			logs = append(logs, row)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "AUDIT_QUERY_FAILED", err.Error())
 		return
 	}

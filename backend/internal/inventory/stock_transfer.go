@@ -242,31 +242,32 @@ func (service *Service) ListStockTransfers(writer http.ResponseWriter, request *
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT id, number, transfer_date, COALESCE(notes,''), status
-		FROM stock_transfers
-		WHERE tenant_id = $1
-		ORDER BY transfer_date DESC, id DESC
-	`, tenant)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "DB_ERROR", err.Error())
-		return
-	}
-	defer rows.Close()
 	items := []stockTransferResponse{}
-	for rows.Next() {
-		var trf stockTransferResponse
-		var notes pgtype.Text
-		var trfDate pgtype.Date
-		if err := rows.Scan(&trf.ID, &trf.Number, &trfDate, &notes, &trf.Status); err != nil {
-			writeError(writer, http.StatusInternalServerError, "DB_ERROR", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT id, number, transfer_date, COALESCE(notes,''), status
+			FROM stock_transfers
+			WHERE tenant_id = $1
+			ORDER BY transfer_date DESC, id DESC
+		`, tenant)
+		if err != nil {
+			return err
 		}
-		trf.TransferDate = dateString(trfDate)
-		trf.Notes = textValue(notes)
-		items = append(items, trf)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var trf stockTransferResponse
+			var notes pgtype.Text
+			var trfDate pgtype.Date
+			if err := rows.Scan(&trf.ID, &trf.Number, &trfDate, &notes, &trf.Status); err != nil {
+				return err
+			}
+			trf.TransferDate = dateString(trfDate)
+			trf.Notes = textValue(notes)
+			items = append(items, trf)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "DB_ERROR", err.Error())
 		return
 	}

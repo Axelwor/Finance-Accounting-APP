@@ -209,37 +209,38 @@ func (service *Service) ListStockOpnames(writer http.ResponseWriter, request *ht
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT id, number, opname_date, COALESCE(notes,''), status,
-		       COALESCE(journal_entry_id,0), total_adjustment_cents
-		FROM stock_opnames
-		WHERE tenant_id = $1
-		ORDER BY opname_date DESC, id DESC
-	`, tenant)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "DB_ERROR", err.Error())
-		return
-	}
-	defer rows.Close()
 	items := []stockOpnameResponse{}
-	for rows.Next() {
-		var opn stockOpnameResponse
-		var notes pgtype.Text
-		var journalID pgtype.Int8
-		var opnDate pgtype.Date
-		if err := rows.Scan(&opn.ID, &opn.Number, &opnDate, &notes, &opn.Status,
-			&journalID, &opn.TotalAdjustmentCents); err != nil {
-			writeError(writer, http.StatusInternalServerError, "DB_ERROR", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT id, number, opname_date, COALESCE(notes,''), status,
+			       COALESCE(journal_entry_id,0), total_adjustment_cents
+			FROM stock_opnames
+			WHERE tenant_id = $1
+			ORDER BY opname_date DESC, id DESC
+		`, tenant)
+		if err != nil {
+			return err
 		}
-		opn.OpnameDate = dateString(opnDate)
-		opn.Notes = textValue(notes)
-		if journalID.Valid {
-			opn.JournalEntryID = journalID.Int64
+		defer rows.Close()
+		for rows.Next() {
+			var opn stockOpnameResponse
+			var notes pgtype.Text
+			var journalID pgtype.Int8
+			var opnDate pgtype.Date
+			if err := rows.Scan(&opn.ID, &opn.Number, &opnDate, &notes, &opn.Status,
+				&journalID, &opn.TotalAdjustmentCents); err != nil {
+				return err
+			}
+			opn.OpnameDate = dateString(opnDate)
+			opn.Notes = textValue(notes)
+			if journalID.Valid {
+				opn.JournalEntryID = journalID.Int64
+			}
+			items = append(items, opn)
 		}
-		items = append(items, opn)
-	}
-	if err := rows.Err(); err != nil {
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "DB_ERROR", err.Error())
 		return
 	}

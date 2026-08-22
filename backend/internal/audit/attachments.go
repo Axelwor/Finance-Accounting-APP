@@ -173,31 +173,31 @@ func (service *Service) ListAttachments(writer http.ResponseWriter, request *htt
 		return
 	}
 
-	rows, err := service.pool.Query(request.Context(), `
-		SELECT id, tenant_id, owner_type, owner_id, file_name, file_key, mime_type, file_size, ocr_status,
-		       to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF'), COALESCE(uploaded_by, 0)
-		FROM attachments
-		WHERE tenant_id = $1 AND owner_type = $2 AND owner_id = $3
-		ORDER BY created_at DESC
-	`, tenant, ownerType, ownerID)
-	if err != nil {
-		writeError(writer, http.StatusInternalServerError, "ATTACHMENT_QUERY_FAILED", err.Error())
-		return
-	}
-	defer rows.Close()
-
 	items := make([]attachmentRow, 0)
-	for rows.Next() {
-		var row attachmentRow
-		if err := rows.Scan(&row.ID, &row.TenantID, &row.OwnerType, &row.OwnerID,
-			&row.FileName, &row.FileKey, &row.MimeType, &row.FileSize, &row.OCRStatus,
-			&row.CreatedAt, &row.UploadedBy); err != nil {
-			writeError(writer, http.StatusInternalServerError, "ATTACHMENT_QUERY_FAILED", err.Error())
-			return
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(request.Context(), `
+			SELECT id, tenant_id, owner_type, owner_id, file_name, file_key, mime_type, file_size, ocr_status,
+			       to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF'), COALESCE(uploaded_by, 0)
+			FROM attachments
+			WHERE tenant_id = $1 AND owner_type = $2 AND owner_id = $3
+			ORDER BY created_at DESC
+		`, tenant, ownerType, ownerID)
+		if err != nil {
+			return err
 		}
-		items = append(items, row)
-	}
-	if err := rows.Err(); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var row attachmentRow
+			if err := rows.Scan(&row.ID, &row.TenantID, &row.OwnerType, &row.OwnerID,
+				&row.FileName, &row.FileKey, &row.MimeType, &row.FileSize, &row.OCRStatus,
+				&row.CreatedAt, &row.UploadedBy); err != nil {
+				return err
+			}
+			items = append(items, row)
+		}
+		return rows.Err()
+	})
+	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "ATTACHMENT_QUERY_FAILED", err.Error())
 		return
 	}
@@ -219,11 +219,13 @@ func (service *Service) DownloadAttachment(writer http.ResponseWriter, request *
 	}
 
 	var fileKey, fileName, mimeType string
-	err = service.pool.QueryRow(request.Context(), `
-		SELECT file_key, file_name, mime_type
-		FROM attachments
-		WHERE tenant_id = $1 AND id = $2
-	`, tenant, id).Scan(&fileKey, &fileName, &mimeType)
+	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(request.Context(), `
+			SELECT file_key, file_name, mime_type
+			FROM attachments
+			WHERE tenant_id = $1 AND id = $2
+		`, tenant, id).Scan(&fileKey, &fileName, &mimeType)
+	})
 	if err != nil {
 		writeError(writer, http.StatusNotFound, "NOT_FOUND", "attachment does not exist")
 		return
