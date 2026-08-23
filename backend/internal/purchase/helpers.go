@@ -132,6 +132,12 @@ func isForeignKeyViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == pgErrCodeForeignKeyViolation
 }
 
+func isCheckViolation(err error) bool {
+	const pgErrCodeCheckViolation = "23514"
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == pgErrCodeCheckViolation
+}
+
 func isNoRows(err error) bool {
 	return errors.Is(err, pgx.ErrNoRows)
 }
