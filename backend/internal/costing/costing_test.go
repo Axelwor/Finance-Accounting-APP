@@ -198,50 +198,31 @@ func TestNumericToFloat_Negative(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// FIFO layer consumption math — replicating consumeFIFO's logic (oldest first,
-// partial consumption, fallback at average cost).
+// FIFO layer consumption math — planFIFOConsumption (oldest first, partial
+// consumption, fallback at average cost).
 // ---------------------------------------------------------------------------
 
-// fifoLayer mirrors the inventory_cost_layers row used by consumeFIFO.
-type fifoLayer struct {
-	qtyRemaining float64
-	unitCost     int64
-}
-
-// consumeFIFOLocal replicates the consumption logic of consumeFIFO without a
-// database: it walks layers oldest-first, consuming `qty` units, and values
-// any shortfall (legacy stock with no layers) at avgCost.
-func consumeFIFOLocal(layers []fifoLayer, qty, avgCost float64) int64 {
-	remaining := qty
-	var cogs int64
-	for _, l := range layers {
-		if remaining <= 0 {
-			break
-		}
-		if l.qtyRemaining <= 0 {
-			continue
-		}
-		take := math.Min(remaining, l.qtyRemaining)
-		cogs += int64(math.Round(take * float64(l.unitCost)))
-		remaining -= take
-	}
-	if remaining > 0 {
-		cogs += int64(math.Round(remaining * avgCost))
+// fifoCOGSWithFallback mirrors the caller-side fallback valuation in
+// consumeFIFO: uncovered qty is valued at the balance's avg cost.
+func fifoCOGSWithFallback(layers []fifoLayer, qty, avgCost float64) int64 {
+	cogs, _, uncovered := planFIFOConsumption(layers, qty, avgCost)
+	if uncovered > 0 {
+		cogs += int64(math.Round(uncovered * avgCost))
 	}
 	return cogs
 }
 
 func TestConsumeFIFO_SingleLayerFullConsumption(t *testing.T) {
-	layers := []fifoLayer{{qtyRemaining: 100, unitCost: 1000}} // 100 units @ $10.00
-	cogs := consumeFIFOLocal(layers, 100, 0)
+	layers := []fifoLayer{{QtyRemaining: 100, UnitCostCents: 1000}} // 100 units @ $10.00
+	cogs := fifoCOGSWithFallback(layers, 100, 0)
 	if cogs != 100000 {
 		t.Errorf("cogs = %d, want 100000", cogs)
 	}
 }
 
 func TestConsumeFIFO_SingleLayerPartialConsumption(t *testing.T) {
-	layers := []fifoLayer{{qtyRemaining: 100, unitCost: 1000}}
-	cogs := consumeFIFOLocal(layers, 30, 0)
+	layers := []fifoLayer{{QtyRemaining: 100, UnitCostCents: 1000}}
+	cogs := fifoCOGSWithFallback(layers, 30, 0)
 	if cogs != 30000 {
 		t.Errorf("cogs = %d, want 30000", cogs)
 	}
@@ -251,10 +232,10 @@ func TestConsumeFIFO_MultipleLayersOldestFirst(t *testing.T) {
 	// Layer 1: 50 @ $10 = 50000, Layer 2: 50 @ $12 = 60000
 	// Consume 70: 50 from layer 1 (50000) + 20 from layer 2 (24000) = 74000
 	layers := []fifoLayer{
-		{qtyRemaining: 50, unitCost: 1000},
-		{qtyRemaining: 50, unitCost: 1200},
+		{QtyRemaining: 50, UnitCostCents: 1000},
+		{QtyRemaining: 50, UnitCostCents: 1200},
 	}
-	cogs := consumeFIFOLocal(layers, 70, 0)
+	cogs := fifoCOGSWithFallback(layers, 70, 0)
 	if cogs != 74000 {
 		t.Errorf("cogs = %d, want 74000", cogs)
 	}
@@ -262,10 +243,10 @@ func TestConsumeFIFO_MultipleLayersOldestFirst(t *testing.T) {
 
 func TestConsumeFIFO_MultipleLayersAllConsumed(t *testing.T) {
 	layers := []fifoLayer{
-		{qtyRemaining: 50, unitCost: 1000},
-		{qtyRemaining: 50, unitCost: 1200},
+		{QtyRemaining: 50, UnitCostCents: 1000},
+		{QtyRemaining: 50, UnitCostCents: 1200},
 	}
-	cogs := consumeFIFOLocal(layers, 100, 0)
+	cogs := fifoCOGSWithFallback(layers, 100, 0)
 	if cogs != 110000 {
 		t.Errorf("cogs = %d, want 110000", cogs)
 	}
@@ -273,8 +254,8 @@ func TestConsumeFIFO_MultipleLayersAllConsumed(t *testing.T) {
 
 func TestConsumeFIFO_FallbackAtAvgCost(t *testing.T) {
 	// Layers only cover 50 of 80 requested; shortfall of 30 valued at avg cost 1500.
-	layers := []fifoLayer{{qtyRemaining: 50, unitCost: 1000}}
-	cogs := consumeFIFOLocal(layers, 80, 1500)
+	layers := []fifoLayer{{QtyRemaining: 50, UnitCostCents: 1000}}
+	cogs := fifoCOGSWithFallback(layers, 80, 1500)
 	// 50*1000 + 30*1500 = 50000 + 45000 = 95000
 	if cogs != 95000 {
 		t.Errorf("cogs = %d, want 95000", cogs)
@@ -282,7 +263,7 @@ func TestConsumeFIFO_FallbackAtAvgCost(t *testing.T) {
 }
 
 func TestConsumeFIFO_NoLayersAllFallback(t *testing.T) {
-	cogs := consumeFIFOLocal(nil, 100, 2000)
+	cogs := fifoCOGSWithFallback(nil, 100, 2000)
 	if cogs != 200000 {
 		t.Errorf("cogs = %d, want 200000", cogs)
 	}
@@ -290,10 +271,10 @@ func TestConsumeFIFO_NoLayersAllFallback(t *testing.T) {
 
 func TestConsumeFIFO_EmptyLayerSkipped(t *testing.T) {
 	layers := []fifoLayer{
-		{qtyRemaining: 0, unitCost: 1000},
-		{qtyRemaining: 50, unitCost: 1200},
+		{QtyRemaining: 0, UnitCostCents: 1000},
+		{QtyRemaining: 50, UnitCostCents: 1200},
 	}
-	cogs := consumeFIFOLocal(layers, 50, 0)
+	cogs := fifoCOGSWithFallback(layers, 50, 0)
 	if cogs != 60000 {
 		t.Errorf("cogs = %d, want 60000", cogs)
 	}
@@ -301,8 +282,8 @@ func TestConsumeFIFO_EmptyLayerSkipped(t *testing.T) {
 
 func TestConsumeFIFO_RoundingToNearestCent(t *testing.T) {
 	// 3 units @ $3.333...  => 3 * 3333.333... = 10000 (rounded)
-	layers := []fifoLayer{{qtyRemaining: 10, unitCost: 3333}}
-	cogs := consumeFIFOLocal(layers, 3, 0)
+	layers := []fifoLayer{{QtyRemaining: 10, UnitCostCents: 3333}}
+	cogs := fifoCOGSWithFallback(layers, 3, 0)
 	if cogs != 9999 {
 		t.Errorf("cogs = %d, want 9999", cogs)
 	}

@@ -100,7 +100,8 @@ func (s *Service) GetCashFlowForecast(w http.ResponseWriter, r *http.Request) {
 		rows, err := tx.Query(ctx, `
 		SELECT i.due_date, i.receivable_cents
 		FROM invoices i
-		WHERE i.tenant_id = $1 AND i.status = 'POSTED' AND i.receivable_cents > 0
+		WHERE i.tenant_id = $1 AND i.status IN ('ISSUED', 'PARTIALLY_PAID')
+		  AND i.receivable_cents > 0
 		  AND i.due_date >= CURRENT_DATE
 		ORDER BY i.due_date
 	`, tid)
@@ -130,9 +131,10 @@ func (s *Service) GetCashFlowForecast(w http.ResponseWriter, r *http.Request) {
 	apFlows := []apFlow{}
 	err = db.WithTenantData(ctx, s.pool, tid, func(tx pgx.Tx) error {
 		rows2, err := tx.Query(ctx, `
-		SELECT si.due_date, si.amount_due_cents
+		SELECT si.due_date, si.payable_cents
 		FROM supplier_invoices si
-		WHERE si.tenant_id = $1 AND si.status = 'POSTED' AND si.amount_due_cents > 0
+		WHERE si.tenant_id = $1 AND si.status IN ('ISSUED', 'PARTIALLY_PAID')
+		  AND si.payable_cents > 0
 		  AND si.due_date >= CURRENT_DATE
 		ORDER BY si.due_date
 	`, tid)

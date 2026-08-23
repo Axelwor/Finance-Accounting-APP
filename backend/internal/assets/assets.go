@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -290,9 +291,20 @@ func (service *Service) RegisterAsset(writer http.ResponseWriter, request *http.
 		}
 		acqDate, _ := parseDate(req.AcquisitionDate)
 
+		// QA-16: straight_line without an explicit rate derives the per-period
+		// rate from the useful life (1 / useful_life_months), matching the
+		// schedule's depreciable-base/useful-life semantics. The column is
+		// NOT NULL, so it must never be left NULL.
+		effectiveRate := req.Rate
 		rateValue := pgtype.Numeric{}
-		if req.Rate != "" {
+		switch {
+		case req.Rate != "":
 			_ = rateValue.Scan(req.Rate)
+		case req.DepreciationMethod == methodStraightLine:
+			effectiveRate = autoStraightLineRate(req.UsefulLifeMonths)
+			if err := rateValue.Scan(effectiveRate); err != nil {
+				return fmt.Errorf("invalid derived straight_line rate: %w", err)
+			}
 		}
 		var unitsTotal pgtype.Int8
 		if req.UnitsTotal > 0 {
@@ -339,7 +351,7 @@ func (service *Service) RegisterAsset(writer http.ResponseWriter, request *http.
 			SalvageValueCents:    req.SalvageValueCents,
 			UsefulLifeMonths:     req.UsefulLifeMonths,
 			DepreciationMethod:   req.DepreciationMethod,
-			Rate:                 req.Rate,
+			Rate:                 effectiveRate,
 			UnitsTotal:           req.UnitsTotal,
 			UnitsUsed:            0,
 			Status:               "ACTIVE",
@@ -387,6 +399,18 @@ func validateRegisterRequest(req RegisterAssetRequest) (string, string) {
 		return "INVALID_REQUEST", "units_total must be > 0 for units_of_production method"
 	}
 	return "", ""
+}
+
+// autoStraightLineRate derives the per-period straight-line depreciation rate
+// from the useful life: rate = 1 / useful_life_months. This mirrors the
+// schedule semantics, where one period charges (cost - salvage) spread evenly
+// over the useful life. The value is formatted to the 6-decimal scale of
+// fixed_assets.rate (NUMERIC(9,6)).
+func autoStraightLineRate(usefulLifeMonths int) string {
+	if usefulLifeMonths <= 0 {
+		return "0"
+	}
+	return strconv.FormatFloat(1.0/float64(usefulLifeMonths), 'f', 6, 64)
 }
 
 // ---------------------------------------------------------------------------
