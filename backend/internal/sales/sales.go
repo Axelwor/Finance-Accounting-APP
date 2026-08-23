@@ -300,13 +300,17 @@ func (service *Service) List(writer http.ResponseWriter, request *http.Request) 
 			var item quotationResponse
 			var quotationDate, validUntil pgtype.Date
 			var notes pgtype.Text
+			var paymentTermID pgtype.Int8
 			if err := rows.Scan(&item.ID, &item.Number, &item.CustomerID, &item.CustomerName,
-				&quotationDate, &validUntil, &item.PaymentTermID, &notes,
+				&quotationDate, &validUntil, &paymentTermID, &notes,
 				&item.Status, &item.TotalCents); err != nil {
 				return err
 			}
 			item.QuotationDate = dateString(quotationDate)
 			item.ValidUntil = dateString(validUntil)
+			if paymentTermID.Valid {
+				item.PaymentTermID = paymentTermID.Int64
+			}
 			item.Notes = textValue(notes)
 			results = append(results, item)
 		}
@@ -467,6 +471,7 @@ func (service *Service) fetchQuotation(ctx context.Context, tx pgx.Tx, tenant, i
 	result := &quotationResponse{}
 	var quotationDate, validUntil pgtype.Date
 	var notes pgtype.Text
+	var paymentTermID pgtype.Int8
 	err := tx.QueryRow(ctx, `
 		SELECT q.id, q.number, q.customer_id, c.name AS customer_name,
 		       q.quotation_date, q.valid_until, q.payment_term_id, q.notes,
@@ -475,13 +480,16 @@ func (service *Service) fetchQuotation(ctx context.Context, tx pgx.Tx, tenant, i
 		JOIN customers c ON c.tenant_id = q.tenant_id AND c.id = q.customer_id
 		WHERE q.tenant_id = $1 AND q.id = $2
 	`, tenant, id).Scan(&result.ID, &result.Number, &result.CustomerID, &result.CustomerName,
-		&quotationDate, &validUntil, &result.PaymentTermID, &notes,
+		&quotationDate, &validUntil, &paymentTermID, &notes,
 		&result.Status, &result.TotalCents)
 	if err != nil {
 		return nil, err
 	}
 	result.QuotationDate = dateString(quotationDate)
 	result.ValidUntil = dateString(validUntil)
+	if paymentTermID.Valid {
+		result.PaymentTermID = paymentTermID.Int64
+	}
 	result.Notes = textValue(notes)
 
 	rows, err := tx.Query(ctx, `

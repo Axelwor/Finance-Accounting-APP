@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -393,7 +394,7 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 			if err != nil {
 				return err
 			}
-			cogsIdemKey := idem + "-cogs"
+			cogsIdemKey := cogsIdempotencyKey(idem)
 			err = tx.QueryRow(request.Context(), `
 				INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, request_hash)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -772,6 +773,15 @@ func (service *Service) findCNByJournalID(ctx context.Context, tx pgx.Tx, tenant
 	result.CNDate = dateString(cnDate)
 	result.Reason = textValue(reason)
 	return result, nil
+}
+
+// cogsIdempotencyKey derives the COGS-reversal journal's idempotency key from
+// the primary credit-note idempotency key. The journal_entries.idempotency_key
+// column is uuid-typed, so the raw "<key>-cogs" string cannot be stored; a
+// UUIDv5 (SHA-1, fixed namespace) over the suffixed string is deterministic —
+// retries of the same request derive the same UUID and stay idempotent.
+func cogsIdempotencyKey(primaryKey string) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(primaryKey+"-cogs")).String()
 }
 
 func nextCNNumber(ctx context.Context, tx pgx.Tx, tenantID int64) (string, error) {

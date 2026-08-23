@@ -3,7 +3,57 @@ package sales
 import (
 	"fmt"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+// mustScanUUID fails the test when raw is not a storable UUID string.
+func mustScanUUID(t *testing.T, raw string) {
+	t.Helper()
+	var parsed pgtype.UUID
+	if err := parsed.Scan(raw); err != nil {
+		t.Fatalf("value %q is not a valid UUID: %v", raw, err)
+	}
+}
+
+// TestCOGSIdempotencyKey covers the N1 fix: the COGS-reversal journal needs a
+// second idempotency key derived from the primary one, and it must be a VALID
+// uuid (the journal column is uuid-typed — the old "<idem>-cogs" suffix broke
+// every goods credit note with SQLSTATE 22P02), deterministic across retries,
+// and distinct per request key.
+func TestCOGSIdempotencyKey(t *testing.T) {
+	tests := []struct {
+		name    string
+		primary string
+	}{
+		{name: "typical key", primary: "dddddddd-0000-4000-8000-000000000001"},
+		{name: "nil-uuid-like key", primary: "00000000-0000-0000-0000-000000000000"},
+		{name: "another tenant key", primary: "aaaaaaaa-1111-4222-8333-444444444444"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			first := cogsIdempotencyKey(tc.primary)
+			second := cogsIdempotencyKey(tc.primary)
+			mustScanUUID(t, first)
+			if first != second {
+				t.Errorf("not deterministic: %q vs %q", first, second)
+			}
+			if first == tc.primary {
+				t.Error("derived key equals the primary key")
+			}
+			if first == tc.primary+"-cogs" {
+				t.Error("derived key leaked the raw suffixed string")
+			}
+		})
+	}
+	t.Run("distinct primaries yield distinct keys", func(t *testing.T) {
+		a := cogsIdempotencyKey("dddddddd-0000-4000-8000-000000000001")
+		b := cogsIdempotencyKey("eeeeeeee-0000-4000-8000-000000000002")
+		if a == b {
+			t.Errorf("different primaries produced the same COGS key %q", a)
+		}
+	})
+}
 
 func validCN() CreateCreditNoteRequest {
 	return CreateCreditNoteRequest{

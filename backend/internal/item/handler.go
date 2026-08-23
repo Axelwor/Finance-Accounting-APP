@@ -202,6 +202,7 @@ func (service *Service) Create(writer http.ResponseWriter, request *http.Request
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", "invalid JSON body")
 		return
 	}
+	normalizeItemRequest(&req)
 	if verr := validateCreate(&req); verr != "" {
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", verr)
 		return
@@ -270,7 +271,7 @@ func (service *Service) Create(writer http.ResponseWriter, request *http.Request
 			return
 		}
 		if isCheckViolation(err) {
-			writeError(writer, http.StatusBadRequest, "ITEM_INVALID_FIELD", "invalid field value (check abc_classification)")
+			writeError(writer, http.StatusBadRequest, "ITEM_INVALID_FIELD", itemCheckViolationMessage(err))
 			return
 		}
 		writeError(writer, http.StatusInternalServerError, "ITEM_CREATE_FAILED", err.Error())
@@ -435,6 +436,45 @@ func (service *Service) CreatePrice(writer http.ResponseWriter, request *http.Re
 // Validation
 // ---------------------------------------------------------------------------
 
+// normalizeItemRequest canonicalizes client-supplied values before validation
+// and insert. QA-15: costing_method is case-insensitive for callers — the DB
+// CHECK only accepts lowercase ('fifo', 'moving_average', 'specific'), so an
+// uppercase "FIFO" is lowercased here instead of bouncing with a misleading
+// constraint error.
+func normalizeItemRequest(req *ItemRequest) {
+	if req.CostingMethod != nil {
+		normalized := strings.ToLower(strings.TrimSpace(*req.CostingMethod))
+		req.CostingMethod = &normalized
+	}
+}
+
+// itemCheckMessages maps items-table CHECK constraint names to field-specific
+// messages (QA-15) so the client learns which column was rejected instead of a
+// generic "check abc_classification" hint.
+var itemCheckMessages = map[string]string{
+	"items_item_type_check":                  "item_type must be 'goods' or 'service'",
+	"items_costing_method_check":             "costing_method must be one of fifo, moving_average, specific",
+	"items_revenue_recognition_method_check": "revenue_recognition_method must be point_in_time, over_time, milestone, or straight_line",
+	"items_abc_classification_check":         "abc_classification must be A, B, or C",
+	"items_check":                            "goods requires a costing_method and inventory_account_id",
+	"items_check1":                           "service cannot have an inventory_account_id or cogs_account_id",
+	"items_purchase_price_cents_nonneg":      "purchase_price_cents must be >= 0",
+	"items_sale_price_cents_nonneg":          "sale_price_cents must be >= 0",
+}
+
+// itemCheckViolationMessage renders a specific message for a check_violation,
+// falling back to the constraint name when it is not in the map.
+func itemCheckViolationMessage(err error) string {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == pgErrCodeCheckViolation {
+		if msg, ok := itemCheckMessages[pgErr.ConstraintName]; ok {
+			return msg
+		}
+		return fmt.Sprintf("invalid field value (%s)", pgErr.ConstraintName)
+	}
+	return "invalid field value"
+}
+
 // validateCreate returns an error message string, or "" if valid.
 func validateCreate(req *ItemRequest) string {
 	if strings.TrimSpace(req.Code) == "" {
@@ -466,6 +506,12 @@ func validateCreate(req *ItemRequest) string {
 		}
 		if req.IsTrackedStock {
 			return "service cannot be tracked stock"
+		}
+		// QA-19: without sale_account_id the item cannot be posted on an
+		// invoice/SO (misleading 409 downstream), so require it up front and
+		// name the item and the missing field in the message.
+		if req.SaleAccountID == nil {
+			return fmt.Sprintf("item %s: service requires sale_account_id", strings.TrimSpace(req.Code))
 		}
 	default:
 		return "item_type must be 'goods' or 'service'"
@@ -560,10 +606,12 @@ func isUniqueViolation(err error) bool {
 }
 
 func isCheckViolation(err error) bool {
-	const pgErrCodeCheckViolation = "23514"
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == pgErrCodeCheckViolation
 }
+
+// pgErrCodeCheckViolation is the PostgreSQL check_violation SQLSTATE.
+const pgErrCodeCheckViolation = "23514"
 
 // withTenant sets the RLS tenant context on the transaction so FORCE RLS
 // tables are visible. Mirrors the pattern used across the codebase.

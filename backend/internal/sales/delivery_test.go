@@ -1,6 +1,15 @@
 package sales
 
-import "testing"
+import (
+	"errors"
+	"fmt"
+	"net/http"
+	"testing"
+
+	"github.com/jackc/pgx/v5"
+
+	"finance-accounting-app/backend/internal/costing"
+)
 
 func TestValidateDeliveryRequest(t *testing.T) {
 	tests := []struct {
@@ -57,5 +66,50 @@ func TestCOGSCalculation(t *testing.T) {
 	cogs := roundQty(5) * 300000
 	if cogs != 1500000 {
 		t.Errorf("cogs = %d, want 1500000", cogs)
+	}
+}
+
+// TestDeliveryErrorFor covers the QA-11 fix: an insufficient-stock failure
+// (raised by costing.ResolveCOGS before any journal work) must map to a
+// 4xx INSUFFICIENT_STOCK response instead of the generic 500.
+func TestDeliveryErrorFor(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantCode   string
+	}{
+		{
+			name:       "insufficient stock maps to 422",
+			err:        fmt.Errorf("%w: item 1 on_hand=50 need=100", costing.ErrInsufficientStock),
+			wantStatus: http.StatusUnprocessableEntity,
+			wantCode:   "INSUFFICIENT_STOCK",
+		},
+		{
+			name:       "bare sentinel still matches",
+			err:        costing.ErrInsufficientStock,
+			wantStatus: http.StatusUnprocessableEntity,
+			wantCode:   "INSUFFICIENT_STOCK",
+		},
+		{
+			name:       "unknown order stays 404 ORDER_NOT_FOUND",
+			err:        pgx.ErrNoRows,
+			wantStatus: http.StatusNotFound,
+			wantCode:   "ORDER_NOT_FOUND",
+		},
+		{
+			name:       "other errors stay 500 DELIVERY_CREATE_FAILED",
+			err:        errors.New("costing: ResolveCOGS layer update"),
+			wantStatus: http.StatusInternalServerError,
+			wantCode:   "DELIVERY_CREATE_FAILED",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			status, code, _ := deliveryErrorFor(tc.err)
+			if status != tc.wantStatus || code != tc.wantCode {
+				t.Errorf("deliveryErrorFor = (%d, %s), want (%d, %s)", status, code, tc.wantStatus, tc.wantCode)
+			}
+		})
 	}
 }
