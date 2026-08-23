@@ -234,3 +234,20 @@ func TestCNRejectsOverCrediting(t *testing.T) {
 		t.Error("over-crediting guard condition failed")
 	}
 }
+
+// TestCNErrorForExceedsReceivable covers FIX-MINOR-004: crediting more than
+// the invoice's outstanding receivable is a business rejection (409), not a
+// 500 INTERNAL_ERROR.
+func TestCNErrorForExceedsReceivable(t *testing.T) {
+	err := fmt.Errorf("%w: credit note total 150000 exceeds the invoice's outstanding receivable 0", errCreditNoteExceedsReceivable)
+	status, code, message := cnErrorFor(err)
+	if status != 409 {
+		t.Errorf("status = %d, want 409", status)
+	}
+	if code != "CREDIT_NOTE_EXCEEDS_RECEIVABLE" {
+		t.Errorf("code = %q, want CREDIT_NOTE_EXCEEDS_RECEIVABLE", code)
+	}
+	if message == "" {
+		t.Error("expected the underlying detail message to be preserved")
+	}
+}

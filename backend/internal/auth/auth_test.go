@@ -4,11 +4,14 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestIssueAndParseToken(t *testing.T) {
@@ -123,5 +126,31 @@ func TestRandomSuffixIsHex(t *testing.T) {
 	}
 	if _, err := hex.DecodeString(suffix); err != nil {
 		t.Fatalf("suffix is not valid hex: %v", err)
+	}
+}
+
+// TestIsUniqueViolation covers FIX-MINOR-004: only PostgreSQL 23505 counts as
+// a duplicate-key insert so permission/schema failures are not disguised as
+// EMAIL_EXISTS during registration.
+func TestIsUniqueViolation(t *testing.T) {
+	dup := &pgconn.PgError{Code: "23505"}
+	wrapped := fmt.Errorf("insert failed: %w", dup)
+	fk := &pgconn.PgError{Code: "23503"}
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"unique-violation", dup, true},
+		{"wrapped-unique", wrapped, true},
+		{"foreign-key", fk, false},
+		{"permission", &pgconn.PgError{Code: "42501"}, false},
+		{"plain-error", errors.New("boom"), false},
+	}
+	for _, tc := range cases {
+		if got := isUniqueViolation(tc.err); got != tc.want {
+			t.Errorf("%s: isUniqueViolation = %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }

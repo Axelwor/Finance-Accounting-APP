@@ -97,7 +97,13 @@ func (service *Service) Register(writer http.ResponseWriter, request *http.Reque
 		req.Email, string(hash), req.FullName,
 	).Scan(&userID)
 	if err != nil {
-		writeError(writer, http.StatusConflict, "EMAIL_EXISTS", "email is already registered")
+		if isUniqueViolation(err) { // users_email_key → a genuine duplicate email
+			writeError(writer, http.StatusConflict, "EMAIL_EXISTS", "email is already registered")
+			return
+		}
+		// FIX-MINOR-004: permission/schema failures must not masquerade as a
+		// duplicate email; answer 500 so the middleware logs the raw cause.
+		writeError(writer, http.StatusInternalServerError, "REGISTER_FAILED", "could not create user")
 		return
 	}
 
@@ -155,6 +161,12 @@ func (service *Service) Register(writer http.ResponseWriter, request *http.Reque
 // insertTenant inserts a tenant row inside tx, deriving a unique lowercase
 // slug from name. If the derived slug already exists (unique_violation on
 // tenants.slug), a random suffix is appended and the insert is retried.
+// isUniqueViolation reports whether err is PostgreSQL's 23505 unique_violation.
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
 func insertTenant(ctx context.Context, tx pgx.Tx, name string) (int64, error) {
 	base := slugify(name)
 	slug := base
@@ -166,8 +178,7 @@ func insertTenant(ctx context.Context, tx pgx.Tx, name string) (int64, error) {
 		if err == nil {
 			return tenantID, nil
 		}
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
+		if isUniqueViolation(err) {
 			slug = base + "-" + randomSuffix()
 			continue
 		}

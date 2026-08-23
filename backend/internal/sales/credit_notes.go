@@ -26,6 +26,10 @@ import (
 // returnAccountCode is the seeded "Sales Returns" contra-revenue account (4201).
 const returnAccountCode = "4201"
 
+// errCreditNoteExceedsReceivable marks a credit note whose total is larger
+// than the invoice's outstanding receivable (e.g. crediting a settled invoice).
+var errCreditNoteExceedsReceivable = errors.New("credit note exceeds outstanding receivable")
+
 // cogsAccountCode is the seeded "COGS" account (5101).
 const cogsAccountCode = "5101"
 
@@ -445,7 +449,7 @@ func (service *Service) CreateCreditNote(writer http.ResponseWriter, request *ht
 		// so the invoice's receivable_cents must go DOWN (M-008: it previously
 		// went up, which both overstated AR and allowed over-crediting).
 		if totalReturn > receivable {
-			return fmt.Errorf("credit note total %d exceeds the invoice's outstanding receivable %d", totalReturn, receivable)
+			return fmt.Errorf("%w: credit note total %d exceeds the invoice's outstanding receivable %d", errCreditNoteExceedsReceivable, totalReturn, receivable)
 		}
 		newReceivable := receivable - totalReturn
 		newStatus := invStatus
@@ -680,6 +684,10 @@ func cnErrorFor(err error) (int, string, string) {
 	}
 	if errors.Is(err, approval.ErrApprovalRequired) {
 		return http.StatusConflict, "APPROVAL_REQUIRED", err.Error()
+	}
+	if errors.Is(err, errCreditNoteExceedsReceivable) {
+		// FIX-MINOR-004: a business-rule rejection must not surface as 500.
+		return http.StatusConflict, "CREDIT_NOTE_EXCEEDS_RECEIVABLE", err.Error()
 	}
 	if isNoRows(err) {
 		return http.StatusNotFound, "INVOICE_NOT_FOUND", "invoice not found"
