@@ -121,25 +121,33 @@ func main() {
 	router.Use(middleware.Timeout(60 * time.Second))            // i-011: per-request timeout
 	router.Use(middleware.LimitBody(8 << 20))                   // F-05: global 8 MiB body cap (attachments install their own tighter cap)
 
-	// Rate limiter for auth endpoints (M-027: prevent brute-force).
-	loginLimiter := middleware.NewRateLimiter(5, time.Minute)
+	// QA-02: one rate limiter PER auth endpoint group (per-IP sliding
+	// window, 1 minute). The previous single shared bucket let a burst on
+	// login lock legitimate users out of register/refresh/2FA. Limits are
+	// defined and documented in middleware.NewAuthLimiters.
+	authLimiters := middleware.NewAuthLimiters()
+	defer authLimiters.Stop()
 
 	router.Get("/healthz", tenant.Health)
 	router.Get("/healthz/detail", tenantHandler.HealthDetailed)
 	router.Route("/api/v1", func(router chi.Router) {
-		router.With(loginLimiter.Middleware).Post("/auth/login", authService.Login)
-		router.With(loginLimiter.Middleware).Post("/auth/register", authService.Register)
-		router.With(loginLimiter.Middleware).Post("/auth/refresh", authService.Refresh)
-		router.Post("/auth/logout", authService.Logout)
+		router.With(authLimiters.Login.Middleware).Post("/auth/login", authService.Login)
+		router.With(authLimiters.Register.Middleware).Post("/auth/register", authService.Register)
+		router.With(authLimiters.Refresh.Middleware).Post("/auth/refresh", authService.Refresh)
 		router.Post("/auth/switch-tenant", authService.SwitchTenant)
 
 		router.Group(func(router chi.Router) {
 			router.Use(authService.Middleware)
 
+			// QA-18: logout now sits behind the auth middleware so a
+			// missing/garbage bearer token is rejected with 401 instead of
+			// silently answering 200 while revoking nothing.
+			router.Post("/auth/logout", authService.Logout)
+
 			// m-006: two-factor authentication setup (authenticated).
-			router.With(loginLimiter.Middleware).Post("/auth/2fa/setup", authService.Setup2FA)
-			router.With(loginLimiter.Middleware).Post("/auth/2fa/verify", authService.Setup2FAVerify)
-			router.With(loginLimiter.Middleware).Post("/auth/2fa/disable", authService.Disable2FA)
+			router.With(authLimiters.TwoFA.Middleware).Post("/auth/2fa/setup", authService.Setup2FA)
+			router.With(authLimiters.TwoFA.Middleware).Post("/auth/2fa/verify", authService.Setup2FAVerify)
+			router.With(authLimiters.TwoFA.Middleware).Post("/auth/2fa/disable", authService.Disable2FA)
 
 			// Tenant lifecycle: create (onboarding, idempotent), create-new
 			// (additional tenant for multi-book accounts), list (tenant

@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -132,6 +133,24 @@ func normalizeWidgetGrid(colSpan, rowSpan int) (int, int) {
 		rowSpan = 1
 	}
 	return colSpan, rowSpan
+}
+
+// normalizeWidgetConfig makes an omitted/empty widget config NULL-safe for
+// the config_json column (QA-14). The column is NOT NULL with a
+// '{}'::jsonb DEFAULT — binding []byte(nil) explicitly overrides that default
+// with NULL and turns a minimal payload into a 500. An absent config therefore
+// binds '{}' instead; a non-empty config must be valid JSON or the caller
+// gets a validation error rather than a jsonb cast failure at INSERT time.
+// Pure: no DB/HTTP coupling.
+func normalizeWidgetConfig(config json.RawMessage) ([]byte, error) {
+	trimmed := bytes.TrimSpace(config)
+	if len(trimmed) == 0 {
+		return []byte("{}"), nil
+	}
+	if !json.Valid(trimmed) {
+		return nil, errors.New("config is not valid JSON")
+	}
+	return trimmed, nil
 }
 
 func (service *Service) GetLayout(w http.ResponseWriter, r *http.Request) {
@@ -376,16 +395,21 @@ func (service *Service) AddWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.ColSpan, req.RowSpan = normalizeWidgetGrid(req.ColSpan, req.RowSpan)
+	config, err := normalizeWidgetConfig(req.Config)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "INVALID_REQUEST", "config must be a valid JSON object")
+		return
+	}
 
 	var id int64
-	err := db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
+	err = db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
 		layoutID := service.ensureDefaultLayoutTx(r.Context(), tx, tenantID, userID)
 		return tx.QueryRow(r.Context(), `
 			INSERT INTO dashboard_widgets (tenant_id, user_id, layout_id, widget_type, title, config_json, position, col_span, row_span)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			RETURNING id
 		`, tenantID, userID, layoutID, req.WidgetType, req.Title,
-			[]byte(req.Config), req.Position, req.ColSpan, req.RowSpan).Scan(&id)
+			config, req.Position, req.ColSpan, req.RowSpan).Scan(&id)
 	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "WIDGET_CREATE_FAILED", err.Error())
@@ -424,13 +448,18 @@ func (service *Service) UpdateWidget(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
 		return
 	}
+	config, cfgErr := normalizeWidgetConfig(req.Config)
+	if cfgErr != nil {
+		writeErr(w, http.StatusBadRequest, "INVALID_REQUEST", "config must be a valid JSON object")
+		return
+	}
 
 	err = db.WithTenantData(r.Context(), service.pool, tenantID, func(tx pgx.Tx) error {
 		_, err := tx.Exec(r.Context(), `
 			UPDATE dashboard_widgets
 			SET title = $3, config_json = $4, position = $5, col_span = $6, row_span = $7, updated_at = now()
 			WHERE tenant_id = $1 AND user_id = $2 AND id = $8
-		`, tenantID, userID, req.Title, []byte(req.Config), req.Position, req.ColSpan, req.RowSpan, widgetID)
+		`, tenantID, userID, req.Title, config, req.Position, req.ColSpan, req.RowSpan, widgetID)
 		return err
 	})
 	if err != nil {

@@ -353,11 +353,20 @@ func (service *Service) Refresh(writer http.ResponseWriter, request *http.Reques
 	})
 }
 
-// Logout revokes the presented refresh token.
+// Logout revokes the presented refresh token. The route sits behind the auth
+// middleware (QA-18): a missing or garbage bearer token is rejected with 401
+// before this handler runs, so an unauthenticated caller can no longer get a
+// false-success 200. An empty refresh_token body is a client bug and answers
+// 400; a non-empty token that is unknown/already revoked stays an idempotent
+// 200 (logout must not fail loudly on a stale token).
 func (service *Service) Logout(writer http.ResponseWriter, request *http.Request) {
 	var req RefreshRequest
 	if err := decodeJSON(request, &req); err != nil {
 		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
+	if req.RefreshToken == "" {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", "refresh_token is required")
 		return
 	}
 	if _, err := service.pool.Exec(request.Context(),
@@ -838,6 +847,12 @@ func RoleFromContext(ctx context.Context) (string, bool) {
 // packages that need to inject the same value the middleware sets.
 func ContextKeyTenantID() contextKey {
 	return tenantIDKey
+}
+
+// ContextKeyUserID exposes the user context key for tests and other packages
+// that need to inject the same value the middleware sets.
+func ContextKeyUserID() contextKey {
+	return userIDKey
 }
 
 // ContextKeyRole exposes the role context key for tests and other packages

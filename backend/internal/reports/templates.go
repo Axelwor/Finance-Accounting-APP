@@ -158,15 +158,27 @@ func (s *Service) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errResp{"INVALID_REQUEST", err.Error()})
 		return
 	}
+	// N7: check RowsAffected — an id owned by another tenant (or a global
+	// tenant_id=0 template, which stays RLS/write-protected) matches zero
+	// rows, which previously returned a false-success 200.
+	var updated bool
 	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
-		_, err := tx.Exec(r.Context(), `
+		ct, err := tx.Exec(r.Context(), `
 			UPDATE report_templates SET code=$3, name=$4, document_type=$5, template_yaml=$6, is_default=$7, updated_at=now()
 			WHERE tenant_id=$1 AND id=$2
 		`, tid, id, req.Code, req.Name, req.DocumentType, req.TemplateYAML, req.IsDefault)
-		return err
+		if err != nil {
+			return err
+		}
+		updated = ct.RowsAffected() > 0
+		return nil
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errResp{"UPDATE_FAILED", err.Error()})
+		return
+	}
+	if !updated {
+		writeJSON(w, http.StatusNotFound, errResp{"NOT_FOUND", "template not found"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "message": "updated"})
@@ -179,12 +191,23 @@ func (s *Service) DeleteTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := pathID(chi.URLParam(r, "id"))
+	// N7: same RowsAffected guard as UpdateTemplate — deleting a foreign or
+	// global (tenant_id=0) template must answer 404, not a false 200.
+	var deleted bool
 	err := db.WithTenantData(r.Context(), s.pool, tid, func(tx pgx.Tx) error {
-		_, err := tx.Exec(r.Context(), `DELETE FROM report_templates WHERE tenant_id=$1 AND id=$2`, tid, id)
-		return err
+		ct, err := tx.Exec(r.Context(), `DELETE FROM report_templates WHERE tenant_id=$1 AND id=$2`, tid, id)
+		if err != nil {
+			return err
+		}
+		deleted = ct.RowsAffected() > 0
+		return nil
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errResp{"DELETE_FAILED", err.Error()})
+		return
+	}
+	if !deleted {
+		writeJSON(w, http.StatusNotFound, errResp{"NOT_FOUND", "template not found"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "message": "deleted"})

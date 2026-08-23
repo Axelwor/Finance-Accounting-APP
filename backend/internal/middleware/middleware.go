@@ -220,11 +220,12 @@ type visitor struct {
 
 // RateLimiter is a simple in-memory sliding-window rate limiter.
 type RateLimiter struct {
-	mu       sync.Mutex
-	visitors map[string]*visitor
-	max      int           // max requests per window
-	window   time.Duration // sliding window duration
-	done     chan struct{} // signals the cleanup goroutine to stop
+	mu         sync.Mutex
+	visitors   map[string]*visitor
+	max        int           // max requests per window
+	window     time.Duration // sliding window duration
+	done       chan struct{} // signals the cleanup goroutine to stop
+	startClean sync.Once     // QA-02: spawn the cleanup goroutine exactly once
 }
 
 // NewRateLimiter creates a rate limiter that allows max requests per window
@@ -239,6 +240,46 @@ func NewRateLimiter(max int, window time.Duration) *RateLimiter {
 	return rl
 }
 
+// Final auth rate limits (per IP, sliding window 1 minute — tune here).
+// Exported so deployments/tests can reference the exact numbers.
+const (
+	AuthLoginRatePerMinute    = 10 // brute-force guard, allows a family sharing one IP
+	AuthRegisterRatePerMinute = 10 // signup spam guard
+	AuthRefreshRatePerMinute  = 30 // SPA with several tabs refreshes aggressively
+	AuthTwoFARatePerMinute    = 10 // covers setup + verify + disable combined
+)
+
+// AuthLimiters bundles one RateLimiter per auth endpoint group (QA-02).
+// Sharing a single bucket across login/register/refresh/2FA let a burst on
+// one endpoint lock legitimate users out of the others, so each endpoint
+// group gets its own per-IP sliding window.
+type AuthLimiters struct {
+	Login    *RateLimiter
+	Register *RateLimiter
+	Refresh  *RateLimiter
+	TwoFA    *RateLimiter
+}
+
+// NewAuthLimiters builds the standard per-endpoint auth limiters.
+func NewAuthLimiters() *AuthLimiters {
+	window := time.Minute
+	return &AuthLimiters{
+		Login:    NewRateLimiter(AuthLoginRatePerMinute, window),
+		Register: NewRateLimiter(AuthRegisterRatePerMinute, window),
+		Refresh:  NewRateLimiter(AuthRefreshRatePerMinute, window),
+		TwoFA:    NewRateLimiter(AuthTwoFARatePerMinute, window),
+	}
+}
+
+// Stop signals every background cleanup goroutine to exit. Call this during
+// graceful shutdown.
+func (a *AuthLimiters) Stop() {
+	a.Login.Stop()
+	a.Register.Stop()
+	a.Refresh.Stop()
+	a.TwoFA.Stop()
+}
+
 // Stop signals the background cleanup goroutine to exit. Call this when the
 // rate limiter is no longer needed (e.g. during graceful shutdown).
 func (rl *RateLimiter) Stop() {
@@ -248,19 +289,24 @@ func (rl *RateLimiter) Stop() {
 // Middleware returns an http.Handler that enforces the rate limit.
 // If the limit is exceeded, a 429 Too Many Requests is returned.
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
-	// Background cleanup of stale visitor entries every 5 minutes.
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-rl.done:
-				return
-			case <-ticker.C:
-				rl.cleanup()
+	// Background cleanup of stale visitor entries every 5 minutes. QA-02:
+	// started exactly once per limiter — Middleware may be wrapped around
+	// several routes, and the previous per-call spawn leaked a goroutine
+	// for every registration site.
+	rl.startClean.Do(func() {
+		go func() {
+			ticker := time.NewTicker(5 * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-rl.done:
+					return
+				case <-ticker.C:
+					rl.cleanup()
+				}
 			}
-		}
-	}()
+		}()
+	})
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := clientIP(r)

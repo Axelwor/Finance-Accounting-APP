@@ -39,7 +39,11 @@ func (service *Service) Export(writer http.ResponseWriter, request *http.Request
 		return
 	}
 
-	f := parseReportFilter(request)
+	f, err := parseReportFilter(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
 	result, err := service.fetchReportData(request, rtype, f)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "REPORT_FAILED", err.Error())
