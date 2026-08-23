@@ -20,6 +20,22 @@ import (
 // overpaymentAccountCode is the seeded "Customer Overpayment" account (2402).
 const overpaymentAccountCode = "2402"
 
+// errPaymentExceedsReceivable marks a payment whose amount is larger than the
+// invoice's outstanding receivable (QA-06: rejected with a clean 409 instead
+// of being accepted as tracked overpayment).
+var errPaymentExceedsReceivable = errors.New("payment exceeds outstanding receivable")
+
+// applyPayment computes how much of the payment applies to AR. A payment may
+// never exceed the outstanding receivable: partial payments leave the rest
+// open, exact amounts settle it, and anything above returns
+// errPaymentExceedsReceivable so the handler answers 409 PAYMENT_EXCEEDS_RECEIVABLE.
+func applyPayment(amountCents, receivable int64) (int64, error) {
+	if amountCents > receivable {
+		return 0, fmt.Errorf("%w: amount %d exceeds receivable %d", errPaymentExceedsReceivable, amountCents, receivable)
+	}
+	return amountCents, nil
+}
+
 // CreatePaymentRequest is the POST /invoices/{id}/payments body.
 type CreatePaymentRequest struct {
 	CashAccountID int64  `json:"cash_account_id"`
@@ -120,12 +136,12 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 			return fmt.Errorf("invoice %s is VOID", invNumber)
 		}
 
-		// Compute AR applied and overpayment.
-		arApplied := req.AmountCents
-		overpayment := int64(0)
-		if arApplied > receivable {
-			overpayment = arApplied - receivable
-			arApplied = receivable
+		// Compute AR applied. Overpayment (amount > receivable) is rejected as
+		// a business validation so the client gets a clean 409 instead of an
+		// accepted payment that would need a tracked refund balance.
+		arApplied, err := applyPayment(req.AmountCents, receivable)
+		if err != nil {
+			return err
 		}
 
 		// Resolve accounts.
@@ -143,20 +159,19 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 			{AccountID: cashAccount.ID, DebitCents: req.AmountCents, SourceLineRef: "cash"},
 			{AccountID: arAccountID, CreditCents: arApplied, SourceLineRef: "ar"},
 		}
-		if overpayment > 0 {
-			opAccountID, err := resolveAccountByCode(request.Context(), tx, tenant, overpaymentAccountCode)
-			if err != nil {
-				return err
-			}
-			journalLines = append(journalLines, accounting.Line{
-				AccountID: opAccountID, CreditCents: overpayment, SourceLineRef: "overpayment",
-			})
-		}
 		if err := accounting.BalanceCheck(journalLines); err != nil {
 			return err
 		}
 
-		sourceRef := fmt.Sprintf("PMT-%d", invoiceID)
+		// QA-06: the journal source_ref must be unique per payment. The old
+		// static "PMT-{invoiceID}" collided with journal_entries_intent_unique
+		// on every second payment for the same invoice; allocate the PMT number
+		// up front and use it (unique per tenant/year via document_numbering).
+		pmtNumber, err := nextPMTNumber(request.Context(), tx, tenant)
+		if err != nil {
+			return err
+		}
+		sourceRef := pmtNumber
 		journal := accounting.Journal{
 			TenantID:    tenant,
 			SourceRef:   sourceRef,
@@ -234,10 +249,6 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 		}
 
 		// Insert payment record.
-		pmtNumber, err := nextPMTNumber(request.Context(), tx, tenant)
-		if err != nil {
-			return err
-		}
 		pmtDate, err := parseDate(req.PaymentDate)
 		if err != nil {
 			return err
@@ -251,32 +262,31 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'RECEIVED', $12, $13, $14)
 			RETURNING id
 		`, tenant, pmtNumber, invoiceID, customerID, entryID,
-			req.AmountCents, arApplied, overpayment, req.CashAccountID,
+			req.AmountCents, arApplied, 0, req.CashAccountID,
 			pmtDate, textValueOptional(req.Description), idem, sourceRef,
 			int8Value(userID)).Scan(&pmtID)
 		if err != nil {
 			return err
 		}
 		result = paymentResponse{
-			ID:               pmtID,
-			Number:           pmtNumber,
-			InvoiceID:        invoiceID,
-			CustomerID:       customerID,
-			JournalEntryID:   entryID,
-			AmountCents:      req.AmountCents,
-			ARAppliedCents:   arApplied,
-			OverpaymentCents: overpayment,
-			CashAccountID:    req.CashAccountID,
-			PaymentDate:      req.PaymentDate,
-			Description:      req.Description,
-			Status:           "RECEIVED",
+			ID:             pmtID,
+			Number:         pmtNumber,
+			InvoiceID:      invoiceID,
+			CustomerID:     customerID,
+			JournalEntryID: entryID,
+			AmountCents:    req.AmountCents,
+			ARAppliedCents: arApplied,
+			CashAccountID:  req.CashAccountID,
+			PaymentDate:    req.PaymentDate,
+			Description:    req.Description,
+			Status:         "RECEIVED",
 		}
 
 		if err := audit.Log(request.Context(), tx, tenant, userID, "invoice_payment", pmtID, audit.ActionPost, nil, map[string]any{
 			"number":            pmtNumber,
 			"amount_cents":      req.AmountCents,
 			"ar_applied_cents":  arApplied,
-			"overpayment_cents": overpayment,
+			"overpayment_cents": 0,
 			"journal_entry_id":  entryID,
 		}); err != nil {
 			return err
@@ -368,6 +378,9 @@ func validatePaymentRequest(req CreatePaymentRequest) (string, string) {
 func paymentErrorFor(err error) (int, string, string) {
 	if errors.Is(err, httperr.ErrIdempotencyKeyReuse) {
 		return http.StatusConflict, "IDEMPOTENCY_KEY_REUSE", err.Error()
+	}
+	if errors.Is(err, errPaymentExceedsReceivable) {
+		return http.StatusConflict, "PAYMENT_EXCEEDS_RECEIVABLE", err.Error()
 	}
 	if isNoRows(err) {
 		return http.StatusNotFound, "INVOICE_NOT_FOUND", "invoice not found"

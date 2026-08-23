@@ -507,6 +507,11 @@ func deliveryErrorFor(err error) (int, string, string) {
 	if isNoRows(err) {
 		return http.StatusNotFound, "ORDER_NOT_FOUND", "sales order not found"
 	}
+	if errors.Is(err, costing.ErrInsufficientStock) {
+		// QA-11: business-rule rejection (qty > on-hand), detected before any
+		// costing/journal work — answer 4xx with a clear code, not a raw 500.
+		return http.StatusUnprocessableEntity, "INSUFFICIENT_STOCK", err.Error()
+	}
 	var overflow dpOverflowError
 	if errors.As(err, &overflow) {
 		return http.StatusConflict, "DP_EXCEEDS_ORDER", overflow.Error()
