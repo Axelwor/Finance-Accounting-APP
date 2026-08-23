@@ -2,6 +2,7 @@ package purchase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -46,8 +47,11 @@ type supplierPaymentResponse struct {
 }
 
 // CreateSupplierPayment posts a supplier payment against an invoice.
-// Journal: Dr 2101 AP (ap_applied) / [Dr 1204 overpayment] / Cr Cash-Bank (amount).
-// Intent: SUPPLIER_PAYMENT. Source ref: PAY-{invoiceID}.
+// Journal: Dr 2101 AP (ap_applied) / Cr Cash-Bank (amount).
+// Intent: SUPPLIER_PAYMENT. Source ref: the unique PAY document number so
+// staged settlements (partial then final payment) never collide on
+// journal_entries_intent_unique. Payments above the outstanding payable are
+// rejected as a business rule.
 func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, request *http.Request) {
 	tenant, err := tenantID(request)
 	if err != nil {
@@ -114,15 +118,13 @@ func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, reques
 			return fmt.Errorf("invoice %s is VOID", invNumber)
 		}
 
-		// Compute AP applied and overpayment.
-		//   ap_applied = min(amount, payable)
-		//   overpayment = amount - ap_applied  (only when amount > payable)
-		apApplied := req.AmountCents
-		overpayment := int64(0)
-		if apApplied > payable {
-			overpayment = apApplied - payable
-			apApplied = payable
+		// Business rule: a payment may not exceed the outstanding payable
+		// (overpayment is rejected with a clean validation error).
+		apApplied, err := splitPaymentAmount(req.AmountCents, payable)
+		if err != nil {
+			return err
 		}
+		overpayment := int64(0)
 
 		// Resolve accounts.
 		apAccountID, err := resolveAccountByCode(request.Context(), tx, tenant, apAccountCode)
@@ -136,26 +138,24 @@ func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, reques
 
 		// Build journal lines.
 		//   Dr 2101 AP (ap_applied) — reduce what we owe.
-		//   Dr 1204 Other Receivables (overpayment) — if overpaid.
 		//   Cr Cash/Bank (amount) — total cash out.
 		journalLines := []accounting.Line{
 			{AccountID: apAccountID, DebitCents: apApplied, SourceLineRef: "ap"},
 			{AccountID: cashAccount.ID, CreditCents: req.AmountCents, SourceLineRef: "cash"},
 		}
-		if overpayment > 0 {
-			opAccountID, err := resolveAccountByCode(request.Context(), tx, tenant, overpaymentAccountCode)
-			if err != nil {
-				return err
-			}
-			journalLines = append(journalLines, accounting.Line{
-				AccountID: opAccountID, DebitCents: overpayment, SourceLineRef: "overpayment",
-			})
-		}
 		if err := accounting.BalanceCheck(journalLines); err != nil {
 			return err
 		}
 
-		sourceRef := fmt.Sprintf("PAY-%d", invoiceID)
+		// Allocate the unique payment document number first: it doubles as
+		// the journal source_ref (PAY-YYYY-NNNNNN), so a second payment on
+		// the same invoice gets its own ref instead of colliding on
+		// journal_entries_intent_unique (QA-06).
+		pmtNumber, err := nextPayNumber(request.Context(), tx, tenant)
+		if err != nil {
+			return err
+		}
+		sourceRef := pmtNumber
 		journal := accounting.Journal{
 			TenantID:    tenant,
 			SourceRef:   sourceRef,
@@ -231,10 +231,6 @@ func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, reques
 		}
 
 		// Insert payment record.
-		pmtNumber, err := nextPayNumber(request.Context(), tx, tenant)
-		if err != nil {
-			return err
-		}
 		pmtDate, err := parseDate(req.PaymentDate)
 		if err != nil {
 			return err
@@ -351,6 +347,27 @@ func (service *Service) ListSupplierPayments(writer http.ResponseWriter, request
 // Supplier payment helpers
 // ---------------------------------------------------------------------------
 
+// paymentExceedsPayableError signals a payment larger than the invoice's
+// outstanding payable; overpayment is rejected as a business rule.
+type paymentExceedsPayableError struct {
+	amountCents  int64
+	payableCents int64
+}
+
+func (e *paymentExceedsPayableError) Error() string {
+	return fmt.Sprintf("payment amount %d cents exceeds outstanding payable %d cents", e.amountCents, e.payableCents)
+}
+
+// splitPaymentAmount validates the requested amount against the invoice's
+// outstanding payable and returns the AP-applied portion. Amounts above the
+// payable are rejected instead of being booked as supplier overpayment.
+func splitPaymentAmount(amountCents, payableCents int64) (int64, error) {
+	if amountCents > payableCents {
+		return 0, &paymentExceedsPayableError{amountCents: amountCents, payableCents: payableCents}
+	}
+	return amountCents, nil
+}
+
 func validateSupplierPaymentRequest(req CreateSupplierPaymentRequest) (string, string) {
 	if req.CashAccountID <= 0 {
 		return "INVALID_REQUEST", "cash_account_id is required"
@@ -367,6 +384,10 @@ func validateSupplierPaymentRequest(req CreateSupplierPaymentRequest) (string, s
 func supplierPaymentErrorFor(err error) (int, string, string) {
 	if isNoRows(err) {
 		return http.StatusNotFound, "SUPPLIER_INVOICE_NOT_FOUND", "supplier invoice not found"
+	}
+	var overpay *paymentExceedsPayableError
+	if errors.As(err, &overpay) {
+		return http.StatusConflict, "PAYMENT_EXCEEDS_PAYABLE", overpay.Error()
 	}
 	if isForeignKeyViolation(err) {
 		return http.StatusBadRequest, "INVALID_REQUEST", "cash account or invoice not found"

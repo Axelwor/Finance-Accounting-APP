@@ -258,7 +258,15 @@ func (service *Service) CreatePurchaseReturn(writer http.ResponseWriter, request
 			return err
 		}
 
-		sourceRef := fmt.Sprintf("PRET-%d", req.InvoiceID)
+		// Allocate the unique PR document number first: it doubles as the
+		// journal source_ref (PRET-YYYY-NNNNNN) so a second return against
+		// the same invoice gets its own ref instead of colliding on
+		// journal_entries_intent_unique (same root cause as QA-06).
+		prNumber, err := nextDocNumber(request.Context(), tx, tenant, "PRET", "PRET")
+		if err != nil {
+			return err
+		}
+		sourceRef := prNumber
 		journal := accounting.Journal{
 			TenantID:    tenant,
 			SourceRef:   sourceRef,
@@ -326,7 +334,7 @@ func (service *Service) CreatePurchaseReturn(writer http.ResponseWriter, request
 				INSERT INTO inventory_movements (tenant_id, item_id, movement_type, qty, unit_cost_cents, source_ref, source_id)
 				VALUES ($1, $2, 'PURCHASE_RETURN', $3, $4, $5, $6)
 			`, tenant, p.line.ItemID, negQty, p.line.UnitPriceCents,
-				fmt.Sprintf("PRET-%d", req.InvoiceID), 0); err != nil {
+				prNumber, 0); err != nil {
 				return err
 			}
 			// Reduce the cost layers / average cost to reflect inventory
@@ -353,11 +361,7 @@ func (service *Service) CreatePurchaseReturn(writer http.ResponseWriter, request
 			return err
 		}
 
-		// Allocate PRET number and insert the return header + lines.
-		prNumber, err := nextDocNumber(request.Context(), tx, tenant, "PRET", "PRET")
-		if err != nil {
-			return err
-		}
+		// Insert the return header + lines (number allocated above).
 		returnDate, err := parseDate(req.ReturnDate)
 		if err != nil {
 			return err
