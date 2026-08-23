@@ -261,7 +261,8 @@ func nextJournalNumber(ctx context.Context, tx pgx.Tx, tenantID int64) (string, 
 
 // resolvePeriod finds the OPEN/REOPENED accounting period containing the entry
 // date, mirroring the assert_entry_date_in_period trigger. Failing here gives
-// a clean 404 instead of a raw trigger error after the journal was built.
+// a clean business error (QA-08: 422 ENTRY_DATE_OUTSIDE_OPEN_PERIOD) instead
+// of the ErrNoRows fallback or a raw trigger error after the journal was built.
 func resolvePeriod(ctx context.Context, tx pgx.Tx, tenantID int64, date string) (int64, error) {
 	var periodID int64
 	err := tx.QueryRow(ctx, `
@@ -274,7 +275,7 @@ func resolvePeriod(ctx context.Context, tx pgx.Tx, tenantID int64, date string) 
 		LIMIT 1
 	`, tenantID, date).Scan(&periodID)
 	if err != nil {
-		return 0, fmt.Errorf("entry date is outside an open period: %w", err)
+		return 0, fmt.Errorf("entry date is outside an open period: %w", accounting.ErrEntryDateOutsideOpenPeriod)
 	}
 	return periodID, nil
 }

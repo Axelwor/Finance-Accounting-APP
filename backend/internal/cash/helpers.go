@@ -28,6 +28,11 @@ import (
 // different request payload (M-023).
 var errIdempotencyKeyReuse = errors.New("IDEMPOTENCY_KEY_REUSE")
 
+// errJournalNotPosted is returned when a reversal targets a journal that is
+// not in POSTED status (e.g. a double-reverse of an already VOID journal,
+// QA-07). It is a business guard, not an internal failure.
+var errJournalNotPosted = errors.New("JOURNAL_NOT_POSTED")
+
 // computeRequestHash reads the request body and returns a SHA-256 hash.
 // The body is restored so downstream handlers can still read it.
 func computeRequestHash(request *http.Request) string {
@@ -173,9 +178,28 @@ func resolveEquityAccount(ctx context.Context, tx pgx.Tx, tenantID int64) (int64
 }
 
 // errorFor maps a posting error to the HTTP status/error code/message.
+// Domain sentinels are checked first; the pgx.ErrNoRows fallback must stay
+// last because resolvePeriod wraps ErrNoRows in its own sentinel (QA-08).
 func errorFor(err error) (int, string, string) {
 	if errors.Is(err, errIdempotencyKeyReuse) {
 		return http.StatusConflict, "IDEMPOTENCY_KEY_REUSE", "this Idempotency-Key was already used with a different payload"
+	}
+	if errors.Is(err, errJournalNotPosted) {
+		// QA-07: reversing a VOID (or already reversed) journal is a business
+		// rejection, not an internal error.
+		return http.StatusConflict, "JOURNAL_NOT_POSTED", "only POSTED journals can be reversed"
+	}
+	if errors.Is(err, accounting.ErrEntryDateOutsideOpenPeriod) {
+		// QA-08: entry dates outside every OPEN/REOPENED period (e.g. posting
+		// after close) are a client input problem, not a missing account.
+		return http.StatusUnprocessableEntity, "ENTRY_DATE_OUTSIDE_OPEN_PERIOD", "entry_date does not fall inside an OPEN accounting period; reopen the period or choose a date inside it"
+	}
+	if errors.Is(err, accounting.ErrAccountTypeMismatch) {
+		// N6: transfers are only valid between CASH/BANK accounts.
+		return http.StatusUnprocessableEntity, "ACCOUNT_TYPE_MISMATCH", "transfers require CASH or BANK accounts on both sides"
+	}
+	if errors.Is(err, accounting.ErrSameTransferAccount) {
+		return http.StatusBadRequest, "SAME_TRANSFER_ACCOUNT", "transfer source and destination accounts must differ"
 	}
 	if isNoRows(err) {
 		return http.StatusNotFound, "ACCOUNT_NOT_FOUND", "account does not exist for this tenant"

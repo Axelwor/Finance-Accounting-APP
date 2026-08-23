@@ -138,6 +138,92 @@ func TestValidateAccountInput(t *testing.T) {
 	}
 }
 
+// TestValidateAccountTypeEnum covers the QA-10 fix: unknown account_type
+// values must be rejected with a message listing the accepted enum.
+func TestValidateAccountTypeEnum(t *testing.T) {
+	rejectionMessage := func(accountType string) string {
+		request := createAccountRequest{
+			Code:        "9998",
+			Name:        "Rejection Probe",
+			ReportGroup: "asset",
+			AccountType: accountType,
+		}
+		_, message := validateAccountInput(request)
+		return message
+	}
+
+	tests := []struct {
+		name        string
+		accountType string
+		wantValid   bool
+	}{
+		{"seeded cash type", "CASH", true},
+		{"seeded bank type", "BANK", true},
+		{"seeded ar type", "AR", true},
+		{"seeded ap type", "AP", true},
+		{"migration provisioned type", "VAT_PAYABLE", true},
+		{"cheque module type", "CHEQUES_IN_TRANSIT", true},
+		{"lease type", "LEASE_LIABILITY", true},
+		{"oci type", "OCI", true},
+		{"unknown type rejected", "NOT_A_TYPE", false},
+		{"lowercase rejected", "cash", false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := createAccountRequest{
+				Code:        "9999",
+				Name:        "Validation Probe",
+				ReportGroup: "asset",
+				AccountType: test.accountType,
+			}
+			code, message := validateAccountInput(request)
+			if test.wantValid && code != "" {
+				t.Fatalf("expected %q to be accepted, got %s: %s", test.accountType, code, message)
+			}
+			if !test.wantValid && code == "" {
+				t.Fatalf("expected %q to be rejected", test.accountType)
+			}
+			if !test.wantValid && !strings.Contains(message, "account_type must be one of") {
+				t.Fatalf("rejection message must list valid values, got %q", message)
+			}
+		})
+	}
+
+	// The rejection message must enumerate at least one value from each
+	// source (seed and migrations) so clients can self-correct.
+	message := rejectionMessage("NOT_A_TYPE")
+	for _, want := range []string{"CASH", "REVENUE", "VAT_PAYABLE"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("valid list missing %q: %s", want, message)
+		}
+	}
+	if !strings.Contains(message, `"NOT_A_TYPE"`) {
+		t.Fatalf("valid list should echo offending value, got %q", message)
+	}
+}
+
+// TestValidAccountTypesAreSortedAndDistinct guards the enum list quality.
+func TestValidAccountTypesAreSortedAndDistinct(t *testing.T) {
+	values := validAccountTypeList()
+	if len(values) < 30 {
+		t.Fatalf("expected the full system enum (>=30 values), got %d", len(values))
+	}
+	seen := make(map[string]bool, len(values))
+	for index, value := range values {
+		if seen[value] {
+			t.Fatalf("duplicate account type %q in list", value)
+		}
+		seen[value] = true
+		if index > 0 && values[index-1] >= value {
+			t.Fatalf("list not sorted at %d: %q >= %q", index, values[index-1], value)
+		}
+		if !validAccountTypes[value] {
+			t.Fatalf("list contains value missing from set: %q", value)
+		}
+	}
+}
+
 func TestValidateCategoryInput(t *testing.T) {
 	tests := []struct {
 		name      string

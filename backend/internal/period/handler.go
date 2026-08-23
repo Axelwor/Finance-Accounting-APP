@@ -238,7 +238,14 @@ func (service *Service) Close(writer http.ResponseWriter, request *http.Request)
 		return
 	}
 	userID, _ := auth.UserIDFromContext(request.Context())
-	idem := request.Header.Get("Idempotency-Key")
+	// QA-09: close posts a journal, so the Idempotency-Key must be validated
+	// up front (same helper as Unlock). Without this an empty key reached the
+	// uuid column as "" and surfaced a raw SQLSTATE leak in the response.
+	idem, err := idempotencyKey(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
 
 	result, err := service.closePeriod(request.Context(), tenantID, userID, idem)
 	if err != nil {

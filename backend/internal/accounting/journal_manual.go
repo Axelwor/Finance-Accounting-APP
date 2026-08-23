@@ -127,18 +127,32 @@ func (service *Service) CreateManualJournal(writer http.ResponseWriter, request 
 		})
 	})
 	if err != nil {
-		if errors.Is(err, approval.ErrApprovalRequired) {
-			writeError(writer, http.StatusConflict, "APPROVAL_REQUIRED", err.Error())
-			return
-		}
-		status := http.StatusInternalServerError
-		if isValidationError(err) {
-			status = http.StatusBadRequest
-		}
-		writeError(writer, status, errorCode(err), err.Error())
+		status, code, message := classifyPostingError(err)
+		writeError(writer, status, code, message)
 		return
 	}
 	writeJSON(writer, http.StatusCreated, result)
+}
+
+// classifyPostingError maps a posting error from CreateManualJournal to an
+// HTTP status, stable error code, and message. Domain sentinels are checked
+// first; the pgx.ErrNoRows fallback must stay after ErrEntryDateOutsideOpen-
+// Period because resolvePeriod failures also surface as no-row errors.
+// N5/NEW-1: an account_id belonging to another tenant returns zero rows under
+// RLS — that is a missing resource for this tenant (404), not an internal
+// failure.
+func classifyPostingError(err error) (int, string, string) {
+	switch {
+	case errors.Is(err, approval.ErrApprovalRequired):
+		return http.StatusConflict, "APPROVAL_REQUIRED", err.Error()
+	case errors.Is(err, ErrEntryDateOutsideOpenPeriod):
+		return http.StatusUnprocessableEntity, "ENTRY_DATE_OUTSIDE_OPEN_PERIOD", "entry_date does not fall inside an OPEN accounting period; reopen the period or choose a date inside it"
+	case isNoRows(err):
+		return http.StatusNotFound, "ACCOUNT_NOT_FOUND", "account does not exist for this tenant"
+	case isValidationError(err):
+		return http.StatusBadRequest, errorCode(err), err.Error()
+	}
+	return http.StatusInternalServerError, errorCode(err), err.Error()
 }
 
 // ListJournalEntries returns all posted journal entries for the tenant with

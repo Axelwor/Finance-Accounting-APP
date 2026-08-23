@@ -115,6 +115,12 @@ var (
 	ErrSameTransferAccount = errors.New("SAME_TRANSFER_ACCOUNT")
 	ErrNoLines             = errors.New("NO_JOURNAL_LINES")
 	ErrInvalidOpening      = errors.New("INVALID_OPENING_BALANCE")
+	// ErrEntryDateOutsideOpenPeriod is wrapped by the posting layer's
+	// resolvePeriod when no OPEN/REOPENED accounting period covers the entry
+	// date (QA-08: includes posting after a period close). Handlers map it to
+	// 422 ENTRY_DATE_OUTSIDE_OPEN_PERIOD instead of the generic not-found
+	// fallback.
+	ErrEntryDateOutsideOpenPeriod = errors.New("ENTRY_DATE_OUTSIDE_OPEN_PERIOD")
 )
 
 func CashIn(intent CashIntent) (Journal, error) {
