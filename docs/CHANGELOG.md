@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Audit Fixes Phase C — RLS Activation COMPLETE (F-01 resolved; plan `1787414685590-audit-fix-implementation-plan.md`):**
+  - **C1:** every RLS-scoped table is now read/written inside tenant transactions (`db.WithTenantData` sets `app.tenant_id`); cross-tenant workers (recurring, email, lease consolidation) sweep per-tenant; registration seeds the new book with the tenant GUC set (QA-01 fix).
+  - **C2:** shadow verification passed — a restricted `finance_app` role (NOSUPERUSER NOBYPASSRLS) returned byte-identical payloads on 33/33 GET routes and successfully registered a new tenant.
+  - **C3:** production API now connects as `finance_app` via `${FINANCE_APP_PASSWORD}` compose interpolation; the `finance` superuser is retained for migrations only. Migration 000057 keeps global report templates visible under RLS.
+
 - **Audit Fixes Phase C — RLS Activation (in progress; plan `1787414685590-audit-fix-implementation-plan.md`):**
   - **C1 batch 1:** new `db.WithTenantData` helper (tenant-scoped transaction via `set_config('app.tenant_id', …, true)`) — every RLS policy is fail-closed, so pool-direct queries return zero rows for a restricted role without it. Reporting (all report fetchers + exports) and the whole dashboard package (layout CRUD, widget CRUD, widget data fetchers) now run inside tenant transactions. No schema/policy changes; remaining packages tracked in TASK_LEDGER before the restricted-role shadow run and cutover.
 
