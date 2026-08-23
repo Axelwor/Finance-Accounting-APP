@@ -212,7 +212,7 @@ func (service *Service) ListProductionJobs(writer http.ResponseWriter, request *
 		rows, err := tx.Query(request.Context(), `
 			SELECT pj.id, pj.number, COALESCE(pj.bom_id,0), pj.finished_good_item_id,
 			       i.code, i.name, pj.target_qty, pj.completed_qty, pj.start_date,
-			       COALESCE(pj.completion_date,''), pj.status,
+			       pj.completion_date, pj.status,
 			       pj.wip_account_id, pj.finished_good_account_id,
 			       pj.total_material_cents, pj.total_labor_cents, pj.total_overhead_cents,
 			       pj.total_cost_cents, pj.variance_cents, COALESCE(pj.journal_entry_id,0)
@@ -862,7 +862,7 @@ func fetchProductionJob(ctx context.Context, tx pgx.Tx, tenant, jobID int64) (*p
 	err := tx.QueryRow(ctx, `
 		SELECT pj.id, pj.number, COALESCE(pj.bom_id,0), pj.finished_good_item_id,
 		       i.code, i.name, pj.target_qty, pj.completed_qty, pj.start_date,
-		       COALESCE(pj.completion_date,''), pj.status,
+		       pj.completion_date, pj.status,
 		       pj.wip_account_id, pj.finished_good_account_id,
 		       pj.total_material_cents, pj.total_labor_cents, pj.total_overhead_cents,
 		       pj.total_cost_cents, pj.variance_cents, pj.journal_entry_id

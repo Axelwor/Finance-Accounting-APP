@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -72,11 +73,12 @@ func (service *Service) CreateDimension(writer http.ResponseWriter, request *htt
 	}
 
 	var d dimensionResponse
+	var createdAt time.Time
 	err = tx.QueryRow(ctx, `
 		INSERT INTO dimensions (tenant_id, code, name, dimension_type, is_active)
 		VALUES ($1, $2, $3, $4, true)
 		RETURNING id, code, name, dimension_type, is_active, created_at
-	`, tenant, code, name, dtype).Scan(&d.ID, &d.Code, &d.Name, &d.DimensionType, &d.IsActive, &d.CreatedAt)
+	`, tenant, code, name, dtype).Scan(&d.ID, &d.Code, &d.Name, &d.DimensionType, &d.IsActive, &createdAt)
 	if err != nil {
 		if isUniqueViolation(err) {
 			writeError(writer, http.StatusConflict, "DIMENSION_EXISTS", "dimension code already exists")
@@ -85,6 +87,7 @@ func (service *Service) CreateDimension(writer http.ResponseWriter, request *htt
 		writeError(writer, http.StatusInternalServerError, "DIMENSION_CREATE_FAILED", err.Error())
 		return
 	}
+	d.CreatedAt = createdAt.Format(time.RFC3339)
 	if err := tx.Commit(ctx); err != nil {
 		writeError(writer, http.StatusInternalServerError, "DIMENSION_CREATE_FAILED", err.Error())
 		return
@@ -125,9 +128,11 @@ func (service *Service) ListDimensions(writer http.ResponseWriter, request *http
 		defer rows.Close()
 		for rows.Next() {
 			var d dimensionResponse
-			if err := rows.Scan(&d.ID, &d.Code, &d.Name, &d.DimensionType, &d.IsActive, &d.CreatedAt); err != nil {
+			var createdAt time.Time
+			if err := rows.Scan(&d.ID, &d.Code, &d.Name, &d.DimensionType, &d.IsActive, &createdAt); err != nil {
 				return err
 			}
+			d.CreatedAt = createdAt.Format(time.RFC3339)
 			items = append(items, d)
 		}
 		return nil

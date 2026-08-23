@@ -178,61 +178,40 @@ func ResolveCOGS(ctx context.Context, tx pgx.Tx, tenantID, itemID int64, warehou
 // is valued at the balance's avg_unit_cost_cents as a fallback so the issue
 // still succeeds.
 func consumeFIFO(ctx context.Context, tx pgx.Tx, tenantID, itemID int64, warehouseID int64, qty, qoh, avgCost float64) (int64, error) {
-	rows, err := tx.Query(ctx, `
-		SELECT id, qty_remaining, unit_cost_cents
-		FROM inventory_cost_layers
-		WHERE tenant_id = $1 AND item_id = $2 AND warehouse_id = $3 AND closed_at IS NULL
-		ORDER BY created_at, id
-		FOR UPDATE
-	`, tenantID, itemID, warehouseID)
+	// Materialize the open layers and drain the result set BEFORE executing
+	// any UPDATE: pgx v5 forbids running tx.Exec while a tx.Query cursor is
+	// still open on the same connection ("conn busy" — QA-03).
+	layers, err := loadOpenFIFOLayers(ctx, tx, tenantID, itemID, warehouseID)
 	if err != nil {
-		return 0, fmt.Errorf("costing: ResolveCOGS layer select: %w", err)
+		return 0, err
 	}
-	defer rows.Close()
 
-	remaining := qty
-	var cogs int64
-	for remaining > 0 && rows.Next() {
-		var layerID int64
-		var qtyRemaining pgtype.Numeric
-		var unitCost int64
-		if err := rows.Scan(&layerID, &qtyRemaining, &unitCost); err != nil {
-			return 0, fmt.Errorf("costing: ResolveCOGS layer scan: %w", err)
-		}
-		layerQty := numericToFloat(qtyRemaining)
-		if layerQty <= 0 {
-			continue
-		}
-		take := math.Min(remaining, layerQty)
-		cogs += int64(math.Round(take * float64(unitCost)))
-		newRemaining := layerQty - take
-		if newRemaining <= 0 {
+	cogs, updates, uncovered := planFIFOConsumption(layers, qty, avgCost)
+
+	for _, update := range updates {
+		if update.NewRemaining <= 0 {
 			if _, err := tx.Exec(ctx, `
 				UPDATE inventory_cost_layers
 				SET qty_remaining = 0, closed_at = now()
 				WHERE tenant_id = $1 AND id = $2 AND warehouse_id = $3
-			`, tenantID, layerID, warehouseID); err != nil {
+			`, tenantID, update.LayerID, warehouseID); err != nil {
 				return 0, fmt.Errorf("costing: ResolveCOGS layer close: %w", err)
 			}
-		} else {
-			if _, err := tx.Exec(ctx, `
-				UPDATE inventory_cost_layers
-				SET qty_remaining = $3
-				WHERE tenant_id = $1 AND id = $2 AND warehouse_id = $3
-			`, tenantID, layerID, warehouseID, newRemaining); err != nil {
-				return 0, fmt.Errorf("costing: ResolveCOGS layer update: %w", err)
-			}
+			continue
 		}
-		remaining -= take
-	}
-	if err := rows.Err(); err != nil {
-		return 0, fmt.Errorf("costing: ResolveCOGS rows: %w", err)
+		if _, err := tx.Exec(ctx, `
+			UPDATE inventory_cost_layers
+			SET qty_remaining = $4
+			WHERE tenant_id = $1 AND id = $2 AND warehouse_id = $3
+		`, tenantID, update.LayerID, warehouseID, update.NewRemaining); err != nil {
+			return 0, fmt.Errorf("costing: ResolveCOGS layer update: %w", err)
+		}
 	}
 
 	// Fallback for legacy stock with no layers: value the shortfall at the
 	// balance's average cost so the issue still succeeds.
-	if remaining > 0 {
-		cogs += int64(math.Round(remaining * avgCost))
+	if uncovered > 0 {
+		cogs += int64(math.Round(uncovered * avgCost))
 	}
 
 	// Reduce the balance.
@@ -244,6 +223,78 @@ func consumeFIFO(ctx context.Context, tx pgx.Tx, tenantID, itemID int64, warehou
 		return 0, fmt.Errorf("costing: ResolveCOGS balance update: %w", err)
 	}
 	return cogs, nil
+}
+
+// fifoLayer is a materialized open inventory_cost_layers row.
+type fifoLayer struct {
+	ID            int64
+	QtyRemaining  float64
+	UnitCostCents int64
+}
+
+// fifoLayerUpdate is a pending balance update for one consumed layer.
+// NewRemaining <= 0 means the layer is fully consumed and must be closed
+// (qty_remaining = 0, closed_at = now()).
+type fifoLayerUpdate struct {
+	LayerID      int64
+	NewRemaining float64
+}
+
+// loadOpenFIFOLayers reads every open cost layer for an item/warehouse, oldest
+// first, locking them FOR UPDATE. Rows are fully materialized (and the result
+// set drained, including the rows.Err check) before the caller issues any
+// further statement on the connection.
+func loadOpenFIFOLayers(ctx context.Context, tx pgx.Tx, tenantID, itemID, warehouseID int64) ([]fifoLayer, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT id, qty_remaining, unit_cost_cents
+		FROM inventory_cost_layers
+		WHERE tenant_id = $1 AND item_id = $2 AND warehouse_id = $3 AND closed_at IS NULL
+		ORDER BY created_at, id
+		FOR UPDATE
+	`, tenantID, itemID, warehouseID)
+	if err != nil {
+		return nil, fmt.Errorf("costing: ResolveCOGS layer select: %w", err)
+	}
+	defer rows.Close()
+
+	var layers []fifoLayer
+	for rows.Next() {
+		var layer fifoLayer
+		var qtyRemaining pgtype.Numeric
+		if err := rows.Scan(&layer.ID, &qtyRemaining, &layer.UnitCostCents); err != nil {
+			return nil, fmt.Errorf("costing: ResolveCOGS layer scan: %w", err)
+		}
+		layer.QtyRemaining = numericToFloat(qtyRemaining)
+		layers = append(layers, layer)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("costing: ResolveCOGS rows: %w", err)
+	}
+	return layers, nil
+}
+
+// planFIFOConsumption walks materialized layers oldest-first and returns the
+// FIFO COGS in cents, the per-layer balance updates to apply, and the qty not
+// covered by any open layer (the caller values it at the fallback average
+// cost). It is pure so the FIFO semantics stay unit-testable without a DB.
+func planFIFOConsumption(layers []fifoLayer, qty, avgCost float64) (cogsCents int64, updates []fifoLayerUpdate, uncoveredQty float64) {
+	remaining := qty
+	for _, layer := range layers {
+		if remaining <= 0 {
+			break
+		}
+		if layer.QtyRemaining <= 0 {
+			continue
+		}
+		take := math.Min(remaining, layer.QtyRemaining)
+		cogsCents += int64(math.Round(take * float64(layer.UnitCostCents)))
+		updates = append(updates, fifoLayerUpdate{
+			LayerID:      layer.ID,
+			NewRemaining: layer.QtyRemaining - take,
+		})
+		remaining -= take
+	}
+	return cogsCents, updates, remaining
 }
 
 // ReverseCOGS reverses a prior COGS posting (for sales returns / credit notes

@@ -87,17 +87,22 @@ func (service *Service) postRoUDepreciation(ctx context.Context, tenantID, contr
 			return err
 		}
 
-		// Load the lease contract and verify it is ACTIVE.
+		// Load the lease contract and verify it is ACTIVE. The RoU cost and
+		// term live on lease_contracts as initial_rou_cents +
+		// (total_payments, payment_frequency); there are no rou_cost_cents /
+		// total_months columns (N3 schema drift).
 		var rouCostCents int64
-		var totalMonths int
+		var totalPayments int
+		var frequency string
 		var startDate, endDate time.Time
 		var statusStr string
 		var contractNumber string
 		err := tx.QueryRow(ctx, `
-			SELECT rou_cost_cents, total_months, start_date, end_date, status, number
+			SELECT initial_rou_cents, total_payments, payment_frequency,
+			       start_date, end_date, status, number
 			FROM lease_contracts
 			WHERE tenant_id = $1 AND id = $2
-		`, tenantID, contractID).Scan(&rouCostCents, &totalMonths, &startDate, &endDate, &statusStr, &contractNumber)
+		`, tenantID, contractID).Scan(&rouCostCents, &totalPayments, &frequency, &startDate, &endDate, &statusStr, &contractNumber)
 		if err != nil {
 			return fmt.Errorf("lease contract not found: %w", err)
 		}
@@ -107,6 +112,7 @@ func (service *Service) postRoUDepreciation(ctx context.Context, tenantID, contr
 		if rouCostCents <= 0 {
 			return fmt.Errorf("lease contract has zero RoU cost; nothing to depreciate")
 		}
+		totalMonths := leaseTermMonths(totalPayments, frequency)
 		if totalMonths <= 0 {
 			return fmt.Errorf("lease contract has zero total months; cannot compute depreciation")
 		}
@@ -124,18 +130,16 @@ func (service *Service) postRoUDepreciation(ctx context.Context, tenantID, contr
 			monthlyDepreciation = 1 // at least 1 cent to avoid zero-amount journals
 		}
 
-		// Check how much has already been depreciated.
-		var accumDepAcctID int64
-		_ = tx.QueryRow(ctx, `SELECT id FROM accounts WHERE tenant_id = $1 AND code = '1702'`, tenantID).Scan(&accumDepAcctID)
+		// Check how much has already been depreciated from the log (the log
+		// row is inserted below in the same transaction, so it stays in sync
+		// with the journal).
 		var alreadyDepreciated int64
-		if accumDepAcctID > 0 {
-			_ = tx.QueryRow(ctx, `
-				SELECT COALESCE(SUM(jl.credit_cents), 0)
-				FROM journal_lines jl
-				JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
-				WHERE jl.tenant_id = $1 AND jl.account_id = $2
-				  AND je.intent_type = $3 AND je.source_ref LIKE $4
-			`, tenantID, accumDepAcctID, intentLeaseDepreciation, fmt.Sprintf("DEP-%d-%%", contractID)).Scan(&alreadyDepreciated)
+		if err := tx.QueryRow(ctx, `
+			SELECT COALESCE(SUM(depreciation_cents), 0)
+			FROM lease_depreciation_log
+			WHERE tenant_id = $1 AND lease_id = $2
+		`, tenantID, contractID).Scan(&alreadyDepreciated); err != nil {
+			return err
 		}
 
 		// Don't depreciate beyond cost.
@@ -150,8 +154,12 @@ func (service *Service) postRoUDepreciation(ctx context.Context, tenantID, contr
 			amount = remaining
 		}
 
-		// Resolve the 1702 and 5209 accounts.
+		// Resolve the 5209 and 1702 accounts.
 		depExpAcctID, err := resolveAccountByCode(ctx, tx, tenantID, rouDepreciationExpenseCode)
+		if err != nil {
+			return err
+		}
+		accumDepAcctID, err := resolveAccountByCode(ctx, tx, tenantID, accumRouDepAccountCode)
 		if err != nil {
 			return err
 		}
@@ -180,13 +188,13 @@ func (service *Service) postRoUDepreciation(ctx context.Context, tenantID, contr
 			return err
 		}
 
-		// Update the lease contract's accumulated depreciation.
+		// Record the period in the depreciation log (also the per-period
+		// idempotency guard via the UNIQUE constraint).
 		if _, err := tx.Exec(ctx, `
-			UPDATE lease_contracts
-			SET accum_dep_cents = COALESCE(accum_dep_cents, 0) + $3,
-			    updated_at = now()
-			WHERE tenant_id = $1 AND id = $2
-		`, tenantID, contractID, amount); err != nil {
+			INSERT INTO lease_depreciation_log
+			    (tenant_id, lease_id, period_year, period_month, depreciation_cents, journal_entry_id)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, tenantID, contractID, year, month, amount, entryID); err != nil {
 			return err
 		}
 
@@ -213,6 +221,19 @@ func (service *Service) postRoUDepreciation(ctx context.Context, tenantID, contr
 		return nil
 	})
 	return result, err
+}
+
+// leaseTermMonths converts the contract's payment plan into the total term in
+// months used as the straight-line RoU depreciation horizon.
+func leaseTermMonths(totalPayments int, frequency string) int {
+	switch frequency {
+	case freqQuarterly:
+		return totalPayments * 3
+	case freqAnnually:
+		return totalPayments * 12
+	default: // MONTHLY (and any legacy/unknown value)
+		return totalPayments
+	}
 }
 
 // ListDepreciationLog handles GET /lease-contracts/{id}/depreciation-log.
@@ -250,9 +271,11 @@ func (service *Service) ListDepreciationLog(writer http.ResponseWriter, request 
 		defer rows.Close()
 		for rows.Next() {
 			var e depLogEntry
-			if err := rows.Scan(&e.PeriodYear, &e.PeriodMonth, &e.DepreciationCents, &e.JournalEntryID, &e.PostedAt); err != nil {
+			var postedAt time.Time
+			if err := rows.Scan(&e.PeriodYear, &e.PeriodMonth, &e.DepreciationCents, &e.JournalEntryID, &postedAt); err != nil {
 				return err
 			}
+			e.PostedAt = postedAt.Format(time.RFC3339)
 			log = append(log, e)
 		}
 		return nil
