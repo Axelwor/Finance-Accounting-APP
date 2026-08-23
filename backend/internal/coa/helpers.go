@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -124,6 +125,63 @@ func validReportGroup(group string) bool {
 	return validReportGroups[group]
 }
 
+// validAccountTypes lists every account_type the system actually uses: the
+// registration seed (auth.SeedDefaultCOA) plus all account rows provisioned
+// by migrations 000001..000057. The accounts table has no CHECK on
+// account_type, so this is the authoritative enum for API input validation
+// (QA-10).
+var validAccountTypes = map[string]bool{
+	"ACCRUED_LIABILITY":       true,
+	"ADVANCE_TO_SUPPLIER":     true,
+	"APPLIED_OVERHEAD":        true,
+	"AP":                      true,
+	"AR":                      true,
+	"BAD_DEBT":                true,
+	"BANK":                    true,
+	"CASH":                    true,
+	"CHEQUES_IN_TRANSIT":      true,
+	"COGS":                    true,
+	"CONTRA_ASSET":            true,
+	"CONTRA_REVENUE":          true,
+	"CUSTOMER_DEPOSIT":        true,
+	"DEFERRED_TAX":            true,
+	"DEPRECIATION":            true,
+	"EQUITY":                  true,
+	"EXPENSE":                 true,
+	"FIXED_ASSET":             true,
+	"FX_LOSS":                 true,
+	"IMPAIRMENT":              true,
+	"INPUT_VAT":               true,
+	"INTEREST_EXPENSE":        true,
+	"INVENTORY":               true,
+	"LEASE_LIABILITY":         true,
+	"OCI":                     true,
+	"OTHER_CURRENT_ASSET":     true,
+	"OTHER_CURRENT_LIABILITY": true,
+	"OTHER_EXPENSE":           true,
+	"OTHER_INCOME":            true,
+	"OTHER_RECEIVABLE":        true,
+	"OTHER_REVENUE":           true,
+	"PREPAYMENT":              true,
+	"REVENUE":                 true,
+	"ROU_ASSET":               true,
+	"TAX_EXPENSE":             true,
+	"TAX_PAYABLE":             true,
+	"TAX_RECEIVABLE":          true,
+	"VAT_PAYABLE":             true,
+}
+
+// validAccountTypeList returns the sorted list of accepted account_type
+// values for error messages.
+func validAccountTypeList() []string {
+	values := make([]string, 0, len(validAccountTypes))
+	for value := range validAccountTypes {
+		values = append(values, value)
+	}
+	sort.Strings(values)
+	return values
+}
+
 // validReportTypes lists the report types allowed by the schema CHECK
 // constraint on report_mappings.report_type.
 var validReportTypes = map[string]bool{
@@ -167,6 +225,10 @@ func validateAccountInput(req createAccountRequest) (string, string) {
 		}
 	} else if req.AccountType == "" {
 		return "INVALID_REQUEST", "account_type is required for detail accounts"
+	} else if !validAccountTypes[req.AccountType] {
+		// QA-10: reject unknown account types with the accepted enum instead
+		// of silently storing a value no engine rule understands.
+		return "INVALID_REQUEST", fmt.Sprintf("account_type must be one of: %s (got %q)", strings.Join(validAccountTypeList(), ", "), req.AccountType)
 	}
 	if req.ValidFrom != nil && req.ValidTo != nil && req.ValidTo.Before(*req.ValidFrom) {
 		return "INVALID_REQUEST", "valid_to must not be before valid_from"

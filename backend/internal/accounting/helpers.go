@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -179,7 +180,8 @@ func leftPad6(seq int64) string {
 }
 
 // resolvePeriod finds the OPEN/REOPENED accounting period containing the
-// entry date.
+// entry date. Failures wrap ErrEntryDateOutsideOpenPeriod so handlers can
+// return 422 ENTRY_DATE_OUTSIDE_OPEN_PERIOD (QA-08) instead of a generic 500.
 func resolvePeriod(ctx context.Context, tx pgx.Tx, tenantID int64, date string) (int64, error) {
 	var periodID int64
 	err := tx.QueryRow(ctx, `
@@ -190,7 +192,7 @@ func resolvePeriod(ctx context.Context, tx pgx.Tx, tenantID int64, date string) 
 		LIMIT 1
 	`, tenantID, date).Scan(&periodID)
 	if err != nil {
-		return 0, errors.New("entry date is outside an open period")
+		return 0, fmt.Errorf("entry date is outside an open period: %w", ErrEntryDateOutsideOpenPeriod)
 	}
 	return periodID, nil
 }

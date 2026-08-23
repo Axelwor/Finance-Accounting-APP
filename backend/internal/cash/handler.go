@@ -307,7 +307,10 @@ func (service *Service) Reverse(writer http.ResponseWriter, request *http.Reques
 			return accounting.Journal{}, err
 		}
 		if original.Status != "POSTED" {
-			return accounting.Journal{}, fmt.Errorf("journal %d is not posted", entryID)
+			// QA-07: rejecting a reversal of a VOID/CLOSED journal is a
+			// business rule; wrap the sentinel so errorFor classifies it as
+			// 409 instead of a 500.
+			return accounting.Journal{}, fmt.Errorf("journal %d is not posted: %w", entryID, errJournalNotPosted)
 		}
 		lines, err := journalLines(ctx, tx, tenant, entryID)
 		if err != nil {
