@@ -1,6 +1,7 @@
 package reporting
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -125,24 +126,38 @@ type reportFilter struct {
 }
 
 // parseDateRange reads the optional from_date / to_date query params and
-// validates the YYYY-MM-DD format. Invalid values are silently ignored so the
-// report degrades to "all posted entries" rather than erroring — the toolbar
-// sends blanks when the user clears a picker.
-func parseDateRange(r *http.Request) dateRange {
-	parse := func(raw string) string {
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
-			return ""
+// validates the YYYY-MM-DD format. The date_from / date_to spellings are
+// accepted as aliases so both client conventions work. An absent or empty
+// param means "no bound" (valid); a non-empty value that fails to parse is an
+// error — QA-20: invalid dates were previously dropped silently, so a typo
+// like ?from_date=invalid returned 200 over ALL entries instead of telling
+// the caller its filter was never applied. Pure: no DB/HTTP coupling beyond
+// reading the query.
+func parseDateRange(r *http.Request) (dateRange, error) {
+	q := r.URL.Query()
+	pick := func(names ...string) string {
+		for _, name := range names {
+			if v := strings.TrimSpace(q.Get(name)); v != "" {
+				return v
+			}
 		}
-		if _, err := time.Parse("2006-01-02", raw); err != nil {
-			return ""
+		return ""
+	}
+	dr := dateRange{
+		fromDate: pick("from_date", "date_from"),
+		toDate:   pick("to_date", "date_to"),
+	}
+	if dr.fromDate != "" {
+		if _, err := time.Parse("2006-01-02", dr.fromDate); err != nil {
+			return dr, fmt.Errorf("from_date must be YYYY-MM-DD, got %q", q.Get("from_date"))
 		}
-		return raw
 	}
-	return dateRange{
-		fromDate: parse(r.URL.Query().Get("from_date")),
-		toDate:   parse(r.URL.Query().Get("to_date")),
+	if dr.toDate != "" {
+		if _, err := time.Parse("2006-01-02", dr.toDate); err != nil {
+			return dr, fmt.Errorf("to_date must be YYYY-MM-DD, got %q", q.Get("to_date"))
+		}
 	}
+	return dr, nil
 }
 
 // parseDimensionIDs reads one or more dimension ids from the dimension_id
@@ -171,18 +186,22 @@ func parseDimensionIDs(rawValues []string) []int64 {
 }
 
 // parseReportFilter reads from_date / to_date plus the optional framework and
-// dimension_id query params used by the reporting endpoints. Invalid values
-// are silently dropped so the report degrades to the default rather than
-// erroring.
-func parseReportFilter(r *http.Request) reportFilter {
-	dr := parseDateRange(r)
+// dimension_id query params used by the reporting endpoints. Dates are
+// strictly validated (QA-20): an invalid date returns an error that handlers
+// map to 400 INVALID_REQUEST, while framework and dimension values keep their
+// lenient drop-invalid behavior.
+func parseReportFilter(r *http.Request) (reportFilter, error) {
+	dr, err := parseDateRange(r)
+	if err != nil {
+		return reportFilter{}, err
+	}
 	f := reportFilter{dateRange: dr}
 	f.dimensionIDs = parseDimensionIDs(r.URL.Query()["dimension_id"])
 	switch strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("framework"))) {
 	case "EMKM", "ETAP", "SAK_UMUM":
 		f.framework = strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("framework")))
 	}
-	return f
+	return f, nil
 }
 
 // dateRangeLabel renders a human-readable range for export headers, e.g.
@@ -236,9 +255,13 @@ func dateFilter(d dateRange, baseArg int, args *[]any) string {
 // inception to to_date; from_date is ignored (a trial balance is a snapshot,
 // not a movement).
 func (service *Service) TrialBalance(writer http.ResponseWriter, request *http.Request) {
-	f := parseReportFilter(request)
+	f, err := parseReportFilter(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
 	var result TrialBalanceResult
-	err := db.WithTenantData(request.Context(), service.pool, tenantFrom(request), func(tx pgx.Tx) error {
+	err = db.WithTenantData(request.Context(), service.pool, tenantFrom(request), func(tx pgx.Tx) error {
 		var err error
 		result, err = service.fetchTrialBalance(request.Context(), tx, tenantFrom(request), f)
 		return err
@@ -273,9 +296,13 @@ func (service *Service) TrialBalance(writer http.ResponseWriter, request *http.R
 // `dimension_id` query params (repeated and/or comma-separated) narrow the
 // aggregation to journal lines tagged with those dimensions (cabang / proyek).
 func (service *Service) ProfitLoss(writer http.ResponseWriter, request *http.Request) {
-	f := parseReportFilter(request)
+	f, err := parseReportFilter(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
 	var result ProfitLossResult
-	err := db.WithTenantData(request.Context(), service.pool, tenantFrom(request), func(tx pgx.Tx) error {
+	err = db.WithTenantData(request.Context(), service.pool, tenantFrom(request), func(tx pgx.Tx) error {
 		var err error
 		result, err = service.fetchProfitLoss(request.Context(), tx, tenantFrom(request), f)
 		return err
@@ -292,9 +319,13 @@ func (service *Service) ProfitLoss(writer http.ResponseWriter, request *http.Req
 // before the period is closed (engine §21.2: current earnings real-time). With
 // to_date supplied the snapshot is taken as of that date.
 func (service *Service) BalanceSheet(writer http.ResponseWriter, request *http.Request) {
-	f := parseReportFilter(request)
+	f, err := parseReportFilter(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
 	var result BalanceSheetResult
-	err := db.WithTenantData(request.Context(), service.pool, tenantFrom(request), func(tx pgx.Tx) error {
+	err = db.WithTenantData(request.Context(), service.pool, tenantFrom(request), func(tx pgx.Tx) error {
 		var err error
 		result, err = service.fetchBalanceSheet(request.Context(), tx, tenantFrom(request), f)
 		return err
@@ -308,9 +339,13 @@ func (service *Service) BalanceSheet(writer http.ResponseWriter, request *http.R
 
 // CashFlow aggregates movements across CASH/BANK accounts within the range.
 func (service *Service) CashFlow(writer http.ResponseWriter, request *http.Request) {
-	f := parseReportFilter(request)
+	f, err := parseReportFilter(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_REQUEST", err.Error())
+		return
+	}
 	var result CashFlowResult
-	err := db.WithTenantData(request.Context(), service.pool, tenantFrom(request), func(tx pgx.Tx) error {
+	err = db.WithTenantData(request.Context(), service.pool, tenantFrom(request), func(tx pgx.Tx) error {
 		var err error
 		result, err = service.fetchCashFlow(request.Context(), tx, tenantFrom(request), f)
 		return err

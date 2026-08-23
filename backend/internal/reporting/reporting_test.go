@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -332,29 +333,80 @@ func TestParseDateRange(t *testing.T) {
 		query    string
 		wantFrom string
 		wantTo   string
+		wantErr  bool
 	}{
 		{name: "empty", query: "", wantFrom: "", wantTo: ""},
 		{name: "both dates", query: "from_date=2025-01-01&to_date=2025-01-31", wantFrom: "2025-01-01", wantTo: "2025-01-31"},
 		{name: "only from", query: "from_date=2025-01-01", wantFrom: "2025-01-01", wantTo: ""},
 		{name: "only to", query: "to_date=2025-01-31", wantFrom: "", wantTo: "2025-01-31"},
 		{name: "whitespace trimmed", query: "from_date=%20%202025-01-01%20&to_date=2025-01-31%20", wantFrom: "2025-01-01", wantTo: "2025-01-31"},
-		{name: "invalid from ignored", query: "from_date=not-a-date&to_date=2025-01-31", wantFrom: "", wantTo: "2025-01-31"},
-		{name: "invalid to ignored", query: "from_date=2025-01-01&to_date=31/01/2025", wantFrom: "2025-01-01", wantTo: ""},
-		{name: "both invalid", query: "from_date=abc&to_date=xyz", wantFrom: "", wantTo: ""},
-		{name: "wrong format rejected", query: "from_date=2025/01/01", wantFrom: "", wantTo: ""},
+		{name: "empty param means no filter", query: "from_date=&to_date=", wantFrom: "", wantTo: ""},
+		// QA-20: invalid dates are no longer silently dropped — they must
+		// surface as an error so handlers can answer 400 INVALID_REQUEST.
+		{name: "invalid from errors", query: "from_date=not-a-date&to_date=2025-01-31", wantErr: true},
+		{name: "invalid to errors", query: "from_date=2025-01-01&to_date=31/01/2025", wantErr: true},
+		{name: "both invalid errors", query: "from_date=abc&to_date=xyz", wantErr: true},
+		{name: "wrong format errors", query: "from_date=2025/01/01", wantErr: true},
+		{name: "date_from alias accepted", query: "date_from=2025-01-01&date_to=2025-01-31", wantFrom: "2025-01-01", wantTo: "2025-01-31"},
+		{name: "date_from alias invalid errors", query: "date_from=invalid", wantErr: true},
 		{name: "february 29 leap year ok", query: "to_date=2024-02-29", wantFrom: "", wantTo: "2024-02-29"},
-		{name: "february 29 non leap rejected", query: "to_date=2025-02-29", wantFrom: "", wantTo: ""},
+		{name: "february 29 non leap rejected", query: "to_date=2025-02-29", wantErr: true},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := parseDateRange(newFilterRequest(tc.query))
+			got, err := parseDateRange(newFilterRequest(tc.query))
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("parseDateRange(%q) expected error, got {%s %s}", tc.query, got.fromDate, got.toDate)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseDateRange(%q) unexpected error: %v", tc.query, err)
+			}
 			if got.fromDate != tc.wantFrom || got.toDate != tc.wantTo {
 				t.Errorf("parseDateRange = {from:%q to:%q}, want {from:%q to:%q}",
 					got.fromDate, got.toDate, tc.wantFrom, tc.wantTo)
 			}
 		})
 	}
+}
+
+// QA-20: report handlers must answer 400 INVALID_REQUEST (not a silent
+// unfiltered 200) when a date query param fails to parse. The 400 is written
+// before any DB access, so this runs without a live pool.
+func TestReportHandlers_InvalidDateParamReturns400(t *testing.T) {
+	handlers := map[string]func(*Service) http.HandlerFunc{
+		"/reports/trial-balance": func(s *Service) http.HandlerFunc { return s.TrialBalance },
+		"/reports/profit-loss":   func(s *Service) http.HandlerFunc { return s.ProfitLoss },
+		"/reports/balance-sheet": func(s *Service) http.HandlerFunc { return s.BalanceSheet },
+		"/reports/cash-flow":     func(s *Service) http.HandlerFunc { return s.CashFlow },
+	}
+	service := NewHandler(nil)
+	for path, wrap := range handlers {
+		t.Run(path, func(t *testing.T) {
+			for _, q := range []string{"from_date=invalid", "date_from=invalid", "to_date=31/01/2025"} {
+				req := httptest.NewRequest(http.MethodGet, path+"?"+q, nil)
+				rr := httptest.NewRecorder()
+				wrap(service)(rr, req)
+				if rr.Code != http.StatusBadRequest {
+					t.Errorf("%s: status = %d, want 400", q, rr.Code)
+				}
+				if body := rr.Body.String(); !strings.Contains(body, `"INVALID_REQUEST"`) {
+					t.Errorf("%s: body = %s, want INVALID_REQUEST code", q, body)
+				}
+			}
+		})
+	}
+
+	t.Run("empty date params stay valid", func(t *testing.T) {
+		// Empty values mean "no filter" and must NOT 400. The request would
+		// proceed to the DB, so we only assert the parse layer accepts it.
+		if _, err := parseDateRange(newFilterRequest("from_date=&to_date=")); err != nil {
+			t.Errorf("empty params should be valid, got %v", err)
+		}
+	})
 }
 
 func TestParseReportFilter(t *testing.T) {
@@ -365,6 +417,7 @@ func TestParseReportFilter(t *testing.T) {
 		wantTo           string
 		wantFramework    string
 		wantDimensionIDs []int64
+		wantErr          bool
 	}{
 		{
 			name:             "all empty",
@@ -446,17 +499,27 @@ func TestParseReportFilter(t *testing.T) {
 			wantDimensionIDs: []int64{4, 9},
 		},
 		{
-			name:             "invalid date still drops framework-safe",
+			name:             "invalid date errors even with valid framework",
 			query:            "from_date=bad&framework=ETAP",
 			wantFrom:         "",
 			wantFramework:    "ETAP",
 			wantDimensionIDs: nil,
+			wantErr:          true,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f := parseReportFilter(newFilterRequest(tc.query))
+			f, err := parseReportFilter(newFilterRequest(tc.query))
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("parseReportFilter(%q) expected error, got %+v", tc.query, f)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseReportFilter(%q) unexpected error: %v", tc.query, err)
+			}
 			if f.fromDate != tc.wantFrom {
 				t.Errorf("fromDate = %q, want %q", f.fromDate, tc.wantFrom)
 			}

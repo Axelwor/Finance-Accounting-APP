@@ -274,6 +274,103 @@ func TestRateLimiter_Stop(t *testing.T) {
 	}
 }
 
+// TestRateLimiter_MiddlewareSpawnsSingleCleanup verifies the QA-02 cleanup
+// fix: wrapping Middleware around several routes must not spawn a cleanup
+// goroutine per registration site. We can't count goroutines reliably, but
+// Stop() panicking on double-close would reveal a second goroutine racing on
+// the same channel after multiple Middleware() calls — so call Middleware a
+// few times, then Stop once and verify no panic and continued enforcement.
+func TestRateLimiter_MiddlewareSpawnsSingleCleanup(t *testing.T) {
+	rl := NewRateLimiter(1, time.Minute)
+	h1 := rl.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	_ = rl.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	_ = rl.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+
+	rr := httptest.NewRecorder()
+	h1.ServeHTTP(rr, httptest.NewRequest("GET", "/", nil))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("first request should pass, got %d", rr.Code)
+	}
+
+	rl.Stop() // must be the single close — no double-close panic from extra goroutines
+}
+
+// QA-02: the auth endpoint groups must have INDEPENDENT buckets with the
+// documented limits, so a burst on one endpoint (empirically: failed logins)
+// can no longer lock legitimate users out of the others.
+func TestAuthLimiters_IndependentBuckets(t *testing.T) {
+	if a := NewAuthLimiters(); a.Login.max != AuthLoginRatePerMinute ||
+		a.Register.max != AuthRegisterRatePerMinute ||
+		a.Refresh.max != AuthRefreshRatePerMinute ||
+		a.TwoFA.max != AuthTwoFARatePerMinute {
+		t.Fatal("NewAuthLimiters must wire the documented per-endpoint constants")
+	}
+
+	a := NewAuthLimiters()
+	defer a.Stop()
+
+	// Burn the login bucket completely.
+	for i := 0; i < AuthLoginRatePerMinute; i++ {
+		rr := httptest.NewRecorder()
+		a.Login.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})).ServeHTTP(rr, httptest.NewRequest("POST", "/auth/login", nil))
+		if rr.Code != http.StatusOK {
+			t.Fatalf("login request %d should pass, got %d", i+1, rr.Code)
+		}
+	}
+
+	// Login is now blocked...
+	rr := httptest.NewRecorder()
+	a.Login.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(rr, httptest.NewRequest("POST", "/auth/login", nil))
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("login should be limited after burst, got %d", rr.Code)
+	}
+	if got := rr.Header().Get("Retry-After"); got == "" {
+		t.Error("429 must keep the Retry-After header")
+	}
+
+	// ...but register, refresh, and 2FA stay open on their own buckets.
+	for name, rl := range map[string]*RateLimiter{"register": a.Register, "refresh": a.Refresh, "2fa": a.TwoFA} {
+		rr := httptest.NewRecorder()
+		rl.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})).ServeHTTP(rr, httptest.NewRequest("POST", "/auth/"+name, nil))
+		if rr.Code != http.StatusOK {
+			t.Errorf("%s must not be affected by the login burst, got %d", name, rr.Code)
+		}
+	}
+}
+
+// TestAuthLimiters_RefreshHigherThanLogin pins the asymmetric refresh limit:
+// repeated token refreshes (SPA with several tabs) must not trip the tighter
+// login bucket.
+func TestAuthLimiters_RefreshHigherThanLogin(t *testing.T) {
+	if AuthRefreshRatePerMinute <= AuthLoginRatePerMinute {
+		t.Fatalf("refresh limit %d must exceed login limit %d", AuthRefreshRatePerMinute, AuthLoginRatePerMinute)
+	}
+
+	a := NewAuthLimiters()
+	defer a.Stop()
+
+	allowed := 0
+	for i := 0; i < AuthRefreshRatePerMinute+1; i++ {
+		rr := httptest.NewRecorder()
+		a.Refresh.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})).ServeHTTP(rr, httptest.NewRequest("POST", "/auth/refresh", nil))
+		if rr.Code != http.StatusOK {
+			break
+		}
+		allowed++
+	}
+	if allowed != AuthRefreshRatePerMinute {
+		t.Errorf("refresh allowed %d requests, want %d", allowed, AuthRefreshRatePerMinute)
+	}
+}
+
 // TestRequestID_GeneratesAndEchoes verifies the RequestID middleware injects
 // a request id into the context, echoes it via X-Request-ID response header,
 // and honors a client-supplied X-Request-ID for distributed tracing.
