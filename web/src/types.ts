@@ -2109,45 +2109,70 @@ export interface CreateReportTemplateInput {
   document_type: ReportTemplateDocumentType;
   template_yaml: string;
 }
-/** Approval workflow types. */
-export interface ApprovalRule {
+/**
+ * Approval workflow types — aligned with backend/internal/approval/handler.go
+ * (GET/POST/DELETE /approval-workflows, /approval-requests).
+ */
+
+/** Entity types accepted by the approval gate (sales/purchase/accounting CheckAmount callers). */
+export type ApprovalEntityType =
+  | "invoice"
+  | "purchase_order"
+  | "supplier_invoice"
+  | "credit_note"
+  | "journal_entry";
+
+/** Roles accepted by validateWorkflow (admin | accountant | manager). */
+export type ApprovalApproverRole = "admin" | "accountant" | "manager";
+
+/** Row of GET /approval-workflows (also the POST response minus is_active). */
+export interface ApprovalWorkflow {
   id: number;
-  tenant_id: number;
   entity_type: string;
   min_amount_cents: number;
-  approver_account_id: number;
-  created_at: string;
-  updated_at: string;
+  approver_role: string;
+  is_active?: boolean;
 }
-export interface CreateApprovalRuleInput {
+
+/** Body of POST /approval-workflows (upsert on tenant+entity_type). */
+export interface CreateApprovalWorkflowInput {
   entity_type: string;
   min_amount_cents: number;
-  approver_account_id: number;
+  approver_role: string;
 }
+
+/** Matches backend ApprovalRequestResponse json tags. */
 export interface ApprovalRequest {
   id: number;
-  tenant_id: number;
   entity_type: string;
   entity_id: number;
-  amount_cents: number;
-  status: "PENDING" | "APPROVED" | "REJECTED";
-  requested_by: string;
+  /** Document number when entity-bound; empty for amount-based requests. */
+  entity_number: string;
+  requested_by: number;
   requested_at: string;
-  approved_by?: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  approved_by?: number;
   approved_at?: string;
-  rejected_by?: string;
-  rejected_at?: string;
   rejection_reason?: string;
-  /** Array of previous approve/reject actions for audit trail. */
+  /**
+   * Legacy field: NOT returned by GET /approval-requests (kept required for
+   * existing consumers); treat as absent unless another source provides it.
+   */
+  amount_cents: number;
+  /** Legacy audit trail — no backend endpoint populates it. */
   approval_history?: Array<{ action: "approved" | "rejected"; by: string; at: string }>;
 }
 export interface SubmitApprovalRequestInput {
   entity_type: string;
   entity_id: number;
+  entity_number?: string;
   amount_cents: number;
 }
 export interface ApproveApprovalRequestInput {
   reason?: string;
+}
+export interface RejectApprovalRequestInput {
+  reason: string;
 }
 /** Cheque list item for GET /api/v1/cheques. */
 export interface ChequeListItem {

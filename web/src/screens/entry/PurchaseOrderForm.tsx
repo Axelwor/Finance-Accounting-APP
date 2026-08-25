@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { useWorkbench } from "../../workbench/state";
 import { FormError } from "../../components/ui";
 import { NextStepsBar } from "../../components/NextSteps";
 import { useToast } from "../../components/Toast";
 import { api } from "../../api";
-import { formatIDR } from "../../lib/format";
+import { formatIDRFromCents, parseRupiahToCents } from "../../lib/format";
 import { openPrintWindow } from "../../lib/print";
 import { draftNumber } from "../../workbench/modules";
 import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
@@ -60,10 +61,14 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
   const [savedNumber, setSavedNumber] = useState("");
   const [savedStatus, setSavedStatus] = useState("");
 
-  useEffect(() => {
+  const loadMasterData = useCallback(() => {
     api.listSuppliers().then(setSuppliers).catch(() => {});
     api.listItems().then(setItems).catch(() => {});
   }, []);
+  useEffect(() => {
+    loadMasterData();
+  }, [loadMasterData]);
+  useTabRefresh(loadMasterData);
 
   useEffect(() => {
     if (isExisting && entryId) {
@@ -199,12 +204,12 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
           return [
             item ? `${item.code} · ${item.name}` : `#${l.itemId}`,
             l.qty,
-            formatIDR(parseInt(l.unitPriceCents) || 0),
-            formatIDR(parseInt(l.discountCents) || 0),
-            formatIDR(lineTotal(parseFloat(l.qty) || 0, parseInt(l.unitPriceCents) || 0, parseInt(l.discountCents) || 0)),
+            formatIDRFromCents(parseInt(l.unitPriceCents) || 0),
+            formatIDRFromCents(parseInt(l.discountCents) || 0),
+            formatIDRFromCents(lineTotal(parseFloat(l.qty) || 0, parseInt(l.unitPriceCents) || 0, parseInt(l.discountCents) || 0)),
           ];
         }),
-      totals: [["Total", formatIDR(totalCents)]],
+      totals: [["Total", formatIDRFromCents(totalCents)]],
     });
   }
 
@@ -303,13 +308,27 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
                   <input className="input input--narrow" type="number" step="0.001" value={line.qty} onChange={(e) => setLine(line.id, "qty", e.target.value)} disabled={isExisting} />
                 </div>
                 <div>
-                  <input className="input input--narrow right" type="number" value={line.unitPriceCents} onChange={(e) => setLine(line.id, "unitPriceCents", e.target.value)} disabled={isExisting} />
+                  <input
+                    className="input input--narrow right"
+                    type="number"
+                    min="0"
+                    value={Number(line.unitPriceCents) / 100 || 0}
+                    onChange={(e) => setLine(line.id, "unitPriceCents", String(parseRupiahToCents(e.target.value)))}
+                    disabled={isExisting}
+                  />
                 </div>
                 <div>
-                  <input className="input input--narrow right" type="number" value={line.discountCents} onChange={(e) => setLine(line.id, "discountCents", e.target.value)} disabled={isExisting} />
+                  <input
+                    className="input input--narrow right"
+                    type="number"
+                    min="0"
+                    value={Number(line.discountCents) / 100 || 0}
+                    onChange={(e) => setLine(line.id, "discountCents", String(parseRupiahToCents(e.target.value)))}
+                    disabled={isExisting}
+                  />
                 </div>
                 <div className="right">
-                  {formatIDR(lineTotal(parseFloat(line.qty) || 0, parseInt(line.unitPriceCents) || 0, parseInt(line.discountCents) || 0))}
+                  {formatIDRFromCents(lineTotal(parseFloat(line.qty) || 0, parseInt(line.unitPriceCents) || 0, parseInt(line.discountCents) || 0))}
                 </div>
                 <div>
                   {!isExisting && (
@@ -334,15 +353,15 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
 
           <div className="entrytab__total">
             <span className="entrytab__total-label">DPP (Subtotal)</span>
-            <span className="entrytab__total-value">{formatIDR(subtotalCents)}</span>
+            <span className="entrytab__total-value">{formatIDRFromCents(subtotalCents)}</span>
           </div>
           <div className="entrytab__total" style={{ marginTop: 8 }}>
             <span className="entrytab__total-label">PPN {taxRate > 0 ? `(${taxRate}%)` : ""}</span>
-            <span className="entrytab__total-value">{formatIDR(ppnCents)}</span>
+            <span className="entrytab__total-value">{formatIDRFromCents(ppnCents)}</span>
           </div>
           <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 8 }}>
             <span className="entrytab__total-label">Total</span>
-            <span className="entrytab__total-value">{formatIDR(totalCents)}</span>
+            <span className="entrytab__total-value">{formatIDRFromCents(totalCents)}</span>
           </div>
 
           {savedId !== null && (

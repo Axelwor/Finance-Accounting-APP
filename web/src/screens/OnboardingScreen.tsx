@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useAppState } from "../state";
@@ -51,6 +51,15 @@ export function OnboardingScreen() {
   const navigate = useNavigate();
   const { setBusiness } = useAppState();
 
+  // Move keyboard focus to the new step's heading when the step changes
+  // (skipped on first mount so initial focus stays in the browser/page).
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    if (mountedRef.current) stepHeadingRef.current?.focus();
+    mountedRef.current = true;
+  }, [step]);
+
   const totalDebit =
     (balance.cash ? Number(balance.cash) : 0) +
     (balance.bank ? Number(balance.bank) : 0) +
@@ -78,6 +87,14 @@ export function OnboardingScreen() {
 
   const handleFinish = async () => {
     setError(null);
+    // F-16: block unbalanced opening balances instead of silently plugging
+    // the difference into the backend.
+    if (!isBalanced) {
+      setError(
+        `Selisih ${formatIDR(Math.abs(difference))} — isi Modal/Kewajiban agar seimbang, atau set semua ke 0.`
+      );
+      return;
+    }
     setFinishing(true);
     try {
       await api.completeOnboarding({
@@ -114,17 +131,17 @@ export function OnboardingScreen() {
           <span className="brand-name">Ledgerly Setup Wizard</span>
         </div>
         <div className="onboarding-steps-indicator">
-          <div className={`step-pill ${step >= 0 ? "is-active" : ""}`}>
+          <div className={`step-pill ${step >= 0 ? "is-active" : ""}`} aria-current={step === 0 ? "step" : undefined}>
             <span className="step-num">1</span>
             <span>Profil Usaha</span>
           </div>
           <div className="step-line" />
-          <div className={`step-pill ${step >= 1 ? "is-active" : ""}`}>
+          <div className={`step-pill ${step >= 1 ? "is-active" : ""}`} aria-current={step === 1 ? "step" : undefined}>
             <span className="step-num">2</span>
             <span>Periode Buku</span>
           </div>
           <div className="step-line" />
-          <div className={`step-pill ${step >= 2 ? "is-active" : ""}`}>
+          <div className={`step-pill ${step >= 2 ? "is-active" : ""}`} aria-current={step === 2 ? "step" : undefined}>
             <span className="step-num">3</span>
             <span>Neraca Awal</span>
           </div>
@@ -143,7 +160,7 @@ export function OnboardingScreen() {
           {step === 0 && (
             <div className="wizard-step">
               <div className="wizard-step__header">
-                <h2>Langkah 1: Identitas & Bidang Usaha</h2>
+                <h2 ref={stepHeadingRef} tabIndex={-1}>Langkah 1: Identitas & Bidang Usaha</h2>
                 <p>Tentukan nama entitas resmi dan jenis industri untuk struktur bagan akun otomatis.</p>
               </div>
 
@@ -194,7 +211,7 @@ export function OnboardingScreen() {
           {step === 1 && (
             <div className="wizard-step">
               <div className="wizard-step__header">
-                <h2>Langkah 2: Konfigurasi Tahun & Periode Fiskal</h2>
+                <h2 ref={stepHeadingRef} tabIndex={-1}>Langkah 2: Konfigurasi Tahun & Periode Fiskal</h2>
                 <p>Tentukan tahun buku aktif dan bulan awal pembukuan akuntansi.</p>
               </div>
 
@@ -253,7 +270,7 @@ export function OnboardingScreen() {
               <div className="wizard-step__header">
                 <div className="flex-between">
                   <div>
-                    <h2>Langkah 3: Neraca Saldo Hari Pertama (Day-One Solver)</h2>
+                    <h2 ref={stepHeadingRef} tabIndex={-1}>Langkah 3: Neraca Saldo Hari Pertama (Day-One Solver)</h2>
                     <p>Masukkan saldo kas, piutang, dan hutang per tanggal mulai pembukuan.</p>
                   </div>
                   <button
@@ -323,21 +340,32 @@ export function OnboardingScreen() {
                   <Icon name="arrow_back" size={16} />
                   <span>Kembali</span>
                 </button>
-                <button
-                  type="button"
-                  className="btn-wizard-finish"
-                  disabled={finishing}
-                  onClick={handleFinish}
-                >
-                  {finishing ? (
-                    <span>Menyimpan Konfigurasi...</span>
-                  ) : (
-                    <>
-                      <Icon name="check" size={16} />
-                      <span>Selesaikan Setup & Buka Dashboard</span>
-                    </>
+                <div className="flex flex-col items-end gap-1">
+                  {!isBalanced && (
+                    <p
+                      role="alert"
+                      style={{ margin: 0, fontSize: "0.8rem", color: "var(--md-sys-color-error, #b3261e)", textAlign: "right", maxWidth: 360 }}
+                    >
+                      Selisih {formatIDR(Math.abs(difference))} — isi Modal/Kewajiban agar seimbang, atau set semua ke 0.
+                    </p>
                   )}
-                </button>
+                  <button
+                    type="button"
+                    className="btn-wizard-finish"
+                    // F-16: never plug an unbalanced opening balance silently.
+                    disabled={!isBalanced || finishing}
+                    onClick={handleFinish}
+                  >
+                    {finishing ? (
+                      <span>Menyimpan Konfigurasi...</span>
+                    ) : (
+                      <>
+                        <Icon name="check" size={16} />
+                        <span>Selesaikan Setup & Buka Dashboard</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           )}

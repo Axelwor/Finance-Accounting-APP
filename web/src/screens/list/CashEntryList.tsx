@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { LoadingState } from "../../components/ui";
 import { EmptyState } from "../../components/EmptyState";
 import { SortableHeader, type SortState } from "../../components/SortableHeader";
@@ -106,6 +107,7 @@ export function CashEntryList({ listKind, title, description, entrySubKind, fixe
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fixedKind, fromDate, toDate, accountFilter]);
+  useTabRefresh(load);
 
   const accountFilterActive = fromDate !== "" || toDate !== "" || accountFilter !== "";
 

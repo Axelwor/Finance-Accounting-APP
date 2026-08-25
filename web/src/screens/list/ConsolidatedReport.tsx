@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
@@ -39,6 +40,7 @@ export function ConsolidatedReport({ initialKind = "trial-balance" }: { initialK
   };
 
   useEffect(() => { void load(); }, [kind]);
+  useTabRefresh(load);
 
   const title = kind === "trial-balance" ? "Consolidated Trial Balance" : "Consolidated Profit & Loss";
   const desc = "PSAK 65 — aggregated across parent + child entities with inter-company elimination.";

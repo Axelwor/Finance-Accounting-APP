@@ -5,7 +5,7 @@ import { NextStepsBar } from "../../components/NextSteps";
 import { StaticCombobox, type ComboboxOption } from "../../components/Combobox";
 import { useToast } from "../../components/Toast";
 import { api } from "../../api";
-import { formatIDR } from "../../lib/format";
+import { formatIDRFromCents, parseRupiahToCents } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import type { InvoiceListItem, InvoiceLine, CreditNoteLineInput } from "../../types";
 import type { PrefillRef } from "../../workbench/types";
@@ -293,7 +293,13 @@ export function CreditNoteForm({ tabId, entryId, initialTitle, prefill }: Props)
       setSavedId(cn.id);
       toast.success(`✓ Saved ${cn.number}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create credit note.");
+      // ApiError carries the backend message on .message — read it safely
+      // regardless of how the API layer throws.
+      const message =
+        typeof (err as { message?: unknown } | null | undefined)?.message === "string"
+          ? (err as { message: string }).message
+          : "Failed to create credit note.";
+      setError(message);
     } finally {
       setSaving(false);
     }
@@ -328,7 +334,7 @@ export function CreditNoteForm({ tabId, entryId, initialTitle, prefill }: Props)
               <option value="">Choose invoice...</option>
               {invoices.map((inv) => (
                 <option key={inv.id} value={inv.id}>
-                  {inv.number} · {inv.customer_name ?? `Customer ${inv.customer_id}`} · {formatIDR(inv.receivable_cents)}
+                  {inv.number} · {inv.customer_name ?? `Customer ${inv.customer_id}`} · {formatIDRFromCents(inv.receivable_cents)}
                 </option>
               ))}
             </select>
@@ -410,21 +416,23 @@ export function CreditNoteForm({ tabId, entryId, initialTitle, prefill }: Props)
                   <input
                     type="text"
                     className="input"
+                    inputMode="numeric"
                     value={formatCentsInput(line.unitPriceCents)}
-                    onChange={(e) => setPrice(line.id, parseCents(e.target.value))}
+                    onChange={(e) => setPrice(line.id, parseRupiahToCents(e.target.value))}
                   />
                 </div>
                 <div className="detail-grid__cell right">
                   <input
                     type="text"
                     className="input"
+                    inputMode="numeric"
                     value={formatCentsInput(line.unitCostCents)}
-                    onChange={(e) => setCost(line.id, parseCents(e.target.value))}
+                    onChange={(e) => setCost(line.id, parseRupiahToCents(e.target.value))}
                     placeholder="auto"
                   />
                 </div>
-                <div className="detail-grid__cell right">{formatIDR(line.lineTotalCents)}</div>
-                <div className="detail-grid__cell right">{formatIDR(line.cogsReversedCents)}</div>
+                <div className="detail-grid__cell right">{formatIDRFromCents(line.lineTotalCents)}</div>
+                <div className="detail-grid__cell right">{formatIDRFromCents(line.cogsReversedCents)}</div>
                 <div className="detail-grid__action">
                   <button type="button" className="icon-btn" onClick={() => removeLine(line.id)} title="Remove line">
                     ×
@@ -441,11 +449,11 @@ export function CreditNoteForm({ tabId, entryId, initialTitle, prefill }: Props)
         <div className="entry-tab__summary">
           <div className="entrytab__total">
             <span className="entrytab__total-label">Return Total (Dr 4201)</span>
-            <span className="entrytab__total-value">{formatIDR(totalCents)}</span>
+            <span className="entrytab__total-value">{formatIDRFromCents(totalCents)}</span>
           </div>
           <div className="entrytab__total" style={{ marginTop: 8 }}>
             <span className="entrytab__total-label">COGS Reversed (Cr 5101)</span>
-            <span className="entrytab__total-value">{formatIDR(totalCOGSReversed)}</span>
+            <span className="entrytab__total-value">{formatIDRFromCents(totalCOGSReversed)}</span>
           </div>
           {savedId !== null && (
             <NextStepsBar number={number}>
@@ -493,14 +501,10 @@ function todayISO(): string {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
+/** Cents -> whole-rupiah text for money inputs (input holds rupiah). */
 function formatCentsInput(cents: number): string {
   if (!cents) return "";
-  return String(cents);
-}
-
-function parseCents(raw: string): number {
-  const digits = (raw || "").replace(/[^\d]/g, "");
-  return digits ? parseInt(digits, 10) : 0;
+  return new Intl.NumberFormat("en-US").format(Math.round(cents / 100));
 }
 
 function DiskIcon() {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { useWorkbench } from "../../workbench/state";
 import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
@@ -25,6 +26,7 @@ export function LeaseContractList() {
   };
 
   useEffect(() => { void load(); }, []);
+  useTabRefresh(load);
 
   const openEntry = (item: LeaseContractListItem) =>
     workbench.openEntryExisting("lease-contract-entry", item.id, item.number, item.status);

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { useWorkbench } from "../../workbench/state";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
@@ -36,6 +37,7 @@ export function FinancialNotesList() {
   useEffect(() => {
     void load();
   }, []);
+  useTabRefresh(load);
 
   const grouped = useMemo(() => {
     const map = new Map<number, FinancialNote[]>();

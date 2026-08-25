@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { EmptyState, ErrorState, LoadingState, MultiSelectCombobox } from "../../components/ui";
 import { api } from "../../api";
-import { formatIDR } from "../../lib/format";
+import { formatIDRFromCents } from "../../lib/format";
 import { showToast } from "../../lib/toast";
 import { useAppState } from "../../state";
 import type { Dimension, ListSubKind, ReportFrameworkRecord, ReportFramework } from "../../types";
@@ -534,6 +534,10 @@ export function TrialBalanceReport() {
         emptyMessage: "No journal entries in the selected date range.",
         render: (data: any) => {
           const rows: { account_code: string; account_name: string; debit_cents: number; credit_cents: number }[] = data.rows ?? [];
+          const totalDebitCents: number = data.total_debit_cents
+            ?? rows.reduce((sum, r) => sum + (r.debit_cents || 0), 0);
+          const totalCreditCents: number = data.total_credit_cents
+            ?? rows.reduce((sum, r) => sum + (r.credit_cents || 0), 0);
           return (
             <div className="ledger-table">
               <div className="ledger-table__head">
@@ -549,23 +553,36 @@ export function TrialBalanceReport() {
                   <p className="empty-state__message">All accounts are at zero. Rule your first entry from the Cash & Bank tab.</p>
                 </div>
               ) : (
-                rows.map((r, i) => (
-                  <div className="ledger-table__row" key={i}>
-                    <span className="ledger-table__date" style={{ fontFamily: "var(--md-ref-typeface-plain)" }}>{r.account_code}</span>
+                <>
+                  {rows.map((r, i) => (
+                    <div className="ledger-table__row" key={i}>
+                      <span className="ledger-table__date" style={{ fontFamily: "var(--md-ref-typeface-plain)" }}>{r.account_code}</span>
+                      <div className="ledger-table__desc">
+                        <div className="ledger-table__desc-text">
+                          <span className="ledger-table__desc-title">{r.account_name}</span>
+                        </div>
+                      </div>
+                      <span className={`ledger-table__amount ${r.debit_cents > 0 ? "" : "is-muted"}`}>
+                        {r.debit_cents > 0 ? formatIDRFromCents(r.debit_cents) : "—"}
+                      </span>
+                      <span className={`ledger-table__amount ${r.credit_cents > 0 ? "" : "is-muted"}`}>
+                        {r.credit_cents > 0 ? formatIDRFromCents(r.credit_cents) : "—"}
+                      </span>
+                      <span aria-hidden="true" />
+                    </div>
+                  ))}
+                  <div className="ledger-table__row total-rule-top total-double" style={{ fontWeight: 700 }}>
+                    <span />
                     <div className="ledger-table__desc">
                       <div className="ledger-table__desc-text">
-                        <span className="ledger-table__desc-title">{r.account_name}</span>
+                        <span className="ledger-table__desc-title">TOTAL</span>
                       </div>
                     </div>
-                    <span className={`ledger-table__amount ${r.debit_cents > 0 ? "" : "is-muted"}`}>
-                      {r.debit_cents > 0 ? formatIDR(r.debit_cents) : "—"}
-                    </span>
-                    <span className={`ledger-table__amount ${r.credit_cents > 0 ? "" : "is-muted"}`}>
-                      {r.credit_cents > 0 ? formatIDR(r.credit_cents) : "—"}
-                    </span>
+                    <span className="ledger-table__amount">{formatIDRFromCents(totalDebitCents)}</span>
+                    <span className="ledger-table__amount">{formatIDRFromCents(totalCreditCents)}</span>
                     <span aria-hidden="true" />
                   </div>
-                ))
+                </>
               )}
             </div>
           );
@@ -618,9 +635,9 @@ export function ProfitLossReport() {
             <>
               <div className="entrytab__body" style={{ background: "transparent", border: 0 }}>
                 <div className="entrytab__section" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-                  <Stat label="Revenue" value={formatIDR(r.revenue_cents ?? 0)} tone="pos" />
-                  <Stat label="Expense" value={formatIDR(r.expense_cents ?? 0)} tone="neg" />
-                  <Stat label="Net" value={formatIDR(Math.abs(net))} tone={isProfit ? "pos" : "neg"} suffix={isProfit ? "PROFIT" : "LOSS"} />
+                  <Stat label="Revenue" value={formatIDRFromCents(r.revenue_cents ?? 0)} tone="pos" />
+                  <Stat label="Expense" value={formatIDRFromCents(r.expense_cents ?? 0)} tone="neg" />
+                  <Stat label="Net" value={formatIDRFromCents(Math.abs(net))} tone={isProfit ? "pos" : "neg"} suffix={isProfit ? "PROFIT" : "LOSS"} />
                 </div>
               </div>
 
@@ -643,7 +660,7 @@ export function ProfitLossReport() {
                           <tr key={s.code} style={{ borderBottom: "1px solid var(--md-sys-color-outline-variant)" }}>
                             <td style={{ padding: "8px 12px" }}>{s.label}</td>
                             <td style={{ padding: "8px 12px", textAlign: "right", fontFamily: "var(--md-ref-typeface-plain)" }}>
-                              {formatIDR(s.amount_cents)}
+                              {formatIDRFromCents(s.amount_cents)}
                             </td>
                           </tr>
                         ))}
@@ -690,16 +707,40 @@ export function BalanceSheetReport() {
         emptyMessage: "No balance sheet data in the selected date range.",
         render: (data: any) => {
           const r = data;
-          const balanced = r.balanced === true;
+          const assets = r.asset_cents ?? 0;
+          const liabilities = r.liability_cents ?? 0;
+          const equity = r.equity_cents ?? 0;
+          // F-06: current-period profit from the backend so the identity
+          // A = L + E + Laba Berjalan is visible before period close. The
+          // backend folds profit into equity, so `balanced` stays authoritative;
+          // when absent, verify locally (folded or unfolded both accepted).
+          const profit = r.profit_cents ?? 0;
+          const localBalanced =
+            assets === liabilities + equity || assets === liabilities + equity + profit;
+          const balanced = typeof r.balanced === "boolean" ? r.balanced : localBalanced;
           return (
             <div className="entrytab__body" style={{ background: "transparent", border: 0 }}>
-              <div className="entrytab__section" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
-                <Stat label="Assets" value={formatIDR(r.asset_cents ?? 0)} tone="pos" />
-                <Stat label="Liabilities" value={formatIDR(r.liability_cents ?? 0)} tone="neg" />
-                <Stat label="Equity" value={formatIDR(r.equity_cents ?? 0)} tone="acc" />
+              <div className="entrytab__section" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+                <Stat label="Assets" value={formatIDRFromCents(assets)} tone="pos" />
+                <Stat label="Liabilities" value={formatIDRFromCents(liabilities)} tone="neg" />
+                <Stat label="Equity" value={formatIDRFromCents(equity)} tone="acc" />
+              </div>
+              <div className="entrytab__section" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 12 }}>
                 <Stat
-                  label="Balance"
-                  value={balanced ? "BALANCED" : "OFF"}
+                  label="Laba Berjalan (Current Profit)"
+                  value={formatIDRFromCents(Math.abs(profit))}
+                  tone={profit >= 0 ? "pos" : "neg"}
+                  suffix={profit >= 0 ? "" : "LOSS"}
+                />
+                <Stat
+                  label="Balance — A = L + E + Laba"
+                  value={
+                    balanced && assets === liabilities + equity + profit
+                      ? "BALANCED"
+                      : balanced
+                        ? "BALANCED (profit di dalam Equity)"
+                        : "OFF"
+                  }
                   tone={balanced ? "pos" : "neg"}
                   suffix=""
                 />
@@ -746,9 +787,9 @@ export function CashFlowReport() {
           return (
             <div className="entrytab__body" style={{ background: "transparent", border: 0 }}>
               <div className="entrytab__section" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-                <Stat label="Inflow" value={formatIDR(r.inflow_cents ?? 0)} tone="pos" />
-                <Stat label="Outflow" value={formatIDR(r.outflow_cents ?? 0)} tone="neg" />
-                <Stat label="Net" value={formatIDR(Math.abs(net))} tone={net >= 0 ? "pos" : "neg"} suffix={net >= 0 ? "POSITIVE" : "NEGATIVE"} />
+                <Stat label="Inflow" value={formatIDRFromCents(r.inflow_cents ?? 0)} tone="pos" />
+                <Stat label="Outflow" value={formatIDRFromCents(r.outflow_cents ?? 0)} tone="neg" />
+                <Stat label="Net" value={formatIDRFromCents(Math.abs(net))} tone={net >= 0 ? "pos" : "neg"} suffix={net >= 0 ? "POSITIVE" : "NEGATIVE"} />
               </div>
             </div>
           );

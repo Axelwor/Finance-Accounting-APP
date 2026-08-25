@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { EmptyState, LoadingState, FormError } from "../../components/ui";
 import { api } from "../../api";
 import type { Supplier } from "../../types";
@@ -11,9 +12,13 @@ export function PurchaseSupplierList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
+  const load = useCallback(() => {
     api.listSuppliers().then(setSuppliers).catch(() => setError("Failed to load suppliers")).finally(() => setLoading(false));
   }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+  useTabRefresh(load);
 
   if (loading) return <LoadingState label="Loading suppliers..." />;
   if (error) return <FormError message={error} />;

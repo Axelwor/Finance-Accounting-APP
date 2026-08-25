@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { Button, EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
@@ -44,6 +45,7 @@ export function PPNReconciliation() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodYear, periodMonth]);
+  useTabRefresh(load);
 
   const handleFile = async () => {
     const year = Number(periodYear);

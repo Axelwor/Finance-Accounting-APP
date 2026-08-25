@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { LoadingState } from "../../components/ui";
 import { EmptyState } from "../../components/EmptyState";
 import { SortableHeader, type SortState } from "../../components/SortableHeader";
@@ -7,6 +8,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { RowActions, type RowAction } from "../../components/RowActions";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
+import { showToast } from "../../lib/toast";
 import type { InvoiceListItem } from "../../types";
 import { Button, IconButton } from "../../components/m3";
 
@@ -18,6 +20,7 @@ export function InvoiceList() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<"ALL" | InvoiceListItem["status"]>("ALL");
   const [sort, setSort] = useState<SortState>({ column: "date", direction: "desc" });
+  const [voidingId, setVoidingId] = useState<number | null>(null);
 
   const load = async (filter: "ALL" | InvoiceListItem["status"] = status) => {
     setLoading(true);
@@ -30,6 +33,7 @@ export function InvoiceList() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useTabRefresh(load);
 
   const onSort = (column: string) =>
     setSort((s) => ({
@@ -89,6 +93,26 @@ export function InvoiceList() {
   const openEntry = (item: InvoiceListItem) =>
     workbench.openEntryExisting("sales-invoice", item.id, item.number, item.status);
 
+  const handleVoid = async (item: InvoiceListItem) => {
+    if (
+      !window.confirm(
+        `Void invoice ${item.number}? A reversal journal will be posted and the invoice cannot be un-voided.`,
+      )
+    ) {
+      return;
+    }
+    setVoidingId(item.id);
+    try {
+      await api.voidInvoice(item.id);
+      showToast(`✓ Invoice ${item.number} voided.`);
+      await load();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to void invoice.", "error");
+    } finally {
+      setVoidingId(null);
+    }
+  };
+
   return (
     <div className="listtab listtab--accurate">
       <div className="listtab__head">
@@ -100,11 +124,28 @@ export function InvoiceList() {
 
       <div className="listtab__toolbar">
         <div className="listtab__filters">
-          <div className="filter-pill">
+          <label className="filter-pill">
             <span className="filter-pill__label">Status</span>
-            <span className="filter-pill__value">{status === "ALL" ? "All" : status}</span>
+            <select
+              className="filter-pill__input"
+              style={{ appearance: "none", width: "auto", paddingRight: 2, cursor: "pointer" }}
+              value={status}
+              aria-label="Filter invoices by status"
+              onChange={(e) => {
+                const next = e.target.value as "ALL" | InvoiceListItem["status"];
+                setStatus(next);
+                void load(next);
+              }}
+            >
+              <option value="ALL">All</option>
+              <option value="DRAFT">Draft</option>
+              <option value="ISSUED">Issued</option>
+              <option value="PARTIALLY_PAID">Partially Paid</option>
+              <option value="PAID">Paid</option>
+              <option value="VOID">Void</option>
+            </select>
             <span className="filter-pill__caret">▾</span>
-          </div>
+          </label>
         </div>
         <div className="listtab__actions">
           <Button
@@ -154,7 +195,13 @@ export function InvoiceList() {
             </thead>
             <tbody>
               {sorted.map((it) => (
-                <InvoiceRow key={it.id} item={it} onOpen={() => openEntry(it)} />
+                <InvoiceRow
+                  key={it.id}
+                  item={it}
+                  onOpen={() => openEntry(it)}
+                  onVoid={() => void handleVoid(it)}
+                  voiding={voidingId === it.id}
+                />
               ))}
             </tbody>
           </table>
@@ -171,11 +218,26 @@ export function InvoiceList() {
   );
 }
 
-function InvoiceRow({ item, onOpen }: { item: InvoiceListItem; onOpen: () => void }) {
+function InvoiceRow({
+  item,
+  onOpen,
+  onVoid,
+  voiding,
+}: {
+  item: InvoiceListItem;
+  onOpen: () => void;
+  onVoid: () => void;
+  voiding: boolean;
+}) {
   const actions: RowAction[] = [
     { label: "Open", onClick: onOpen },
     { label: "Print", onClick: () => window.print(), disabled: item.status === "VOID" },
-    { label: "Void", onClick: onOpen, destructive: true, disabled: item.status === "VOID" },
+    {
+      label: voiding ? "Voiding…" : "Void",
+      onClick: onVoid,
+      destructive: true,
+      disabled: item.status === "VOID" || voiding,
+    },
   ];
   return (
     <tr role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }} style={{ cursor: "pointer" }}>

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useWorkbench } from "../workbench/state";
 import { MODULES } from "../workbench/modules";
 import { Icon } from "./m3/Icon";
+import { useDialogA11y } from "./dialogA11y";
 import type { EntrySubKind, ListSubKind } from "../workbench/types";
 
 interface CommandItem {
@@ -23,7 +24,11 @@ export function CommandPalette({ isOpen, onClose }: Props) {
   const [search, setSearch] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const listboxId = useId();
+
+  // Focus trap + Escape (anywhere) + focus restore to the trigger.
+  useDialogA11y(isOpen, onClose, dialogRef, inputRef);
 
   // Build command catalogue
   const commands: CommandItem[] = useMemo(() => {
@@ -105,12 +110,11 @@ export function CommandPalette({ isOpen, onClose }: Props) {
     );
   }, [commands, search]);
 
-  // Focus on open
+  // Reset state each time the palette opens (focus is handled by useDialogA11y).
   useEffect(() => {
     if (isOpen) {
       setSearch("");
       setSelectedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
 
@@ -121,17 +125,12 @@ export function CommandPalette({ isOpen, onClose }: Props) {
 
   // Scroll active item into view
   useEffect(() => {
-    if (listRef.current) {
-      const activeEl = listRef.current.querySelector<HTMLElement>(".command-palette-item.is-selected");
-      activeEl?.scrollIntoView({ block: "nearest" });
-    }
+    const activeEl = document.querySelector<HTMLElement>(".command-palette-item.is-selected");
+    activeEl?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      onClose();
-    } else if (e.key === "ArrowDown") {
+    if (e.key === "ArrowDown") {
       e.preventDefault();
       setSelectedIndex((prev) => (prev + 1) % Math.max(1, filteredCommands.length));
     } else if (e.key === "ArrowUp") {
@@ -153,6 +152,7 @@ export function CommandPalette({ isOpen, onClose }: Props) {
 
   return (
     <div
+      ref={dialogRef}
       className="command-palette-backdrop"
       style={{
         position: "fixed",
@@ -199,6 +199,7 @@ export function CommandPalette({ isOpen, onClose }: Props) {
           <Icon name="search" size={20} className="text-muted" />
           <input
             ref={inputRef}
+            id={`${listboxId}-input`}
             type="text"
             className="command-palette-input"
             style={{
@@ -214,6 +215,15 @@ export function CommandPalette({ isOpen, onClose }: Props) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={listboxId}
+            aria-autocomplete="list"
+            aria-activedescendant={
+              filteredCommands[selectedIndex]
+                ? `${listboxId}-opt-${selectedIndex}`
+                : undefined
+            }
           />
           <span
             style={{
@@ -232,8 +242,9 @@ export function CommandPalette({ isOpen, onClose }: Props) {
 
         {/* Command List */}
         <ul
-          ref={listRef}
+          id={listboxId}
           role="listbox"
+          aria-label="Perintah"
           style={{
             listStyle: "none",
             maxHeight: "360px",
@@ -259,8 +270,10 @@ export function CommandPalette({ isOpen, onClose }: Props) {
               return (
                 <li
                   key={cmd.id}
+                  id={`${listboxId}-opt-${idx}`}
                   role="option"
                   aria-selected={isSelected}
+                  aria-label={cmd.label}
                   className={`command-palette-item ${isSelected ? "is-selected" : ""}`}
                   style={{
                     display: "flex",

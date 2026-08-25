@@ -221,6 +221,27 @@ export function ItemForm({ tabId, entryId, initialTitle }: Props) {
     [suppliers],
   );
 
+  /** Field labels used to build the human-readable validation summary. */
+  const FIELD_LABELS: Partial<Record<keyof ItemFormState, string>> = {
+    code: "Item Code",
+    name: "Item Name",
+    itemType: "Item Type",
+    uom: "Base UoM",
+    costingMethod: "Costing Method",
+    inventoryAccountId: "Inventory Account",
+    cogsAccountId: "COGS Account",
+    saleAccountId: "Sale/Revenue Account",
+    salePrice: "Sale Price",
+    purchasePrice: "Purchase Price",
+    weightGrams: "Weight (grams)",
+    volumeCc: "Volume (cc)",
+    reorderPoint: "Reorder Point",
+    reorderQty: "Reorder Qty",
+    leadTimeDays: "Lead Time (days)",
+    openingQty: "Opening Balance Qty",
+    openingCost: "Opening Balance Cost",
+  };
+
   function validate(): FieldErrors {
     const next: FieldErrors = {};
     if (!form.code.trim()) next.code = "Item code is required.";
@@ -228,13 +249,19 @@ export function ItemForm({ tabId, entryId, initialTitle }: Props) {
     if (!form.itemType) next.itemType = "Choose goods or service — this drives costing.";
     if (!form.uom.trim()) next.uom = "Base UoM is required.";
 
+    // QA-19: the backend rejects `service requires sale_account_id`, so the
+    // field is mandatory up front for services (goods keeps it optional,
+    // mirroring the backend contract).
     if (isGoods) {
       if (!form.costingMethod) next.costingMethod = "Costing method is required for goods.";
       if (!form.inventoryAccountId) next.inventoryAccountId = "Inventory account is required for goods.";
       if (!form.cogsAccountId) next.cogsAccountId = "COGS account is required for goods.";
       if (toCents(form.salePrice) <= 0) next.salePrice = "Sale price must be greater than zero.";
-    } else if (form.itemType === "service" && form.salePrice && toCents(form.salePrice) <= 0) {
-      next.salePrice = "Sale price must be greater than zero.";
+    } else if (form.itemType === "service") {
+      if (!form.saleAccountId) next.saleAccountId = "Revenue account is required for services.";
+      if (form.salePrice && toCents(form.salePrice) <= 0) {
+        next.salePrice = "Sale price must be greater than zero.";
+      }
     }
     // Purchase price is not persisted server-side yet — optional, but must be
     // positive when entered.
@@ -259,7 +286,12 @@ export function ItemForm({ tabId, entryId, initialTitle }: Props) {
     const fieldErrors = validate();
     setErrors(fieldErrors);
     if (Object.keys(fieldErrors).length > 0) {
-      setError("Please fix the highlighted fields.");
+      // List every missing required field for the chosen item type so the
+      // user never faces a silent blocked submit.
+      const missing = (Object.keys(fieldErrors) as (keyof ItemFormState)[])
+        .map((key) => FIELD_LABELS[key] ?? key)
+        .join(", ");
+      setError(`Please fix the highlighted fields — missing or invalid: ${missing}.`);
       return;
     }
     if (form.itemType === "") return; // flagged by validate(); narrows the type below
@@ -494,9 +526,23 @@ export function ItemForm({ tabId, entryId, initialTitle }: Props) {
                 />
               </>
             ) : (
-              <p style={{ gridColumn: "1 / -1", margin: 0, fontSize: "0.75rem", color: "var(--md-sys-color-outline)" }}>
-                Services are not stocked and carry no inventory, COGS, or costing method.
-              </p>
+              <>
+                <p style={{ gridColumn: "1 / -1", margin: 0, fontSize: "0.75rem", color: "var(--md-sys-color-outline)" }}>
+                  Services are not stocked and carry no inventory, COGS, or costing method.
+                </p>
+                {/* QA-19/F-07: backend 400s with "service requires sale_account_id"
+                    when this is missing — surface it as a required picker. */}
+                {form.itemType === "service" && (
+                  <SelectField
+                    label="Sale / Revenue Account *"
+                    value={form.saleAccountId}
+                    onChange={(value) => update("saleAccountId", value)}
+                    options={accountOptions.revenue}
+                    placeholder="Choose account..."
+                    error={errors.saleAccountId}
+                  />
+                )}
+              </>
             )}
             <FieldShell label="Weight (grams)" error={errors.weightGrams}>
               <input
@@ -660,7 +706,7 @@ export function ItemForm({ tabId, entryId, initialTitle }: Props) {
             ) : (
               <>
                 <strong>Tip:</strong> item type drives costing — goods need a costing method, inventory
-                and COGS accounts, and a sale price above zero.
+                and COGS accounts, and a sale price above zero; services need a revenue account.
               </>
             )}
           </div>

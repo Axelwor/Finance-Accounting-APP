@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
@@ -36,6 +37,7 @@ export function DueDateReminders() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [days]);
+  useTabRefresh(load);
 
   const receivables = items.filter((it) => it.direction === "customer");
   const payables = items.filter((it) => it.direction === "supplier");

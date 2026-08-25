@@ -142,6 +142,8 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: num
       role={toast.type === "error" ? "alert" : "status"}
       onMouseEnter={stop}
       onMouseLeave={start}
+      onFocus={stop}
+      onBlur={start}
     >
       <span className="toast__icon" aria-hidden="true">
         {iconFor(toast.type)}

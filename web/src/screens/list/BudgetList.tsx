@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { useWorkbench } from "../../workbench/state";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
@@ -40,6 +41,7 @@ export function BudgetList() {
   useEffect(() => {
     void load();
   }, []);
+  useTabRefresh(load);
 
   return (
     <div className="listtab listtab--accurate">

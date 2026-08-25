@@ -1,6 +1,5 @@
 /**
- * Pure SVG Icon component using lucide-react mappings.
- * Completely eliminates Material Symbols ligature font rendering glitches (e.g. 'ala', 'sel', 'let').
+ * Pure SVG icon component using lucide-react mappings.
  */
 import type { ComponentType, CSSProperties } from "react";
 import {
@@ -151,7 +150,7 @@ const ICON_MAP: Record<string, ComponentType<{ size?: number | string; className
 };
 
 export interface IconProps {
-  /** Icon name (supports legacy Material Symbols snake_case names or Lucide aliases) */
+  /** Lookup key resolved via ICON_MAP; unknown names fall back to FileText. */
   name: string;
   slot?: string;
   filled?: boolean;

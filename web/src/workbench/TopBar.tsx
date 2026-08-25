@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { useAppState } from "../state";
@@ -18,11 +18,51 @@ export function TopBar({ onOpenPalette }: { onOpenPalette?: () => void }) {
     () => (localStorage.getItem("theme") as "light" | "dark") || "light"
   );
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
+  const quickTriggerRef = useRef<HTMLButtonElement>(null);
+  const quickMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("theme", theme);
   }, [theme]);
+
+  // Quick menu: move focus into the menu on open, close on Escape (restoring
+  // focus to the trigger), and restore focus after any close.
+  useEffect(() => {
+    if (!quickMenuOpen) return;
+    const focusTimer = window.setTimeout(() => {
+      quickMenuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    }, 0);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setQuickMenuOpen(false);
+        quickTriggerRef.current?.focus();
+      } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        const items = Array.from(
+          quickMenuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [],
+        );
+        if (items.length === 0) return;
+        e.preventDefault();
+        const idx = items.indexOf(document.activeElement as HTMLElement);
+        const next =
+          e.key === "ArrowDown"
+            ? items[(idx + 1) % items.length]
+            : items[(idx - 1 + items.length) % items.length];
+        next.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("keydown", onKey, true);
+      // Any close path (backdrop click, item click) returns focus to the trigger
+      // when nothing else grabbed it while the dropdown unmounted.
+      const active = document.activeElement;
+      if (!active || active === document.body) quickTriggerRef.current?.focus();
+    };
+  }, [quickMenuOpen]);
 
   const handleLogout = async () => {
     await api.logout();
@@ -95,10 +135,12 @@ export function TopBar({ onOpenPalette }: { onOpenPalette?: () => void }) {
         {/* Quick Action Dropdown */}
         <div className="topbar__quick-action">
           <button
+            ref={quickTriggerRef}
             type="button"
             className="btn-quick-add"
             onClick={() => setQuickMenuOpen(!quickMenuOpen)}
             aria-expanded={quickMenuOpen}
+            aria-haspopup="menu"
           >
             <Icon name="plus" size={16} />
             <span>+ Buat Baru</span>
@@ -111,7 +153,7 @@ export function TopBar({ onOpenPalette }: { onOpenPalette?: () => void }) {
                 className="quick-menu-backdrop"
                 onClick={() => setQuickMenuOpen(false)}
               />
-              <div className="quick-menu-dropdown" role="menu">
+              <div ref={quickMenuRef} className="quick-menu-dropdown" role="menu" aria-label="Buat dokumen baru">
                 <div className="quick-menu-group">
                   <span className="quick-menu-group-label">Kas & Bank</span>
                   <button

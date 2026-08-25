@@ -3,7 +3,7 @@ import { useWorkbench } from "../../workbench/state";
 import { useAppState } from "../../state";
 import { ErrorState, FormError, LoadingState } from "../../components/ui";
 import { api, mockHelpers } from "../../api";
-import { formatIDR } from "../../lib/format";
+import { formatIDRFromCents, parseRupiahToCents } from "../../lib/format";
 import { Icon } from "../../components/m3/Icon";
 import type { BackendAccount, CounterLinePayload, EntrySubKind, JournalEntryListItem } from "../../types";
 
@@ -27,11 +27,6 @@ function seedLine(): CounterLine {
   return { id: `cl-${Date.now()}-${lineSeq}`, accountId: "", amount: "", memo: "" };
 }
 
-function parseCents(digits: string): number {
-  const clean = digits.replace(/[^\d]/g, "");
-  return clean ? parseInt(clean, 10) : 0;
-}
-
 export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) {
   const workbench = useWorkbench();
   let business = null;
@@ -43,6 +38,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
   }
   const isDetail = entryId !== undefined;
   const isReceipt = subKind === "money-in";
+  const isTransfer = subKind === "cash-transfer";
 
   const [accounts, setAccounts] = useState<BackendAccount[]>([]);
   const [recentEntries, setRecentEntries] = useState<JournalEntryListItem[]>([]);
@@ -56,15 +52,32 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
   // Form Fields
   const [date, setDate] = useState(mockHelpers.today());
   const [cashAccountId, setCashAccountId] = useState("");
+  const [transferToAccountId, setTransferToAccountId] = useState("");
   const [counterparty, setCounterparty] = useState("");
   const [description, setDescription] = useState("");
   const [reference, setReference] = useState("");
   const [lines, setLines] = useState<CounterLine[]>([seedLine()]);
-  const [docNumber, setDocNumber] = useState(initialTitle ?? (isReceipt ? "BKM-2026/DRAFT" : "BKK-2026/DRAFT"));
+  const [docNumber, setDocNumber] = useState(
+    initialTitle ?? (isTransfer ? "BTR-2026/DRAFT" : isReceipt ? "BKM-2026/DRAFT" : "BKK-2026/DRAFT")
+  );
   const [status, setStatus] = useState(isDetail ? "POSTED" : "DRAFT");
 
   const draftKey = `ledgerly.draft.${tabId}`;
   const isInitialMount = useRef(true);
+
+  // Money convention: the input holds whole rupiah typed by the user; every
+  // value below is integer cents (×100) as stored by the backend.
+  const totalAmountCents = useMemo(
+    () => lines.reduce((sum, l) => sum + parseRupiahToCents(l.amount), 0),
+    [lines]
+  );
+
+  // F-14: a "-" anywhere in a nominal input means the user tried to post a
+  // negative amount — block it instead of silently stripping the sign.
+  const hasNegativeInput = useMemo(
+    () => lines.some((l) => l.amount.includes("-")),
+    [lines]
+  );
 
   // 1. Restore draft on mount if not detail
   useEffect(() => {
@@ -75,6 +88,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
           const parsed = JSON.parse(savedDraft);
           if (parsed.date) setDate(parsed.date);
           if (parsed.cashAccountId) setCashAccountId(parsed.cashAccountId);
+          if (parsed.transferToAccountId) setTransferToAccountId(parsed.transferToAccountId);
           if (parsed.counterparty) setCounterparty(parsed.counterparty);
           if (parsed.description) setDescription(parsed.description);
           if (parsed.reference) setReference(parsed.reference);
@@ -98,7 +112,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
 
     const timer = setTimeout(() => {
       try {
-        const payload = { date, cashAccountId, counterparty, description, reference, lines };
+        const payload = { date, cashAccountId, transferToAccountId, counterparty, description, reference, lines };
         localStorage.setItem(draftKey, JSON.stringify(payload));
       } catch (e) {
         console.warn("Failed to autosave draft", e);
@@ -106,7 +120,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [date, cashAccountId, counterparty, description, reference, lines, isDetail, saved, draftKey]);
+  }, [date, cashAccountId, transferToAccountId, counterparty, description, reference, lines, isDetail, saved, draftKey]);
 
   useEffect(() => {
     void loadInitialData();
@@ -151,7 +165,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [workbench.activeNested?.id, saving, saved, isDetail, tabId, cashAccountId, lines, date, description, counterparty, reference]);
+  }, [workbench.activeNested?.id, saving, saved, isDetail, tabId, cashAccountId, transferToAccountId, hasNegativeInput, totalAmountCents, isTransfer, isReceipt, date, description, counterparty, reference, lines, draftKey]);
 
   const cashAccounts = useMemo(
     () => accounts.filter((a) => a.account_type === "CASH" || a.account_type === "BANK" || a.code.startsWith("11")),
@@ -161,11 +175,6 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
   const expenseOrRevenueAccounts = useMemo(
     () => accounts.filter((a) => !cashAccounts.some((c) => c.id === a.id)),
     [accounts, cashAccounts]
-  );
-
-  const totalAmount = useMemo(
-    () => lines.reduce((sum, l) => sum + parseCents(l.amount), 0),
-    [lines]
   );
 
   // Period-lock warning
@@ -210,48 +219,83 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
   };
 
   const handlePost = async () => {
+    if (hasNegativeInput) {
+      setError("Nominal tidak boleh negatif.");
+      return;
+    }
     if (!cashAccountId) {
       setError("Pilih rekening Kas/Bank utama.");
       return;
     }
-    if (totalAmount <= 0) {
+    if (isTransfer && !transferToAccountId) {
+      setError("Pilih rekening Kas/Bank tujuan transfer.");
+      return;
+    }
+    if (isTransfer && transferToAccountId === cashAccountId) {
+      setError("Rekening sumber dan tujuan transfer tidak boleh sama.");
+      return;
+    }
+    if (totalAmountCents <= 0) {
       setError("Nominal transaksi harus lebih dari Rp 0.");
       return;
     }
-    const invalidLines = lines.some((l) => !l.accountId || parseCents(l.amount) <= 0);
+
+    let invalidLines: boolean;
+    if (isTransfer) {
+      invalidLines = parseRupiahToCents(lines[0]?.amount ?? "") <= 0;
+    } else {
+      invalidLines = lines.some((l) => !l.accountId || parseRupiahToCents(l.amount) <= 0);
+    }
     if (invalidLines) {
-      setError("Pastikan semua baris alokasi memiliki akun dan nominal valid.");
+      setError(isTransfer
+        ? "Isi nominal transfer terlebih dahulu."
+        : "Pastikan semua baris alokasi memiliki akun dan nominal valid.");
       return;
     }
 
     setError(null);
     setSaving(true);
     try {
-      const counterLines: CounterLinePayload[] = lines.map((l) => ({
-        account_id: Number(l.accountId),
-        amount_cents: parseCents(l.amount),
-        description: l.memo.trim() || description.trim() || "Alokasi kas",
-      }));
-
       let res;
-      if (isReceipt) {
-        res = await api.postCashIn({
+      if (isTransfer) {
+        const fromName = accounts.find((a) => String(a.id) === cashAccountId)?.name ?? "Sumber";
+        const toName = accounts.find((a) => String(a.id) === transferToAccountId)?.name ?? "Tujuan";
+        res = await api.postTransfer({
           entry_date: date,
-          description: description.trim() || (counterparty ? `Kas Masuk dari ${counterparty}` : "Kas Masuk Operasional"),
-          cash_account_id: Number(cashAccountId),
-          counter_account_id: Number(counterLines[0].account_id),
-          amount_cents: totalAmount,
-          counter_lines: counterLines,
+          description:
+            description.trim() ||
+            reference.trim() ||
+            `Transfer Kas dari ${fromName} ke ${toName}`,
+          from_account_id: Number(cashAccountId),
+          to_account_id: Number(transferToAccountId),
+          amount_cents: totalAmountCents,
         });
       } else {
-        res = await api.postCashOut({
-          entry_date: date,
-          description: description.trim() || (counterparty ? `Kas Keluar kepada ${counterparty}` : "Kas Keluar Operasional"),
-          cash_account_id: Number(cashAccountId),
-          counter_account_id: Number(counterLines[0].account_id),
-          amount_cents: totalAmount,
-          counter_lines: counterLines,
-        });
+        const counterLines: CounterLinePayload[] = lines.map((l) => ({
+          account_id: Number(l.accountId),
+          amount_cents: parseRupiahToCents(l.amount),
+          description: l.memo.trim() || description.trim() || "Alokasi kas",
+        }));
+
+        if (isReceipt) {
+          res = await api.postCashIn({
+            entry_date: date,
+            description: description.trim() || (counterparty ? `Kas Masuk dari ${counterparty}` : "Kas Masuk Operasional"),
+            cash_account_id: Number(cashAccountId),
+            counter_account_id: Number(counterLines[0].account_id),
+            amount_cents: totalAmountCents,
+            counter_lines: counterLines,
+          });
+        } else {
+          res = await api.postCashOut({
+            entry_date: date,
+            description: description.trim() || (counterparty ? `Kas Keluar kepada ${counterparty}` : "Kas Keluar Operasional"),
+            cash_account_id: Number(cashAccountId),
+            counter_account_id: Number(counterLines[0].account_id),
+            amount_cents: totalAmountCents,
+            counter_lines: counterLines,
+          });
+        }
       }
 
       setSaved(true);
@@ -273,6 +317,19 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
   if (loadError) return <ErrorState message={loadError} onRetry={loadInitialData} />;
 
   const cashAccountName = accounts.find((a) => String(a.id) === cashAccountId)?.name || "Kas/Bank Utama";
+  const transferToAccountName =
+    accounts.find((a) => String(a.id) === transferToAccountId)?.name || "Kas/Bank Tujuan";
+
+  const formTitle = isTransfer
+    ? "Transfer Kas / Bank (Cash Transfer)"
+    : isReceipt
+      ? "Kas Masuk Operasional (Other Receipt)"
+      : "Kas Keluar Operasional (Other Payment)";
+  const formSubtitle = isTransfer
+    ? "Pemindahan dana antar rekening kas/bank — jurnal otomatis Dr Tujuan / Cr Sumber"
+    : isReceipt
+      ? "Pencatatan penerimaan kas non-faktur (pendapatan lain, bunga, setoran)"
+      : "Pencatatan beban & pengeluaran kas non-faktur";
 
   return (
     <div className="enterprise-form">
@@ -281,16 +338,14 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
         <div className="form-header__title-group">
           <div className="form-header__icon-box">
             <Icon
-              name={isReceipt ? "arrow_down_left" : "arrow_up_right"}
+              name={isTransfer ? "currency_exchange" : isReceipt ? "arrow_down_left" : "arrow_up_right"}
               size={20}
-              className={isReceipt ? "text-success" : "text-danger"}
+              className={isTransfer ? "text-brand" : isReceipt ? "text-success" : "text-danger"}
             />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="form-header__title">
-                {isReceipt ? "Kas Masuk Operasional (Other Receipt)" : "Kas Keluar Operasional (Other Payment)"}
-              </h1>
+              <h1 className="form-header__title">{formTitle}</h1>
               <span className="form-header__doc-number">{docNumber}</span>
               <span className={`form-header__status-badge status-${status.toLowerCase()}`}>
                 {status}
@@ -301,9 +356,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                 </span>
               )}
             </div>
-            <p className="text-xs text-muted mt-0.5">
-              {isReceipt ? "Pencatatan penerimaan kas non-faktur (pendapatan lain, bunga, setoran)" : "Pencatatan beban & pengeluaran kas non-faktur"}
-            </p>
+            <p className="text-xs text-muted mt-0.5">{formSubtitle}</p>
           </div>
         </div>
 
@@ -355,7 +408,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
           {/* Kolom Kiri: Pihak Utama & Rekening */}
           <div className="flex flex-col gap-3">
             <div className="auth-field">
-              <label>Rekening Kas / Bank Sumber Transaksi *</label>
+              <label>{isTransfer ? "Rekening Kas / Bank Sumber (Dikredit) *" : "Rekening Kas / Bank Sumber Transaksi *"}</label>
               <select
                 className="input-base font-semibold"
                 value={cashAccountId}
@@ -370,17 +423,38 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
               </select>
             </div>
 
-            <div className="auth-field">
-              <label>{isReceipt ? "Diterima Dari (Pihak Pembayar)" : "Dibayarkan Kepada (Penerima Kas)"}</label>
-              <input
-                type="text"
-                className="input-base"
-                placeholder={isReceipt ? "Nama pelanggan / mitra / sumber dana" : "Nama vendor / staf / penerima pembayaran"}
-                value={counterparty}
-                disabled={isDetail || saved}
-                onChange={(e) => setCounterparty(e.target.value)}
-              />
-            </div>
+            {isTransfer ? (
+              <div className="auth-field">
+                <label>Rekening Kas / Bank Tujuan (Didebit) *</label>
+                <select
+                  className="input-base font-semibold"
+                  value={transferToAccountId}
+                  disabled={isDetail || saved}
+                  onChange={(e) => setTransferToAccountId(e.target.value)}
+                >
+                  <option value="">-- Pilih Rekening Tujuan --</option>
+                  {cashAccounts
+                    .filter((acc) => String(acc.id) !== cashAccountId)
+                    .map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.code} - {acc.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            ) : (
+              <div className="auth-field">
+                <label>{isReceipt ? "Diterima Dari (Pihak Pembayar)" : "Dibayarkan Kepada (Penerima Kas)"}</label>
+                <input
+                  type="text"
+                  className="input-base"
+                  placeholder={isReceipt ? "Nama pelanggan / mitra / sumber dana" : "Nama vendor / staf / penerima pembayaran"}
+                  value={counterparty}
+                  disabled={isDetail || saved}
+                  onChange={(e) => setCounterparty(e.target.value)}
+                />
+              </div>
+            )}
           </div>
 
           {/* Kolom Kanan: Tanggal & Referensi */}
@@ -420,7 +494,37 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
           </div>
         </div>
 
+        {/* 2.B Transfer Nominal (cash-transfer mode) */}
+        {isTransfer && (
+          <div className="form-card">
+            <div className="flex-between mb-3">
+              <div>
+                <h2 className="text-sm font-bold text-primary">Nominal Transfer</h2>
+                <p className="text-xs text-muted">Jumlah uang yang dipindahkan dari rekening sumber ke rekening tujuan.</p>
+              </div>
+            </div>
+            <div className="auth-field" style={{ maxWidth: 360 }}>
+              <label>Nominal Transfer (Rp) *</label>
+              <input
+                type="number"
+                className="input-base text-right font-mono font-semibold"
+                placeholder="0"
+                min="0"
+                value={lines[0]?.amount ?? ""}
+                disabled={isDetail || saved}
+                onChange={(e) => updateLine(lines[0].id, "amount", e.target.value)}
+              />
+              {lines[0]?.amount.includes("-") && (
+                <p className="text-xs text-rose-600 mt-1 flex items-center gap-1">
+                  <Icon name="warning" size={12} /> Nominal tidak boleh negatif.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* 2.B Line Items Table Engine (Multi-Account Allocation Grid) */}
+        {!isTransfer && (
         <div className="form-card">
           <div className="flex-between mb-3">
             <div>
@@ -511,7 +615,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                     Total Nominal:
                   </td>
                   <td className="num font-mono font-bold text-primary text-sm">
-                    {formatIDR(totalAmount)}
+                    {formatIDRFromCents(totalAmountCents)}
                   </td>
                   {!isDetail && !saved && <td />}
                 </tr>
@@ -519,6 +623,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
             </table>
           </div>
         </div>
+        )}
 
         {/* 2.C Live Journal Preview */}
         <div className="form-card bg-surface-secondary">
@@ -527,16 +632,25 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
             <h3 className="text-xs font-bold text-primary uppercase">Pratinjau Otomatis Jurnal Buku Besar (Live Journal Effect)</h3>
           </div>
           <div className="text-xs font-mono space-y-1">
-            {isReceipt ? (
+            {isTransfer ? (
               <>
                 <p className="text-emerald-700 font-semibold">
-                  (Dr) {cashAccountName}: <strong>{formatIDR(totalAmount)}</strong>
+                  (Dr) {transferToAccountName}: <strong>{formatIDRFromCents(totalAmountCents)}</strong>
+                </p>
+                <p className="text-rose-700 font-semibold pl-4">
+                  (Cr) {cashAccountName}: <strong>{formatIDRFromCents(totalAmountCents)}</strong>
+                </p>
+              </>
+            ) : isReceipt ? (
+              <>
+                <p className="text-emerald-700 font-semibold">
+                  (Dr) {cashAccountName}: <strong>{formatIDRFromCents(totalAmountCents)}</strong>
                 </p>
                 {lines.map((l, i) => {
                   const acc = accounts.find((a) => String(a.id) === l.accountId);
                   return (
                     <p key={i} className="text-slate-600 pl-4">
-                      (Cr) {acc ? `${acc.code} - ${acc.name}` : "[Pilih Akun Lawan]"}: {formatIDR(parseCents(l.amount))}
+                      (Cr) {acc ? `${acc.code} - ${acc.name}` : "[Pilih Akun Lawan]"}: {formatIDRFromCents(parseRupiahToCents(l.amount))}
                     </p>
                   );
                 })}
@@ -547,12 +661,12 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                   const acc = accounts.find((a) => String(a.id) === l.accountId);
                   return (
                     <p key={i} className="text-slate-700 font-semibold">
-                      (Dr) {acc ? `${acc.code} - ${acc.name}` : "[Pilih Akun Lawan]"}: {formatIDR(parseCents(l.amount))}
+                      (Dr) {acc ? `${acc.code} - ${acc.name}` : "[Pilih Akun Lawan]"}: {formatIDRFromCents(parseRupiahToCents(l.amount))}
                     </p>
                   );
                 })}
                 <p className="text-rose-700 font-semibold pl-4">
-                  (Cr) {cashAccountName}: <strong>{formatIDR(totalAmount)}</strong>
+                  (Cr) {cashAccountName}: <strong>{formatIDRFromCents(totalAmountCents)}</strong>
                 </p>
               </>
             )}
@@ -583,7 +697,11 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-secondary">Integritas Transaksi:</span>
-            {totalAmount > 0 ? (
+            {hasNegativeInput ? (
+              <span className="status-badge status-unbalanced text-xs">
+                <Icon name="warning" size={12} /> Nominal tidak boleh negatif
+              </span>
+            ) : totalAmountCents > 0 ? (
               <span className="status-badge status-balanced text-xs">
                 <Icon name="check" size={12} /> SEIMBANG (DEBIT = KREDIT)
               </span>
@@ -601,7 +719,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
         <div className="flex items-center gap-6">
           <div className="text-right">
             <span className="text-xs text-muted block">TOTAL TRANSAKSI KAS:</span>
-            <span className="font-mono text-xl font-bold text-primary total-double inline-block">{formatIDR(totalAmount)}</span>
+            <span className="font-mono text-xl font-bold text-primary total-double inline-block">{formatIDRFromCents(totalAmountCents)}</span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -609,7 +727,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
               <button
                 type="button"
                 className="btn-dash-primary"
-                disabled={totalAmount <= 0 || saving}
+                disabled={totalAmountCents <= 0 || saving}
                 onClick={handlePost}
               >
                 {saving ? (
@@ -617,7 +735,7 @@ export function CashEntryForm({ tabId, subKind, entryId, initialTitle }: Props) 
                 ) : (
                   <>
                     <Icon name="check" size={14} />
-                    <span>Posting Transaksi Kas</span>
+                    <span>{isTransfer ? "Posting Transfer Kas" : "Posting Transaksi Kas"}</span>
                     <kbd className="btn-kbd">Ctrl+S</kbd>
                   </>
                 )}

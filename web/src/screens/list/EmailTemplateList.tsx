@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import DOMPurify from "dompurify";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { EmailTemplate } from "../../types";
 import { Button, Select } from "../../components/m3";
+import { useDialogA11y } from "../../components/dialogA11y";
 
 type TriggerEvent =
   | "INVOICE_SENT"
@@ -45,6 +47,7 @@ export function EmailTemplateList() {
   useEffect(() => {
     void load();
   }, []);
+  useTabRefresh(load);
 
   const handleToggleActive = async (template: EmailTemplate) => {
     try {
@@ -234,6 +237,9 @@ interface EmailTemplateFormModalProps {
 }
 
 function EmailTemplateFormModal({ visible, onClose, onSave, initialData }: EmailTemplateFormModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // Focus trap + Escape + focus restore (no-ops while hidden).
+  useDialogA11y(visible, onClose, dialogRef);
   const [subject, setSubject] = useState(initialData?.subject ?? "");
   const [bodyHtml, setBodyHtml] = useState(initialData?.body_html ?? "");
   const [bodyText, setBodyText] = useState(initialData?.body_text ?? "");
@@ -288,7 +294,14 @@ function EmailTemplateFormModal({ visible, onClose, onSave, initialData }: Email
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={initialData ? "Edit Template" : "New Template"} onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={initialData ? "Edit Template" : "New Template"}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal__header">
           <h3>{initialData ? "Edit Template" : "New Template"}</h3>
           <button className="modal__close" onClick={onClose} aria-label="Close">×</button>

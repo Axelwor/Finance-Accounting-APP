@@ -1,8 +1,20 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import { useAppState } from "../state";
 import { Icon } from "../components/m3/Icon";
+
+const AUTH_ERROR_COPY: Record<string, string> = {
+  EMAIL_EXISTS: "Email sudah terdaftar. Gunakan email lain atau masuk.",
+  INVALID_CREDENTIALS: "Email atau kata sandi salah.",
+};
+
+function authErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    return AUTH_ERROR_COPY[err.code] ?? err.message;
+  }
+  return "Tidak dapat terhubung ke server. Silakan coba lagi.";
+}
 
 export function AuthScreen() {
   const [params] = useSearchParams();
@@ -16,7 +28,7 @@ export function AuthScreen() {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
-  const { setUser } = useAppState();
+  const { setUser, setBusiness } = useAppState();
 
   const switchMode = (m: "login" | "register") => {
     setMode(m);
@@ -33,12 +45,13 @@ export function AuthScreen() {
         setUser(user);
         navigate("/onboarding", { replace: true });
       } else {
-        const { user, hasTenant } = await api.login({ email, password });
+        const { user, hasTenant, business } = await api.login({ email, password });
         setUser(user);
+        if (business) setBusiness(business);
         navigate(hasTenant ? "/" : "/onboarding", { replace: true });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Tidak dapat terhubung ke server. Silakan coba lagi.");
+      setError(authErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -113,6 +126,7 @@ export function AuthScreen() {
             <button
               type="button"
               className={`auth-mode-btn${mode === "login" ? " is-active" : ""}`}
+              aria-pressed={mode === "login"}
               onClick={() => switchMode("login")}
             >
               Masuk (Sign In)
@@ -120,6 +134,7 @@ export function AuthScreen() {
             <button
               type="button"
               className={`auth-mode-btn${mode === "register" ? " is-active" : ""}`}
+              aria-pressed={mode === "register"}
               onClick={() => switchMode("register")}
             >
               Buka Buku Baru
@@ -143,6 +158,7 @@ export function AuthScreen() {
                     id="businessName"
                     type="text"
                     required
+                    autoComplete="organization"
                     value={businessName}
                     onChange={(e) => setBusinessName(e.target.value)}
                     placeholder="Contoh: PT Maju Bersama Makmur"
@@ -159,6 +175,7 @@ export function AuthScreen() {
                   id="email"
                   type="email"
                   required
+                  autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="akuntan@perusahaan.co.id"
@@ -174,6 +191,7 @@ export function AuthScreen() {
                   id="password"
                   type={showPassword ? "text" : "password"}
                   required
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Minimal 8 karakter"

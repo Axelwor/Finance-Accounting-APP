@@ -1,0 +1,1881 @@
+/* ============================================================
+   Ledgerly — List Tabs & Reports (listtab / ledger-table layer)
+   Corporate compact density: 32px controls, 16px page padding,
+   12px section gaps. All selectors scoped to list/report classes;
+   tokens come from m3-tokens.css only.
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   1. Shell — .listtab
+   ------------------------------------------------------------ */
+.listtab {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  background-color: var(--bg-canvas);
+  /* M3 web-component buttons inside lists: corporate type + density */
+  --md-sys-typescale-label-large-font: var(--font-sans);
+  --md-sys-typescale-label-large-size: 12px;
+  --md-sys-typescale-label-large-weight: 600;
+  --md-sys-typescale-label-large-tracking: 0.1px;
+}
+
+.listtab__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 14px 16px 10px;
+}
+
+.listtab__title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.listtab__title > span {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+/* Subtitle sits on its own line, visually separated from the title */
+.listtab__title small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.listtab__desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.listtab__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 12px 16px;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Toolbar row: filters on the left, actions pushed right */
+.listtab__toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.listtab > .listtab__toolbar {
+  padding: 0 16px 10px;
+}
+
+.listtab__filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.listtab__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.listtab__filter-row {
+  flex-basis: 100%;
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.listtab__filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.listtab .listtab__search {
+  width: 220px;
+  height: 32px;
+  padding: 4px 10px;
+  font-size: 12.5px;
+}
+
+.listtab__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  background-color: var(--bg-surface-secondary);
+  border: 1px solid var(--border-color);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.listtab__demo {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning-text);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.listtab__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 2px 16px 12px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.listtab__body--scroll {
+  overflow: auto;
+  min-height: 0;
+}
+
+.listtab__footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 8px 16px;
+  background-color: var(--bg-surface);
+  border-top: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.listtab__footer strong {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.listtab__footer-count {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* Compact inputs while inside a list screen */
+.listtab .input {
+  height: 32px;
+  padding: 4px 10px;
+  font-size: 12.5px;
+}
+
+.listtab .field {
+  gap: 4px;
+}
+
+.listtab .field .input {
+  height: 32px;
+}
+
+.field--inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field--inline > span {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.field__input {
+  width: 100%;
+  height: 32px;
+  padding: 4px 10px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--text-primary);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.field__input:focus {
+  border-color: var(--brand-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--brand-primary-light);
+}
+
+/* ------------------------------------------------------------
+   2. M3 web-component buttons — corporate shape inside lists
+   ------------------------------------------------------------ */
+.listtab md-filled-button,
+.listtab md-outlined-button,
+.listtab md-filled-tonal-button,
+.listtab md-text-button,
+.listtab md-elevated-button {
+  --md-filled-button-container-shape: var(--radius-xs);
+  --md-outlined-button-container-shape: var(--radius-xs);
+  --md-filled-tonal-button-container-shape: var(--radius-xs);
+  --md-text-button-container-shape: var(--radius-xs);
+  --md-elevated-button-container-shape: var(--radius-xs);
+}
+
+.listtab .m3-button--sm {
+  --md-filled-button-container-height: 30px;
+  --md-outlined-button-container-height: 30px;
+  --md-filled-tonal-button-container-height: 30px;
+  --md-text-button-container-height: 30px;
+  --md-elevated-button-container-height: 30px;
+}
+
+.listtab md-icon-button {
+  --md-icon-button-icon-size: 18px;
+}
+
+/* ------------------------------------------------------------
+   3. Filter pills
+   ------------------------------------------------------------ */
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-primary);
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+
+button.filter-pill {
+  cursor: pointer;
+}
+
+.filter-pill:hover {
+  border-color: var(--brand-primary-border);
+  background-color: var(--brand-primary-light);
+}
+
+.filter-pill:focus-within {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px var(--brand-primary-light);
+}
+
+.filter-pill[aria-expanded="true"],
+.filter-pill.is-active {
+  background-color: var(--brand-primary-light);
+  border-color: var(--brand-primary-border);
+}
+
+.filter-pill__label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.filter-pill__value {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.filter-pill__caret {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+.filter-pill__input {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--text-primary);
+  width: 108px;
+}
+
+.filter-pill__input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.filter-pill--wide {
+  min-width: 210px;
+}
+
+.filter-pill--wide > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------
+   4. Ledger table — div-based grid variant
+   ------------------------------------------------------------ */
+div.ledger-table {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+div.ledger-table__head,
+div.ledger-table__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  min-width: 0;
+}
+
+div.ledger-table__head {
+  background-color: var(--brand-primary-light);
+  border-bottom: 1px solid var(--brand-primary-border);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--md-sys-color-on-primary-container);
+}
+
+:where(div.ledger-table__head, div.ledger-table__row) > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* Leading key column (code / number / action kind) */
+:where(div.ledger-table__head, div.ledger-table__row) > :first-child {
+  flex: 0 0 120px;
+}
+
+/* Neutralise decorative spacer cells (e.g. Trial Balance) */
+:where(div.ledger-table__head, div.ledger-table__row) > [aria-hidden="true"] {
+  flex: 0 0 16px;
+}
+
+div.ledger-table__row:last-child {
+  border-bottom: none;
+}
+
+div.ledger-table__row--clickable,
+div.ledger-table__row--link,
+div.ledger-table__row--btn {
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+div.ledger-table__row--clickable:hover,
+div.ledger-table__row--link:hover,
+div.ledger-table__row--btn:hover {
+  background-color: rgba(37, 99, 235, 0.045);
+}
+
+/* Totals / group header rows inside div tables */
+div.ledger-table__row--header,
+div.ledger-table__row--head {
+  font-weight: 700;
+  background-color: var(--bg-surface-secondary);
+  border-top: 2px solid var(--border-strong);
+}
+
+.ledger-table__no,
+.ledger-table__date {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.ledger-table__cat,
+.ledger-table__memo,
+.ledger-table__party,
+.ledger-table__desc-title,
+.ledger-table__desc-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledger-table__cat,
+.ledger-table__memo,
+.ledger-table__party {
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+.ledger-table__desc-title {
+  font-weight: 600;
+}
+
+.ledger-table__desc-text {
+  white-space: normal;
+}
+
+.ledger-table__desc-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ledger-table__amount {
+  flex: 0 0 150px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--text-primary);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ledger-table__amount.right,
+div.ledger-table__head > .right {
+  flex: 0 0 150px;
+  text-align: right;
+  justify-content: flex-end;
+}
+
+.ledger-table__actions,
+.ledger-table__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.ledger-table__delete {
+  color: var(--color-danger);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  font-size: 13px;
+}
+
+/* ------------------------------------------------------------
+   5. Ledger table — semantic <table> variant
+   ------------------------------------------------------------ */
+table.ledger-table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+  background-color: var(--bg-surface);
+  font-size: 12.5px;
+}
+
+table.ledger-table thead th {
+  background-color: var(--brand-primary-light);
+  border-bottom: 1px solid var(--brand-primary-border);
+  padding: 6px 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  text-align: left;
+  color: var(--md-sys-color-on-primary-container);
+  white-space: nowrap;
+}
+
+table.ledger-table tbody td,
+table.ledger-table tbody th[scope="row"] {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+  color: var(--text-primary);
+}
+
+table.ledger-table tbody th[scope="row"] {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+table.ledger-table tbody tr:nth-child(even) td,
+table.ledger-table tbody tr:nth-child(even) th[scope="row"] {
+  background-color: var(--bg-canvas);
+}
+
+table.ledger-table tbody tr:hover td,
+table.ledger-table tbody tr:hover th[scope="row"] {
+  background-color: rgba(37, 99, 235, 0.05);
+}
+
+table.ledger-table tfoot td,
+table.ledger-table tfoot th {
+  padding: 6px 10px;
+  background-color: var(--bg-surface-secondary);
+  border-top: 2px solid var(--border-strong);
+  border-bottom: none;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.listtab__body--scroll table.ledger-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* Numeric alignment + financial figures */
+table.ledger-table .right,
+.listtab .right,
+.listtab .is-right {
+  text-align: right;
+}
+
+table.ledger-table td.right {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+table.ledger-table th.right button,
+table.ledger-table th.sort-th.right {
+  text-align: right;
+}
+
+/* Sortable header cells */
+table.ledger-table .sort-th__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+table.ledger-table .sort-th__arrow {
+  font-size: 10px;
+  min-width: 10px;
+  color: var(--text-muted);
+}
+
+table.ledger-table .sort-th.is-active {
+  color: var(--brand-primary);
+}
+
+table.ledger-table .sort-th.is-active .sort-th__arrow {
+  color: var(--brand-primary);
+}
+
+/* ------------------------------------------------------------
+   6. Generic report tables (.table / .data-table)
+   ------------------------------------------------------------ */
+.table,
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  font-size: 12.5px;
+}
+
+.table thead th,
+.data-table thead th {
+  background-color: var(--brand-primary-light);
+  border-bottom: 1px solid var(--brand-primary-border);
+  padding: 6px 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  text-align: left;
+  color: var(--md-sys-color-on-primary-container);
+  white-space: nowrap;
+}
+
+.table tbody td,
+.data-table tbody td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.table tbody tr:last-child td,
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table--striped tbody tr:nth-child(even) {
+  background-color: var(--bg-canvas);
+}
+
+.data-table tbody tr:hover td,
+.table tbody tr:hover td {
+  background-color: rgba(37, 99, 235, 0.05);
+}
+
+.table td.right,
+.data-table td.right {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------
+   7. Status pills — kind-mark / badge / meta-pill / status-badge
+   ------------------------------------------------------------ */
+.kind-mark {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background-color: var(--bg-surface-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.kind-mark.is-positive,
+.kind-mark.is-green,
+.is-positive,
+.is-green {
+  color: var(--color-success);
+}
+
+.kind-mark.is-negative,
+.kind-mark.is-red,
+.is-negative,
+.is-red {
+  color: var(--color-danger);
+}
+
+.kind-mark.is-warning,
+.is-warning {
+  color: var(--color-warning);
+}
+
+.kind-mark.is-info,
+.is-info {
+  color: var(--color-info);
+}
+
+.kind-mark.is-muted,
+.is-muted {
+  color: var(--text-muted);
+}
+
+.kind-mark.is-positive,
+.kind-mark.is-green {
+  background-color: var(--color-success-bg);
+  border-color: var(--color-success-border);
+}
+
+.kind-mark.is-negative,
+.kind-mark.is-red {
+  background-color: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
+}
+
+.kind-mark.is-warning {
+  background-color: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+}
+
+.kind-mark.is-info {
+  background-color: var(--color-info-bg);
+  border-color: var(--color-info-border);
+}
+
+.kind-mark--money-in {
+  background-color: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success);
+}
+
+.kind-mark--money-out {
+  background-color: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger);
+}
+
+.kind-mark--transfer {
+  background-color: var(--color-info-bg);
+  border-color: var(--color-info-border);
+  color: var(--color-info);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background-color: var(--bg-surface-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.badge--success {
+  background-color: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success-text);
+}
+
+.badge--danger {
+  background-color: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger-text);
+}
+
+.badge--warning {
+  background-color: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning-text);
+}
+
+.meta-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background-color: var(--brand-primary-light);
+  border: 1px solid var(--brand-primary-border);
+  color: var(--md-sys-color-on-primary-container);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.meta-pill--muted {
+  background-color: var(--bg-surface-secondary);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+.status-badge--success {
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
+  border: 1px solid var(--color-success-border);
+}
+
+.status-badge--warning {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border: 1px solid var(--color-warning-border);
+}
+
+.status-badge--danger {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger-text);
+  border: 1px solid var(--color-danger-border);
+}
+
+.status-badge--info {
+  background-color: var(--color-info-bg);
+  color: var(--color-info-text);
+  border: 1px solid var(--color-info-border);
+}
+
+.status-badge--neutral {
+  background-color: var(--bg-surface-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.status-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------
+   8. Row actions dropdown (shared component)
+   ------------------------------------------------------------ */
+.row-actions {
+  position: relative;
+  display: inline-flex;
+}
+
+.row-actions__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-xs);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.row-actions__trigger:hover {
+  background-color: var(--bg-surface-secondary);
+  color: var(--text-primary);
+}
+
+.row-actions__menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  z-index: 60;
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+}
+
+.row-actions__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.row-actions__item:hover:not(:disabled) {
+  background-color: var(--brand-primary-light);
+  color: var(--brand-primary);
+}
+
+.row-actions__item.is-destructive {
+  color: var(--color-danger);
+}
+
+.row-actions__item.is-destructive:hover:not(:disabled) {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.row-actions__item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.row-actions__icon {
+  display: inline-flex;
+  width: 14px;
+  justify-content: center;
+}
+
+/* ------------------------------------------------------------
+   9. KPI stat cards (.kpi-list)
+   ------------------------------------------------------------ */
+.kpi-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.kpi-list__row {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.kpi-list__row.is-pos {
+  border-color: var(--color-success-border);
+}
+
+.kpi-list__row.is-neg {
+  border-color: var(--color-danger-border);
+}
+
+.kpi-list__label {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding-right: 16px;
+}
+
+.kpi-list__label-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+.kpi-list__label-note {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background-color: var(--bg-surface-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.kpi-list__value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.kpi-list__value.is-pos,
+.kpi-list__value.is-green {
+  color: var(--color-success);
+}
+
+.kpi-list__value.is-neg,
+.kpi-list__value.is-red {
+  color: var(--color-danger);
+}
+
+.kpi-list__value.is-acc {
+  color: var(--brand-primary);
+}
+
+.kpi-list__dot {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--border-strong);
+}
+
+.kpi-list__dot.is-pos {
+  background-color: var(--color-success);
+}
+
+.kpi-list__dot.is-neg {
+  background-color: var(--color-danger);
+}
+
+.kpi-list__dot.is-warn {
+  background-color: var(--color-warning);
+}
+
+/* ------------------------------------------------------------
+   10. Reports — shared range bar + report toolbar
+   ------------------------------------------------------------ */
+.report-range {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px 16px;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.report-range__dates {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.report-range__dates label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.report-range__dates input[type="date"] {
+  height: 30px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  background-color: var(--bg-surface);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--text-primary);
+}
+
+.report-range__dates input[type="date"]:focus {
+  border-color: var(--brand-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--brand-primary-light);
+}
+
+.report-range__presets {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.report-range__preset {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-strong);
+  background-color: var(--bg-surface);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.report-range__preset:hover {
+  border-color: var(--brand-primary-border);
+  color: var(--brand-primary);
+  background-color: var(--brand-primary-light);
+}
+
+.report-range__preset.is-active {
+  background-color: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: #ffffff;
+}
+
+.report-range__warn {
+  flex-basis: 100%;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.report-toolbar {
+  gap: 8px;
+}
+
+.report-toolbar__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.report-toolbar__select {
+  height: 30px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  background-color: var(--bg-surface);
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.report-toolbar__select:focus {
+  border-color: var(--brand-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--brand-primary-light);
+}
+
+.report-toolbar__note {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-success);
+}
+
+.report-toolbar__note.is-err {
+  color: var(--color-danger);
+}
+
+/* Report stat sections rendered through legacy entrytab blocks */
+.listtab .entrytab__body {
+  padding: 0;
+}
+
+.entrytab__section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ledger-summary {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+
+.ledger-summary__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ledger-summary__head span:first-child {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------
+   11. AR/AP aging summary cards
+   ------------------------------------------------------------ */
+.aging-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.aging-summary__card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.aging-summary__label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+.aging-summary__value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* ------------------------------------------------------------
+   12. Empty / loading / error states
+   ------------------------------------------------------------ */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  padding: 48px 24px;
+  background-color: var(--bg-surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.empty-state__art-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+  color: var(--text-placeholder);
+}
+
+.empty-state__art {
+  display: block;
+}
+
+.empty-state__title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.empty-state__message {
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 440px;
+  line-height: 1.5;
+}
+
+.empty-state__action {
+  margin-top: 8px;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 16px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.list-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.list-skeleton__row {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+}
+
+.list-skeleton__line {
+  height: 10px;
+  border-radius: var(--radius-full);
+  background-color: var(--bg-surface-secondary);
+}
+
+.list-skeleton__line--wide {
+  flex: 2 1 0;
+}
+
+.list-skeleton__line--narrow {
+  flex: 1 1 0;
+}
+
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  padding: 40px 24px;
+  background-color: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-sm);
+}
+
+.error-state__title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--color-danger-text);
+}
+
+.error-state__message {
+  font-size: 12px;
+  color: var(--color-danger-text);
+  max-width: 480px;
+}
+
+.error-message {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.workarea__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+/* ------------------------------------------------------------
+   13. Due-date reminders
+   ------------------------------------------------------------ */
+.reminders-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.reminders-panel {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.reminders-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.reminders-panel__head.is-pos {
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
+  border-bottom: 1px solid var(--color-success-border);
+}
+
+.reminders-panel__head.is-neg {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger-text);
+  border-bottom: 1px solid var(--color-danger-border);
+}
+
+.reminders-panel__total {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+}
+
+.reminders-panel__body {
+  padding: 10px 12px;
+}
+
+.reminders-panel__empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 12px 0;
+}
+
+.reminders-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.reminders-rows__head,
+.reminders-rows__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 84px 110px 90px;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.reminders-rows__head {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.reminders-rows__row:last-child {
+  border-bottom: none;
+}
+
+.reminders-rows__party {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reminders-rows__number,
+.reminders-rows__due {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.reminders-rows__amount,
+.reminders-rows__days {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.reminders-rows__days.is-positive {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+.reminders-rows__days.is-negative {
+  color: var(--text-muted);
+}
+
+.reminders-rows__days.is-muted {
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------
+   14. Financial notes / audit log
+   ------------------------------------------------------------ */
+.notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.notes-list__group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notes-list__group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.notes-list__group-year {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.notes-list__group-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.audit-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.audit-log-list__diff {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 12px 10px;
+}
+
+.audit-log-list__diff-col {
+  background-color: var(--bg-surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs);
+  padding: 8px 10px;
+  min-width: 0;
+}
+
+.audit-log-list__diff-col h4 {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.audit-log-list__diff-col pre {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  overflow: auto;
+  max-height: 240px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ------------------------------------------------------------
+   15. Calculator screens (ECL / PPh) — form & result blocks
+   ------------------------------------------------------------ */
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.form-field__label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.result-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.result-block__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.result-block__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detail-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 16px;
+}
+
+.filter-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.input--sm {
+  height: 28px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.listtab input.amount {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ------------------------------------------------------------
+   16. Modals used by list tools (email templates etc.)
+   ------------------------------------------------------------ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(15, 23, 42, 0.45);
+  padding: 24px;
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 94vw);
+  max-height: 88vh;
+  background-color: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+}
+
+.modal--accurate {
+  width: min(760px, 94vw);
+}
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal__header h3,
+.modal__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.modal__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.modal__close:hover {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.modal__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--bg-canvas);
+}
+
+.email-preview {
+  background-color: var(--bg-surface);
+}
+
+/* ------------------------------------------------------------
+   17. Simple timeline (petty cash & friends)
+   ------------------------------------------------------------ */
+.timeline-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.timeline--vertical {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-left: 18px;
+}
+
+.timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background-color: var(--border-color);
+}
+
+.timeline-marker {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: var(--brand-primary);
+  border: 2px solid var(--brand-primary-light);
+}
+
+.timeline-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.timeline-time {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.timeline-text {
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+/* ------------------------------------------------------------
+   18. Responsive baseline
+   ------------------------------------------------------------ */
+@media (max-width: 900px) {
+  .listtab__head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .listtab__actions {
+    margin-left: 0;
+  }
+
+  .listtab__search {
+    width: 100%;
+  }
+
+  .audit-log-list__diff {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   W5-A Responsive Append — Work Area, Reports & Sticky Footer
+   (≤960 / ≤600): tables/reports scroll horizontally inside their
+   own container; toolbars wrap; sticky form footer stacks.
+   ============================================================ */
+@media (max-width: 960px) {
+  .listtab__head,
+  .listtab__header {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .listtab > .listtab__toolbar {
+    padding: 0 12px 10px;
+  }
+  /* Horizontal scroller lives on the existing body container */
+  .listtab__body {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .listtab__body > * + * {
+    margin-top: 12px;
+  }
+  /* Belt-and-braces: grid sections and the div-based ledger table
+     must never blow out wider than the viewport. */
+  .entrytab__section {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  div.ledger-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  table.ledger-table {
+    min-width: 560px;
+  }
+  .report-range {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .dashboard-container {
+    padding: 14px 12px;
+    gap: 14px;
+  }
+  .dashboard-main-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Sticky form footer: wrap instead of clipping the CTA */
+  .form-zone-3 {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 8px 10px;
+  }
+  .form-zone-3 > * {
+    min-width: 0;
+  }
+  .form-zone-3__actions,
+  .form-zone-3__summary {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 600px) {
+  .listtab__body {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .listtab .listtab__search {
+    width: 100%;
+  }
+  /* CTA takes the full row; shortcut hint chip hides */
+  .form-zone-3 kbd.btn-kbd {
+    display: none;
+  }
+  .form-zone-3 button.btn-dash-primary {
+    flex: 1 1 100%;
+    justify-content: center;
+    min-height: 38px;
+  }
+  .datatable-footer {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+}

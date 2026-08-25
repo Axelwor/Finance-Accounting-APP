@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { useWorkbench } from "../../workbench/state";
 import { FormError } from "../../components/ui";
 import { NextStepsBar } from "../../components/NextSteps";
 import { useToast } from "../../components/Toast";
-import { api } from "../../api";
+import { api, ApiError } from "../../api";
 import { formatIDR } from "../../lib/format";
 import { openPrintWindow } from "../../lib/print";
 import { draftNumber } from "../../workbench/modules";
@@ -54,10 +55,14 @@ export function DeliveryOrderForm({ tabId, entryId, initialTitle, prefill }: Pro
     workbench.markUnsaved(tabId, true);
   }, [tabId, date, number, salesOrderId, notes, lines, workbench]);
 
-  useEffect(() => {
+  const loadMasterData = useCallback(() => {
     void api.listItems().then(setItems);
     void api.listSalesOrders("CONFIRMED").then(setSalesOrders);
   }, []);
+  useEffect(() => {
+    loadMasterData();
+  }, [loadMasterData]);
+  useTabRefresh(loadMasterData);
 
   // Auto-fill: when a sales order is picked (manually or via workflow-chain
   // prefill), copy its lines into the delivery so nothing is re-keyed.
@@ -208,7 +213,13 @@ export function DeliveryOrderForm({ tabId, entryId, initialTitle, prefill }: Pro
       workbench.markUnsaved(tabId, false);
       toast.success(`✓ Saved ${created.number}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create the delivery order.");
+      // Backend rejections (e.g. 422 INSUFFICIENT_STOCK) carry a stock-specific
+      // message in err.message; only non-API failures get the generic fallback.
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Could not create the delivery order.",
+      );
     } finally {
       setSaving(false);
     }

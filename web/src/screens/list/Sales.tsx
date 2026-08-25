@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { useWorkbench } from "../../workbench/state";
 import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
@@ -143,6 +144,12 @@ export function QuotationList() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useTabRefresh(load);
+
+  const onStatusChange = (next: "ALL" | QuotationListItem["status"]) => {
+    setStatus(next);
+    void load(next);
+  };
 
   const total = useMemo(() => items.reduce((acc, it) => acc + it.total_cents, 0), [items]);
   const openEntry = (item: QuotationListItem) =>
@@ -159,11 +166,21 @@ export function QuotationList() {
 
       <div className="listtab__toolbar">
         <div className="listtab__filters">
-          <div className="filter-pill">
+          <label className="filter-pill">
             <span className="filter-pill__label">Status</span>
-            <span className="filter-pill__value">{status === "ALL" ? "All" : status}</span>
-            <span className="filter-pill__caret">▾</span>
-          </div>
+            <select
+              className="filter-pill__input"
+              value={status}
+              onChange={(e) => onStatusChange(e.target.value as "ALL" | QuotationListItem["status"])}
+            >
+              <option value="ALL">All</option>
+              <option value="DRAFT">Draft</option>
+              <option value="SENT">Sent</option>
+              <option value="CONVERTED">Converted</option>
+              <option value="EXPIRED">Expired</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </label>
         </div>
         <div className="listtab__actions">
           <Button

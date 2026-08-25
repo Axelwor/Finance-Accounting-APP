@@ -51,7 +51,7 @@ export function AccountPicker({
   placeholder = "Ketik kode / nama akun…",
   disabled,
   id,
-  ...rest
+  "aria-label": ariaLabel,
 }: AccountPickerProps) {
   const options = useMemo<AccountOption[]>(() => {
     const exclude = new Set(excludeIds ?? []);
@@ -70,6 +70,8 @@ export function AccountPicker({
       placeholder={placeholder}
       disabled={disabled}
       className="account-picker"
+      id={id}
+      aria-label={ariaLabel}
     />
   );
 }

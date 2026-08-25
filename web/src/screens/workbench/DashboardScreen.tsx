@@ -79,8 +79,11 @@ export function DashboardScreen() {
   const arOver90Ratio = arTotal > 0 ? ((arAging?.bucket_90_plus_cents ?? 0) / arTotal) * 100 : null;
   const apOver90Ratio = apTotal > 0 ? ((apAging?.bucket_90_plus_cents ?? 0) / apTotal) * 100 : null;
 
-  // Quick Ratio computation: (Cash + AR) / AP
-  const quickRatio = apTotal > 0 ? ((cashBalance ? cashBalance * 100 : 0) + arTotal) / apTotal : 2.5;
+  // Quick Ratio computation: (Cash + AR) / AP; null bila AP = 0 (belum dapat dihitung)
+  const quickRatio = apTotal > 0 ? ((cashBalance ?? 0) * 100 + arTotal) / apTotal : null;
+
+  // Status periode aktual dari data widget (OPEN/CLOSED); null bila belum termuat
+  const periodStatus = period?.status?.toUpperCase() ?? null;
 
   return (
     <div className="dashboard-container">
@@ -95,7 +98,19 @@ export function DashboardScreen() {
             {businessName}
           </h1>
           <p className="text-xs text-secondary mt-0.5">
-            Periode Fiskal: <strong>{period?.period_start ? `${period.period_start} s/d ${period.period_end}` : "Aktif"}</strong> &bull; Status: <span className="status-badge-inline status-open">TERBUKA (OPEN)</span>
+            Periode Fiskal: <strong>{period?.period_start ? `${period.period_start} s/d ${period.period_end}` : "Aktif"}</strong> &bull; Status:{" "}
+            {periodStatus === null ? (
+              <span className="status-badge-inline">…</span>
+            ) : periodStatus === "CLOSED" ? (
+              <span
+                className="status-badge-inline"
+                style={{ backgroundColor: "var(--bg-surface-secondary)", color: "var(--text-secondary)", border: "1px solid var(--border-color)" }}
+              >
+                TERTUTUP (CLOSED)
+              </span>
+            ) : (
+              <span className="status-badge-inline status-open">TERBUKA (OPEN)</span>
+            )}
           </p>
         </div>
 
@@ -145,7 +160,7 @@ export function DashboardScreen() {
               <div className="kpi-card-v2__value font-mono">
                 {cashBalance !== null ? formatIDR(cashBalance) : "—"}
               </div>
-              <div className="kpi-card-v2__sub text-success">
+              <div className="kpi-card-v2__sub" style={{ color: "var(--color-success-text)" }}>
                 <Icon name="check" size={12} />
                 <span>Saldo likuid siap pakai</span>
               </div>
@@ -191,7 +206,7 @@ export function DashboardScreen() {
               <div className="kpi-card-v2__value font-mono text-amber-700">
                 {formatIDR(apTotal)}
               </div>
-              <div className="kpi-card-v2__sub text-amber-600">
+              <div className="kpi-card-v2__sub text-amber-700">
                 <span>Kewajiban bayar ke supplier</span>
               </div>
             </div>
@@ -199,16 +214,22 @@ export function DashboardScreen() {
             <div className="kpi-card-v2">
               <div className="kpi-card-v2__head">
                 <span className="kpi-card-v2__label">Quick Ratio Likuiditas</span>
-                <span className="kpi-card-v2__icon bg-teal-50 text-teal-600">
+                <span className="kpi-card-v2__icon bg-blue-50 text-blue-600">
                   <Icon name="security" size={16} />
                 </span>
               </div>
-              <div className="kpi-card-v2__value font-mono text-teal-700">
-                {quickRatio.toFixed(2)}x
+              <div className="kpi-card-v2__value font-mono" style={{ color: "var(--brand-primary-hover)" }}>
+                {quickRatio !== null ? `${quickRatio.toFixed(2)}x` : "—"}
               </div>
-              <div className="mt-1">
-                <QuickRatioGauge value={quickRatio} />
-              </div>
+              {quickRatio !== null ? (
+                <div className="mt-1">
+                  <QuickRatioGauge value={quickRatio} />
+                </div>
+              ) : (
+                <div className="kpi-card-v2__sub text-muted">
+                  <span>Belum dapat dihitung</span>
+                </div>
+              )}
             </div>
           </section>
 

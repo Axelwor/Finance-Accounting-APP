@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { EmptyState, ErrorState, ListSkeleton } from "../../components/ui";
 import { api } from "../../api";
-import { formatIDR, todayISO, formatDate } from "../../lib/format";
+import { formatIDRFromCents, todayISO, formatDate } from "../../lib/format";
 import { showToast } from "../../lib/toast";
-import { downloadBlob } from "./ARAgingList";
-import type { AgingReport } from "../../types";
+import { downloadBlob, type AgingReport } from "./ARAgingList";
 import { Button } from "../../components/m3";
 
+/**
+ * F-04/F-05: GET /aging/ap returns the same FLAT shape as /aging/ar
+ * (internal/aging/handler.go): { as_of_date, total_cents, current_cents,
+ * bucket_*_cents, rows[] } — no nested `summary`.
+ */
 export function APAgingList() {
   const [asOf, setAsOf] = useState<string>(todayISO());
   const [data, setData] = useState<AgingReport | null>(null);
@@ -18,9 +22,14 @@ export function APAgingList() {
     setLoading(true);
     setError(null);
     try {
-      setData(await api.getAPAging(date || undefined));
+      setData((await api.getAPAging(date || undefined)) as unknown as AgingReport);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load AP aging.");
+      // Human-readable message — surface ApiError.message when present.
+      const detail =
+        typeof (err as { message?: unknown } | null | undefined)?.message === "string"
+          ? (err as { message: string }).message
+          : "Could not load the AP aging report.";
+      setError(`${detail} Check your connection or pick another as-of date, then retry.`);
     } finally {
       setLoading(false);
     }
@@ -44,7 +53,12 @@ export function APAgingList() {
     }
   };
 
-  const total = data?.summary.total_receivable_cents ?? 0;
+  const total = data?.total_cents ?? 0;
+  const overdue =
+    (data?.bucket_1_30_cents ?? 0) +
+    (data?.bucket_31_60_cents ?? 0) +
+    (data?.bucket_61_90_cents ?? 0) +
+    (data?.bucket_90_plus_cents ?? 0);
   const percent = (amount: number): string =>
     total === 0 ? "0%" : `${((amount / total) * 100).toFixed(1)}%`;
 
@@ -96,88 +110,127 @@ export function APAgingList() {
           <EmptyState title="No AP aging data" message="Pick an as-of date to view the report." />
         ) : (
           <>
-            <AgingSummaryCards report={data} />
+            <AgingSummaryCards report={data} overdue={overdue} />
             <AgingTable report={data} percent={percent} />
           </>
         )}
       </div>
       <div className="listtab__footer">
         <span className="listtab__footer-count">
-          {data ? `As of ${formatDate(data.asOf)} · ${data.summary.total_invoices} invoices` : ""}
+          {data ? `As of ${formatDate(data.as_of_date)} · ${data.rows.length} invoices` : ""}
         </span>
       </div>
     </div>
   );
 }
 
-function AgingSummaryCards({ report }: { report: AgingReport }) {
-  const { total_receivable_cents, overdue_amount_cents, total_invoices } = report.summary;
+function AgingSummaryCards({ report, overdue }: { report: AgingReport; overdue: number }) {
   return (
     <div className="aging-summary">
       <div className="aging-summary__card">
         <span className="aging-summary__label">Total Payable</span>
-        <span className="aging-summary__value is-green">{formatIDR(total_receivable_cents)}</span>
+        <span className="aging-summary__value is-green">{formatIDRFromCents(report.total_cents)}</span>
       </div>
       <div className="aging-summary__card">
         <span className="aging-summary__label">Overdue</span>
-        <span className="aging-summary__value is-red">{formatIDR(overdue_amount_cents)}</span>
+        <span className="aging-summary__value is-red">{formatIDRFromCents(overdue)}</span>
       </div>
       <div className="aging-summary__card">
         <span className="aging-summary__label">Current</span>
         <span className="aging-summary__value is-green">
-          {formatIDR(total_receivable_cents - overdue_amount_cents)}
+          {formatIDRFromCents(report.current_cents)}
         </span>
       </div>
       <div className="aging-summary__card">
         <span className="aging-summary__label">Invoices</span>
-        <span className="aging-summary__value">{total_invoices}</span>
+        <span className="aging-summary__value">{report.rows.length}</span>
       </div>
     </div>
   );
 }
 
-function AgingTable({
-  report,
-  percent,
-}: {
-  report: AgingReport;
-  percent: (amount: number) => string;
-}) {
+function AgingTable({ report, percent }: { report: AgingReport; percent: (amount: number) => string }) {
   return (
-    <table className="table table--striped">
-      <thead>
-        <tr>
-          <th>Bucket</th>
-          <th className="right">Amount</th>
-          <th className="right">Count</th>
-          <th className="right">% of Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        {report.buckets.map((b) => (
-          <tr key={b.bucket}>
-            <td>
-              <span className={`badge ${bucketTone(b.bucket)}`}>{b.bucket} days</span>
-            </td>
-            <td className="right">{formatIDR(b.amount_cents)}</td>
-            <td className="right">{b.count}</td>
-            <td className="right">{percent(b.amount_cents)}</td>
+    <>
+      <table className="table table--striped">
+        <thead>
+          <tr>
+            <th>Bucket</th>
+            <th className="right">Amount</th>
+            <th className="right">% of Total</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {report.rows.length === 0 &&
+            BUCKET_ROWS.every(({ key }) => Number(report[key] ?? 0) === 0) && (
+              <tr>
+                <td colSpan={3} style={{ textAlign: "center", color: "var(--md-sys-color-outline)" }}>
+                  No outstanding payables.
+                </td>
+              </tr>
+            )}
+          {BUCKET_ROWS.map(({ key, label, range }) => {
+            const amount = Number(report[key] ?? 0);
+            return (
+              <tr key={key}>
+                <td>
+                  <span className={`badge ${bucketTone(range)}`}>{label}</span>
+                </td>
+                <td className="right">{formatIDRFromCents(amount)}</td>
+                <td className="right">{percent(amount)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {report.rows.length > 0 && (
+        <table className="table table--striped" style={{ marginTop: 16 }}>
+          <thead>
+            <tr>
+              <th>Supplier</th>
+              <th>Invoice</th>
+              <th>Due Date</th>
+              <th>Bucket</th>
+              <th className="right">Outstanding</th>
+              <th className="right">Days</th>
+            </tr>
+          </thead>
+          <tbody>
+            {report.rows.map((r, i) => (
+              <tr key={`${r.party_id}-${r.invoice_number}-${i}`}>
+                <td>{r.party_name || `#${r.party_id}`}</td>
+                <td>{r.invoice_number}</td>
+                <td>{formatDate(r.due_date)}</td>
+                <td>{r.bucket}</td>
+                <td className="right">{formatIDRFromCents(r.outstanding_cents)}</td>
+                <td className="right">{Math.max(r.days_overdue, 0)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
   );
 }
 
-function bucketTone(bucket: string): string {
-  switch (bucket) {
-    case "0-30":
+const BUCKET_ROWS: { key: keyof AgingReport; label: string; range: string }[] = [
+  { key: "current_cents", label: "Current", range: "Not yet due" },
+  { key: "bucket_1_30_cents", label: "1–30 days", range: "1 - 30" },
+  { key: "bucket_31_60_cents", label: "31–60 days", range: "31 - 60" },
+  { key: "bucket_61_90_cents", label: "61–90 days", range: "61 - 90" },
+  { key: "bucket_90_plus_cents", label: ">90 days", range: "90+" },
+];
+
+function bucketTone(range: string): string {
+  switch (range) {
+    case "1 - 30":
       return "badge--green";
-    case "31-60":
+    case "31 - 60":
       return "badge--amber";
-    case "61-90":
+    case "61 - 90":
       return "badge--orange";
-    case ">90":
+    case "90+":
       return "badge--red";
     default:
       return "";

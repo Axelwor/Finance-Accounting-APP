@@ -14,11 +14,11 @@
 
 import type {
   AccountItem,
-  ApiError,
-  ApprovalRule,
+  ApprovalWorkflow,
   ApprovalRequest,
   ApproveApprovalRequestInput,
-  CreateApprovalRuleInput,
+  RejectApprovalRequestInput,
+  CreateApprovalWorkflowInput,
   AgingReport,
 
   BackendAccount,
@@ -264,8 +264,20 @@ function delay<T>(value: T): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), LATENCY_MS));
 }
 
+/** Error thrown by every failed API call; carries the backend error code so
+ *  callers can branch on it while still behaving like a standard Error. */
+export class ApiError extends Error {
+  code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.code = code;
+  }
+}
+
 function makeError(code: string, message: string): ApiError {
-  return { code, message };
+  return new ApiError(code, message);
 }
 
 function fakeId(prefix: string): string {
@@ -655,7 +667,11 @@ export const api = {
    * instead of being sent back to onboarding. */
   async login(
     input: LoginInput,
-  ): Promise<{ user: { id: string; email: string; businessName: string }; hasTenant: boolean }> {
+  ): Promise<{
+    user: { id: string; email: string; businessName: string };
+    hasTenant: boolean;
+    business: Business | null;
+  }> {
     const email = input.email.trim().toLowerCase();
     if (!email || !input.password) {
       throw makeError("VALIDATION_ERROR", "Please enter your email and password.");
@@ -691,10 +707,13 @@ export const api = {
       businessName: business?.name || email.split("@")[0] || "My business",
     };
     saveState({ ...loadState(), user, business });
-    return delay({ user, hasTenant: business !== null });
+    return delay({ user, hasTenant: business !== null, business });
   },
 
-  /** Closes the session: revokes the refresh token on the backend + clears local data. */
+  /** Closes the session: revokes the refresh token on the backend + clears local data.
+   * A stale/invalid refresh token (backend answers 401) is not an error: the
+   * server has nothing left to revoke, so we still clear the local session
+   * and resolve successfully. */
   async logout(): Promise<void> {
     const refreshToken = readRefreshToken();
     if (refreshToken) {
@@ -703,8 +722,8 @@ export const api = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: refreshToken }),
       }).catch(() => undefined);
-      localStorage.removeItem(TOKEN_KEY);
     }
+    localStorage.removeItem(TOKEN_KEY);
     const state = loadState();
     saveState({ ...state, user: null });
     return delay(undefined);
@@ -1523,6 +1542,7 @@ export const api = {
     return http<FixedAsset>("/fixed-assets", {
       method: "POST",
       auth: true,
+      idempotencyKey: newIdempotencyKey(),
       body: JSON.stringify(input),
     });
   },
@@ -1964,6 +1984,15 @@ export const api = {
       auth: true,
       idempotencyKey: newIdempotencyKey(),
       body: JSON.stringify(input),
+    });
+  },
+
+  /** Void an invoice (POST /invoices/{id}/void). Posts the reversal journal. */
+  async voidInvoice(id: number): Promise<Invoice & { id: number; number: string }> {
+    return http<Invoice & { id: number; number: string }>(`/invoices/${id}/void`, {
+      method: "POST",
+      auth: true,
+      idempotencyKey: newIdempotencyKey(),
     });
   },
 
@@ -2715,46 +2744,42 @@ export const api = {
      return response.blob();
    },
 
-   // -- Approval Workflow API methods (Wave 4) --
+   // -- Approval workflow API (backend internal/approval/handler.go) --
 
-  /** List pending approval requests for current user. */
-  async listApprovalRequests(): Promise<ApprovalRequest[]> {
-    return http<ApprovalRequest[]>(`/approval-requests`, { auth: true });
+  /** List approval workflows (GET /approval-workflows). */
+  async listApprovalWorkflows(): Promise<ApprovalWorkflow[]> {
+    return http<ApprovalWorkflow[]>(`/approval-workflows`, { auth: true });
   },
 
-  /** List approval rules. */
-  async getApprovalRules(): Promise<ApprovalRule[]> {
-    return http<ApprovalRule[]>(`/approval-rules`, { auth: true });
-  },
-
-  /** Create an approval rule. */
-  async createApprovalRule(input: CreateApprovalRuleInput): Promise<ApprovalRule> {
-    return http(`/approval-rules`, {
+  /**
+   * Create an approval workflow (POST /approval-workflows). The backend
+   * upserts on (tenant_id, entity_type), so re-posting the same entity type
+   * updates the existing row — no PUT endpoint exists.
+   */
+  async createApprovalWorkflow(input: CreateApprovalWorkflowInput): Promise<ApprovalWorkflow> {
+    return http(`/approval-workflows`, {
       method: "POST",
       auth: true,
       body: JSON.stringify(input),
     });
   },
 
-  /** Update an approval rule. */
-  async updateApprovalRule(id: number, input: CreateApprovalRuleInput): Promise<ApprovalRule> {
-    return http(`/approval-rules/${id}`, {
-      method: "PUT",
-      auth: true,
-      body: JSON.stringify(input),
-    });
-  },
-
-  /** Delete an approval rule. */
-  async deleteApprovalRule(id: number): Promise<void> {
-    return http(`/approval-rules/${id}`, {
+  /** Deactivate an approval workflow (DELETE /approval-workflows/{id}). */
+  async deleteApprovalWorkflow(id: number): Promise<void> {
+    return http(`/approval-workflows/${id}`, {
       method: "DELETE",
       auth: true,
     });
   },
 
-   /** Approve an approval request with optional reason. */
-   async approveApprovalRequest(requestId: number, input: ApproveApprovalRequestInput): Promise<void> {
+  /** List approval requests, optionally filtered by status (GET /approval-requests). */
+  async listApprovalRequests(params?: { status?: string }): Promise<ApprovalRequest[]> {
+    const query = params?.status ? `?status=${encodeURIComponent(params.status)}` : "";
+    return http<ApprovalRequest[]>(`/approval-requests${query}`, { auth: true });
+  },
+
+   /** Approve a pending approval request (POST /approval-requests/{id}/approve). */
+   async approveApprovalRequest(requestId: number, input: ApproveApprovalRequestInput = {}): Promise<void> {
      return http(`/approval-requests/${requestId}/approve`, {
        method: "POST",
        auth: true,
@@ -2762,8 +2787,8 @@ export const api = {
      });
    },
 
-   /** Reject an approval request with mandatory reason. */
-   async rejectApprovalRequest(requestId: number, input: ApproveApprovalRequestInput): Promise<void> {
+   /** Reject a pending approval request — reason is mandatory (POST /approval-requests/{id}/reject). */
+   async rejectApprovalRequest(requestId: number, input: RejectApprovalRequestInput): Promise<void> {
      return http(`/approval-requests/${requestId}/reject`, {
        method: "POST",
        auth: true,

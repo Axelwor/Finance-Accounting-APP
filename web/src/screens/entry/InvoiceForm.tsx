@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { useWorkbench } from "../../workbench/state";
 import { FormError, LoadingState } from "../../components/ui";
 import { api } from "../../api";
-import { formatIDR } from "../../lib/format";
+import { parseRupiahToCents, formatIDRFromCents, todayISO } from "../../lib/format";
+import { useToast } from "../../components/Toast";
 import { Icon } from "../../components/m3/Icon";
-import type { Customer, Item, SalesOrderListItem } from "../../types";
+import type { Customer, Item, SalesOrderListItem, Invoice, InvoicePayment } from "../../types";
 import type { PrefillRef } from "../../workbench/types";
 
 interface Props {
@@ -21,6 +23,8 @@ interface Line {
   itemName: string;
   qty: number;
   unitPriceCents: number;
+  /** Raw rupiah text as typed by the user; cents derived via parseRupiahToCents. */
+  priceInput: string;
   discountPct: number;
   lineTotalCents: number;
 }
@@ -35,6 +39,7 @@ function seedLine(): Line {
     itemName: "",
     qty: 1,
     unitPriceCents: 0,
+    priceInput: "",
     discountPct: 0,
     lineTotalCents: 0,
   };
@@ -62,14 +67,96 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [status, setStatus] = useState(isDetail ? "APPROVED" : "DRAFT");
+  const toast = useToast();
 
-  useEffect(() => {
+  // Posted-invoice data (drives the Pelunasan panel + header/footer totals).
+  const [savedId, setSavedId] = useState<number | null>(null);
+  const [invoice, setInvoice] = useState<Invoice | null>(null);
+  const [payments, setPayments] = useState<InvoicePayment[]>([]);
+
+  // Receive-payment form (Pelunasan / Receive Payment).
+  const [cashAccounts, setCashAccounts] = useState<{ id: number; name: string }[]>([]);
+  const [payAccountId, setPayAccountId] = useState(0);
+  const [payAmountInput, setPayAmountInput] = useState("");
+  const [payDate, setPayDate] = useState(todayISO());
+  const [payMemo, setPayMemo] = useState("");
+  const [payError, setPayError] = useState<string | null>(null);
+  const [postingPay, setPostingPay] = useState(false);
+
+  const loadMasterData = useCallback(() => {
     void Promise.all([
       api.listCustomers().then(setCustomers),
       api.listItems().then(setItems),
       api.listSalesOrders("CLOSED").then(setSalesOrders),
     ]).finally(() => setLoading(false));
   }, []);
+  useEffect(() => {
+    loadMasterData();
+  }, [loadMasterData]);
+  useTabRefresh(loadMasterData);
+
+  // Cash/bank options for the receive-payment form.
+  useEffect(() => {
+    let cancelled = false;
+    void api.listAccounts().then((accs) => {
+      if (cancelled) return;
+      const mapped = accs.map((a) => ({
+        id: Number(a.id),
+        name: `${a.code ? `${a.code} - ` : ""}${a.name}`,
+        type: (a.account_type ?? "").toUpperCase(),
+      }));
+      const cashish = mapped.filter((a) => a.type === "CASH" || a.type === "BANK");
+      const options = cashish.length > 0 ? cashish : mapped;
+      setCashAccounts(options);
+      if (options.length > 0) setPayAccountId(options[0].id);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const loadInvoiceData = async (id: number) => {
+    try {
+      const inv = await api.getInvoice(id);
+      setInvoice(inv);
+      setStatus(inv.status);
+      if (inv.number) setNumber(inv.number);
+      setDate(inv.invoice_date);
+      setDueDate(inv.due_date ?? "");
+      setCustomerId(String(inv.customer_id));
+      setNotes(inv.notes ?? "");
+      setLines(
+        inv.lines.map((l) => ({
+          id: `inv-d-${l.id}`,
+          itemId: String(l.item_id),
+          itemCode: l.item_code ?? "",
+          itemName: l.item_name ?? "",
+          qty: Number(l.qty),
+          unitPriceCents: l.unit_price_cents,
+          priceInput: l.unit_price_cents ? String(l.unit_price_cents / 100) : "",
+          discountPct:
+            l.unit_price_cents > 0
+              ? Math.round((l.discount_cents / l.unit_price_cents) * 100)
+              : 0,
+          lineTotalCents: l.line_total_cents,
+        })),
+      );
+    } catch {
+      // Detail fetch failed — keep whatever the form already shows.
+    }
+    try {
+      setPayments(await api.listInvoicePayments(id));
+    } catch {
+      setPayments([]);
+    }
+  };
+
+  const invoiceId = isDetail ? Number(entryId) : savedId;
+
+  useEffect(() => {
+    if (invoiceId) void loadInvoiceData(invoiceId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoiceId]);
 
   const subtotal = useMemo(
     () => lines.reduce((sum, l) => sum + l.lineTotalCents, 0),
@@ -77,6 +164,26 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
   );
   const ppnCents = Math.round(subtotal * 0.11);
   const grandTotal = subtotal + ppnCents;
+
+  // Draft totals while editing; authoritative server values once loaded/posted.
+  const subtotalCents = invoice?.sub_total_cents ?? subtotal;
+  const ppnDisplayCents = invoice?.tax_total_cents ?? ppnCents;
+  const totalDisplayCents = invoice?.total_cents ?? grandTotal;
+
+  // Pelunasan visibility: any posted (non-draft) invoice with a backend record.
+  const isPosted = status !== "DRAFT";
+  const showPaymentPanel = isPosted && !!invoiceId;
+  const paidAppliedCents = payments
+    .filter((p) => p.status !== "REVERSED")
+    .reduce((sum, p) => sum + p.ar_applied_cents, 0);
+  const outstandingCents = invoice ? invoice.receivable_cents : 0;
+  const canReceiveMore =
+    status !== "PAID" && status !== "VOID" && outstandingCents > 0;
+
+  const cashAccountLabel = (id: number) => {
+    const acc = cashAccounts.find((a) => a.id === id);
+    return acc ? acc.name : `Akun #${id}`;
+  };
 
   // Keyboard shortcuts: Ctrl+S to save/post, Esc to close
   useEffect(() => {
@@ -106,13 +213,14 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
     setLines((prev) =>
       prev.map((l) => {
         if (l.id !== id) return l;
-        const price = (itm as any)?.selling_price_cents ?? (itm as any)?.unit_price_cents ?? 100000;
+        const price = (itm as any)?.selling_price_cents ?? (itm as any)?.unit_price_cents ?? 0;
         return {
           ...l,
           itemId,
           itemCode: itm?.code ?? "",
           itemName: itm?.name ?? "",
           unitPriceCents: price,
+          priceInput: price ? String(price / 100) : "",
           lineTotalCents: Math.round(l.qty * price * (1 - l.discountPct / 100)),
         };
       })
@@ -133,12 +241,14 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
     );
   };
 
-  const updateLinePrice = (id: string, price: number) => {
+  const updateLinePrice = (id: string, text: string) => {
     setLines((prev) =>
       prev.map((l) => {
         if (l.id !== id) return l;
+        const price = parseRupiahToCents(text);
         return {
           ...l,
+          priceInput: text,
           unitPriceCents: price,
           lineTotalCents: Math.round(l.qty * price * (1 - l.discountPct / 100)),
         };
@@ -175,18 +285,62 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
           qty: l.qty,
           unit_price_cents: l.unitPriceCents,
           discount_cents: Math.round(l.unitPriceCents * (l.discountPct / 100)),
-          tax_rate: 0.11,
+          tax_rate: 11,
         })),
       };
 
       const res = await api.createInvoice(payload);
       setSaved(true);
-      setStatus("APPROVED");
-      if (res?.number) setNumber(res.number);
+      setSavedId(res.id);
+      setStatus(res.status && res.status !== "DRAFT" ? res.status : "APPROVED");
+      if (res.number) setNumber(res.number);
+      // Convert the draft tab into the persisted record: title = invoice number,
+      // unsaved dot cleared, entryId recorded so reloads reuse this tab.
+      workbench.replaceDraft(tabId, res.number ?? number, res.status ?? "APPROVED", res.id);
+      workbench.markUnsaved(tabId, false);
+      toast.success(`✓ Faktur terbit — ${res.number}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal menerbitkan faktur penjualan.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePostPayment = async () => {
+    if (!invoiceId || !invoice) return;
+    setPayError(null);
+    const amountCents = parseRupiahToCents(payAmountInput);
+    if (amountCents <= 0) {
+      setPayError("Jumlah pembayaran harus lebih besar dari nol.");
+      return;
+    }
+    if (amountCents > outstandingCents) {
+      setPayError(
+        `Jumlah pembayaran melebihi sisa tagihan ${formatIDRFromCents(outstandingCents)}.`
+      );
+      return;
+    }
+    if (!payAccountId) {
+      setPayError("Pilih akun kas/bank penerima pembayaran.");
+      return;
+    }
+    setPostingPay(true);
+    try {
+      const res = await api.createInvoicePayment(invoiceId, {
+        cash_account_id: payAccountId,
+        amount_cents: amountCents,
+        payment_date: payDate,
+        description: payMemo.trim() || undefined,
+      });
+      toast.success(`✓ Pembayaran diterima — ${res.number}`);
+      setPayAmountInput("");
+      setPayMemo("");
+      await loadInvoiceData(invoiceId);
+    } catch (err) {
+      // Backend (2402 dsb.) adalah sumber kebenaran untuk penolakan bisnis.
+      setPayError(err instanceof Error ? err.message : "Gagal mencatat penerimaan pembayaran.");
+    } finally {
+      setPostingPay(false);
     }
   };
 
@@ -268,7 +422,7 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
                 <option value="">-- Tidak Terkait SO (Langsung) --</option>
                 {salesOrders.map((so) => (
                   <option key={so.id} value={so.id}>
-                    {so.number} &bull; {so.customer_name} ({formatIDR(so.total_cents)})
+                    {so.number} &bull; {so.customer_name} ({formatIDRFromCents(so.total_cents)})
                   </option>
                 ))}
               </select>
@@ -397,11 +551,12 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
                       </td>
                       <td className="num">
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
                           className="input-base text-xs text-right font-mono font-semibold w-full"
-                          value={line.unitPriceCents}
+                          value={line.priceInput}
                           disabled={isDetail || saved}
-                          onChange={(e) => updateLinePrice(line.id, Number(e.target.value))}
+                          onChange={(e) => updateLinePrice(line.id, e.target.value)}
                         />
                       </td>
                       <td className="num">
@@ -429,7 +584,7 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
                         />
                       </td>
                       <td className="num font-mono font-bold text-primary">
-                        {formatIDR(line.lineTotalCents)}
+                        {formatIDRFromCents(line.lineTotalCents)}
                       </td>
                       {!isDetail && !saved && (
                         <td className="text-center">
@@ -453,7 +608,7 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
                       Subtotal Penjualan:
                     </td>
                     <td className="num font-mono font-bold text-primary text-sm">
-                      {formatIDR(subtotal)}
+                      {formatIDRFromCents(subtotalCents)}
                     </td>
                     {!isDetail && !saved && <td />}
                   </tr>
@@ -462,7 +617,7 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
                       PPN 11%:
                     </td>
                     <td className="num font-mono font-semibold text-secondary text-xs">
-                      {formatIDR(ppnCents)}
+                      {formatIDRFromCents(ppnDisplayCents)}
                     </td>
                     {!isDetail && !saved && <td />}
                   </tr>
@@ -471,7 +626,7 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
                       Total Tagihan (Grand Total):
                     </td>
                     <td className="num font-mono font-bold text-brand text-base">
-                      {formatIDR(grandTotal)}
+                      {formatIDRFromCents(totalDisplayCents)}
                     </td>
                     {!isDetail && !saved && <td />}
                   </tr>
@@ -516,15 +671,174 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
             </div>
             <div className="text-xs font-mono space-y-1">
               <p className="text-indigo-700 font-semibold">
-                (Dr) 1103 - Piutang Usaha (AR): <strong>{formatIDR(grandTotal)}</strong>
+                (Dr) 1103 - Piutang Usaha (AR): <strong>{formatIDRFromCents(totalDisplayCents)}</strong>
               </p>
               <p className="text-slate-600 pl-4">
-                (Cr) 4101 - Pendapatan Penjualan: {formatIDR(subtotal)}
+                (Cr) 4101 - Pendapatan Penjualan: {formatIDRFromCents(subtotalCents)}
               </p>
               <p className="text-slate-600 pl-4">
-                (Cr) 2202 - Hutang PPN Keluaran (11%): {formatIDR(ppnCents)}
+                (Cr) 2202 - Hutang PPN Keluaran (11%): {formatIDRFromCents(ppnDisplayCents)}
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Pelunasan / Receive Payment — only for posted invoices */}
+        {showPaymentPanel && invoice && (
+          <div className="form-card" id="invoice-payment-panel">
+            <div className="flex-between mb-3">
+              <h2 className="text-sm font-bold text-primary">Pelunasan / Receive Payment</h2>
+              <span className="text-xs text-muted">
+                Sisa Outstanding:{" "}
+                <strong className={`font-mono ${outstandingCents > 0 ? "text-brand" : "text-secondary"}`}>
+                  {formatIDRFromCents(outstandingCents)}
+                </strong>
+              </span>
+            </div>
+
+            <div className="text-xs text-muted mb-3">
+              Total Tagihan: <span className="font-mono">{formatIDRFromCents(totalDisplayCents)}</span>{" "}
+              &bull; Sudah Diterima: <span className="font-mono">{formatIDRFromCents(paidAppliedCents)}</span>
+              {(invoice.dp_applied_cents ?? 0) > 0 && (
+                <>
+                  {" "}&bull; DP Teraplikasi:{" "}
+                  <span className="font-mono">{formatIDRFromCents(invoice.dp_applied_cents)}</span>
+                </>
+              )}
+            </div>
+
+            <div className="datatable-wrapper mb-3">
+              <table className="datatable">
+                <thead>
+                  <tr>
+                    <th>Nomor Bukti</th>
+                    <th>Tanggal</th>
+                    <th>Akun Kas/Bank</th>
+                    <th className="num">Jumlah</th>
+                    <th>Memo</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center text-xs text-muted">
+                        Belum ada pembayaran yang diterima untuk faktur ini.
+                      </td>
+                    </tr>
+                  ) : (
+                    payments.map((pmt) => (
+                      <tr key={pmt.id}>
+                        <td className="font-mono font-semibold text-xs">{pmt.number}</td>
+                        <td className="font-mono text-xs">{pmt.payment_date}</td>
+                        <td className="text-xs">{cashAccountLabel(pmt.cash_account_id)}</td>
+                        <td className="num font-mono font-bold text-primary text-xs">
+                          {formatIDRFromCents(pmt.amount_cents)}
+                        </td>
+                        <td className="text-xs text-muted">{pmt.description || "-"}</td>
+                        <td>
+                          <span
+                            className={`status-badge ${
+                              pmt.status === "RECEIVED" ? "status-balanced" : "status-unbalanced"
+                            } text-xs`}
+                          >
+                            {pmt.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {canReceiveMore ? (
+              <>
+                <div className="form-grid-2col">
+                  <div className="auth-field">
+                    <label htmlFor="inv-pay-account">Akun Kas/Bank *</label>
+                    <select
+                      id="inv-pay-account"
+                      className="input-base"
+                      value={payAccountId}
+                      disabled={postingPay || cashAccounts.length === 0}
+                      onChange={(e) => setPayAccountId(Number(e.target.value))}
+                    >
+                      {cashAccounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="auth-field">
+                    <label htmlFor="inv-pay-amount">Jumlah Diterima (Rp) *</label>
+                    <input
+                      id="inv-pay-amount"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="0"
+                      className="input-base text-right font-mono font-semibold"
+                      value={payAmountInput}
+                      disabled={postingPay}
+                      onChange={(e) => setPayAmountInput(e.target.value)}
+                    />
+                  </div>
+                  <div className="auth-field">
+                    <label htmlFor="inv-pay-date">Tanggal Pembayaran *</label>
+                    <input
+                      id="inv-pay-date"
+                      type="date"
+                      className="input-base font-mono"
+                      value={payDate}
+                      disabled={postingPay}
+                      onChange={(e) => setPayDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="auth-field">
+                    <label htmlFor="inv-pay-memo">Memo / Referensi</label>
+                    <input
+                      id="inv-pay-memo"
+                      type="text"
+                      className="input-base"
+                      placeholder="Contoh: Transfer BCA 123456789"
+                      value={payMemo}
+                      disabled={postingPay}
+                      onChange={(e) => setPayMemo(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-end mt-2 gap-3">
+                  <span className="text-xs text-muted">
+                    Membayar penuh? Isi jumlah sama dengan sisa outstanding.
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-dash-primary"
+                    disabled={postingPay || cashAccounts.length === 0}
+                    onClick={() => void handlePostPayment()}
+                  >
+                    {postingPay ? (
+                      <span>Mencatat Pembayaran...</span>
+                    ) : (
+                      <>
+                        <Icon name="check" size={14} />
+                        <span>Terima Pembayaran</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-muted">
+                {status === "PAID"
+                  ? "Faktur sudah lunas."
+                  : status === "VOID"
+                    ? "Faktur dibatalkan — pembayaran ditutup."
+                    : "Tidak ada sisa tagihan."}
+              </p>
+            )}
+            {payError && <FormError message={payError} />}
           </div>
         )}
 
@@ -552,20 +866,26 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
       <footer className="form-zone-3">
         <div className="flex items-center gap-4">
           <span className="status-badge status-balanced text-xs">
-            <Icon name="check" size={12} /> JURNAL OTOMATIS SIAP POSTING
+            <Icon name="check" size={12} /> {isPosted ? "TERPOSTING" : "JURNAL OTOMATIS SIAP POSTING"}
           </span>
-          <span className="text-xs text-muted">
-            [Ctrl+S] Posting Faktur &bull; [Esc] Tutup
-          </span>
+          {isPosted ? (
+            <span className="text-xs text-muted">
+              Terima pembayaran di panel Pelunasan &bull; [Esc] Tutup
+            </span>
+          ) : (
+            <span className="text-xs text-muted">
+              [Ctrl+S] Posting Faktur &bull; [Esc] Tutup
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-6">
           <div className="text-right">
             <div className="text-xs text-muted">
-              Subtotal: <span className="font-mono">{formatIDR(subtotal)}</span> &bull; PPN 11%: <span className="font-mono">{formatIDR(ppnCents)}</span>
+              Subtotal: <span className="font-mono">{formatIDRFromCents(subtotalCents)}</span> &bull; PPN 11%: <span className="font-mono">{formatIDRFromCents(ppnDisplayCents)}</span>
             </div>
             <div className="text-sm font-bold text-primary">
-              GRAND TOTAL: <span className="font-mono text-xl text-brand">{formatIDR(grandTotal)}</span>
+              GRAND TOTAL: <span className="font-mono text-xl text-brand">{formatIDRFromCents(totalDisplayCents)}</span>
             </div>
           </div>
 

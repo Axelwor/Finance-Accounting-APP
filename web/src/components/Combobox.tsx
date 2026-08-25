@@ -36,6 +36,10 @@ export interface ComboboxProps<T extends ComboboxOption> {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /** Applied to the closed control (field wiring). */
+  id?: string;
+  /** Accessible name for the closed control. */
+  "aria-label"?: string;
 }
 
 export interface StaticComboboxProps<T extends ComboboxOption> {
@@ -45,6 +49,10 @@ export interface StaticComboboxProps<T extends ComboboxOption> {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /** Applied to the closed control (field wiring). */
+  id?: string;
+  /** Accessible name for the closed control. */
+  "aria-label"?: string;
 }
 
 const DEBOUNCE_MS = 300;
@@ -72,6 +80,10 @@ interface ViewProps<T extends ComboboxOption> {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /** Applied to the closed control (field wiring). */
+  id?: string;
+  /** Accessible name for the closed control. */
+  ariaLabel?: string;
 }
 
 function ComboboxView<T extends ComboboxOption>({
@@ -88,12 +100,16 @@ function ComboboxView<T extends ComboboxOption>({
   placeholder = "Select...",
   disabled = false,
   className,
+  id,
+  ariaLabel,
 }: ViewProps<T>) {
   const baseId = useId();
   const listboxId = `${baseId}-listbox`;
   const containerRef = useRef<HTMLDivElement>(null);
+  const controlRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const optionRefs = useRef<Array<HTMLLIElement | null>>([]);
+  const wasOpenRef = useRef(false);
   const [highlighted, setHighlighted] = useState(-1);
 
   // Reset the highlight to the first option whenever the list changes.
@@ -105,11 +121,16 @@ function ComboboxView<T extends ComboboxOption>({
   useEffect(() => {
     if (!open) {
       setQuery("");
+      // Restore focus to the control when the panel closes (Escape, select,
+      // outside click) so keyboard focus never falls back to <body>.
+      if (wasOpenRef.current && !disabled) controlRef.current?.focus();
+      wasOpenRef.current = false;
       return;
     }
+    wasOpenRef.current = true;
     const t = window.setTimeout(() => inputRef.current?.focus(), 0);
     return () => window.clearTimeout(t);
-  }, [open, setQuery]);
+  }, [open, disabled, setQuery]);
 
   // Close on outside pointer down.
   useEffect(() => {
@@ -172,12 +193,15 @@ function ComboboxView<T extends ComboboxOption>({
       ref={containerRef}
     >
       <div
+        ref={controlRef}
+        id={id}
         className="combobox__control"
         role="button"
         tabIndex={disabled ? -1 : 0}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
+        aria-label={ariaLabel}
         onClick={openPanel}
         onKeyDown={handleControlKeyDown}
       >
@@ -270,6 +294,8 @@ export function Combobox<T extends ComboboxOption>({
   placeholder,
   disabled,
   className,
+  id,
+  "aria-label": ariaLabel,
 }: ComboboxProps<T>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -368,6 +394,8 @@ export function Combobox<T extends ComboboxOption>({
       placeholder={placeholder}
       disabled={disabled}
       className={className}
+      id={id}
+      ariaLabel={ariaLabel}
     />
   );
 }
@@ -383,6 +411,8 @@ export function StaticCombobox<T extends ComboboxOption>({
   placeholder,
   disabled,
   className,
+  id,
+  "aria-label": ariaLabel,
 }: StaticComboboxProps<T>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -434,6 +464,8 @@ export function StaticCombobox<T extends ComboboxOption>({
       placeholder={placeholder}
       disabled={disabled}
       className={className}
+      id={id}
+      ariaLabel={ariaLabel}
     />
   );
 }

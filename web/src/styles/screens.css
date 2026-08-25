@@ -600,3 +600,91 @@
   border: 1px solid var(--border-color);
   cursor: pointer;
 }
+
+/* ============================================================
+   W5-A Responsive Append — Auth & Onboarding (≤900 / ≤600)
+   Contract: no horizontal overflow at 390px; banner hides,
+   wizard card goes full-width with compact padding.
+   ============================================================ */
+@media (max-width: 900px) {
+  /* Auth split-layout collapses to a single centered column */
+  .auth-container {
+    flex-direction: column;
+    width: 100%;
+  }
+  .auth-banner {
+    display: none;
+  }
+  .auth-form-panel {
+    flex: 1 0 auto;
+    min-width: 0;
+    padding: 24px 14px;
+    align-items: center;
+  }
+  .auth-card-v2 {
+    max-width: 480px;
+    padding: 22px 16px;
+    gap: 16px;
+  }
+  .auth-card-v2__header h2 {
+    font-size: 18px;
+  }
+  .auth-title {
+    font-size: 26px;
+    overflow-wrap: break-word;
+  }
+
+  /* Onboarding wizard: full-width card, compact paddings */
+  .onboarding-header {
+    height: auto;
+    min-height: 52px;
+    padding: 8px 14px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .onboarding-body {
+    padding: 18px 12px 28px;
+    align-items: flex-start;
+  }
+  .onboarding-card {
+    padding: 20px 14px;
+    border-radius: var(--radius-md);
+  }
+  .wizard-step {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 600px) {
+  .onboarding-brand .brand-name {
+    font-size: 14px;
+  }
+  .onboarding-steps-indicator {
+    gap: 6px;
+  }
+  .step-line {
+    width: 12px;
+  }
+  .step-pill {
+    font-size: 11px;
+    gap: 4px;
+  }
+  .balance-summary-strip {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .balance-input-wrapper {
+    width: 160px;
+  }
+  .wizard-actions {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-top: 14px;
+  }
+  .btn-wizard-next,
+  .btn-wizard-finish {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-height: 40px;
+  }
+}

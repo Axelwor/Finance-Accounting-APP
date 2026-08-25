@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { ChequeListItem } from "../../types";
 import { Button } from "../../components/m3";
+import { useDialogA11y } from "../../components/dialogA11y";
 
 interface BounceModalProps {
   open: boolean;
@@ -13,6 +14,13 @@ export function BounceModal({ open, onClose, onSubmit, cheque }: BounceModalProp
   const [bouncing, setBouncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reason, setReason] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const reasonRef = useRef<HTMLTextAreaElement>(null);
+
+  // Focus trap + Escape + focus restore; initial focus lands on the reason
+  // field since it is the only required input.
+  useDialogA11y(open, onClose, dialogRef, reasonRef);
 
   if (!open) return null;
 
@@ -34,9 +42,16 @@ export function BounceModal({ open, onClose, onSubmit, cheque }: BounceModalProp
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal modal--centered" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="modal modal--centered"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal__head">
-          <h3 className="modal__title">Cheque Bounced</h3>
+          <h3 className="modal__title" id={titleId}>Cheque Bounced</h3>
         </div>
         <div className="modal__body">
           <p><strong>Cheque #:</strong> {cheque.cheque_number}</p>
@@ -45,6 +60,7 @@ export function BounceModal({ open, onClose, onSubmit, cheque }: BounceModalProp
           <label className="form__field" style={{ marginTop: "var(--md-sys-spacing-4)" }}>
             <span className="form__label">Reason *</span>
             <textarea
+              ref={reasonRef}
               className="form__input form__input--large"
               rows={3}
               value={reason}

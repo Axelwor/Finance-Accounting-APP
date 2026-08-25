@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
@@ -25,6 +26,7 @@ export function CreditNoteList() {
   };
 
   useEffect(() => { void load(); }, []);
+  useTabRefresh(load);
 
   const totalReturns = useMemo(
     () => items.filter((i) => i.status !== "VOID").reduce((acc, it) => acc + it.total_cents, 0),

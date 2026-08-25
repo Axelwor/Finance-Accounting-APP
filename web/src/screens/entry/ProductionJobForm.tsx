@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { useWorkbench } from "../../workbench/state";
 import { FormError } from "../../components/ui";
 import { api } from "../../api";
@@ -43,9 +44,13 @@ export function ProductionJobForm({ tabId, entryId, initialTitle }: Props) {
   const [completing, setCompleting] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
+  const loadMasterData = useCallback(() => {
     api.listItems().then(setItems).catch(() => {});
   }, []);
+  useEffect(() => {
+    loadMasterData();
+  }, [loadMasterData]);
+  useTabRefresh(loadMasterData);
 
   const loadJob = async (id: number) => {
     const job = await api.getProductionJob(id);

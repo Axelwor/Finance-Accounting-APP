@@ -1,24 +1,33 @@
 import { useEffect, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { ApprovalRequest } from "../../types";
-import { ApprovalActions } from "../../components/ApprovalActions";
-import { formatIDR } from "../../lib/format";
 import { Button } from "../../components/m3";
+
+const ENTITY_TYPE_LABEL: Record<string, string> = {
+  invoice: "Sales Invoice",
+  purchase_order: "Purchase Order",
+  supplier_invoice: "Supplier Invoice",
+  credit_note: "Credit Note",
+  journal_entry: "Journal Entry",
+};
 
 export function PendingApprovalRequestList() {
   const [items, setItems] = useState<ApprovalRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedRequest, setSelectedRequest] = useState<ApprovalRequest | null>(null);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [sortByAmount, setSortByAmount] = useState(true);
+  const [actionTarget, setActionTarget] = useState<ApprovalRequest | null>(null);
+  const [actionType, setActionType] = useState<"approve" | "reject" | null>(null);
+  const [reason, setReason] = useState("");
+  const [acting, setActing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.listApprovalRequests();
+      const data = await api.listApprovalRequests({ status: "PENDING" });
       setItems(data.filter((i) => i.status === "PENDING"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load pending requests.");
@@ -30,11 +39,12 @@ export function PendingApprovalRequestList() {
   useEffect(() => {
     void load();
   }, []);
+  useTabRefresh(load);
 
-  const sortedItems = [...items].sort((a, b) => {
-    if (sortByAmount) return b.amount_cents - a.amount_cents;
-    return new Date(a.requested_at).getTime() - new Date(b.requested_at).getTime();
-  });
+  // Backend already orders by requested_at DESC.
+  const sortedItems = [...items].sort(
+    (a, b) => new Date(b.requested_at).getTime() - new Date(a.requested_at).getTime(),
+  );
 
   const formatStatus = (status: string) => {
     switch (status) {
@@ -49,18 +59,40 @@ export function PendingApprovalRequestList() {
     }
   };
 
-  const handleApproveSuccess = () => {
-    load();
+  const openAction = (request: ApprovalRequest, type: "approve" | "reject") => {
+    setActionTarget(request);
+    setActionType(type);
+    setReason("");
+    setActionError(null);
   };
 
-  const getHistoryColor = (action: string) => {
-    switch (action) {
-      case "approved":
-        return "success";
-      case "rejected":
-        return "danger";
-      default:
-        return "";
+  const closeAction = () => {
+    setActionTarget(null);
+    setActionType(null);
+    setReason("");
+    setActionError(null);
+  };
+
+  const handleConfirm = async () => {
+    if (!actionTarget || !actionType) return;
+    if (actionType === "reject" && reason.trim() === "") {
+      setActionError("Rejection reason is required.");
+      return;
+    }
+    setActing(true);
+    setActionError(null);
+    try {
+      if (actionType === "approve") {
+        await api.approveApprovalRequest(actionTarget.id, { reason });
+      } else {
+        await api.rejectApprovalRequest(actionTarget.id, { reason });
+      }
+      closeAction();
+      await load();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to process approval.");
+    } finally {
+      setActing(false);
     }
   };
 
@@ -79,14 +111,6 @@ export function PendingApprovalRequestList() {
           >
             Reload
           </Button>
-          <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px" }}>
-            <input
-              type="checkbox"
-              checked={sortByAmount}
-              onChange={(e) => setSortByAmount(e.target.checked)}
-            />
-            Sort by Amount
-          </label>
         </div>
       </div>
 
@@ -98,130 +122,111 @@ export function PendingApprovalRequestList() {
         ) : items.length === 0 ? (
           <EmptyState title="No pending approvals" message="All requests have been processed." />
         ) : (
-          <>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Entity</th>
-                  <th>Amount</th>
-                  <th>Requested By</th>
-                  <th>Requested At</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedItems.map((request) => (
-                  <tr key={request.id}>
-                    <td>
-                      <strong>{request.entity_type}</strong> #{request.entity_id}
-                      <br />
-                      <small style={{ color: "var(--md-sys-color-on-surface-variant)" }}>{formatStatus(request.status)}</small>
-                    </td>
-                    <td style={{ fontFamily: "var(--md-ref-typeface-plain)", fontWeight: "500" }}>
-                      {formatIDR(request.amount_cents / 100)}
-                    </td>
-                    <td>{request.requested_by || "Unknown"}</td>
-                    <td>{new Date(request.requested_at).toLocaleString()}</td>
-                    <td>
-                      <Button
-                        variant="outlined"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedRequest(request);
-                          setShowHistoryModal(true);
-                        }}
-                        title="View History"
-                      >
-                        📜
-                      </Button>
-                      <ApprovalActions
-                        request={request}
-                        onSuccess={handleApproveSuccess}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {selectedRequest && showHistoryModal && (
-              <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="history-modal-title">
-                <div className="modal" style={{ maxWidth: "500px" }}>
-                  <div className="modal__header">
-                    <h3 id="history-modal-title">Approval History - {selectedRequest.entity_type} #{selectedRequest.entity_id}</h3>
-                    <button
-                      type="button"
-                      className="modal__close"
-                      onClick={() => {
-                        setShowHistoryModal(false);
-                        setSelectedRequest(null);
-                      }}
-                      aria-label="Close"
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Entity</th>
+                <th>Status</th>
+                <th>Requested By</th>
+                <th>Requested At</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedItems.map((request) => (
+                <tr key={request.id}>
+                  <td>
+                    <strong>{ENTITY_TYPE_LABEL[request.entity_type] ?? request.entity_type}</strong>{" "}
+                    {request.entity_number || `#${request.entity_id}`}
+                  </td>
+                  <td>{formatStatus(request.status)}</td>
+                  <td>{request.requested_by || "Unknown"}</td>
+                  <td>{new Date(request.requested_at).toLocaleString()}</td>
+                  <td>
+                    <Button
+                      variant="filled"
+                      size="sm"
+                      success
+                      onClick={() => openAction(request, "approve")}
                     >
-                      ×
-                    </button>
-                  </div>
-                  <div className="modal__body" style={{ maxHeight: "60vh", overflowY: "auto" }}>
-                    {selectedRequest.approval_history && selectedRequest.approval_history.length > 0 ? (
-                      <div className="timeline-container">
-                        <ul className="timeline timeline--vertical">
-                          {selectedRequest.approval_history.map((entry, idx) => (
-                            <li key={idx} className={`timeline-item timeline-item--${getHistoryColor(entry.action)}`}>
-                              <div className="timeline-marker">
-                                {entry.action === "approved" ? "✓" : "✕"}
-                              </div>
-                              <div className="timeline-content">
-                                <div className="timeline-text">
-                                  <strong>{entry.by}</strong> {entry.action} this transaction
-                                </div>
-                                <div className="timeline-time">{new Date(entry.at).toLocaleString()}</div>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : (
-                      <p style={{ color: "var(--md-sys-color-on-surface-variant)" }}>No approval history yet.</p>
-                    )}
-                    {(selectedRequest.approved_at || selectedRequest.rejected_at) && (
-                      <div style={{ marginTop: "16px", borderTop: "1px solid var(--md-sys-color-outline-variant)", paddingTop: "12px" }}>
-                        {selectedRequest.approved_at && (
-                          <div>
-                            <strong>Approved:</strong> {new Date(selectedRequest.approved_at).toLocaleString()}
-                            {selectedRequest.approved_by && <em> by {selectedRequest.approved_by}</em>}
-                          </div>
-                        )}
-                        {selectedRequest.rejected_at && (
-                          <div style={{ marginTop: "8px" }}>
-                            <strong>Rejected:</strong> {new Date(selectedRequest.rejected_at).toLocaleString()}
-                            {selectedRequest.rejected_by && <em> by {selectedRequest.rejected_by}</em>}
-                            {selectedRequest.rejection_reason && (
-                              <div style={{ marginTop: "4px", color: "var(--md-sys-color-error)" }}>
-                                Reason: {selectedRequest.rejection_reason}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div className="modal__footer">
-                    <Button variant="tonal" onClick={() => {
-                        setShowHistoryModal(false);
-                        setSelectedRequest(null);
-                      }}>
-                      Close
+                      Approve
+                    </Button>{" "}
+                    <Button
+                      variant="outlined"
+                      size="sm"
+                      danger
+                      onClick={() => openAction(request, "reject")}
+                    >
+                      Reject
                     </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
       <div className="listtab__footer">
         <span className="listtab__footer-count">{items.length} Pending Request(s)</span>
       </div>
+
+      {actionTarget && actionType ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="approval-action-title">
+          <div className="modal" style={{ maxWidth: "480px" }}>
+            <div className="modal__header">
+              <h3 id="approval-action-title">
+                {actionType === "approve" ? "Approve Transaction" : "Reject Transaction"}
+              </h3>
+              <button type="button" className="modal__close" onClick={closeAction} aria-label="Close">×</button>
+            </div>
+            <div className="modal__body">
+              <p>
+                <strong>Entity:</strong>{" "}
+                {ENTITY_TYPE_LABEL[actionTarget.entity_type] ?? actionTarget.entity_type}{" "}
+                {actionTarget.entity_number || `#${actionTarget.entity_id}`}
+              </p>
+              <p><strong>Requested by:</strong> {actionTarget.requested_by || "Unknown"}</p>
+              <div className="form-group">
+                <label htmlFor="approval-action-reason">
+                  Reason {actionType === "reject" ? "*" : "(optional)"}
+                </label>
+                <textarea
+                  id="approval-action-reason"
+                  className="form-control"
+                  rows={3}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder={
+                    actionType === "reject"
+                      ? "Enter rejection reason..."
+                      : "Enter approval note (optional)..."
+                  }
+                />
+              </div>
+              {actionType === "reject" && reason.trim() === "" ? (
+                <p style={{ color: "var(--md-sys-color-error)" }}>Reason is required for rejection.</p>
+              ) : null}
+              {actionError ? (
+                <p style={{ color: "var(--md-sys-color-error)" }}>{actionError}</p>
+              ) : null}
+            </div>
+            <div className="modal__footer">
+              <Button variant="tonal" onClick={closeAction} disabled={acting}>
+                Cancel
+              </Button>
+              <Button
+                variant="filled"
+                success={actionType === "approve"}
+                danger={actionType === "reject"}
+                disabled={acting}
+                onClick={() => void handleConfirm()}
+              >
+                {acting ? "Processing..." : actionType === "approve" ? "Confirm Approve" : "Confirm Reject"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

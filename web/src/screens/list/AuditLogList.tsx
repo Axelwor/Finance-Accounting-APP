@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { AuditLog } from "../../types";
@@ -45,6 +46,7 @@ export function AuditLogList() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useTabRefresh(load);
 
   const hasFilters = Boolean(entityType || userId || fromDate || toDate);
 

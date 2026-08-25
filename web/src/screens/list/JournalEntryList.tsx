@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { useWorkbench } from "../../workbench/state";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
@@ -41,6 +42,7 @@ export function JournalEntryList() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useTabRefresh(load);
 
   const totalDebit = items.reduce((sum, it) => sum + it.total_debit_cents, 0);
   const totalCredit = items.reduce((sum, it) => sum + it.total_credit_cents, 0);

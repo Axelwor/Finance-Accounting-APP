@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { StockTransferListItem } from "../../types";
@@ -23,6 +24,7 @@ export function StockTransferList() {
   };
 
   useEffect(() => { void load(); }, []);
+  useTabRefresh(load);
 
   const openEntry = (item: StockTransferListItem) =>
     workbench.openEntryExisting("stock-transfer-entry", item.id, item.number, item.status);

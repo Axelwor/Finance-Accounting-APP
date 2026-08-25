@@ -63,6 +63,7 @@ func (service *Service) Routes(router chi.Router) {
 	router.Post("/invoices", service.CreateInvoice)
 	router.Get("/invoices", service.ListInvoices)
 	router.Get("/invoices/{id}", service.GetInvoice)
+	router.Post("/invoices/{id}/void", service.VoidInvoice)
 	router.Post("/invoices/{id}/payments", service.CreatePayment)
 	router.Get("/invoices/{id}/payments", service.ListPayments)
 
@@ -159,6 +160,8 @@ func (service *Service) Create(writer http.ResponseWriter, request *http.Request
 			continue // re-allocate the next number and retry
 		}
 		switch {
+		case errors.Is(err, errItemRevenueAccountRequired):
+			writeError(writer, http.StatusBadRequest, "ITEM_REVENUE_ACCOUNT_REQUIRED", err.Error())
 		case isForeignKeyViolation(err):
 			writeError(writer, http.StatusConflict, "INVALID_REQUEST", "quotation references a resource that does not exist for this tenant")
 		case isNoRows(err):
@@ -169,6 +172,25 @@ func (service *Service) Create(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	writeError(writer, http.StatusConflict, "QUOTATION_NUMBER_EXISTS", "could not allocate a unique quotation number")
+}
+
+// errItemRevenueAccountRequired marks a line whose item has no revenue (sale)
+// account configured — a client-fixable request problem, not a server failure.
+var errItemRevenueAccountRequired = errors.New("item has no revenue (sale) account")
+
+// requireRevenueAccount returns errItemRevenueAccountRequired when the item was
+// saved without a sale (revenue) account, naming the offending item so the
+// handler can answer 400 ITEM_REVENUE_ACCOUNT_REQUIRED instead of letting the
+// lines insert fail and abort the transaction.
+func requireRevenueAccount(itemID int64, code, itemName string, revenue int64) error {
+	if revenue != 0 {
+		return nil
+	}
+	label := code
+	if strings.TrimSpace(itemName) != "" {
+		label = fmt.Sprintf("%s (%s)", code, itemName)
+	}
+	return fmt.Errorf("%w: item %q (id %d) has no revenue (sale) account configured", errItemRevenueAccountRequired, label, itemID)
 }
 
 // createInTx performs the quotation + lines insert inside an open transaction
@@ -232,15 +254,18 @@ func (service *Service) createInTx(ctx context.Context, tx pgx.Tx, tenant int64,
 	}
 
 	for position, prepared := range lines {
-		revenueAccountID, cogsAccountID, inventoryAccountID, err := loadItemDefaults(ctx, tx, tenant, prepared.Line.ItemID)
+		revenueAccountID, cogsAccountID, inventoryAccountID, itemCode, itemName, err := loadItemDefaults(ctx, tx, tenant, prepared.Line.ItemID)
 		if err != nil {
+			return nil, err
+		}
+		if err := requireRevenueAccount(prepared.Line.ItemID, itemCode, itemName, revenueAccountID); err != nil {
 			return nil, err
 		}
 		var lineID int64
 		var qty pgtype.Numeric
 		_ = qty.Scan(fmt.Sprintf("%g", prepared.Line.Qty))
 		lineNo := position + 1
-		_ = tx.QueryRow(ctx, `
+		if err := tx.QueryRow(ctx, `
 			INSERT INTO sales_quotations_lines
 				(tenant_id, quotation_id, item_id, line_no, qty, unit_price_cents,
 				 discount_cents, tax_rate, line_total_cents, revenue_account_id,
@@ -251,8 +276,7 @@ func (service *Service) createInTx(ctx context.Context, tx pgx.Tx, tenant int64,
 			prepared.Line.UnitPriceCents, prepared.Line.DiscountCents,
 			prepared.Line.TaxRate, prepared.LineTotalCents,
 			revenueAccountID, cogsAccountID, inventoryAccountID,
-			textValueOptional(prepared.Line.Description)).Scan(&lineID)
-		if err != nil {
+			textValueOptional(prepared.Line.Description)).Scan(&lineID); err != nil {
 			return nil, err
 		}
 	}
@@ -445,15 +469,16 @@ func currentStatus(ctx context.Context, tx pgx.Tx, tenant, id int64) (string, er
 	return status, err
 }
 
-// loadItemDefaults returns the item's account defaults used to stamp each line.
+// loadItemDefaults returns the item's account defaults used to stamp each line
+// plus its code and name for error messages.
 // The item must belong to the tenant (RLS enforces visibility).
-func loadItemDefaults(ctx context.Context, tx pgx.Tx, tenant, itemID int64) (revenue, cogs, inventory int64, err error) {
+func loadItemDefaults(ctx context.Context, tx pgx.Tx, tenant, itemID int64) (revenue, cogs, inventory int64, code, name string, err error) {
 	revenue, cogs, inventory = 0, 0, 0
 	var rev, cog, inv pgtype.Int8
 	err = tx.QueryRow(ctx, `
-		SELECT sale_account_id, cogs_account_id, inventory_account_id
+		SELECT sale_account_id, cogs_account_id, inventory_account_id, code, name
 		FROM items WHERE tenant_id = $1 AND id = $2
-	`, tenant, itemID).Scan(&rev, &cog, &inv)
+	`, tenant, itemID).Scan(&rev, &cog, &inv, &code, &name)
 	if rev.Valid {
 		revenue = rev.Int64
 	}

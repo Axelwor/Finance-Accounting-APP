@@ -62,7 +62,8 @@ export class ErrorBoundary extends Component<
             <div className="error-state" style={{ maxWidth: 520, margin: "var(--md-sys-spacing-7) auto" }}>
               <h2 className="error-state__title">Something went wrong</h2>
               <p className="error-state__message">
-                An unexpected error occurred{this.state.message ? `: ${this.state.message}` : "."}
+                An unexpected application error occurred. The technical details were
+                written to the browser console.
                 <br />
                 Reloading the app will restore your open tabs — unsaved form data may be lost.
               </p>
@@ -102,7 +103,8 @@ export class TabErrorBoundary extends Component<
       <div className="error-state" role="alert">
         <h3 className="error-state__title">{this.props.title ? `${this.props.title} crashed` : "This tab crashed"}</h3>
         <p className="error-state__message">
-          {this.state.message || "An unexpected error occurred in this tab."} Other tabs are unaffected.
+          An unexpected error occurred in this tab. Other tabs are unaffected.
+          Technical details were written to the browser console.
         </p>
         <div className="quick-actions">
           <Button variant="filled" onClick={() => this.setState({ hasError: false, message: "" })}>
@@ -117,33 +119,68 @@ export class TabErrorBoundary extends Component<
   }
 }
 
+/** Skip-link: first focusable element on every page; styles are inline
+ * because style files are owned by another agent. */
+const SKIP_LINK_STYLE = `
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.skip-link:focus {
+  left: 12px;
+  top: 12px;
+  width: auto;
+  height: auto;
+  z-index: 10000;
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary, #111827);
+  border: 2px solid var(--brand-primary, #2f80ed);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
+}
+`;
+
 export default function App() {
   return (
-    <ErrorBoundary>
-      <AppStateProvider>
-        <ToastProvider>
-        <WorkbenchProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<AuthScreen />} />
-              <Route path="/onboarding" element={<OnboardingScreen />} />
-              <Route
-                path="/"
-                element={
-                  <ShellRoute>
-                    <AppShell />
-                  </ShellRoute>
-                }
-              >
-                <Route index element={<OnboardingRoute />} />
-                <Route path="*" element={<WorkbenchRedirect />} />
-              </Route>
-            </Routes>
-          </BrowserRouter>
-        </WorkbenchProvider>
-        </ToastProvider>
-      </AppStateProvider>
-    </ErrorBoundary>
+    <>
+      <style>{SKIP_LINK_STYLE}</style>
+      <a href="#app-main" className="skip-link">
+        Lewati ke konten utama (Skip to main content)
+      </a>
+      <ErrorBoundary>
+        <AppStateProvider>
+          <ToastProvider>
+          <WorkbenchProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/login" element={<AuthScreen />} />
+                <Route path="/onboarding" element={<OnboardingScreen />} />
+                <Route
+                  path="/"
+                  element={
+                    <ShellRoute>
+                      <AppShell />
+                    </ShellRoute>
+                  }
+                >
+                  <Route index element={<OnboardingRoute />} />
+                  <Route path="*" element={<WorkbenchRedirect />} />
+                </Route>
+              </Routes>
+            </BrowserRouter>
+          </WorkbenchProvider>
+          </ToastProvider>
+        </AppStateProvider>
+      </ErrorBoundary>
+    </>
   );
 }
 

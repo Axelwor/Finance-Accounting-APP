@@ -1,12 +1,13 @@
 package budget
 
 import (
-	"github.com/jackc/pgx/v5"
-
 	"context"
 	"errors"
 	"net/http"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/db"
 )
@@ -49,9 +50,11 @@ func (service *Service) ListFrameworks(writer http.ResponseWriter, request *http
 		defer rows.Close()
 		for rows.Next() {
 			var f frameworkResponse
-			if err := rows.Scan(&f.ID, &f.Framework, &f.IsDefault, &f.TenantID, &f.CreatedAt); err != nil {
+			var createdAt pgtype.Timestamptz
+			if err := rows.Scan(&f.ID, &f.Framework, &f.IsDefault, &f.TenantID, &createdAt); err != nil {
 				return err
 			}
+			f.CreatedAt = timestampString(createdAt)
 			items = append(items, f)
 		}
 		return nil
@@ -106,17 +109,19 @@ func (service *Service) SetFramework(writer http.ResponseWriter, request *http.R
 	}
 
 	var f frameworkResponse
+	var createdAt pgtype.Timestamptz
 	err = tx.QueryRow(ctx, `
 		INSERT INTO report_frameworks (tenant_id, framework, is_default)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (tenant_id, framework) DO UPDATE
 		SET is_default = EXCLUDED.is_default
 		RETURNING id, framework, is_default, tenant_id, created_at
-	`, tenant, fw, req.IsDefault).Scan(&f.ID, &f.Framework, &f.IsDefault, &f.TenantID, &f.CreatedAt)
+	`, tenant, fw, req.IsDefault).Scan(&f.ID, &f.Framework, &f.IsDefault, &f.TenantID, &createdAt)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "FRAMEWORK_SET_FAILED", err.Error())
 		return
 	}
+	f.CreatedAt = timestampString(createdAt)
 	if err := tx.Commit(ctx); err != nil {
 		writeError(writer, http.StatusInternalServerError, "FRAMEWORK_SET_FAILED", err.Error())
 		return

@@ -1161,3 +1161,160 @@ select.input-base {
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================================
+   W5-A Responsive Append — App Shell (≤959 / ≤600)
+   Contract UI_CONTRACT.md:38: below 960px the 64px rail hides
+   behind a 260px slide-over opened by a top-bar toggle.
+   ============================================================ */
+@media (max-width: 959.98px) {
+  /* Slide-over drawer (markup already ships .is-open + .sidebar-scrim) */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 260px;
+    transform: translateX(-102%);
+    transition: transform 0.22s ease;
+    box-shadow: none;
+    z-index: 140;
+    padding: 8px 0;
+    overflow-y: auto;
+  }
+  .sidebar.is-open {
+    transform: translateX(0);
+    box-shadow: var(--shadow-xl);
+  }
+
+  /* Scrim behind the drawer (was unstyled before) */
+  .sidebar-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 130;
+    background-color: rgba(15, 23, 42, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+  }
+  .sidebar-scrim.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Toggle becomes a real 40px button pinned in the topbar area
+     (was a full-height transparent strip as a flex child). */
+  .sidebar-toggle {
+    position: fixed;
+    top: 6px;
+    left: 6px;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-surface);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    z-index: 135;
+  }
+  .sidebar-toggle:hover {
+    background-color: var(--bg-surface-secondary);
+    color: var(--text-primary);
+  }
+  /* Reserve room so the toggle does not cover the brand mark */
+  .topbar {
+    padding-left: 54px;
+  }
+
+  /* Drawer rows: label always visible, comfortable touch target */
+  .sidebar.is-open .rail-item__btn {
+    width: 100%;
+    height: 44px;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 0 10px;
+  }
+  .sidebar.is-open .rail-item__label {
+    max-width: none;
+    font-size: 12.5px;
+  }
+  /* Flyout becomes an in-flow accordion under its module row so it
+     can never intercept taps on other rows. */
+  .sidebar.is-open .rail-flyout {
+    position: static;
+    width: auto;
+    margin: 2px 6px 4px;
+    box-shadow: none;
+    animation: none;
+    background-color: var(--bg-surface-secondary);
+  }
+}
+
+@media (max-width: 600px) {
+  .topbar {
+    gap: 6px;
+    padding-right: 8px;
+  }
+  .topbar__left {
+    gap: 8px;
+  }
+  .topbar__divider,
+  .brand__name,
+  .brand__badge,
+  .theme-picker,
+  .topbar__search-btn {
+    display: none !important;
+  }
+  /* Keep only avatar + sign out on the right */
+  .topbar__actions > .topbar__icon-btn:not(.topbar__icon-btn--logout) {
+    display: none;
+  }
+  .topbar__user-pill {
+    padding: 4px 6px;
+  }
+  .topbar__user-email {
+    display: none;
+  }
+  /* Tenant switcher truncates instead of pushing the bar wide */
+  .topbar__business {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .tenant-switcher {
+    min-width: 0;
+    max-width: 34vw;
+    overflow: hidden;
+  }
+  .tenant-switcher__toggle {
+    max-width: 34vw;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  /* Quick-add collapses to an icon-only CTA */
+  .btn-quick-add span {
+    display: none;
+  }
+  .btn-quick-add {
+    padding: 6px 8px;
+  }
+}
+
+/* ------------------------------------------------------------
+   Reduced motion — honor OS accessibility preference
+   ------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

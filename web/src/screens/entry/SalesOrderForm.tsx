@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { useWorkbench } from "../../workbench/state";
 import { FormError, LoadingState } from "../../components/ui";
 import { useToast } from "../../components/Toast";
 import { api } from "../../api";
-import { formatIDR } from "../../lib/format";
+import { formatIDRFromCents, parseRupiahToCents } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
 import { Icon } from "../../components/m3/Icon";
@@ -43,11 +44,6 @@ function seedLine(): Line {
   };
 }
 
-function parseCents(raw: string): number {
-  const digits = (raw || "").replace(/[^\d]/g, "");
-  return digits ? parseInt(digits, 10) : 0;
-}
-
 function lineTotal(qty: number, unitPriceCents: number, discountCents: number): number {
   return Math.round((qty > 0 ? qty : 1) * unitPriceCents) - discountCents;
 }
@@ -82,12 +78,16 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
 
   const isExisting = orderId !== null;
 
-  useEffect(() => {
+  const loadMasterData = useCallback(() => {
     void Promise.all([
       api.listCustomers().then(setCustomers),
       api.listItems().then(setItems),
     ]).finally(() => setLoading(false));
   }, []);
+  useEffect(() => {
+    loadMasterData();
+  }, [loadMasterData]);
+  useTabRefresh(loadMasterData);
 
   // Workflow chain: pre-fill from quotation
   useEffect(() => {
@@ -496,22 +496,24 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
                             <input
                               type="number"
                               className="input-base text-right font-mono font-semibold"
-                              value={line.unitPriceCents}
+                              min="0"
+                              value={line.unitPriceCents / 100}
                               disabled={isExisting}
-                              onChange={(e) => setPrice(line.id, parseCents(e.target.value))}
+                              onChange={(e) => setPrice(line.id, parseRupiahToCents(e.target.value))}
                             />
                           </td>
                           <td className="num">
                             <input
                               type="number"
                               className="input-base text-right font-mono"
-                              value={line.discountCents}
+                              min="0"
+                              value={line.discountCents / 100}
                               disabled={isExisting}
-                              onChange={(e) => setDiscount(line.id, parseCents(e.target.value))}
+                              onChange={(e) => setDiscount(line.id, parseRupiahToCents(e.target.value))}
                             />
                           </td>
                           <td className="num font-mono font-bold text-primary">
-                            {formatIDR(line.lineTotalCents)}
+                            {formatIDRFromCents(line.lineTotalCents)}
                           </td>
                           {!isExisting && (
                             <td className="text-center">
@@ -535,7 +537,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
                           DPP (Subtotal)
                         </td>
                         <td className="num font-mono font-bold text-primary">
-                          {formatIDR(subtotalCents)}
+                          {formatIDRFromCents(subtotalCents)}
                         </td>
                         {!isExisting && <td />}
                       </tr>
@@ -544,7 +546,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
                           PPN {taxRate > 0 ? `${taxRate}%` : ""}
                         </td>
                         <td className="num font-mono font-semibold text-secondary">
-                          {formatIDR(ppnCents)}
+                          {formatIDRFromCents(ppnCents)}
                         </td>
                         {!isExisting && <td />}
                       </tr>
@@ -553,7 +555,7 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
                           Total Pesanan
                         </td>
                         <td className="num font-mono font-bold text-brand text-sm">
-                          {formatIDR(totalCents)}
+                          {formatIDRFromCents(totalCents)}
                         </td>
                         {!isExisting && <td />}
                       </tr>
@@ -658,13 +660,13 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
       <footer className="form-zone-3">
         <div className="form-zone-3__summary">
           <span className="text-xs text-muted">
-            DPP <strong className="font-mono text-secondary">{formatIDR(subtotalCents)}</strong>
+            DPP <strong className="font-mono text-secondary">{formatIDRFromCents(subtotalCents)}</strong>
             {"  ·  "}
-            PPN <strong className="font-mono text-secondary">{formatIDR(ppnCents)}</strong>
+            PPN <strong className="font-mono text-secondary">{formatIDRFromCents(ppnCents)}</strong>
           </span>
           <div className="form-zone-3__total-block">
             <span className="form-zone-3__total-label">Total</span>
-            <span className="form-zone-3__total-val">{formatIDR(totalCents)}</span>
+            <span className="form-zone-3__total-val">{formatIDRFromCents(totalCents)}</span>
           </div>
         </div>
 

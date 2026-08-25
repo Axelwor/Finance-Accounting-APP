@@ -84,6 +84,7 @@ export function DataTable<T extends { id?: string | number }>({
             <input
               type="text"
               placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{ fontSize: "12px" }}
@@ -105,31 +106,80 @@ export function DataTable<T extends { id?: string | number }>({
 
       <div style={{ overflowX: "auto" }}>
         <table className="datatable">
+          {title && (
+            <caption
+              style={{
+                position: "absolute",
+                width: 1,
+                height: 1,
+                padding: 0,
+                margin: -1,
+                overflow: "hidden",
+                clip: "rect(0, 0, 0, 0)",
+                whiteSpace: "nowrap",
+                border: 0,
+              }}
+            >
+              {title}
+            </caption>
+          )}
           <thead>
             <tr>
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  style={{ width: col.width }}
-                  className={col.align === "right" ? "num" : col.align === "center" ? "text-center" : ""}
-                  onClick={() => col.sortable && handleSort(col.key)}
-                >
-                  <div
-                    className={`flex items-center gap-1.5 ${
-                      col.align === "right" ? "justify-end" : col.align === "center" ? "justify-center" : ""
-                    } ${col.sortable ? "cursor-pointer select-none hover:text-primary" : ""}`}
+              {columns.map((col) => {
+                const isSorted = sortKey === col.key;
+                const ariaSort = !col.sortable
+                  ? undefined
+                  : isSorted
+                    ? sortDir === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none";
+                return (
+                  <th
+                    key={col.key}
+                    scope="col"
+                    style={{ width: col.width }}
+                    className={col.align === "right" ? "num" : col.align === "center" ? "text-center" : ""}
+                    aria-sort={ariaSort}
                   >
-                    <span>{col.header}</span>
-                    {col.sortable && sortKey === col.key && (
-                      <Icon
-                        name={sortDir === "asc" ? "chevron_up" : "chevron_down"}
-                        size={12}
-                        className="text-brand"
-                      />
+                    {col.sortable ? (
+                      <button
+                        type="button"
+                        onClick={() => handleSort(col.key)}
+                        className={`flex items-center gap-1.5 ${
+                          col.align === "right" ? "justify-end" : col.align === "center" ? "justify-center" : ""
+                        } cursor-pointer select-none hover:text-primary`}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          padding: 0,
+                          font: "inherit",
+                          color: "inherit",
+                          width: "100%",
+                        }}
+                        title={`Sort by ${col.header}`}
+                      >
+                        <span>{col.header}</span>
+                        {isSorted && (
+                          <Icon
+                            name={sortDir === "asc" ? "chevron_up" : "chevron_down"}
+                            size={12}
+                            className="text-brand"
+                          />
+                        )}
+                      </button>
+                    ) : (
+                      <div
+                        className={`flex items-center gap-1.5 ${
+                          col.align === "right" ? "justify-end" : col.align === "center" ? "justify-center" : ""
+                        }`}
+                      >
+                        <span>{col.header}</span>
+                      </div>
                     )}
-                  </div>
-                </th>
-              ))}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>

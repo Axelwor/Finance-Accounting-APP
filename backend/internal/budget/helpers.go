@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"finance-accounting-app/backend/internal/auth"
@@ -112,6 +114,16 @@ func isForeignKeyViolation(err error) bool {
 
 func isNoRows(err error) bool {
 	return errors.Is(err, pgx.ErrNoRows)
+}
+
+// timestampString renders a scanned timestamptz as RFC3339; NULL -> "".
+// Scanning timestamptz straight into *string fails in pgx v5, so callers scan
+// into pgtype.Timestamptz first and format through this helper.
+func timestampString(value pgtype.Timestamptz) string {
+	if !value.Valid {
+		return ""
+	}
+	return value.Time.Format(time.RFC3339)
 }
 
 // optionalInt parses a query string into an int pointer; empty -> NULL.

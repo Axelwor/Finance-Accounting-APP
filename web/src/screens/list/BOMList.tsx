@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { BOMListItem } from "../../types";
@@ -23,6 +24,7 @@ export function BOMList() {
   };
 
   useEffect(() => { void load(); }, []);
+  useTabRefresh(load);
 
   return (
     <div className="listtab listtab--accurate">

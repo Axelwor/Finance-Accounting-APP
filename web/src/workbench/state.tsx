@@ -44,9 +44,13 @@ interface State {
   activeId: string | null;
   /** Currently active child per module parent. */
   activeChild: Record<string, string | null>;
+  /** Per nested-child activation counter; bumped every time a child
+   *  becomes active (tab click, menu re-open dedupe). Lets mounted-but
+   *  hidden panes detect "I'm active again" and refresh stale data. */
+  activation: Record<string, number>;
 }
 
-const EMPTY_STATE: State = { tabs: [], nested: {}, activeId: null, activeChild: {} };
+const EMPTY_STATE: State = { tabs: [], nested: {}, activeId: null, activeChild: {}, activation: {} };
 
 type Action =
   | { type: "open-list"; subKind: ListSubKind }
@@ -74,7 +78,8 @@ function samePrefill(a?: PrefillRef, b?: PrefillRef): boolean {
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "hydrate": {
-      return action.state;
+      // Older persisted states predate the activation counter.
+      return { ...action.state, activation: action.state.activation ?? {} };
     }
     case "ensure-dashboard": {
       // Always keep the Dashboard tab as the first tab.
@@ -199,6 +204,7 @@ function reducer(state: State, action: Action): State {
             ...state,
             activeId: parentId,
             activeChild: { ...state.activeChild, [parentId]: action.id },
+            activation: bumpActivation(state, action.id),
           };
         }
       }
@@ -281,6 +287,12 @@ function ensureModuleParent(state: State, moduleId: ModuleId, title?: string): S
   };
 }
 
+/** Bump the activation counter of a nested child so mounted panes can
+ *  react to "this tab just became active" (see useTabRefresh). */
+function bumpActivation(state: State, childId: string): Record<string, number> {
+  return { ...state.activation, [childId]: (state.activation[childId] ?? 0) + 1 };
+}
+
 function activateNestedChild(state: State, child: NestedTab): State {
   const parentId = `module-${child.moduleId}`;
   const parentExists = state.tabs.some((t) => t.id === parentId);
@@ -320,12 +332,14 @@ function activateNestedChild(state: State, child: NestedTab): State {
   const existing = existingIdx >= 0 ? next.nested[parentId][existingIdx] : null;
   let children = next.nested[parentId] ?? [];
   if (existing) {
-    // Activate the existing child; no need to add another.
+    // Activate the existing child; no need to add another. The counter bump
+    // tells the pane it was re-opened (e.g. menu click) and should refresh.
     return {
       ...next,
       nested: { ...next.nested, [parentId]: children },
       activeId: parentId,
       activeChild: { ...next.activeChild, [parentId]: existing.id },
+      activation: bumpActivation(next, existing.id),
     };
   }
   children = [...children, child];
@@ -338,6 +352,7 @@ function activateNestedChild(state: State, child: NestedTab): State {
     nested: { ...next.nested, [parentId]: children },
     activeId: parentId,
     activeChild: { ...next.activeChild, [parentId]: child.id },
+    activation: bumpActivation(next, child.id),
   };
 }
 
@@ -351,7 +366,7 @@ function closeModule(state: State, parentId: string): State {
   if (activeId === parentId) {
     activeId = state.tabs.find((t) => t.kind === "dashboard")?.id ?? tabs[0]?.id ?? null;
   }
-  return { tabs, nested, activeId, activeChild };
+  return { tabs, nested, activeId, activeChild, activation: state.activation };
 }
 
 /** Reverse lookup from EntrySubKind to a representative ListSubKind so the
@@ -433,6 +448,8 @@ interface WorkbenchApi {
   activeId: string | null;
   activeTab: Tab | null;
   activeNested: NestedTab | null;
+  /** Activation counter per nested child id (see useTabRefresh). */
+  activation: Readonly<Record<string, number>>;
   activeChildFor: (parentId: string) => string | null;
   openDashboard: () => void;
   openList: (sub: ListSubKind) => void;
@@ -529,6 +546,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
       activeId: state.activeId,
       activeTab,
       activeNested,
+      activation: state.activation,
       activeChildFor: (parentId: string) => state.activeChild[parentId] ?? null,
       openDashboard,
       openList,

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { useWorkbench } from "../../workbench/state";
 import { FormError } from "../../components/ui";
 import { NextStepsBar } from "../../components/NextSteps";
 import { useToast } from "../../components/Toast";
 import { api } from "../../api";
-import { formatIDR } from "../../lib/format";
+import { formatIDRFromCents, parseRupiahToCents } from "../../lib/format";
 import { openPrintWindow } from "../../lib/print";
 import { draftNumber } from "../../workbench/modules";
 import type { SupplierListItem, GoodsReceivedNoteListItem, Item, SupplierInvoiceLineInput } from "../../types";
@@ -61,11 +62,15 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle, prefill }: P
     workbench.markUnsaved(tabId, true);
   }, [tabId, date, number, supplierId, grnId, supplierInvoiceNumber, notes, lines, workbench]);
 
-  useEffect(() => {
+  const loadMasterData = useCallback(() => {
     void api.listSuppliers().then(setSuppliers);
     void api.listItems().then(setItems);
     void api.listGRNs("RECEIVED").then(setGrNs).catch(() => setGrNs([]));
   }, []);
+  useEffect(() => {
+    loadMasterData();
+  }, [loadMasterData]);
+  useTabRefresh(loadMasterData);
 
   // Auto-fill: when a GRN is picked (manually or via workflow-chain
   // prefill), copy its supplier + received lines into the invoice.
@@ -305,15 +310,15 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle, prefill }: P
         .map((l) => [
           `${l.itemCode || l.itemId}${l.itemName ? ` · ${l.itemName}` : ""}`,
           l.qty,
-          formatIDR(l.unitPriceCents),
+          formatIDRFromCents(l.unitPriceCents),
           l.taxRate,
-          formatIDR(l.vatCents),
-          formatIDR(l.lineTotalCents),
+          formatIDRFromCents(l.vatCents),
+          formatIDRFromCents(l.lineTotalCents),
         ]),
       totals: [
-        ["DPP", formatIDR(isExisting ? dpp : computedDpp)],
-        ["VAT", formatIDR(isExisting ? vat : computedVat)],
-        ["Payable", formatIDR(isExisting ? payable : computedPayable)],
+        ["DPP", formatIDRFromCents(isExisting ? dpp : computedDpp)],
+        ["VAT", formatIDRFromCents(isExisting ? vat : computedVat)],
+        ["Payable", formatIDRFromCents(isExisting ? payable : computedPayable)],
       ],
     });
   };
@@ -435,7 +440,7 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle, prefill }: P
                       type="text"
                       inputMode="numeric"
                       value={centsInput(line.unitPriceCents)}
-                      onChange={(e) => setPrice(line.id, parseCents(e.target.value))}
+                      onChange={(e) => setPrice(line.id, parseRupiahToCents(e.target.value))}
                       placeholder="0"
                       disabled={isExisting}
                       aria-label={`Unit price for line ${line.id}`}
@@ -447,7 +452,7 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle, prefill }: P
                       type="text"
                       inputMode="numeric"
                       value={centsInput(line.discountCents)}
-                      onChange={(e) => setDiscount(line.id, parseCents(e.target.value))}
+                      onChange={(e) => setDiscount(line.id, parseRupiahToCents(e.target.value))}
                       placeholder="0"
                       disabled={isExisting}
                       aria-label={`Discount for line ${line.id}`}
@@ -468,10 +473,10 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle, prefill }: P
                     />
                   </div>
                   <div role="cell" className="right">
-                    <span className="ledger-table__amount">{formatIDR(line.vatCents)}</span>
+                    <span className="ledger-table__amount">{formatIDRFromCents(line.vatCents)}</span>
                   </div>
                   <div role="cell" className="right">
-                    <span className="ledger-table__amount">{formatIDR(line.lineTotalCents)}</span>
+                    <span className="ledger-table__amount">{formatIDRFromCents(line.lineTotalCents)}</span>
                   </div>
                   <div role="cell">
                     <button
@@ -511,19 +516,19 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle, prefill }: P
 
           <div className="entrytab__total">
             <span className="entrytab__total-label">DPP (Dasar Pengenaan Pajak)</span>
-            <span className="entrytab__total-value">{formatIDR(isExisting ? dpp : computedDpp)}</span>
+            <span className="entrytab__total-value">{formatIDRFromCents(isExisting ? dpp : computedDpp)}</span>
           </div>
           <div className="entrytab__total" style={{ marginTop: 8 }}>
             <span className="entrytab__total-label">VAT (PPN Masukan)</span>
-            <span className="entrytab__total-value">{formatIDR(isExisting ? vat : computedVat)}</span>
+            <span className="entrytab__total-value">{formatIDRFromCents(isExisting ? vat : computedVat)}</span>
           </div>
           <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 8 }}>
             <span className="entrytab__total-label">Total</span>
-            <span className="entrytab__total-value">{formatIDR(isExisting ? total : computedTotal)}</span>
+            <span className="entrytab__total-value">{formatIDRFromCents(isExisting ? total : computedTotal)}</span>
           </div>
           <div className="entrytab__total" style={{ marginTop: 8, borderTop: "2px solid var(--md-sys-color-primary)", paddingTop: 8 }}>
             <span className="entrytab__total-label">Payable (Cr 2101 AP)</span>
-            <span className="entrytab__total-value">{formatIDR(isExisting ? payable : computedPayable)}</span>
+            <span className="entrytab__total-value">{formatIDRFromCents(isExisting ? payable : computedPayable)}</span>
           </div>
 
           {isExisting && (
@@ -572,14 +577,10 @@ function vatForLine(lineTotalCents: number, taxRate: number): number {
   return Math.round((lineTotalCents * taxRate) / 100);
 }
 
-function parseCents(raw: string): number {
-  const digits = (raw || "").replace(/[^\d]/g, "");
-  return digits ? parseInt(digits, 10) : 0;
-}
-
+/** Cents -> whole-rupiah text for money inputs (input holds rupiah). */
 function centsInput(cents: number): string {
   if (!cents) return "";
-  return new Intl.NumberFormat("en-US").format(cents);
+  return new Intl.NumberFormat("en-US").format(Math.round(cents / 100));
 }
 
 function seedLine(): Line {

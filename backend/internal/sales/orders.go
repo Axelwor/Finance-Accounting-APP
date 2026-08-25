@@ -133,6 +133,8 @@ func (service *Service) CreateOrder(writer http.ResponseWriter, request *http.Re
 			continue
 		}
 		switch {
+		case errors.Is(err, errItemRevenueAccountRequired):
+			writeError(writer, http.StatusBadRequest, "ITEM_REVENUE_ACCOUNT_REQUIRED", err.Error())
 		case isForeignKeyViolation(err):
 			writeError(writer, http.StatusConflict, "INVALID_REQUEST", "order references a resource that does not exist for this tenant")
 		case isNoRows(err):
@@ -217,8 +219,14 @@ func (service *Service) createOrderInTx(ctx context.Context, tx pgx.Tx, tenant i
 	}
 
 	for position, prepared := range lines {
-		revenueAccountID, cogsAccountID, inventoryAccountID, err := loadItemDefaults(ctx, tx, tenant, prepared.Line.ItemID)
+		revenueAccountID, cogsAccountID, inventoryAccountID, itemCode, itemName, err := loadItemDefaults(ctx, tx, tenant, prepared.Line.ItemID)
 		if err != nil {
+			return nil, err
+		}
+		// Same guard as quotation-create: an item without a sale account
+		// must fail the request (400) instead of inserting revenue_account_id=0
+		// and dying on the FK constraint.
+		if err := requireRevenueAccount(prepared.Line.ItemID, itemCode, itemName, revenueAccountID); err != nil {
 			return nil, err
 		}
 		var qty pgtype.Numeric

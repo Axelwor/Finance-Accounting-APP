@@ -1,6 +1,8 @@
 package accounting
 
 import (
+	"fmt"
+
 	"github.com/jackc/pgx/v5"
 
 	"net/http"
@@ -91,7 +93,7 @@ func (service *Service) GetGeneralLedger(writer http.ResponseWriter, request *ht
 				WHERE jl.tenant_id = $1 AND jl.account_id = $2
 				  AND je.status = 'POSTED'
 				  AND je.entry_date < $3
-			`, tenant, accountID, fromDate).Scan(&opening)
+			`, tenant, accountID, dateValue(fromDate)).Scan(&opening)
 		})
 		if err != nil {
 			writeError(writer, http.StatusInternalServerError, "LEDGER_FAILED", err.Error())
@@ -99,21 +101,30 @@ func (service *Service) GetGeneralLedger(writer http.ResponseWriter, request *ht
 		}
 	}
 
-	// Movements inside the window.
+	// Movements inside the window. Date bounds are appended only when present
+	// and always bound as pgtype.Date: passing the raw string makes Postgres
+	// compare date >= text (SQLSTATE 42883).
 	movements := make([]GeneralLedgerMovement, 0)
 	err = db.WithTenantData(ctx, service.pool, tenant, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `
+		query := `
 			SELECT je.number, to_char(je.entry_date, 'YYYY-MM-DD'),
 			       COALESCE(je.description, ''),
 			       jl.debit_cents, jl.credit_cents
 			FROM journal_lines jl
 			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
 			WHERE jl.tenant_id = $1 AND jl.account_id = $2
-			  AND je.status = 'POSTED'
-			  AND ($3 = '' OR je.entry_date >= $3)
-			  AND ($4 = '' OR je.entry_date <= $4)
-			ORDER BY je.entry_date ASC, je.number ASC
-		`, tenant, accountID, fromDate, toDate)
+			  AND je.status = 'POSTED'`
+		args := []any{tenant, accountID}
+		if fromDate != "" {
+			args = append(args, dateValue(fromDate))
+			query += fmt.Sprintf(" AND je.entry_date >= $%d", len(args))
+		}
+		if toDate != "" {
+			args = append(args, dateValue(toDate))
+			query += fmt.Sprintf(" AND je.entry_date <= $%d", len(args))
+		}
+		query += " ORDER BY je.entry_date ASC, je.number ASC"
+		rows, err := tx.Query(ctx, query, args...)
 		if err != nil {
 			return err
 		}

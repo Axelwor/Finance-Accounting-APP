@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { ChequeListItem } from "../../types";
 import { Button } from "../../components/m3";
+import { useDialogA11y } from "../../components/dialogA11y";
 
 interface DepositModalProps {
   open: boolean;
@@ -12,6 +13,11 @@ interface DepositModalProps {
 export function DepositModal({ open, onClose, onSubmit, cheque }: DepositModalProps) {
   const [depositing, setDepositing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+
+  // Focus trap + Escape + focus restore (no-ops while closed).
+  useDialogA11y(open, onClose, dialogRef);
 
   if (!open) return null;
 
@@ -29,9 +35,16 @@ export function DepositModal({ open, onClose, onSubmit, cheque }: DepositModalPr
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal modal--centered" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="modal modal--centered"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal__head">
-          <h3 className="modal__title">Deposit Cheque</h3>
+          <h3 className="modal__title" id={titleId}>Deposit Cheque</h3>
         </div>
         <div className="modal__body">
           <p><strong>Cheque #:</strong> {cheque.cheque_number}</p>

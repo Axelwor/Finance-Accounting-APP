@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
@@ -30,6 +31,7 @@ export function SupplierInvoiceList() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useTabRefresh(load);
 
   const totalPayable = useMemo(
     () => items.filter((i) => i.status !== "VOID").reduce((acc, it) => acc + it.payable_cents, 0),

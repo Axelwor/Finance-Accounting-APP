@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { useWorkbench } from "../../workbench/state";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
-import { formatIDR } from "../../lib/format";
+import { formatIDRFromCents } from "../../lib/format";
 import type { JournalRegisterItem } from "../../types";
 import { Button, IconButton } from "../../components/m3";
 
@@ -31,7 +32,11 @@ export function JournalRegister() {
         to_date: toDate || undefined,
         intent_type: intentType || undefined,
       });
-      setItems(data);
+      // Backend wraps the rows: { items, from_date, to_date, intent_type }
+      // (internal/accounting/journal_register.go). Accept both shapes so a
+      // bare array from an older contract keeps working.
+      const wrapped = data as unknown as { items?: JournalRegisterItem[] };
+      setItems(Array.isArray(data) ? data : (wrapped.items ?? []));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load the journal register.");
     } finally {
@@ -43,6 +48,7 @@ export function JournalRegister() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useTabRefresh(load);
 
   const totalDebit = items.reduce((sum, it) => sum + it.total_debit_cents, 0);
   const totalCredit = items.reduce((sum, it) => sum + it.total_credit_cents, 0);
@@ -150,8 +156,8 @@ export function JournalRegister() {
                 <span>
                   <span className="kind-mark is-muted">{it.intent_type}</span>
                 </span>
-                <span className="ledger-table__amount right">{formatIDR(it.total_debit_cents)}</span>
-                <span className="ledger-table__amount right">{formatIDR(it.total_credit_cents)}</span>
+                <span className="ledger-table__amount right">{formatIDRFromCents(it.total_debit_cents)}</span>
+                <span className="ledger-table__amount right">{formatIDRFromCents(it.total_credit_cents)}</span>
               </div>
             ))}
           </div>
@@ -160,7 +166,7 @@ export function JournalRegister() {
 
       <div className="listtab__footer">
         <span>
-          Totals <strong>{formatIDR(totalDebit)}</strong> / <strong>{formatIDR(totalCredit)}</strong>
+          Totals <strong>{formatIDRFromCents(totalDebit)}</strong> / <strong>{formatIDRFromCents(totalCredit)}</strong>
         </span>
         <span className="listtab__footer-count">{items.length} entr(ies)</span>
       </div>

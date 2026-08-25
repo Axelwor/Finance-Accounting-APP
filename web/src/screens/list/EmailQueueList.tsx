@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { EmailQueueItem } from "../../types";
@@ -27,6 +28,7 @@ export function EmailQueueList() {
   useEffect(() => {
     void load();
   }, []);
+  useTabRefresh(load);
 
   const handleSend = async (id: number) => {
     if (!confirm("Send this email now?")) return;

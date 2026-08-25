@@ -42,4 +42,56 @@ describe("CommandPalette Component", () => {
     expect(mockOpenEntryDraft).toHaveBeenCalledWith("money-in");
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("moves initial focus into the palette search input", () => {
+    render(<CommandPalette isOpen={true} onClose={vi.fn()} />);
+    const input = screen.getByPlaceholderText(/Cari modul, transaksi/i);
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("keeps Tab focus inside the dialog (only focusable element cycles)", () => {
+    render(<CommandPalette isOpen={true} onClose={vi.fn()} />);
+    const input = screen.getByPlaceholderText(/Cari modul, transaksi/i);
+    for (let i = 0; i < 3; i++) {
+      fireEvent.keyDown(document, { key: "Tab" });
+      expect(document.activeElement).toBe(input);
+    }
+  });
+
+  it("closes on Escape from anywhere inside the dialog", () => {
+    const onClose = vi.fn();
+    render(<CommandPalette isOpen={true} onClose={onClose} />);
+    const listbox = screen.getByRole("listbox");
+    fireEvent.keyDown(listbox, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores focus to the trigger element after closing", () => {
+    const trigger = document.createElement("button");
+    document.body.appendChild(trigger);
+    trigger.focus();
+
+    const { rerender } = render(<CommandPalette isOpen={true} onClose={vi.fn()} />);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    rerender(<CommandPalette isOpen={false} onClose={vi.fn()} />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(trigger);
+    trigger.remove();
+  });
+
+  it("wires combobox semantics: activedescendant follows the selected option", () => {
+    render(<CommandPalette isOpen={true} onClose={vi.fn()} />);
+    const input = screen.getByPlaceholderText(/Cari modul, transaksi/i);
+    const options = screen.getAllByRole("option");
+    expect(options.length).toBeGreaterThan(0);
+
+    const activeId = input.getAttribute("aria-activedescendant");
+    expect(activeId).toBeTruthy();
+    expect(document.getElementById(activeId!)).toBe(options[0]);
+
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    const nextId = input.getAttribute("aria-activedescendant");
+    expect(document.getElementById(nextId!)).toBe(options[1]);
+  });
 });

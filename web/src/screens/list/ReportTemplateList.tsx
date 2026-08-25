@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { useWorkbench } from "../../workbench/state";
@@ -42,6 +43,7 @@ export function ReportTemplateList() {
   useEffect(() => {
     void load();
   }, []);
+  useTabRefresh(load);
 
   const resetForm = () => {
     setCode("");

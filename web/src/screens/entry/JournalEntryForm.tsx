@@ -3,7 +3,7 @@ import { useWorkbench } from "../../workbench/state";
 import { useAppState } from "../../state";
 import { ErrorState, FormError, LoadingState } from "../../components/ui";
 import { api, mockHelpers } from "../../api";
-import { formatIDR } from "../../lib/format";
+import { formatIDRFromCents, parseRupiahToCents } from "../../lib/format";
 import { Icon } from "../../components/m3/Icon";
 import type { BackendAccount, JournalEntry, JournalEntryListItem } from "../../types";
 
@@ -25,11 +25,6 @@ let lineSeq = 0;
 function seedLine(): FormLine {
   lineSeq += 1;
   return { id: `jl-${Date.now()}-${lineSeq}`, accountId: "", debit: "", credit: "", description: "" };
-}
-
-function parseCents(digits: string): number {
-  const clean = digits.replace(/[^\d]/g, "");
-  return clean ? parseInt(clean, 10) : 0;
 }
 
 export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
@@ -136,8 +131,9 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
         entry.lines.map((l, idx) => ({
           id: `line-${idx}`,
           accountId: String(l.account_id),
-          debit: l.debit_cents ? String(l.debit_cents) : "",
-          credit: l.credit_cents ? String(l.credit_cents) : "",
+          // Backend stores cents; the input shows whole rupiah.
+          debit: l.debit_cents ? String(l.debit_cents / 100) : "",
+          credit: l.credit_cents ? String(l.credit_cents / 100) : "",
           description: l.description || "",
         }))
       );
@@ -168,12 +164,13 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [workbench.activeNested?.id, saving, saved, isDetail, tabId, lines, date, description, reference]);
 
+  // Inputs hold whole rupiah; totals below are integer cents (×100).
   const debitTotal = useMemo(
-    () => lines.reduce((sum, l) => sum + parseCents(l.debit), 0),
+    () => lines.reduce((sum, l) => sum + parseRupiahToCents(l.debit), 0),
     [lines]
   );
   const creditTotal = useMemo(
-    () => lines.reduce((sum, l) => sum + parseCents(l.credit), 0),
+    () => lines.reduce((sum, l) => sum + parseRupiahToCents(l.credit), 0),
     [lines]
   );
   const difference = debitTotal - creditTotal;
@@ -293,11 +290,11 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
         entry_date: date,
         description: description.trim(),
         lines: lines
-          .filter((l) => l.accountId && (parseCents(l.debit) > 0 || parseCents(l.credit) > 0))
+          .filter((l) => l.accountId && (parseRupiahToCents(l.debit) > 0 || parseRupiahToCents(l.credit) > 0))
           .map((l) => ({
             account_id: Number(l.accountId),
-            debit_cents: parseCents(l.debit),
-            credit_cents: parseCents(l.credit),
+            debit_cents: parseRupiahToCents(l.debit),
+            credit_cents: parseRupiahToCents(l.credit),
             description: l.description.trim(),
           })),
       };
@@ -546,10 +543,10 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
                     Total Jurnal:
                   </td>
                   <td className="num font-mono font-bold text-emerald-700 text-sm cell-debit">
-                    {formatIDR(debitTotal)}
+                    {formatIDRFromCents(debitTotal)}
                   </td>
                   <td className="num font-mono font-bold text-slate-700 text-sm cell-credit">
-                    {formatIDR(creditTotal)}
+                    {formatIDRFromCents(creditTotal)}
                   </td>
                   {!isDetail && !saved && <td />}
                 </tr>
@@ -621,7 +618,7 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
                 </span>
               ) : (
                 <span className="status-badge status-unbalanced text-xs">
-                  <Icon name="warning" size={12} /> SELISIH: {formatIDR(Math.abs(difference))}
+                  <Icon name="warning" size={12} /> SELISIH: {formatIDRFromCents(Math.abs(difference))}
                 </span>
               )}
             </div>
@@ -634,7 +631,7 @@ export function JournalEntryForm({ tabId, entryId, initialTitle }: Props) {
         <div className="flex items-center gap-6">
           <div className="text-right">
             <div className="text-xs text-secondary">
-              Total Debit: <strong className="font-mono text-primary">{formatIDR(debitTotal)}</strong> &bull; Total Kredit: <strong className="font-mono text-primary">{formatIDR(creditTotal)}</strong>
+              Total Debit: <strong className="font-mono text-primary">{formatIDRFromCents(debitTotal)}</strong> &bull; Total Kredit: <strong className="font-mono text-primary">{formatIDRFromCents(creditTotal)}</strong>
             </div>
           </div>
 

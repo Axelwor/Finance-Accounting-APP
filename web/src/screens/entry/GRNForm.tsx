@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { useWorkbench } from "../../workbench/state";
 import { FormError } from "../../components/ui";
 import { NextStepsBar } from "../../components/NextSteps";
 import { useToast } from "../../components/Toast";
 import { api } from "../../api";
-import { formatIDR } from "../../lib/format";
+import { formatIDRFromCents, parseRupiahToCents } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import type { PurchaseOrderListItem, Item, GRNLineInput } from "../../types";
 import type { PrefillRef } from "../../workbench/types";
@@ -57,13 +58,17 @@ export function GRNForm({ tabId, entryId, initialTitle, prefill }: Props) {
   /** Read-only once the GRN exists (reopened tab or just saved). */
   const isExisting = !!entryId || savedId !== null;
 
-  useEffect(() => {
+  const loadMasterData = useCallback(() => {
     api.listPurchaseOrders("CONFIRMED").then(setPurchaseOrders).catch(() => {});
     api.listPurchaseOrders("PARTIALLY_RECEIVED").then((partial) => {
       setPurchaseOrders((prev) => [...prev, ...partial]);
     }).catch(() => {});
     api.listItems().then(setItems).catch(() => {});
   }, []);
+  useEffect(() => {
+    loadMasterData();
+  }, [loadMasterData]);
+  useTabRefresh(loadMasterData);
 
   // Auto-fill: when a PO is picked (manually or via workflow-chain prefill),
   // load its lines and pre-populate the remaining qty per item (D-08).
@@ -259,10 +264,17 @@ export function GRNForm({ tabId, entryId, initialTitle, prefill }: Props) {
                   <input className="input input--narrow" type="number" step="0.001" value={line.qty} onChange={(e) => setLine(line.id, "qty", e.target.value)} disabled={isExisting} />
                 </div>
                 <div>
-                  <input className="input input--narrow right" type="number" value={line.unitCostCents} onChange={(e) => setLine(line.id, "unitCostCents", e.target.value)} disabled={isExisting} />
+                  <input
+                    className="input input--narrow right"
+                    type="number"
+                    min="0"
+                    value={Number(line.unitCostCents) / 100 || 0}
+                    onChange={(e) => setLine(line.id, "unitCostCents", String(parseRupiahToCents(e.target.value)))}
+                    disabled={isExisting}
+                  />
                 </div>
                 <div className="right">
-                  {formatIDR(Math.round((parseFloat(line.qty) || 0) * (parseInt(line.unitCostCents) || 0)))}
+                  {formatIDRFromCents(Math.round((parseFloat(line.qty) || 0) * (parseInt(line.unitCostCents) || 0)))}
                 </div>
                 <div>
                   {!isExisting && (
@@ -286,7 +298,7 @@ export function GRNForm({ tabId, entryId, initialTitle, prefill }: Props) {
 
           <div className="entrytab__total">
             <span className="entrytab__total-label">Total (Dr Inventory / Cr Payable)</span>
-            <span className="entrytab__total-value">{formatIDR(totalCents)}</span>
+            <span className="entrytab__total-value">{formatIDRFromCents(totalCents)}</span>
           </div>
 
           {savedId !== null && (

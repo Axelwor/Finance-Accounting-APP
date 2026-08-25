@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
@@ -29,6 +30,7 @@ export function DeliveryOrderList() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useTabRefresh(load);
 
   const totalCOGS = useMemo(() => items.reduce((acc, it) => acc + it.total_cogs_cents, 0), [items]);
   const openEntry = (item: DeliveryOrderListItem) =>

@@ -3,7 +3,7 @@
  *
  * Icon-only action button (40px default, `size="sm"` → 32px for dense
  * toolbars/rows). Children render into the default slot — inline SVG
- * components work as-is; for Material Symbols use `<Icon name="..." />`.
+ * components work as-is; use `<Icon name="..." />` for named icons.
  */
 import type { CSSProperties, ReactNode } from "react";
 import "@material/web/iconbutton/icon-button.js";

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -85,6 +86,33 @@ func main() {
 		os.Exit(1)
 	}
 	cancel()
+
+	// F-17: RLS startup guard. A role with SUPERUSER or BYPASSRLS silently
+	// disables tenant isolation, so warn prominently (but never crash —
+	// local throwaway databases legitimately use a superuser role).
+	rlsCtx, cancelRLS := context.WithTimeout(context.Background(), 5*time.Second)
+	var roleSuperuser, roleBypassRLS bool
+	err = pool.QueryRow(rlsCtx,
+		`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`,
+	).Scan(&roleSuperuser, &roleBypassRLS)
+	cancelRLS()
+	switch {
+	case err != nil:
+		// Role cannot read pg_roles (or the query failed): skip the check.
+		slog.Debug("rls guard skipped: pg_roles query unavailable", "error", err)
+	case roleSuperuser || roleBypassRLS:
+		slog.Warn(strings.Join([]string{
+			"",
+			"======================================================================",
+			"RLS WARNING: the DATABASE_URL role bypasses Row Level Security.",
+			"rolsuper/rolbypassrls = true means the app.tenant_id policy is",
+			"ignored and tenant isolation is OFF: every query can read and",
+			"write ALL tenants' data.",
+			"Use a restricted role (NOSUPERUSER NOBYPASSRLS, pattern: finance_app)",
+			"for every environment except a local throwaway database.",
+			"======================================================================",
+		}, "\n"))
+	}
 
 	tenantHandler := tenant.NewHandler(pool)
 	authService := auth.NewService(pool, cfg.JWTSecret)
@@ -199,6 +227,7 @@ func main() {
 				router.Post("/delivery-orders", salesHandler.CreateDelivery)
 				router.Post("/invoices", salesHandler.CreateInvoice)
 				router.Post("/invoices/{id}/payments", salesHandler.CreatePayment)
+				router.Post("/invoices/{id}/void", salesHandler.VoidInvoice)
 				router.Post("/credit-notes", salesHandler.CreateCreditNote)
 
 				router.Post("/supplier-invoices", purchaseHandler.CreateSupplierInvoice)
@@ -260,6 +289,10 @@ func main() {
 				router.Get("/reports/templates/{id}", reportsHandler.GetTemplate)
 				router.Put("/reports/templates/{id}", reportsHandler.UpdateTemplate)
 				router.Delete("/reports/templates/{id}", reportsHandler.DeleteTemplate)
+				// Render is read-only (template id + ?format=; no body), so it is
+				// registered for both GET (frontend preview) and POST in the same
+				// RBAC group, sharing one handler.
+				router.Get("/reports/templates/{id}/render", reportsHandler.RenderReport)
 				router.Post("/reports/templates/{id}/render", reportsHandler.RenderReport)
 
 				// D-01..D-02: Dashboard widget CRUD (write)

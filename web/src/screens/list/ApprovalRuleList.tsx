@@ -1,34 +1,53 @@
 import { useEffect, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
-import type { ApprovalRule, CreateApprovalRuleInput } from "../../types";
+import type {
+  ApprovalWorkflow,
+  ApprovalEntityType,
+  ApprovalApproverRole,
+} from "../../types";
+import { parseRupiahToCents, formatIDRFromCents } from "../../lib/format";
 import { Button } from "../../components/m3";
 
-const ENTITY_TYPE_LABEL: Record<string, string> = {
-  "sales-invoice": "Sales Invoice",
-  "purchase-order": "Purchase Order",
-  "supplier-invoice": "Supplier Invoice",
-  "journal-entry": "Journal Entry",
-};
+/** Values accepted by the approval gate (CheckAmount callers in the backend). */
+const ENTITY_TYPE_OPTIONS: Array<{ value: ApprovalEntityType; label: string }> = [
+  { value: "invoice", label: "Sales Invoice" },
+  { value: "purchase_order", label: "Purchase Order" },
+  { value: "supplier_invoice", label: "Supplier Invoice" },
+  { value: "credit_note", label: "Credit Note" },
+  { value: "journal_entry", label: "Journal Entry" },
+];
+
+/** Roles accepted by validateWorkflow on the backend. */
+const APPROVER_ROLE_OPTIONS: Array<{ value: ApprovalApproverRole; label: string }> = [
+  { value: "admin", label: "Admin" },
+  { value: "accountant", label: "Accountant" },
+  { value: "manager", label: "Manager" },
+];
+
+const ENTITY_TYPE_LABEL: Record<string, string> = Object.fromEntries(
+  ENTITY_TYPE_OPTIONS.map((o) => [o.value, o.label]),
+);
 
 export function ApprovalRuleList() {
-  const [items, setItems] = useState<ApprovalRule[]>([]);
+  const [items, setItems] = useState<ApprovalWorkflow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  /** When set, the form prefills an existing workflow — save re-posts it (upsert). */
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const [entityType, setEntityType] = useState("sales-invoice");
-  const [minAmount, setMinAmount] = useState(0);
-  const [approverAccountId, setApproverAccountId] = useState<number | "">("");
+  const [entityType, setEntityType] = useState<ApprovalEntityType>("invoice");
+  const [minAmount, setMinAmount] = useState("");
+  const [approverRole, setApproverRole] = useState<ApprovalApproverRole>("accountant");
 
   const load = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getApprovalRules();
+      const data = await api.listApprovalWorkflows();
       setItems(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load approval rules.");
@@ -42,40 +61,33 @@ export function ApprovalRuleList() {
   }, []);
 
   const resetForm = () => {
-    setEntityType("sales-invoice");
-    setMinAmount(0);
-    setApproverAccountId("");
+    setEntityType("invoice");
+    setMinAmount("");
+    setApproverRole("accountant");
     setFormError(null);
     setShowForm(false);
     setEditingId(null);
   };
 
   const handleSave = async () => {
-    if (!entityType.trim()) {
-      setFormError("Entity type is required.");
+    if (minAmount.trim() === "") {
+      setFormError("Minimum amount is required (use 0 to apply to any amount).");
       return;
     }
-    if (minAmount < 0) {
+    const minAmountCents = parseRupiahToCents(minAmount);
+    if (minAmountCents < 0) {
       setFormError("Minimum amount must be >= 0.");
-      return;
-    }
-    if (approverAccountId === "" || approverAccountId === undefined) {
-      setFormError("Approver account is required.");
       return;
     }
     setSaving(true);
     setFormError(null);
     try {
-      const input: CreateApprovalRuleInput = {
+      // No PUT endpoint: POST upserts per entity_type.
+      await api.createApprovalWorkflow({
         entity_type: entityType,
-        min_amount_cents: minAmount * 100,
-        approver_account_id: Number(approverAccountId),
-      };
-      if (editingId) {
-        await api.updateApprovalRule(editingId, input);
-      } else {
-        await api.createApprovalRule(input);
-      }
+        min_amount_cents: minAmountCents,
+        approver_role: approverRole,
+      });
       resetForm();
       await load();
     } catch (err) {
@@ -85,31 +97,26 @@ export function ApprovalRuleList() {
     }
   };
 
-  const editRule = (rule: ApprovalRule) => {
+  const editRule = (rule: ApprovalWorkflow) => {
     setEditingId(rule.id);
-    setEntityType(rule.entity_type);
-    setMinAmount(Math.floor(rule.min_amount_cents / 100));
-    setApproverAccountId(rule.approver_account_id);
+    setEntityType((ENTITY_TYPE_LABEL[rule.entity_type] ? rule.entity_type : "invoice") as ApprovalEntityType);
+    setMinAmount(String(Math.floor(rule.min_amount_cents / 100)));
+    setApproverRole(
+      (APPROVER_ROLE_OPTIONS.some((o) => o.value === rule.approver_role)
+        ? rule.approver_role
+        : "accountant") as ApprovalApproverRole,
+    );
     setShowForm(true);
   };
 
   const deleteRule = async (id: number) => {
     if (!confirm("Delete this approval rule?")) return;
     try {
-      await api.deleteApprovalRule(id);
+      await api.deleteApprovalWorkflow(id);
       await load();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to delete rule.");
     }
-  };
-
-  const formatAmount = (cents: number) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(cents / 100);
   };
 
   return (
@@ -152,36 +159,36 @@ export function ApprovalRuleList() {
               <select
                 className="input"
                 value={entityType}
-                onChange={(e) => setEntityType(e.target.value)}
+                onChange={(e) => setEntityType(e.target.value as ApprovalEntityType)}
                 style={{ padding: "6px 10px" }}
               >
-                <option value="sales-invoice">Sales Invoice</option>
-                <option value="purchase-order">Purchase Order</option>
-                <option value="supplier-invoice">Supplier Invoice</option>
-                <option value="journal-entry">Journal Entry</option>
+                {ENTITY_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
               </select>
 
-              <label className="field__label">Minimum Amount</label>
+              <label className="field__label">Minimum Amount (Rp)</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 className="input"
                 value={minAmount}
-                onChange={(e) => setMinAmount(Number(e.target.value))}
-                placeholder="e.g. 5000000"
+                onChange={(e) => setMinAmount(e.target.value)}
+                placeholder="e.g. 5.000.000 (0 = any amount)"
                 style={{ padding: "6px 10px" }}
-                min="0"
               />
 
-              <label className="field__label">Approver Account ID</label>
-              <input
-                type="number"
+              <label className="field__label">Approver Role</label>
+              <select
                 className="input"
-                value={approverAccountId}
-                onChange={(e) => setApproverAccountId(e.target.value === "" ? "" : Number(e.target.value))}
-                placeholder="e.g. 1"
+                value={approverRole}
+                onChange={(e) => setApproverRole(e.target.value as ApprovalApproverRole)}
                 style={{ padding: "6px 10px" }}
-                min="1"
-              />
+              >
+                {APPROVER_ROLE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
             </div>
             {formError ? (
               <p style={{ color: "var(--md-sys-color-error)", margin: "8px 0 0" }}>{formError}</p>
@@ -193,7 +200,7 @@ export function ApprovalRuleList() {
                 disabled={saving}
                 onClick={() => void handleSave()}
               >
-                {saving ? "Saving..." : editingId ? "Update" : "Create"}
+                {saving ? "Saving..." : "Save"}
               </Button>
               <Button
                 variant="outlined"
@@ -218,7 +225,8 @@ export function ApprovalRuleList() {
                 <tr>
                   <th>Entity Type</th>
                   <th>Min Amount</th>
-                  <th>Approver ID</th>
+                  <th>Approver Role</th>
+                  <th>Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -226,8 +234,17 @@ export function ApprovalRuleList() {
                 {items.map((rule) => (
                   <tr key={rule.id}>
                     <td>{ENTITY_TYPE_LABEL[rule.entity_type] ?? rule.entity_type}</td>
-                    <td style={{ fontFamily: "var(--md-ref-typeface-plain)" }}>{formatAmount(rule.min_amount_cents)}</td>
-                    <td>{rule.approver_account_id}</td>
+                    <td style={{ fontFamily: "var(--md-ref-typeface-plain)" }}>
+                      {formatIDRFromCents(rule.min_amount_cents)}
+                    </td>
+                    <td style={{ textTransform: "capitalize" }}>{rule.approver_role}</td>
+                    <td>
+                      {rule.is_active === false ? (
+                        <span className="badge">Inactive</span>
+                      ) : (
+                        <span className="badge badge--success">Active</span>
+                      )}
+                    </td>
                     <td>
                       <Button
                         variant="outlined"
@@ -235,7 +252,7 @@ export function ApprovalRuleList() {
                         onClick={() => editRule(rule)}
                       >
                         Edit
-                      </Button>
+                      </Button>{" "}
                       <Button
                         variant="outlined"
                         size="sm"

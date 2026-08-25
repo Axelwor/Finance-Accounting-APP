@@ -28,7 +28,7 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <Sidebar />
-      <div className="app-main" role="main">
+      <div className="app-main" role="main" id="app-main">
         <TopBar onOpenPalette={() => setPaletteOpen(true)} />
         <TabStrip />
         <div className="app-main__inner">

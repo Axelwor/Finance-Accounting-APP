@@ -75,6 +75,7 @@ export function NestedTabStrip({
             tab={child}
             isActive={child.id === activeChildId}
             tabIndex={activeIndex === index ? 0 : -1}
+            dataIndex={index}
             onKeyDown={(e) => handleKeyDown(e, index)}
           />
         ))}
@@ -99,11 +100,13 @@ function NestedTabPill({
   tab,
   isActive,
   tabIndex,
+  dataIndex,
   onKeyDown,
 }: {
   tab: NestedTab;
   isActive: boolean;
   tabIndex?: number;
+  dataIndex?: number;
   onKeyDown?: (e: React.KeyboardEvent) => void;
 }) {
   const workbench = useWorkbench();
@@ -117,7 +120,7 @@ function NestedTabPill({
         role="tab"
         aria-selected={isActive}
         tabIndex={tabIndex}
-        data-nested-tab-index={tabIndex ?? -1}
+        data-nested-tab-index={dataIndex ?? -1}
         title={tab.title}
         onClick={() => workbench.activate(tab.id)}
         onKeyDown={onKeyDown}
@@ -135,7 +138,7 @@ function NestedTabPill({
       role="tab"
       aria-selected={isActive}
       tabIndex={tabIndex}
-      data-nested-tab-index={tabIndex ?? -1}
+      data-nested-tab-index={dataIndex ?? -1}
       onClick={() => workbench.activate(tab.id)}
       onKeyDown={onKeyDown}
     >

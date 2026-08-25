@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   formatIDR,
+  formatIDRFromCents,
   formatDate,
   todayISO,
   formatRelativeDate,
   parseAmountInput,
+  parseRupiahToCents,
   fmtCurrencyIDR,
   fmtDateIDR,
   parseDateInput,
@@ -111,6 +113,44 @@ describe("parseAmountInput", () => {
   it("returns 0 for empty or non-numeric input", () => {
     expect(parseAmountInput("")).toBe(0);
     expect(parseAmountInput("abc")).toBe(0);
+  });
+});
+
+describe("parseRupiahToCents", () => {
+  it("multiplies integer rupiah by 100 (backend stores cents)", () => {
+    expect(parseRupiahToCents("150000")).toBe(15000000);
+  });
+
+  it("strips separators and currency symbols before converting", () => {
+    expect(parseRupiahToCents("1.250.000")).toBe(125000000);
+    expect(parseRupiahToCents("Rp 12,500")).toBe(1250000);
+  });
+
+  it("returns 0 for empty or non-numeric input", () => {
+    expect(parseRupiahToCents("")).toBe(0);
+    expect(parseRupiahToCents("abc")).toBe(0);
+  });
+
+  it("returns 0 for explicit zero", () => {
+    expect(parseRupiahToCents("0")).toBe(0);
+  });
+});
+
+describe("formatIDRFromCents", () => {
+  it("divides cents by 100 and formats as IDR", () => {
+    expect(formatIDRFromCents(15000000)).toBe(`IDR${NBSP}150,000`);
+  });
+
+  it("rounds sub-rupiah cents to whole rupiah (consistent with formatIDR)", () => {
+    expect(formatIDRFromCents(1234567)).toBe(`IDR${NBSP}12,346`);
+  });
+
+  it("formats zero cents as zero rupiah", () => {
+    expect(formatIDRFromCents(0)).toBe(`IDR${NBSP}0`);
+  });
+
+  it("matches formatIDR styling for the same amount", () => {
+    expect(formatIDRFromCents(250000)).toBe(formatIDR(2500));
   });
 });
 

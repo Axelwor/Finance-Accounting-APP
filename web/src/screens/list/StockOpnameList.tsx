@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
@@ -26,6 +27,7 @@ export function StockOpnameList() {
   };
 
   useEffect(() => { void load(); }, []);
+  useTabRefresh(load);
 
   const openEntry = (item: StockOpnameListItem) =>
     workbench.openEntryExisting("stock-opname-entry", item.id, item.number, item.status);

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { useWorkbench } from "../../workbench/state";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
@@ -38,6 +39,7 @@ export function ChequeList() {
   useEffect(() => {
     void load();
   }, [directionFilter]);
+  useTabRefresh(load);
 
   const handleDeposit = (cheque: ChequeListItem) => {
     setSelectedCheque(cheque);

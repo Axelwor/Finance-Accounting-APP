@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { FormError, LoadingState } from "../../components/ui";
 import { EmptyState } from "../../components/EmptyState";
 import { SortableHeader, type SortState } from "../../components/SortableHeader";
@@ -19,9 +20,13 @@ export function CustomerList() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState>({ column: "code", direction: "asc" });
 
-  useEffect(() => {
+  const load = useCallback(() => {
     api.listCustomers().then(setCustomers).catch(() => setError("Failed to load customers")).finally(() => setLoading(false));
   }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+  useTabRefresh(load);
 
   const onSort = (column: string) =>
     setSort((s) => ({

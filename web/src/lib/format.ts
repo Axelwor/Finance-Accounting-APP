@@ -44,6 +44,25 @@ export function parseAmountInput(text: string): number {
   return parseInt(clean, 10);
 }
 
+/**
+ * Parse a rupiah amount typed by the user ("12.500", "Rp 1,250,000") into
+ * integer cents (backend stores every money value as *_cents, so rupiah is
+ * multiplied by 100). Empty or zero input yields 0.
+ */
+export function parseRupiahToCents(input: string): number {
+  const clean = (input || "").replace(/[^\d]/g, "");
+  if (!clean) return 0;
+  return parseInt(clean, 10) * 100;
+}
+
+/**
+ * Format an integer-cents value as whole-rupiah IDR, consistent with
+ * formatIDR styling (same Intl config, divided by 100 first).
+ */
+export function formatIDRFromCents(cents: number): string {
+  return formatIDR(Math.round((cents || 0) / 100));
+}
+
 /** Alias for formatIDR — used by recurring/cost-center modules. */
 export function fmtCurrencyIDR(value: number): string {
   return formatIDR(value);

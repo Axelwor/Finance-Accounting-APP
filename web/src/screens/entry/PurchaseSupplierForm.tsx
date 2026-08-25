@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
 import { FormError, LoadingState } from "../../components/ui";
 import { api } from "../../api";
+import { parseRupiahToCents } from "../../lib/format";
 import type { CreateSupplierInput, PaymentTerm, Supplier } from "../../types";
 
 interface Props {
@@ -138,7 +139,7 @@ export function PurchaseSupplierForm({ tabId, entryId, initialTitle }: Props) {
     province: province.trim() || undefined,
     postal_code: postalCode.trim() || undefined,
     payment_term_id: paymentTermId ? Number(paymentTermId) : undefined,
-    credit_limit_cents: parseCents(creditLimitDisplay) || undefined,
+    credit_limit_cents: parseRupiahToCents(creditLimitDisplay) || undefined,
     npwp: npwp.trim() || undefined,
     supplier_type: supplierType as CreateSupplierInput["supplier_type"],
     is_pkp: isPkp,
@@ -167,7 +168,7 @@ export function PurchaseSupplierForm({ tabId, entryId, initialTitle }: Props) {
         setSavedSupplier(updated);
         replaceDraft(tabId, `${updated.code} · ${updated.name}`, updated.is_active ? "ACTIVE" : "INACTIVE", updated.id);
       } else {
-        const ob = parseCents(openingBalance);
+        const ob = parseRupiahToCents(openingBalance);
         if (ob > 0) {
           payload.opening_balance_cents = ob;
           payload.opening_balance_date = openingBalanceDate || undefined;
@@ -178,7 +179,13 @@ export function PurchaseSupplierForm({ tabId, entryId, initialTitle }: Props) {
       }
         markUnsaved(tabId, false);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save supplier.");
+      // Surface the real backend message (ApiError carries .message) instead
+      // of a generic fallback, so a failed save is never silent.
+      const message =
+        typeof (err as { message?: unknown } | null | undefined)?.message === "string"
+          ? (err as { message: string }).message
+          : "Failed to save supplier.";
+      setError(message);
     } finally {
       setSaving(false);
     }
@@ -378,11 +385,6 @@ export function PurchaseSupplierForm({ tabId, entryId, initialTitle }: Props) {
       </div>
     </form>
   );
-}
-
-function parseCents(raw: string): number {
-  const digits = (raw || "").replace(/[^\d]/g, "");
-  return digits ? parseInt(digits, 10) * 100 : 0;
 }
 
 function centsInput(cents: number): string {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"finance-accounting-app/backend/internal/db"
 )
@@ -96,12 +97,13 @@ func (service *Service) CreateBudget(writer http.ResponseWriter, request *http.R
 	dimArg := nullableInt8(req.DimensionID)
 	var b budgetResponse
 	b.Status = "DRAFT"
+	var createdAt pgtype.Timestamptz
 	err = tx.QueryRow(ctx, `
 		INSERT INTO budgets (tenant_id, name, fiscal_year, dimension_id, status)
 		VALUES ($1, $2, $3, $4, 'DRAFT')
 		RETURNING id, name, fiscal_year, COALESCE(dimension_id, 0), status, created_at
 	`, tenant, name, req.FiscalYear, dimArg).Scan(
-		&b.ID, &b.Name, &b.FiscalYear, &b.DimensionID, &b.Status, &b.CreatedAt)
+		&b.ID, &b.Name, &b.FiscalYear, &b.DimensionID, &b.Status, &createdAt)
 	if err != nil {
 		if isUniqueViolation(err) {
 			writeError(writer, http.StatusConflict, "BUDGET_EXISTS",
@@ -116,6 +118,7 @@ func (service *Service) CreateBudget(writer http.ResponseWriter, request *http.R
 		writeError(writer, http.StatusInternalServerError, "BUDGET_CREATE_FAILED", err.Error())
 		return
 	}
+	b.CreatedAt = timestampString(createdAt)
 
 	b.Lines = make([]budgetLineResponse, 0, len(req.Lines))
 	for _, line := range req.Lines {
@@ -174,10 +177,12 @@ func (service *Service) ListBudgets(writer http.ResponseWriter, request *http.Re
 		defer rows.Close()
 		for rows.Next() {
 			var b budgetListItem
+			var createdAt pgtype.Timestamptz
 			if err := rows.Scan(&b.ID, &b.Name, &b.FiscalYear, &b.DimensionID, &b.Status,
-				&b.CreatedAt, &b.LineCount, &b.TotalCents); err != nil {
+				&createdAt, &b.LineCount, &b.TotalCents); err != nil {
 				return err
 			}
+			b.CreatedAt = timestampString(createdAt)
 			items = append(items, b)
 		}
 		return nil
@@ -203,11 +208,12 @@ func (service *Service) GetBudget(writer http.ResponseWriter, request *http.Requ
 	}
 
 	var b budgetResponse
+	var createdAt pgtype.Timestamptz
 	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
 		return tx.QueryRow(request.Context(), `
 			SELECT id, name, fiscal_year, COALESCE(dimension_id, 0), status, created_at
 			FROM budgets WHERE tenant_id = $1 AND id = $2
-		`, tenant, id).Scan(&b.ID, &b.Name, &b.FiscalYear, &b.DimensionID, &b.Status, &b.CreatedAt)
+		`, tenant, id).Scan(&b.ID, &b.Name, &b.FiscalYear, &b.DimensionID, &b.Status, &createdAt)
 	})
 	if err != nil {
 		if isNoRows(err) {
@@ -217,6 +223,7 @@ func (service *Service) GetBudget(writer http.ResponseWriter, request *http.Requ
 		writeError(writer, http.StatusInternalServerError, "BUDGET_GET_FAILED", err.Error())
 		return
 	}
+	b.CreatedAt = timestampString(createdAt)
 
 	b.Lines = []budgetLineResponse{}
 	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
@@ -327,12 +334,13 @@ func (service *Service) UpdateBudget(writer http.ResponseWriter, request *http.R
 	name := strings.TrimSpace(req.Name)
 	dimArg := nullableInt8(req.DimensionID)
 	var b budgetResponse
+	var createdAt pgtype.Timestamptz
 	err = tx.QueryRow(ctx, `
 		UPDATE budgets SET name = $3, fiscal_year = $4, dimension_id = $5
 		WHERE tenant_id = $1 AND id = $2
 		RETURNING id, name, fiscal_year, COALESCE(dimension_id, 0), status, created_at
 	`, tenant, id, name, req.FiscalYear, dimArg).Scan(
-		&b.ID, &b.Name, &b.FiscalYear, &b.DimensionID, &b.Status, &b.CreatedAt)
+		&b.ID, &b.Name, &b.FiscalYear, &b.DimensionID, &b.Status, &createdAt)
 	if err != nil {
 		if isUniqueViolation(err) {
 			writeError(writer, http.StatusConflict, "BUDGET_EXISTS",
@@ -342,6 +350,7 @@ func (service *Service) UpdateBudget(writer http.ResponseWriter, request *http.R
 		writeError(writer, http.StatusInternalServerError, "BUDGET_UPDATE_FAILED", err.Error())
 		return
 	}
+	b.CreatedAt = timestampString(createdAt)
 
 	if _, err := tx.Exec(ctx, `
 		DELETE FROM budget_lines WHERE tenant_id = $1 AND budget_id = $2

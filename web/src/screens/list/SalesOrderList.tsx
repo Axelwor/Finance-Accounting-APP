@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useWorkbench } from "../../workbench/state";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { EmptyState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import { formatIDR } from "../../lib/format";
@@ -11,6 +12,8 @@ const SO_STATUS_TONE: Record<string, string> = {
   CLOSED: "is-positive",
   CANCELLED: "is-negative",
 };
+
+type SOStatusFilter = "ALL" | SalesOrderListItem["status"];
 
 export function SalesOrderList() {
   const workbench = useWorkbench();
@@ -29,6 +32,12 @@ export function SalesOrderList() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useTabRefresh(load);
+
+  const onStatusChange = (next: SOStatusFilter) => {
+    setStatus(next);
+    void load(next);
+  };
 
   const total = useMemo(() => items.reduce((acc, it) => acc + it.total_cents, 0), [items]);
   const dpTotal = useMemo(() => items.reduce((acc, it) => acc + it.dp_received_cents, 0), [items]);
@@ -46,11 +55,19 @@ export function SalesOrderList() {
 
       <div className="listtab__toolbar">
         <div className="listtab__filters">
-          <div className="filter-pill">
+          <label className="filter-pill">
             <span className="filter-pill__label">Status</span>
-            <span className="filter-pill__value">{status === "ALL" ? "All" : status}</span>
-            <span className="filter-pill__caret">▾</span>
-          </div>
+            <select
+              className="filter-pill__input"
+              value={status}
+              onChange={(e) => onStatusChange(e.target.value as SOStatusFilter)}
+            >
+              <option value="ALL">All</option>
+              <option value="CONFIRMED">Confirmed</option>
+              <option value="CLOSED">Closed</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </label>
         </div>
         <div className="listtab__actions">
           <Button

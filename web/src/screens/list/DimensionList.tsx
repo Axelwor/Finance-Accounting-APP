@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTabRefresh } from "../../workbench/useTabRefresh";
 import { EmptyState, ErrorState, LoadingState } from "../../components/ui";
 import { api } from "../../api";
 import type { Dimension } from "../../types";
@@ -47,6 +48,7 @@ export function DimensionList() {
   useEffect(() => {
     void load();
   }, []);
+  useTabRefresh(load);
 
   const resetForm = () => {
     setCode("");

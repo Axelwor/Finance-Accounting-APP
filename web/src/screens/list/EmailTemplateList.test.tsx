@@ -13,6 +13,12 @@ vi.mock("../../api", () => ({
   },
 }));
 
+// useTabRefresh (list refetch on tab activation) requires WorkbenchProvider,
+// which this isolated component test does not mount.
+vi.mock("../../workbench/useTabRefresh", () => ({
+  useTabRefresh: () => {},
+}));
+
 const { listEmailTemplates } = api as unknown as {
   listEmailTemplates: ReturnType<typeof vi.fn>;
 };

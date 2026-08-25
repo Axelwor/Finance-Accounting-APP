@@ -4,6 +4,7 @@ import { EmptyState } from "../components/ui";
 import { TabErrorBoundary } from "../App";
 import { useKeyboardShortcuts, CLOSE_TAB_EVENT } from "../hooks/useKeyboardShortcuts";
 import { NestedTabStrip } from "./NestedTabStrip";
+import { PaneTabScope } from "./useTabRefresh";
 import type { EntryTab, ListTab, ModuleTab, NestedTab } from "./types";
 import { CashEntryList } from "../screens/list/CashEntryList";
 import { CashEntryForm } from "../screens/entry/CashEntryForm";
@@ -161,11 +162,14 @@ function ModuleContent({ parent }: { parent: ModuleTab }) {
   const activeChild = activeChildId ? children.find((c) => c.id === activeChildId) ?? null : null;
 
   const module = findModule(parent.moduleId);
-  // The +New button should open a draft of the entry kind that matches the
-  // currently active list, not the module's first sub-item (N-01).
-  const activeListItem = activeChild?.kind === "list"
-    ? module?.items.find((i) => i.openList === activeChild.subKind)
-    : module?.items[0];
+  // The +New button should follow the ACTIVE child tab: its matching list
+  // when a list is active, or the entry's own kind when an entry form is
+  // active — falling back to the module's first sub-item (N-01).
+  const activeListItem = !activeChild
+    ? undefined
+    : activeChild.kind === "list"
+      ? module?.items.find((i) => i.openList === activeChild.subKind)
+      : module?.items.find((i) => i.openEntry === activeChild.subKind) ?? module?.items[0];
   const onAdd = activeListItem?.openEntry
     ? () => workbench.openEntryDraft(activeListItem.openEntry!)
     : undefined;
@@ -206,7 +210,9 @@ function ModuleContent({ parent }: { parent: ModuleTab }) {
             style={{ display: child.id === activeChildId ? "block" : "none" }}
           >
             <TabErrorBoundary title={child.title}>
-              <NestedContent tab={child} />
+              <PaneTabScope tab={child}>
+                <NestedContent tab={child} />
+              </PaneTabScope>
             </TabErrorBoundary>
           </div>
         ))}

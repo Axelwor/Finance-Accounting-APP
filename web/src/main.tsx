@@ -6,6 +6,7 @@ import { initM3Theme } from "./lib/m3-theme";
 // M3 stylesheet system: tokens + shell, shared components, screen patterns.
 import "./styles/base.css";
 import "./styles/components.css";
+import "./styles/list.css";
 import "./styles/screens.css";
 import "./styles/legacy-forms.css";
 import "./styles/utilities.css";

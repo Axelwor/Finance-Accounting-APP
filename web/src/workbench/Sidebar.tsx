@@ -30,13 +30,27 @@ export function Sidebar() {
 
   const activeModuleId = workbench.tabs.find((t) => t.id === workbench.activeId)?.moduleId ?? null;
 
-  // Close on Escape.
+  // Close on Escape and return focus to the open module's trigger button.
   useEffect(() => {
     if (!hoveredModule && !pinnedModule) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setHoveredModule(null);
         setPinnedModule(null);
+        if (closeTimer.current) {
+          window.clearTimeout(closeTimer.current);
+          closeTimer.current = null;
+        }
+        const openItem = document.querySelector(".rail-item.is-open");
+        const trigger = openItem?.querySelector<HTMLElement>(".rail-item__btn");
+        const active = document.activeElement;
+        if (
+          trigger &&
+          openItem &&
+          (active === trigger || (active instanceof Node && openItem.contains(active)))
+        ) {
+          trigger.focus();
+        }
       }
     };
     document.addEventListener("keydown", onKey);
@@ -58,6 +72,19 @@ export function Sidebar() {
     closeTimer.current = window.setTimeout(() => {
       setHoveredModule(null);
     }, 180);
+  };
+
+  // Focus moving anywhere inside the module block (trigger or flyout items)
+  // keeps the flyout alive; only leaving the whole block starts the timer.
+  const handleModuleBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget as Node)) {
+      if (closeTimer.current) {
+        window.clearTimeout(closeTimer.current);
+        closeTimer.current = null;
+      }
+      return;
+    }
+    handleLeave();
   };
 
   const handleSubClick = (sub: SubItem) => {
@@ -106,6 +133,7 @@ export function Sidebar() {
                 className={`rail-item${isOpen ? " is-open" : ""}${isActive ? " is-active" : ""}`}
                 onMouseEnter={() => handleEnter(mod.id)}
                 onMouseLeave={handleLeave}
+                onBlur={handleModuleBlur}
               >
                 <button
                   type="button"
@@ -116,8 +144,6 @@ export function Sidebar() {
                   onClick={() =>
                     setPinnedModule((cur) => (cur === mod.id ? null : mod.id))
                   }
-                  onFocus={() => handleEnter(mod.id)}
-                  onBlur={handleLeave}
                 >
                   <span className="rail-item__icon">
                     <Icon name={iconName} size={20} strokeWidth={2} />
