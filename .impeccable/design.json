@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-26T02:05:00+07:00",
+  "title": "Design System: Trexo",
+  "extensions": {
+    "colorMeta": {
+      "ledger-blue": { "role": "primary", "displayName": "Ledger Blue", "canonical": "#2563eb", "tonalRamp": ["oklch(15% 0.06 263)", "oklch(25% 0.11 263)", "oklch(35% 0.16 263)", "oklch(45% 0.2 263)", "oklch(55% 0.22 263)", "oklch(65% 0.19 263)", "oklch(78% 0.12 263)", "oklch(93% 0.04 263)"] },
+      "ledger-blue-deep": { "role": "primary", "displayName": "Ledger Blue Deep", "canonical": "#1d4ed8" },
+      "ledger-blue-tint": { "role": "primary", "displayName": "Ledger Blue Tint", "canonical": "#eff6ff" },
+      "cleared-emerald": { "role": "tertiary", "displayName": "Cleared Emerald", "canonical": "#059669", "tonalRamp": ["oklch(15% 0.04 165)", "oklch(26% 0.08 165)", "oklch(37% 0.11 165)", "oklch(48% 0.13 165)", "oklch(60% 0.13 165)", "oklch(70% 0.12 165)", "oklch(82% 0.09 165)", "oklch(94% 0.04 165)"] },
+      "overdue-red": { "role": "tertiary", "displayName": "Overdue Red", "canonical": "#dc2626", "tonalRamp": ["oklch(15% 0.05 27)", "oklch(26% 0.1 27)", "oklch(37% 0.15 27)", "oklch(48% 0.19 27)", "oklch(58% 0.21 27)", "oklch(68% 0.18 27)", "oklch(81% 0.11 27)", "oklch(94% 0.03 27)"] },
+      "due-amber": { "role": "tertiary", "displayName": "Due Amber", "canonical": "#d97706", "tonalRamp": ["oklch(17% 0.05 60)", "oklch(29% 0.09 60)", "oklch(41% 0.12 60)", "oklch(53% 0.14 60)", "oklch(67% 0.15 60)", "oklch(76% 0.13 60)", "oklch(85% 0.1 60)", "oklch(95% 0.05 60)"] },
+      "memo-sky": { "role": "secondary", "displayName": "Memo Sky", "canonical": "#0284c7", "tonalRamp": ["oklch(16% 0.05 235)", "oklch(27% 0.09 235)", "oklch(38% 0.12 235)", "oklch(50% 0.13 235)", "oklch(62% 0.13 235)", "oklch(72% 0.11 235)", "oklch(83% 0.07 235)", "oklch(94% 0.03 235)"] },
+      "canvas-mist": { "role": "neutral", "displayName": "Canvas Mist", "canonical": "#f8fafc", "tonalRamp": ["oklch(15% 0.03 255)", "oklch(24% 0.03 255)", "oklch(34% 0.025 255)", "oklch(45% 0.02 255)", "oklch(56% 0.02 255)", "oklch(68% 0.015 255)", "oklch(82% 0.01 255)", "oklch(97% 0.005 255)"] },
+      "paper-white": { "role": "neutral", "displayName": "Paper White", "canonical": "#ffffff" },
+      "slate-wash": { "role": "neutral", "displayName": "Slate Wash", "canonical": "#f1f5f9" },
+      "slate-line": { "role": "neutral", "displayName": "Slate Line", "canonical": "#e2e8f0" },
+      "graphite-rule": { "role": "neutral", "displayName": "Graphite Rule", "canonical": "#cbd5e1" },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#0f172a" },
+      "ink-soft": { "role": "neutral", "displayName": "Ink Soft", "canonical": "#475569" },
+      "ink-muted": { "role": "neutral", "displayName": "Ink Muted", "canonical": "#64748b" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display / Grand Total", "purpose": "Form footer grand totals and hero KPI figures only. Always mono, always tnum." },
+      "headline": { "displayName": "Headline", "purpose": "Document titles in the sticky Zone 1 enterprise-form bar." },
+      "title": { "displayName": "Title", "purpose": "Card and section titles." },
+      "body": { "displayName": "Body", "purpose": "Default reading text; dense contexts drop to 12px." },
+      "label": { "displayName": "Label", "purpose": "Table heads (uppercase), field labels, footer summary labels, rail captions." }
+    },
+    "shadows": [
+      { "name": "shadow-xs", "value": "0 1px 2px 0 rgba(0, 0, 0, 0.05)", "purpose": "Cards at rest." },
+      { "name": "shadow-sm", "value": "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1)", "purpose": "Brand badge, slightly raised elements." },
+      { "name": "shadow-md", "value": "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)", "purpose": "Small popovers." },
+      { "name": "shadow-lg", "value": "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)", "purpose": "Menus and dropdown panels." },
+      { "name": "shadow-xl", "value": "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)", "purpose": "Flyouts and modal dialogs only." },
+      { "name": "sticky-bar-whisper", "value": "0 1px 2px rgba(15, 23, 42, 0.04)", "purpose": "Sticky Zone 1 header bars (mirrored upward for footers)." },
+      { "name": "focus-ring-keyboard", "value": "0 0 0 2px var(--bg-surface, #ffffff), 0 0 0 4px var(--brand-primary, #2563eb)", "purpose": "Global keyboard-first focus ring on inputs, selects, buttons." }
+    ],
+    "motion": [
+      { "name": "transition-fast", "value": "all 0.12s ease", "purpose": "Quick-dock buttons, small control state changes." },
+      { "name": "transition-standard", "value": "all 0.15s ease", "purpose": "Rail items, icon buttons, input border/shadow transitions." },
+      { "name": "flyout-slide-in", "value": "150ms ease-out translateX(-6px) fade", "purpose": "Sidebar submenu flyouts (@keyframes flyoutSlideIn)." }
+    ],
+    "breakpoints": [
+      { "name": "form-grid-collapse", "value": "1100px", "purpose": "Enterprise-form header grid drops from 4 columns to 2." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single action color of the screen: compact blue button with optional keyboard hint chip.",
+      "html": "<button class=\"ds-btn-primary\">Simpan<span class=\"ds-btn-kbd\">Ctrl+S</span></button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 10px; background: var(--brand-primary, #2563eb); color: #fff; font-family: Inter, sans-serif; font-size: 11.5px; font-weight: 600; line-height: 1.4; white-space: nowrap; border-radius: var(--radius-xs, 4px); border: 1px solid var(--brand-primary-hover, #1d4ed8); cursor: pointer; transition: background 0.15s ease, box-shadow 0.15s ease; } .ds-btn-primary:hover { background: var(--brand-primary-hover, #1d4ed8); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg-surface, #fff), 0 0 0 4px var(--brand-primary, #2563eb); } .ds-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; } .ds-btn-kbd { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 600; padding: 0 4px; border-radius: var(--radius-xs, 4px); background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); line-height: 1.5; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Paper-white bordered button for supporting actions.",
+      "html": "<button class=\"ds-btn-secondary\">Batal Filter</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 10px; background: var(--bg-surface, #fff); color: var(--text-primary, #0f172a); font-family: Inter, sans-serif; font-size: 11.5px; font-weight: 600; line-height: 1.4; white-space: nowrap; border-radius: var(--radius-xs, 4px); border: 1px solid var(--border-strong, #cbd5e1); cursor: pointer; transition: background 0.15s ease; } .ds-btn-secondary:hover { background: var(--bg-surface-secondary, #f1f5f9); } .ds-btn-secondary:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg-surface, #fff), 0 0 0 4px var(--brand-primary, #2563eb); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input-text",
+      "description": "Compact labeled field with Ledger Blue focus halo; invalid state announces below.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field__label\" for=\"ds-demo-input\">Nama Pelanggan</label><input class=\"ds-input\" id=\"ds-demo-input\" type=\"text\" placeholder=\"PT Maju Jaya\" /><p class=\"ds-field__hint\">Nama sesuai faktur pajak.</p></div>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; } .ds-field__label { font-family: Inter, sans-serif; font-size: 11px; font-weight: 600; color: var(--text-secondary, #475569); line-height: 1.3; } .ds-input { width: 100%; padding: 5px 8px; background: var(--bg-surface, #fff); border: 1px solid var(--border-strong, #cbd5e1); border-radius: var(--radius-xs, 4px); font-family: Inter, sans-serif; font-size: 12px; line-height: 1.5; color: var(--text-primary, #0f172a); transition: border-color 0.12s ease, box-shadow 0.12s ease; } .ds-input::placeholder { color: var(--text-placeholder, #94a3b8); } .ds-input:focus { border-color: var(--brand-primary, #2563eb); box-shadow: 0 0 0 2px var(--brand-primary-light, #eff6ff); outline: none; } .ds-field__hint { font-family: Inter, sans-serif; font-size: 10.5px; color: var(--text-muted, #64748b); }"
+    },
+    {
+      "name": "Status Badges",
+      "kind": "chip",
+      "refersTo": "card",
+      "description": "Document state stamps: draft slate, posted emerald, void red struck-through, pending amber.",
+      "html": "<span class=\"ds-badge-row\"><span class=\"ds-badge ds-badge--draft\">Draft</span><span class=\"ds-badge ds-badge--posted\">Posted</span><span class=\"ds-badge ds-badge--pending\">Pending</span><span class=\"ds-badge ds-badge--void\">Void</span></span>",
+      "css": ".ds-badge-row { display: inline-flex; gap: 6px; align-items: center; } .ds-badge { font-family: Inter, sans-serif; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: var(--radius-full, 9999px); letter-spacing: 0.5px; text-transform: uppercase; } .ds-badge--draft { background: var(--bg-surface-tertiary, #e2e8f0); color: var(--text-secondary, #475569); border: 1px solid var(--border-color, #e2e8f0); } .ds-badge--posted { background: var(--color-success-bg, #ecfdf5); color: var(--color-success-text, #065f46); border: 1px solid var(--color-success-border, #a7f3d0); } .ds-badge--pending { background: var(--color-warning-bg, #fffbeb); color: var(--color-warning-text, #92400e); border: 1px solid var(--color-warning-border, #fde68a); } .ds-badge--void { background: var(--color-danger-bg, #fef2f2); color: var(--color-danger-text, #991b1b); border: 1px solid var(--color-danger-border, #fecaca); text-decoration: line-through; }"
+    },
+    {
+      "name": "Dashboard Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "White working paper with hairline border and quiet title row.",
+      "html": "<section class=\"ds-card\"><header class=\"ds-card__header\"><h3 class=\"ds-card__title\">Posisi Kas & Bank</h3><button class=\"ds-link-btn\">Lihat semua<svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14M12 5l7 7-7 7\"/></svg></button></header><div class=\"ds-card__figure\"><span class=\"ds-card__amount\">Rp 128.450.000</span><span class=\"ds-live-pulse\" aria-hidden=\"true\"></span></div></section>",
+      "css": ".ds-card { background: var(--bg-surface, #fff); border: 1px solid var(--border-color, #e2e8f0); border-radius: var(--radius-md, 8px); padding: 16px; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); } .ds-card__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; } .ds-card__title { font-family: Inter, sans-serif; font-size: 13.5px; font-weight: 700; color: var(--text-primary, #0f172a); margin: 0; } .ds-link-btn { display: inline-flex; align-items: center; gap: 4px; font-family: Inter, sans-serif; font-size: 12px; color: var(--brand-primary, #2563eb); font-weight: 600; background: transparent; border: none; cursor: pointer; } .ds-card__figure { display: flex; align-items: center; gap: 8px; } .ds-card__amount { font-family: 'JetBrains Mono', monospace; font-feature-settings: \"tnum\" 1; font-size: 16px; font-weight: 800; color: var(--text-primary, #0f172a); text-align: right; } .ds-live-pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success, #059669); box-shadow: 0 0 0 2px rgba(16,185,129,0.2); display: inline-block; }"
+    },
+    {
+      "name": "Data Table",
+      "kind": "custom",
+      "refersTo": "datatable",
+      "description": "Signature high-density table: uppercase tracked head on slate wash, mono right-aligned amounts, double-ruled total row.",
+      "html": "<div class=\"ds-dt-wrap\"><table class=\"ds-dt\"><thead><tr><th>Tanggal</th><th>Akun</th><th class=\"ds-dt__num\">Debit</th><th class=\"ds-dt__num\">Kredit</th></tr></thead><tbody><tr><td>25/08/2026</td><td>Kas — BCA</td><td class=\"ds-dt__num ds-dt--debit\">5.000.000,00</td><td class=\"ds-dt__num\">—</td></tr><tr><td>25/08/2026</td><td>Pendapatan Penjualan</td><td class=\"ds-dt__num\">—</td><td class=\"ds-dt__num ds-dt--credit\">5.000.000,00</td></tr></tbody><tfoot><tr><td colspan=\"2\">Total</td><td class=\"ds-dt__num ds-dt--total\">5.000.000,00</td><td class=\"ds-dt__num ds-dt--total\">5.000.000,00</td></tr></tfoot></table></div>",
+      "css": ".ds-dt-wrap { background: var(--bg-surface, #fff); border: 1px solid var(--border-color, #e2e8f0); border-radius: var(--radius-sm, 6px); overflow: hidden; } .ds-dt { width: 100%; border-collapse: collapse; font-family: Inter, sans-serif; font-size: 12px; text-align: left; } .ds-dt th { background: var(--bg-surface-secondary, #f1f5f9); color: var(--text-secondary, #475569); font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; padding: 6px 8px; border-bottom: 1px solid var(--border-strong, #cbd5e1); white-space: nowrap; text-align: left; } .ds-dt td { padding: 4px 8px; border-bottom: 1px solid var(--border-subtle, #f1f5f9); color: var(--text-primary, #0f172a); vertical-align: middle; } .ds-dt tbody tr:hover td { background: var(--bg-surface-hover, #f8fafc); } .ds-dt tfoot tr { background: var(--bg-surface-secondary, #f1f5f9); } .ds-dt tfoot td { padding: 6px 8px; font-weight: 700; border-bottom: none; } .ds-dt__num { font-family: 'JetBrains Mono', monospace; font-feature-settings: \"tnum\" 1; text-align: right !important; } .ds-dt--debit { background: rgba(5,150,105,0.05); } .ds-dt--credit { background: rgba(100,116,139,0.06); } .ds-dt--total { border-top: 1px solid var(--border-strong, #cbd5e1); font-weight: 800; }"
+    },
+    {
+      "name": "Form Footer Total Block",
+      "kind": "custom",
+      "refersTo": "display",
+      "description": "Sticky Zone 3 summary: uppercase label beside the mono Ledger Blue grand total.",
+      "html": "<div class=\"ds-total-block\"><span class=\"ds-total-label\">Total</span><span class=\"ds-total-value\">Rp 16.950.000</span></div>",
+      "css": ".ds-total-block { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; } .ds-total-label { font-family: Inter, sans-serif; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted, #64748b); } .ds-total-value { font-family: 'JetBrains Mono', monospace; font-feature-settings: \"tnum\" 1; font-size: 16px; font-weight: 800; color: var(--brand-primary, #2563eb); text-align: right; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Accountant's Desk",
+    "overview": "Trexo looks like the desk of a meticulous professional accountant: white working papers laid on cool slate, ruled lines instead of ornament, instruments arranged within reach and nothing out of place. The voice is sober, exact, tireless — a tool that works as long as the user does and is never louder than the numbers. Density is a feature: the screen is a workspace where an accountant scans dozens of rows without scrolling fatigue, so type stays compact (13.5px base, 12px inside tables), surfaces stay flat and bordered, and every visual decision serves scanability and audit-grade trust.\n\nColor behaves like ink stamps on a ledger: blue marks action and identity, while emerald, red, and amber are earned by document state — posted, void, pending — never applied as decoration. Depth exists only as whispers: hairline shadows under sticky bars, real elevation reserved for things that actually float (menus, dialogs, flyouts).",
+    "keyCharacteristics": [
+      "High-density corporate layout: 64px icon-rail shell, 52px topbar, tab strips, full-width content",
+      "Flat white cards defined by 1px slate borders; shadows only as state response or floating chrome",
+      "All money set in JetBrains Mono with tabular numerals, right-aligned",
+      "Strict semantic status palette (draft/posted/void/pending) shared across every module",
+      "3-Zone Enterprise Form architecture: sticky header bar, tabbed body, sticky totals footer",
+      "Light and dark themes driven by the same token names ([data-theme=\"dark\"] flips values)"
+    ],
+    "rules": [
+      { "name": "The Earned Color Rule", "body": "Emerald, red, and amber appear only when a document state or amount direction justifies them. A screen with no financial state on it shows blue and slate only.", "section": "colors" },
+      { "name": "The Tabular Truth Rule", "body": "Every monetary figure renders in JetBrains Mono with font-feature-settings \"tnum\" 1, right-aligned. Proportional digits never touch money.", "section": "typography" },
+      { "name": "The Floating Chrome Rule", "body": "Only detached surfaces (flyout menus, dialogs, autocomplete panels) may cast shadow-lg/xl. Anything docked to the page stays at xs/sm or uses the sticky-bar whisper.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do render every monetary figure in JetBrains Mono, \"tnum\" 1, right-aligned — including KPI cards, table cells, and form totals.",
+      "Do reuse the four status stamps (draft/posted/void/pending) verbatim across modules; void always strikes through its label.",
+      "Do build commercial forms on the 3-Zone skeleton with minmax(0, 1fr) grids so nothing ever clips at the right edge.",
+      "Do mark computed fields visually locked (Slate Wash fill, muted text) the moment they're derived.",
+      "Do keep interactive feedback fast and quiet: 0.12–0.15s ease transitions, no bounce, no spring."
+    ],
+    "donts": [
+      "Don't use consumer-gradient decoration, glassmorphism/backdrop-blur surfaces, playful bubble-fintech shapes, or decorative italic serif accents — all four are binding rejections.",
+      "Don't apply emerald/red/amber as decoration; they exist only for financial state (see The Earned Color Rule).",
+      "Don't center or proportionally-space numbers in tables.",
+      "Don't introduce new accent hues; the palette is Ledger Blue plus the semantic quartet on slate neutrals.",
+      "Don't loosen the density contract (13.5px base, 12px table text, 4px-radius controls) without an explicit accessibility-driven reason."
+    ]
+  }
+}

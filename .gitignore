@@ -27,3 +27,10 @@ fix_plan_check.md
 # Tool artifacts
 .kilo/
 .playwright-mcp/
+
+# Impeccable live-mode runtime state (config.json & design.json stay tracked)
+.impeccable/live/
+
+# Harness-local agent settings (auto-executing hooks stay machine-local)
+.claude/settings.local.json
+.codex/hooks.json
