@@ -306,14 +306,14 @@ export function CreditNoteForm({ tabId, entryId, initialTitle, prefill }: Props)
   };
 
   return (
-    <form className="entry-tab" onSubmit={handleSubmit}>
-      <header className="entry-tab__header">
-        <span className="entry-tab__number">{number}</span>
+    <form className="entrytab" onSubmit={handleSubmit}>
+      <header className="entrytab__head">
+        <span className="entrytab__number">{number}</span>
         <span className="kind-mark is-muted">Credit Note</span>
       </header>
 
-      <div className="entry-tab__body">
-        <div className="entry-tab__fields">
+      <div className="entrytab__body">
+        <div className="entrytab__fields">
           <label className="field">
             <span className="field__label">CN Date *</span>
             <input type="date" className="input" value={cnDate} onChange={(e) => setCnDate(e.target.value)} required />
@@ -446,7 +446,7 @@ export function CreditNoteForm({ tabId, entryId, initialTitle, prefill }: Props)
           </button>
         </div>
 
-        <div className="entry-tab__summary">
+        <div className="entrytab__summary">
           <div className="entrytab__total">
             <span className="entrytab__total-label">Return Total (Dr 4201)</span>
             <span className="entrytab__total-value">{formatIDRFromCents(totalCents)}</span>

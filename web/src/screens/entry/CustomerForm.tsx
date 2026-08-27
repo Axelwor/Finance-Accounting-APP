@@ -267,7 +267,7 @@ export function CustomerForm({ tabId, entryId, initialTitle }: Props) {
                 aria-describedby={errors.code ? `${id}-error` : undefined}
               />
               {errors.code && (
-                <span className="field-error">{errors.code}</span>
+                <span className="field__error">{errors.code}</span>
               )}
             </label>
             <label className="field">
@@ -281,7 +281,7 @@ export function CustomerForm({ tabId, entryId, initialTitle }: Props) {
                 aria-describedby={errors.name ? `${id}-error` : undefined}
               />
               {errors.name && (
-                <span className="field-error">{errors.name}</span>
+                <span className="field__error">{errors.name}</span>
               )}
             </label>
             <label className="field field--checkbox">

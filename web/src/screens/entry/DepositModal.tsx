@@ -34,7 +34,7 @@ export function DepositModal({ open, onClose, onSubmit, cheque }: DepositModalPr
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-overlay" onClick={onClose}>
       <div
         ref={dialogRef}
         className="modal modal--centered"
@@ -43,7 +43,7 @@ export function DepositModal({ open, onClose, onSubmit, cheque }: DepositModalPr
         aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal__head">
+        <div className="modal__header">
           <h3 className="modal__title" id={titleId}>Deposit Cheque</h3>
         </div>
         <div className="modal__body">
@@ -52,7 +52,7 @@ export function DepositModal({ open, onClose, onSubmit, cheque }: DepositModalPr
           <p><strong>Amount:</strong> {formatIDR(cheque.amount_cents)}</p>
           {error && <p className="modal__error">{error}</p>}
         </div>
-        <div className="modal__foot">
+        <div className="modal__footer">
           <Button
             variant="text"
             onClick={onClose}

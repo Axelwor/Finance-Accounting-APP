@@ -131,12 +131,12 @@ export function PurchaseReturnForm({ tabId, entryId, initialTitle }: Props) {
 
   if (entryId) {
     return (
-      <div className="entry-tab">
-        <header className="entry-tab__header">
-          <span className="entry-tab__number">{number}</span>
+      <div className="entrytab">
+        <header className="entrytab__head">
+          <span className="entrytab__number">{number}</span>
           <span className="kind-mark is-muted">Purchase Return</span>
         </header>
-        <div className="entry-tab__body">
+        <div className="entrytab__body">
           <p className="tab-placeholder__sub">View existing purchase return (read-only).</p>
         </div>
       </div>
@@ -144,14 +144,14 @@ export function PurchaseReturnForm({ tabId, entryId, initialTitle }: Props) {
   }
 
   return (
-    <form className="entry-tab" onSubmit={handleSubmit}>
-      <header className="entry-tab__header">
-        <span className="entry-tab__number">{number}</span>
+    <form className="entrytab" onSubmit={handleSubmit}>
+      <header className="entrytab__head">
+        <span className="entrytab__number">{number}</span>
         <span className="kind-mark is-muted">Purchase Return</span>
       </header>
 
-      <div className="entry-tab__body">
-        <div className="entry-tab__fields">
+      <div className="entrytab__body">
+        <div className="entrytab__fields">
           <label className="field">
             <span className="field__label">Return Date *</span>
             <input type="date" className="input" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} required />

@@ -592,10 +592,25 @@ table.ledger-table .sort-th__button {
   cursor: pointer;
 }
 
+table.ledger-table .sort-th__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 table.ledger-table .sort-th__arrow {
   font-size: 10px;
   min-width: 10px;
   color: var(--text-muted);
+}
+
+/* Alias: number column variant (Lease schedules, consolidated reports) */
+.ledger-table__num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 table.ledger-table .sort-th.is-active {
@@ -1647,6 +1662,12 @@ table.ledger-table .sort-th.is-active .sort-th__arrow {
 
 .modal--accurate {
   width: min(760px, 94vw);
+}
+
+/* Bounce/Deposit cheque modals reuse .modal-overlay + .modal__header/
+   .modal__footer/.modal__body from the shared modal system above. */
+.modal--centered {
+  width: min(480px, 94vw);
 }
 
 .modal__header {

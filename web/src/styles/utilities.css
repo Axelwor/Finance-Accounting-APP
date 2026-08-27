@@ -25,7 +25,27 @@
 .justify-center { justify-content: center; }
 .justify-end { justify-content: flex-end; }
 
-.grid-col-2 { display: grid; grid-template-columns: 1fr 1fr; }
+.grid-col-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+
+/* ---- Field width caps (compact form density) ----
+   Prevent single-line inputs from stretching full-track on wide
+   monitors; pair with .auth-field / .field wrappers. */
+.field-w-sm { max-width: 150px; }  /* dates, codes, short numbers */
+.field-w-md { max-width: 220px; }  /* selects, amounts */
+.field-w-lg { max-width: 320px; }  /* names, counterparty */
+
+/* ---- Screen-reader-only content ---- */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* ---- Gap (4px scale) ---- */
 .gap-0\.5 { gap: 2px; }

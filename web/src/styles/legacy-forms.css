@@ -11,7 +11,10 @@
   background-color: var(--bg-canvas);
 }
 
-.entrytab__head {
+/* Single sticky entry header — `.entrytab__header` is a legacy alias
+   kept so 13 existing forms render from one declaration block. */
+.entrytab__head,
+.entrytab__header {
   position: sticky;
   top: 0;
   z-index: 30;
@@ -21,6 +24,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   box-shadow: var(--shadow-xs);
 }
 
@@ -304,13 +309,13 @@
 }
 
 .action-rail__btn--primary {
-  background: linear-gradient(180deg, var(--brand-primary), var(--brand-primary-hover));
+  background-color: var(--brand-primary);
   color: #fff;
   border-color: var(--brand-primary-hover);
 }
 
 .action-rail__btn--primary:hover:not(:disabled) {
-  background: var(--brand-primary-hover);
+  background-color: var(--brand-primary-hover);
 }
 
 .action-rail__btn--danger {
@@ -322,4 +327,1087 @@
 .action-rail__btn--danger:hover:not(:disabled) {
   background-color: var(--color-danger);
   color: #fff;
+}
+
+/* ============================================================
+   Density alignment — legacy entrytab cards adopt the compact
+   3-Zone rhythm (body 10px 14px, gaps 8–10px, 6px card radius)
+   instead of the old airy 16–28px paddings.
+   ============================================================ */
+.entrytab__head,
+.entrytab__header {
+  padding: 8px 16px;
+}
+
+.entrytab__body {
+  padding: 10px 14px;
+  gap: 10px;
+}
+
+.entrytab__main {
+  gap: 10px;
+}
+
+.entrytab__header-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+}
+
+.entrytab__detail {
+  padding: 10px 12px;
+  gap: 10px;
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  overflow-x: auto;
+}
+
+.action-rail__btn {
+  padding: 5px 10px;
+  font-size: 11.5px;
+  box-shadow: none;
+}
+
+.detail-grid__head,
+.detail-grid__row {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 80px) minmax(0, 140px) minmax(0, 140px) minmax(0, 150px) 40px;
+}
+
+/* ============================================================
+   entrytab field grid & summary (Credit Note / Purchase Return)
+   ============================================================ */
+.entrytab__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px 16px;
+  align-items: start;
+}
+
+.entrytab__summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* Head extras used by Lease Contract & template editor headers */
+.entrytab__title-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.entrytab__draft-no {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background-color: var(--bg-surface-secondary);
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-color);
+}
+
+.entrytab__header-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.entrytab__header-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--text-primary);
+}
+
+.entrytab__header-number {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background-color: var(--bg-surface-secondary);
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-color);
+}
+
+.entrytab__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ============================================================
+   Cheque register form (form__*)
+   ============================================================ */
+.form {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 14px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: var(--bg-canvas);
+}
+
+.form__head {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.form__title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--text-primary);
+}
+
+.form__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px 16px;
+}
+
+.form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.form__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1.3;
+}
+
+.form__input,
+.form__select {
+  width: 100%;
+  padding: 5px 8px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-primary);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.form__input--large {
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.form__input:focus:not(:focus-visible),
+.form__select:focus:not(:focus-visible) {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px var(--brand-primary-light);
+}
+
+/* Single shared error-alert rule for every error surface family
+   (form fields, modals, ui.tsx FormError, list screens). */
+.form__error,
+.modal__error,
+.form-error,
+.listtab__error {
+  padding: 8px 12px;
+  background-color: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-danger-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* List screens additionally inset the alert from the gutters. */
+.listtab__error {
+  margin: 0 16px 12px;
+}
+
+.form__foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* ============================================================
+   Bank reconciliation workbench (recon-*)
+   ============================================================ */
+.recon-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.recon-panel {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.recon-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: var(--bg-surface-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.recon-panel__body {
+  padding: 4px 0;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.recon-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12px;
+}
+
+.recon-row:last-child {
+  border-bottom: none;
+}
+
+.recon-row.is-matched,
+.recon-row.is-taken {
+  background-color: var(--bg-surface-secondary);
+}
+
+.recon-row__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.recon-row__date {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.recon-row__desc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.recon-row__ref {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.recon-row__amount {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  white-space: nowrap;
+  text-align: right;
+  flex-shrink: 0;
+  min-width: 110px;
+}
+
+.recon-row__amount.is-pos { color: var(--color-success); }
+.recon-row__amount.is-neg { color: var(--color-danger); }
+
+.recon-row__action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.recon-row__link {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--brand-primary);
+  cursor: pointer;
+}
+
+.recon-row__select {
+  font-size: 11.5px;
+  padding: 2px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  background-color: var(--bg-surface);
+  font-family: inherit;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.recon-empty {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.recon-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.recon-summary__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.recon-summary__row strong {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.recon-summary__row--diff {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-color);
+  font-weight: 700;
+}
+
+.recon-summary__row--diff.is-balanced strong { color: var(--color-success); }
+.recon-summary__row--diff.is-unbalanced strong { color: var(--color-danger); }
+
+@media (max-width: 960px) {
+  .recon-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ============================================================
+   Lease contract entry (entryform__*) — PSAK 73 ROU registration
+   ============================================================ */
+.entryform {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
+}
+
+.entryform__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 16px;
+}
+
+.entryform__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.entryform__field > span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1.3;
+}
+
+.entryform__field input,
+.entryform__field select {
+  width: 100%;
+  padding: 5px 8px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-primary);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.entryform__field input:focus:not(:focus-visible),
+.entryform__field select:focus:not(:focus-visible) {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px var(--brand-primary-light);
+}
+
+.entryform__summary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 8px 12px;
+  background-color: var(--bg-surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.entryform__summary strong {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand-primary);
+}
+
+.entryform__summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px 12px;
+}
+
+.entryform__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+@media (max-width: 768px) {
+  .entryform__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ============================================================
+   Report template editor (rp-editor__*)
+   ============================================================ */
+.rp-editor {
+  max-width: 100%;
+}
+
+.rp-editor__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px 16px;
+}
+
+.rp-editor__status {
+  padding: 24px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.rp-editor__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.rp-editor__pane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.rp-editor__pane-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.rp-editor__yaml {
+  width: 100%;
+  min-height: 320px;
+  padding: 8px 10px;
+  background-color: var(--bg-canvas);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  resize: vertical;
+}
+
+.rp-editor__yaml:focus:not(:focus-visible) {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px var(--brand-primary-light);
+}
+
+.rp-editor__preview {
+  width: 100%;
+  min-height: 320px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs);
+  background-color: #ffffff;
+}
+
+.rp-editor__preview-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 16px;
+}
+
+@media (max-width: 960px) {
+  .rp-editor__split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ============================================================
+   Legacy form completeness layer — remaining live entrytab
+   families (Customer/Supplier/Warehouse/Item/BOM/Asset/Bank
+   import/Petty cash/Demo) that referenced never-defined classes.
+   ============================================================ */
+
+/* Grouped sections (fieldset + legend) */
+fieldset.fieldset,
+fieldset.entrytab__fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-surface);
+  margin: 0;
+  min-width: 0;
+}
+
+.fieldset__legend,
+.entrytab__legend {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding: 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Field variants */
+.field--checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.field--checkbox input[type="checkbox"] {
+  accent-color: var(--brand-primary);
+  width: 14px;
+  height: 14px;
+}
+
+.field-note,
+.field-warning {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.field-warning {
+  color: var(--color-warning-text);
+  background-color: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-xs);
+  padding: 6px 10px;
+}
+
+.field__static {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 8px;
+  background-color: var(--bg-surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.field-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  accent-color: var(--brand-primary);
+  width: 14px;
+  height: 14px;
+}
+
+/* entrytab layout helpers */
+.entrytab__detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 14px;
+}
+
+.entrytab__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.entrytab__section-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.entrytab__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px 14px;
+  align-items: end;
+}
+
+.entrytab__row--full {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.entrytab__detail-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 6px 12px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.entrytab__hint {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.entrytab__totals {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px 12px;
+  background-color: var(--bg-surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.entrytab__body__inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.entrytab__search {
+  position: relative;
+  width: 260px;
+}
+
+.entrytab__search input {
+  width: 100%;
+  padding: 5px 8px 5px 28px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+}
+
+.entrytab__search input:focus:not(:focus-visible) {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px var(--brand-primary-light);
+}
+
+.entrytab__search-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+/* Action rail variants */
+.action-rail--inline {
+  width: auto;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.action-rail--success .action-rail__btn--primary {
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.action-rail--success .action-rail__btn--primary:hover:not(:disabled) {
+  background-color: var(--color-success);
+  filter: brightness(1.1);
+}
+
+.action-rail__content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.action-rail__btn--secondary {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+}
+
+.action-rail__hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Detail grid variants (CN/GRN/Quote/SI share the base tracks;
+   forms may override columns inline for their line shape) */
+.detail-grid--cn,
+.detail-grid--grn,
+.detail-grid--quote,
+.detail-grid--si {
+  min-width: 0;
+}
+
+.detail-grid__cell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-grid__cell input,
+.detail-grid__cell select {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+}
+
+.detail-grid__cell input:focus:not(:focus-visible),
+.detail-grid__cell select:focus:not(:focus-visible) {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px var(--brand-primary-light);
+}
+
+.detail-grid__action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.detail-grid__readonly {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Small controls */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs);
+  background-color: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background-color: var(--color-danger-bg);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger);
+}
+
+.btn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--brand-primary);
+  cursor: pointer;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+.input--narrow {
+  max-width: 110px;
+}
+
+/* Petty cash card forms */
+.form--card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 640px;
+  padding: 12px 14px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.form__header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.form__header h3 {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.form__header small {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.form__sections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form__notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface-secondary);
+  color: var(--text-secondary);
+}
+
+.form__notice--info {
+  background-color: var(--color-info-bg);
+  border-color: var(--color-info-border);
+  color: var(--color-info-text);
+}
+
+.form__notice--success {
+  background-color: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success-text);
+}
+
+.form__notice--warning {
+  background-color: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning-text);
+}
+
+.form__notice__content {
+  line-height: 1.5;
+}
+
+.form__notice__content strong {
+  font-weight: 700;
+}
+
+/* Footer action rows */
+.form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* Generic approval/reject controls (PendingApprovalRequestList) */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.form-group label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.form-control {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+  resize: vertical;
+}
+
+.form-control:focus:not(:focus-visible) {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px var(--brand-primary-light);
+}
+
+/* Placeholder tab content (ApprovalRuleForm & friends) */
+.tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 24px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.tab-content h1 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Account picker width cap (StaticCombobox wrapper) */
+.account-picker {
+  max-width: 360px;
+}
+
+/* Ledger table cell aliases */
+.ledger-table__cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledger-table__desc {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+.ledger-table__row--foot {
+  font-weight: 700;
+  background-color: var(--bg-surface-secondary);
+  border-top: 2px solid var(--border-strong);
+}
+
+/* Accurate-mode variants (accurate entry / budget / lease schedule) */
+.entrytab--accurate .entrytab__body {
+  padding: 12px 16px;
+}
+
+.listtab--accurate {
+  background-color: var(--bg-canvas);
 }

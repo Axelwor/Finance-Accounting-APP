@@ -41,7 +41,7 @@ export function BounceModal({ open, onClose, onSubmit, cheque }: BounceModalProp
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-overlay" onClick={onClose}>
       <div
         ref={dialogRef}
         className="modal modal--centered"
@@ -50,7 +50,7 @@ export function BounceModal({ open, onClose, onSubmit, cheque }: BounceModalProp
         aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal__head">
+        <div className="modal__header">
           <h3 className="modal__title" id={titleId}>Cheque Bounced</h3>
         </div>
         <div className="modal__body">
@@ -70,7 +70,7 @@ export function BounceModal({ open, onClose, onSubmit, cheque }: BounceModalProp
           </label>
           {error && <p className="modal__error">{error}</p>}
         </div>
-        <div className="modal__foot">
+        <div className="modal__footer">
           <Button
             variant="text"
             onClick={onClose}

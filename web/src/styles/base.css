@@ -139,7 +139,7 @@ table.datatable thead th {
 .brand-badge {
   width: 38px;
   height: 38px;
-  background: linear-gradient(135deg, var(--brand-primary), #1d4ed8);
+  background-color: var(--brand-primary);
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
@@ -374,7 +374,7 @@ table.datatable thead th {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: linear-gradient(180deg, var(--brand-primary), var(--brand-primary-hover));
+  background-color: var(--brand-primary);
   color: #ffffff;
   font-size: 12px;
   font-weight: 600;
@@ -382,12 +382,11 @@ table.datatable thead th {
   border: 1px solid var(--brand-primary-hover);
   box-shadow: var(--shadow-xs);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.btn-quick-add:hover {
-  filter: brightness(1.05);
-  box-shadow: var(--shadow-sm);
+.btn-quick-add:hover:not(:disabled) {
+  background-color: var(--brand-primary-hover);
 }
 
 .quick-menu-backdrop {
@@ -496,6 +495,230 @@ table.datatable thead th {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Tenant Switcher dropdown (desktop) — detached menu, shadow-xl.
+   The ≤600px media block below adjusts it for phones. */
+.tenant-switcher {
+  position: relative;
+  min-width: 0;
+}
+
+.tenant-switcher__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 160;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 250px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 6px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
+}
+
+.tenant-switcher__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tenant-switcher__item:hover:not(:disabled),
+.tenant-switcher__item.is-active {
+  background-color: var(--brand-primary-light);
+  color: var(--brand-primary);
+}
+
+.tenant-switcher__item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tenant-switcher__item-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.tenant-switcher__item-role {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+.tenant-switcher__empty {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.tenant-switcher__add {
+  padding: 6px 8px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--brand-primary);
+  cursor: pointer;
+}
+
+.tenant-switcher__add:hover:not(:disabled) {
+  background-color: var(--brand-primary-light);
+  border-style: solid;
+}
+
+.tenant-switcher__form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+}
+
+.tenant-switcher__form input {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+}
+
+.tenant-switcher__form input:focus:not(:focus-visible) {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px var(--brand-primary-light);
+}
+
+.tenant-switcher__form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.tenant-switcher__error {
+  padding: 6px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-danger-text);
+  background-color: var(--color-danger-bg);
+  border-radius: var(--radius-xs);
+}
+
+/* Theme Picker popover (topbar) */
+.theme-picker {
+  position: relative;
+}
+
+.theme-picker__popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 160;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 208px;
+  padding: 10px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
+}
+
+.theme-picker__title {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+.theme-picker__swatches {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.theme-picker__swatch {
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.theme-picker__swatch:hover {
+  transform: scale(1.08);
+}
+
+.theme-picker__swatch.is-active {
+  box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--brand-primary);
+}
+
+.theme-picker__custom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.theme-picker__custom input[type="color"] {
+  width: 32px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  cursor: pointer;
+}
+
+.theme-picker__reset {
+  padding: 4px 8px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--brand-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.theme-picker__reset:hover {
+  background-color: var(--brand-primary-light);
 }
 
 /* TabStrip */
@@ -678,6 +901,172 @@ table.datatable thead th {
   position: relative;
 }
 
+/* Workbench module panes — inactive panes are toggled via inline
+   display so unsaved form state survives tab switches (E-02). */
+.module-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+
+.module-content__body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.module-content__pane {
+  min-width: 0;
+}
+
+.workarea--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Placeholder tabs while a module is being wired up */
+.tab-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 64px 24px;
+  text-align: center;
+}
+
+.tab-placeholder__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.tab-placeholder__sub {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.tab-placeholder__sub code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  background-color: var(--bg-surface-secondary);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+}
+
+.tab-placeholder__hint {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  max-width: 380px;
+}
+
+/* Period close/reopen stamp (components/period.tsx) */
+.period-stamp {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.period-stamp__desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  max-width: 520px;
+}
+
+.period-stamp__status {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-success-text);
+}
+
+.period-stamp__status code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Boot spinner (App.tsx loading console) */
+.loading-state__spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--brand-primary);
+  border-radius: 50%;
+  animation: loadingSpin 0.7s linear infinite;
+}
+
+@keyframes loadingSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* Topbar / rail / tabstrip micro-wrappers */
+.topbar__center {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rail-item__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.rail-flyout__arrow {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.rail-flyout__header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand-primary);
+}
+
+.rail-flyout__item-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tabpill__icon,
+.tabpill__title {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.tabpill__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+
+.nested-icon-tab__label,
+.nested-tabpill__title {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ------------------------------------------------------------
    5. Standard Corporate Enterprise Form Architecture
    ------------------------------------------------------------ */
@@ -800,6 +1189,12 @@ table.datatable thead th {
   .form-header-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* Date tracks stay narrow inside the 4-column header grid so the
+   row reads compact on wide monitors. */
+.form-header-grid .auth-field:has(> input[type="date"]) {
+  max-width: 170px;
 }
 
 /* Side-Tab Icon Rail + Main Grid Area */
@@ -1280,15 +1675,16 @@ select.input-base {
   .topbar__user-email {
     display: none;
   }
-  /* Tenant switcher truncates instead of pushing the bar wide */
+  /* Tenant switcher truncates instead of pushing the bar wide
+     (overflow stays visible so the dropdown menu is not clipped) */
   .topbar__business {
     min-width: 0;
-    overflow: hidden;
+    overflow: visible;
   }
   .tenant-switcher {
     min-width: 0;
     max-width: 34vw;
-    overflow: hidden;
+    overflow: visible;
   }
   .tenant-switcher__toggle {
     max-width: 34vw;
