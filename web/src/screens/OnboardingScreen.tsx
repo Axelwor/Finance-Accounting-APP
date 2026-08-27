@@ -128,7 +128,7 @@ export function OnboardingScreen() {
           <div className="brand-badge">
             <Icon name="book_open" size={20} className="text-white" />
           </div>
-          <span className="brand-name">Ledgerly Setup Wizard</span>
+          <span className="brand-name">Trexo Setup Wizard</span>
         </div>
         <div className="onboarding-steps-indicator">
           <div className={`step-pill ${step >= 0 ? "is-active" : ""}`} aria-current={step === 0 ? "step" : undefined}>

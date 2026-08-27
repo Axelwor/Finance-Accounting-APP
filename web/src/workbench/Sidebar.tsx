@@ -114,7 +114,7 @@ export function Sidebar() {
 
       <aside className={`sidebar${mobileOpen ? " is-open" : ""}`} aria-label="Modules">
         {/* Brand mark */}
-        <div className="sidebar__brand" title="Ledgerly Accounting">
+        <div className="sidebar__brand" title="Trexo Accounting">
           <div className="brand-badge">
             <Icon name="book_open" size={20} className="text-white" />
           </div>

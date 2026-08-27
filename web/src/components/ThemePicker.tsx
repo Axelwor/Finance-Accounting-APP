@@ -12,7 +12,7 @@ import "@material/web/iconbutton/icon-button.js";
 
 /** Curated Material You palette (hex source colors). */
 const PRESET_COLORS = [
-  { value: "#1a6dc4", label: "Ledgerly Blue" },
+  { value: "#1a6dc4", label: "Trexo Blue" },
   { value: "#6750a4", label: "Violet" },
   { value: "#006a60", label: "Teal" },
   { value: "#00629d", label: "Ocean" },

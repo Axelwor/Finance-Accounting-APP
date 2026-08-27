@@ -68,7 +68,7 @@ export function TransactionFormScreen() {
   const { setTransactions } = useAppState();
 
   useEffect(() => {
-    document.title = `${meta.title} - Ledgerly`;
+    document.title = `${meta.title} - Trexo`;
   }, [meta.title]);
 
   const loadMaster = useCallback(async () => {

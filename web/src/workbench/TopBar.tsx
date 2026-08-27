@@ -80,11 +80,11 @@ export function TopBar({ onOpenPalette }: { onOpenPalette?: () => void }) {
   return (
     <header className="topbar" role="banner">
       <div className="topbar__left">
-        <Link to="/" className="brand brand--inline" aria-label="Ledgerly Home">
+        <Link to="/" className="brand brand--inline" aria-label="Trexo Home">
           <span className="brand__logo-icon">
             <Icon name="book_open" size={18} />
           </span>
-          <span className="brand__name">Ledgerly</span>
+          <span className="brand__name">Trexo</span>
           <span className="brand__badge">v2.0</span>
         </Link>
 

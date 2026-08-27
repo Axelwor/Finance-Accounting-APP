@@ -46,10 +46,10 @@ export function SegmentedAgingBar({ buckets, formatCurrency = (c) => `Rp ${c.toL
   const pOver90 = (safeOver90 / total) * 100;
 
   const segments = [
-    { label: "0-30 Hari", cents: safe0_30, pct: p0_30, color: "#059669" },
-    { label: "31-60 Hari", cents: safe31_60, pct: p31_60, color: "#0284c7" },
-    { label: "61-90 Hari", cents: safe61_90, pct: p61_90, color: "#d97706" },
-    { label: ">90 Hari", cents: safeOver90, pct: pOver90, color: "#dc2626" },
+    { label: "0-30 Hari", cents: safe0_30, pct: p0_30, color: "var(--color-success)" },
+    { label: "31-60 Hari", cents: safe31_60, pct: p31_60, color: "var(--color-info)" },
+    { label: "61-90 Hari", cents: safe61_90, pct: p61_90, color: "var(--color-warning)" },
+    { label: ">90 Hari", cents: safeOver90, pct: pOver90, color: "var(--color-danger)" },
   ];
 
   return (
@@ -75,7 +75,6 @@ export function SegmentedAgingBar({ buckets, formatCurrency = (c) => `Rp ${c.toL
               width: `${seg.pct}%`,
               backgroundColor: seg.color,
               height: "100%",
-              transition: "width 0.3s ease",
             }}
             title={`${seg.label}: ${formatCurrency(seg.cents)} • ${seg.pct.toFixed(1)}%`}
           />

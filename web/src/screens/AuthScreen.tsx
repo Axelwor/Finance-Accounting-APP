@@ -65,7 +65,7 @@ export function AuthScreen() {
           <div className="auth-brand-logo">
             <Icon name="book_open" size={24} />
           </div>
-          <span className="auth-brand-name">Ledgerly</span>
+          <span className="auth-brand-name">Trexo</span>
         </div>
 
         <div className="auth-banner__content">
@@ -106,7 +106,7 @@ export function AuthScreen() {
         </div>
 
         <div className="auth-banner__footer">
-          <span>&copy; 2026 Ledgerly Financial Engine &bull; PSAK / EMKM Compliant</span>
+          <span>&copy; 2026 Trexo Financial Engine &bull; PSAK / EMKM Compliant</span>
         </div>
       </div>
 
@@ -202,7 +202,7 @@ export function AuthScreen() {
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
                 >
-                  <Icon name={showPassword ? "visibility" : "visibility"} size={16} />
+                  <Icon name={showPassword ? "visibility_off" : "visibility"} size={16} />
                 </button>
               </div>
             </div>
