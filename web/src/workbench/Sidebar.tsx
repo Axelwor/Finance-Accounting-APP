@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useWorkbench } from "./state";
+import { useAppState } from "../state";
 import { MODULES } from "./modules";
 import { Icon } from "../components/m3/Icon";
 import type { Module, SubItem } from "./types";
@@ -23,12 +24,21 @@ const MODULE_ICON_NAMES: Record<Module["icon"], string> = {
  */
 export function Sidebar() {
   const workbench = useWorkbench();
+  const { business } = useAppState();
   const [hoveredModule, setHoveredModule] = useState<string | null>(null);
   const [pinnedModule, setPinnedModule] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const closeTimer = useRef<number | null>(null);
 
   const activeModuleId = workbench.tabs.find((t) => t.id === workbench.activeId)?.moduleId ?? null;
+
+  // Email routes are Owner/Admin only (server enforces 403 for others);
+  // hide the module from the rail so non-admins never reach the dead end.
+  const role = business?.businessType ?? "owner";
+  const visibleModules =
+    role === "owner" || role === "admin"
+      ? MODULES
+      : MODULES.filter((m) => m.id !== "email");
 
   // Close on Escape and return focus to the open module's trigger button.
   useEffect(() => {
@@ -122,7 +132,7 @@ export function Sidebar() {
 
         {/* Navigation Rail */}
         <nav className="sidebar__rail" aria-label="Modules">
-          {MODULES.map((mod) => {
+          {visibleModules.map((mod) => {
             const isOpen = openModuleId === mod.id;
             const isActive = activeModuleId === mod.id;
             const iconName = MODULE_ICON_NAMES[mod.icon] || "file_text";

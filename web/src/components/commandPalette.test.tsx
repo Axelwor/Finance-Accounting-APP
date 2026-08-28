@@ -4,11 +4,18 @@ import { CommandPalette } from "./CommandPalette";
 
 const mockOpenList = vi.fn();
 const mockOpenEntryDraft = vi.fn();
+let mockRole = "owner";
 
 vi.mock("../workbench/state", () => ({
   useWorkbench: () => ({
     openList: mockOpenList,
     openEntryDraft: mockOpenEntryDraft,
+  }),
+}));
+
+vi.mock("../state", () => ({
+  useAppState: () => ({
+    business: { id: "t1", name: "T", businessType: mockRole, currency: "IDR", fiscalYearStart: 1 },
   }),
 }));
 
@@ -93,5 +100,25 @@ describe("CommandPalette Component", () => {
     fireEvent.keyDown(input, { key: "ArrowDown" });
     const nextId = input.getAttribute("aria-activedescendant");
     expect(document.getElementById(nextId!)).toBe(options[1]);
+  });
+
+  it("shows email module commands for owner/admin roles", () => {
+    mockRole = "owner";
+    render(<CommandPalette isOpen={true} onClose={vi.fn()} />);
+    const input = screen.getByPlaceholderText(/Cari modul, transaksi/i);
+    fireEvent.change(input, { target: { value: "Email" } });
+    expect(screen.getByText(/Buka Email Templates/i)).toBeInTheDocument();
+  });
+
+  it("hides email module commands for non-admin roles", () => {
+    mockRole = "staff";
+    render(<CommandPalette isOpen={true} onClose={vi.fn()} />);
+    const input = screen.getByPlaceholderText(/Cari modul, transaksi/i);
+    fireEvent.change(input, { target: { value: "Email" } });
+    expect(screen.queryByText(/Buka Email/i)).not.toBeInTheDocument();
+    // Other module commands still reachable
+    fireEvent.change(input, { target: { value: "Invoice" } });
+    const options = screen.getAllByRole("option");
+    expect(options.length).toBeGreaterThan(0);
   });
 });

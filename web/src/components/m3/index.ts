@@ -33,8 +33,3 @@ export { Radio, type RadioProps } from "./Radio";
 export { Tabs, PrimaryTab, type TabsProps, type PrimaryTabProps } from "./Tabs";
 export { Dialog, type DialogProps } from "./Dialog";
 export { Menu, MenuItem, type MenuProps, type MenuItemProps } from "./Menu";
-export {
-  Autocomplete,
-  type AutocompleteOption,
-  type AutocompleteProps,
-} from "./Autocomplete";

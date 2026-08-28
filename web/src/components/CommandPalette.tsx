@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useWorkbench } from "../workbench/state";
+import { useAppState } from "../state";
 import { MODULES } from "../workbench/modules";
 import { Icon } from "./m3/Icon";
 import { useDialogA11y } from "./dialogA11y";
@@ -21,6 +22,7 @@ interface Props {
 
 export function CommandPalette({ isOpen, onClose }: Props) {
   const workbench = useWorkbench();
+  const { business } = useAppState();
   const [search, setSearch] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -75,8 +77,10 @@ export function CommandPalette({ isOpen, onClose }: Props) {
       },
     ];
 
-    // Modules subitems
-    MODULES.forEach((mod) => {
+    // Modules subitems — email commands hidden for non-admin roles, matching the sidebar rail.
+    const role = business?.businessType ?? "owner";
+    const modules = role === "owner" || role === "admin" ? MODULES : MODULES.filter((m) => m.id !== "email");
+    modules.forEach((mod) => {
       mod.items.forEach((item) => {
         list.push({
           id: `mod-${mod.id}-${item.id}`,
@@ -96,7 +100,7 @@ export function CommandPalette({ isOpen, onClose }: Props) {
     });
 
     return list;
-  }, [workbench]);
+  }, [workbench, business]);
 
   // Filter commands
   const filteredCommands = useMemo(() => {
