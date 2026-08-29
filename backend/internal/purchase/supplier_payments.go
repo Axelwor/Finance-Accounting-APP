@@ -164,16 +164,20 @@ func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, reques
 		}
 
 		// Build journal lines.
-		//   Dr 2101 AP (ap_applied) — reduce what we owe.
-		//   Cr Cash/Bank (amount) — total cash out.
-		//   FX difference clears through the mapped gain/loss account.
+		//   Dr 2101 AP (ap_applied) — reduce what we owe, at booked value.
+		//   Cr Cash/Bank (apApplied + fxDiff) — the document amount converted
+		//      at the payment rate, i.e. the cash actually paid.
+		//   FX difference clears through the mapped gain/loss account so
+		//   debit always equals credit. For a PAYABLE settled at a higher
+		//   rate the cash out exceeds the booked AP value → loss; a lower
+		//   rate → gain.
 		journalLines := []accounting.Line{
 			{AccountID: apAccountID, DebitCents: apApplied, SourceLineRef: "ap"},
-			{AccountID: cashAccount.ID, CreditCents: req.AmountCents, SourceLineRef: "cash"},
+			{AccountID: cashAccount.ID, CreditCents: apApplied + fxDiff, SourceLineRef: "cash"},
 		}
 		if fxDiff > 0 {
 			// Payment rate > invoice rate: paying costs more base currency
-			// than the AP booked value → FX loss (Dr loss / Cr cash extra).
+			// than the AP booked value → FX loss (Dr loss).
 			fxLossAccountID, err := settings.ResolveAccount(request.Context(), tx, tenant, settings.SettingFxLoss, fxLossAccountCode)
 			if err != nil {
 				return err
@@ -182,7 +186,7 @@ func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, reques
 				AccountID: fxLossAccountID, DebitCents: fxDiff, SourceLineRef: "fx-loss",
 			})
 		} else if fxDiff < 0 {
-			// Payment rate < invoice rate: FX gain (Dr cash extra / Cr gain).
+			// Payment rate < invoice rate: FX gain (Cr gain).
 			fxGainAccountID, err := settings.ResolveAccount(request.Context(), tx, tenant, settings.SettingFxGain, fxGainAccountCode)
 			if err != nil {
 				return err

@@ -86,6 +86,8 @@ type supplierInvoiceResponse struct {
 	Notes                 string                        `json:"notes"`
 	Status                string                        `json:"status"`
 	JournalEntryID        int64                         `json:"journal_entry_id,omitempty"`
+	CurrencyCode          string                        `json:"currency_code"`
+	ExchangeRate          float64                       `json:"exchange_rate"`
 	Lines                 []supplierInvoiceLineResponse `json:"lines,omitempty"`
 }
 
@@ -631,14 +633,16 @@ func fetchSupplierInvoice(ctx context.Context, tx pgx.Tx, tenant, invID int64) (
 		SELECT si.id, si.number, si.supplier_id, s.name, si.grn_id,
 		       si.invoice_date, si.due_date, si.supplier_invoice_number,
 		       si.dpp_cents, si.vat_cents, si.total_cents, si.dp_applied_cents,
-		       si.payable_cents, si.notes, si.status, si.journal_entry_id
+		       si.payable_cents, si.notes, si.status, si.journal_entry_id,
+		       btrim(si.currency_code)::text, si.exchange_rate::float8
 		FROM supplier_invoices si
 		JOIN suppliers s ON s.tenant_id = si.tenant_id AND s.id = si.supplier_id
 		WHERE si.tenant_id = $1 AND si.id = $2
 	`, tenant, invID).Scan(&inv.ID, &inv.Number, &inv.SupplierID, &inv.SupplierName, &grnID,
 		&invoiceDate, &dueDate, &supplierInvNo,
 		&inv.DPPCents, &inv.VATCents, &inv.TotalCents, &inv.DPAppliedCents,
-		&inv.PayableCents, &notes, &inv.Status, &journalID)
+		&inv.PayableCents, &notes, &inv.Status, &journalID,
+		&inv.CurrencyCode, &inv.ExchangeRate)
 	if err != nil {
 		return nil, err
 	}

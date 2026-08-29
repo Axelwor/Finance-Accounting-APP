@@ -1061,7 +1061,8 @@ func (service *Service) fetchInvoice(ctx context.Context, tx pgx.Tx, tenant, id 
 		       i.invoice_date, i.due_date, i.payment_term_id, i.notes, i.status,
 		       i.total_cents, i.dp_applied_cents, i.receivable_cents,
 		       i.tax_invoice_number, i.sub_total_cents, i.discount_total_cents, i.tax_total_cents,
-		       i.shipping_fee_cents, i.other_charges_cents, i.rounding_cents, i.salesperson_id
+		       i.shipping_fee_cents, i.other_charges_cents, i.rounding_cents, i.salesperson_id,
+		       btrim(i.currency_code)::text, i.exchange_rate::float8
 		FROM invoices i
 		JOIN customers c ON c.tenant_id = i.tenant_id AND c.id = i.customer_id
 		WHERE i.tenant_id = $1 AND i.id = $2
@@ -1069,7 +1070,8 @@ func (service *Service) fetchInvoice(ctx context.Context, tx pgx.Tx, tenant, id 
 		&invoiceDate, &dueDate, &paymentTermID, &notes, &result.Status,
 		&result.TotalCents, &result.DPAppliedCents, &result.ReceivableCents,
 		&taxInvoiceNumber, &subTotalCents, &discountTotalCents, &taxTotalCents,
-		&shippingFeeCents, &otherChargesCents, &roundingCents, &salespersonID)
+		&shippingFeeCents, &otherChargesCents, &roundingCents, &salespersonID,
+		&result.CurrencyCode, &result.ExchangeRate)
 	if err != nil {
 		return nil, err
 	}

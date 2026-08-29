@@ -186,11 +186,19 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 			return err
 		}
 
-		// Build journal lines. Cash is debited at the payment rate value
-		// (amount + FX effect on the settled slice); AR is credited at its
-		// booked (invoice) value; the FX difference clears through the mapped
-		// gain/loss account so debit always equals credit.
-		cashDebit := req.AmountCents
+		// Build journal lines. amount_cents is the booked (invoice-rate)
+		// base-currency value of the receivable being settled — it can never
+		// exceed receivable_cents. The cash actually received for that slice
+		// is its document-currency value converted at the payment rate:
+		// arApplied/invRate*payRate == arApplied + fxDiff. AR is released at
+		// its booked value and the FX difference clears through the mapped
+		// gain/loss account, so debit always equals credit.
+		//
+		// Sign convention for a RECEIVABLE settled in a foreign currency:
+		// payment rate ABOVE the invoice rate means the same document amount
+		// converts to MORE base currency than the AR booked value → gain
+		// (cash in > receivable released). Rate below → loss.
+		cashDebit := arApplied + fxDiff
 		arCredit := arApplied
 		journalLines := []accounting.Line{
 			{AccountID: cashAccount.ID, DebitCents: cashDebit, SourceLineRef: "cash"},
@@ -198,25 +206,26 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 		}
 		var fxDelta int64
 		if fxDiff > 0 {
-			// Payment rate > invoice rate: settling costs more base currency
-			// than the AR booked value → FX loss (Dr loss / Cr AR extra).
+			// Payment rate > invoice rate: cash received exceeds the booked
+			// AR value of the settled slice → FX gain (Cr gain).
 			fxDelta = fxDiff
-			fxLossAccountID, err := settings.ResolveAccount(request.Context(), tx, tenant, settings.SettingFxLoss, fxLossAccountCode)
-			if err != nil {
-				return err
-			}
-			journalLines = append(journalLines, accounting.Line{
-				AccountID: fxLossAccountID, DebitCents: fxDiff, SourceLineRef: "fx-loss",
-			})
-		} else if fxDiff < 0 {
-			// Payment rate < invoice rate: FX gain (Dr AR extra / Cr gain).
-			fxDelta = -fxDiff
 			fxGainAccountID, err := settings.ResolveAccount(request.Context(), tx, tenant, settings.SettingFxGain, fxGainAccountCode)
 			if err != nil {
 				return err
 			}
 			journalLines = append(journalLines, accounting.Line{
-				AccountID: fxGainAccountID, CreditCents: -fxDiff, SourceLineRef: "fx-gain",
+				AccountID: fxGainAccountID, CreditCents: fxDiff, SourceLineRef: "fx-gain",
+			})
+		} else if fxDiff < 0 {
+			// Payment rate < invoice rate: cash received is below the booked
+			// AR value of the settled slice → FX loss (Dr loss).
+			fxDelta = -fxDiff
+			fxLossAccountID, err := settings.ResolveAccount(request.Context(), tx, tenant, settings.SettingFxLoss, fxLossAccountCode)
+			if err != nil {
+				return err
+			}
+			journalLines = append(journalLines, accounting.Line{
+				AccountID: fxLossAccountID, DebitCents: -fxDiff, SourceLineRef: "fx-loss",
 			})
 		}
 		_ = fxDelta
@@ -345,8 +354,8 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 			Status:         "RECEIVED",
 			CurrencyCode:   invCurrency,
 			ExchangeRate:   paymentRate,
-			FxGainCents:    max64(-fxDiff, 0),
-			FxLossCents:    max64(fxDiff, 0),
+			FxGainCents:    max64(fxDiff, 0),
+			FxLossCents:    max64(-fxDiff, 0),
 		}
 
 		if err := audit.Log(request.Context(), tx, tenant, userID, "invoice_payment", pmtID, audit.ActionPost, nil, map[string]any{
