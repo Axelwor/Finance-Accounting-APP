@@ -1,12 +1,37 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, lazy, Suspense, type ErrorInfo, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppStateProvider, useAppState } from "./state";
 import { WorkbenchProvider } from "./workbench/state";
 import { ToastProvider } from "./components/Toast";
-import { AppShell } from "./workbench/AppShell";
-import { AuthScreen } from "./screens/AuthScreen";
-import { OnboardingScreen } from "./screens/OnboardingScreen";
 import { Button } from "./components/m3";
+
+// Route-level code splitting: the login/onboarding screens and the main
+// workbench each load on first visit instead of shipping as one megabyte-
+// plus bundle on the login page.
+const AuthScreen = lazy(() =>
+  import("./screens/AuthScreen").then((m) => ({ default: m.AuthScreen })),
+);
+const OnboardingScreen = lazy(() =>
+  import("./screens/OnboardingScreen").then((m) => ({ default: m.OnboardingScreen })),
+);
+const AppShell = lazy(() =>
+  import("./workbench/AppShell").then((m) => ({ default: m.AppShell })),
+);
+
+function RouteFallback() {
+  return (
+    <div className="app">
+      <main className="app-main">
+        <div className="app-main__inner">
+          <p className="loading-state" role="status">
+            <span className="loading-state__spinner" aria-hidden="true" />
+            <span>Memuat modul...</span>
+          </p>
+        </div>
+      </main>
+    </div>
+  );
+}
 
 function ShellRoute({ children }: { children: React.ReactNode }) {
   const { user, hydrating } = useAppState();
@@ -161,13 +186,15 @@ export default function App() {
           <WorkbenchProvider>
             <BrowserRouter>
               <Routes>
-                <Route path="/login" element={<AuthScreen />} />
-                <Route path="/onboarding" element={<OnboardingScreen />} />
+                <Route path="/login" element={<Suspense fallback={<RouteFallback />}><AuthScreen /></Suspense>} />
+                <Route path="/onboarding" element={<Suspense fallback={<RouteFallback />}><OnboardingScreen /></Suspense>} />
                 <Route
                   path="/"
                   element={
                     <ShellRoute>
-                      <AppShell />
+                      <Suspense fallback={<RouteFallback />}>
+                        <AppShell />
+                      </Suspense>
                     </ShellRoute>
                   }
                 >

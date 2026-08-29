@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { useWorkbench } from "./state";
 import { EmptyState } from "../components/ui";
 import { TabErrorBoundary } from "../App";
@@ -6,107 +6,100 @@ import { useKeyboardShortcuts, CLOSE_TAB_EVENT } from "../hooks/useKeyboardShort
 import { NestedTabStrip } from "./NestedTabStrip";
 import { PaneTabScope } from "./useTabRefresh";
 import type { EntryTab, ListTab, ModuleTab, NestedTab } from "./types";
-import { CashEntryList } from "../screens/list/CashEntryList";
-import { CashEntryForm } from "../screens/entry/CashEntryForm";
-import {
-  TrialBalanceReport,
-  ProfitLossReport,
-  BalanceSheetReport,
-  CashFlowReport,
-} from "../screens/list/Reports";
-import { DueDateReminders } from "../screens/list/DueDateReminders";
-import { CustomerStatementScreen } from "../screens/list/CustomerStatement";
-import { DashboardScreen } from "../screens/workbench/DashboardScreen";
-import {
-  SalesReceiptList,
-  QuotationList,
-} from "../screens/list/Sales";
-import { SalesOrderList } from "../screens/list/SalesOrderList";
-import { DeliveryOrderList } from "../screens/list/DeliveryOrderList";
-import { InvoiceList } from "../screens/list/InvoiceList";
-import { CreditNoteList } from "../screens/list/CreditNoteList";
-import { PurchaseOrderList } from "../screens/list/PurchaseOrderList";
-import { GRNList } from "../screens/list/GRNList";
-import { PurchaseSupplierList } from "../screens/list/PurchaseSupplierList";
-import { CustomerList } from "../screens/list/CustomerList";
-import { PurchaseReturnList } from "../screens/list/PurchaseReturnList";
-import {
-  PurchaseInvoiceList,
-  PurchasePaymentList,
-} from "../screens/list/Purchases";
-import { SupplierInvoiceList } from "../screens/list/SupplierInvoiceList";
-import {
-  InventoryItemsList,
-  StockMovementsList,
-} from "../screens/list/Inventory";
-import { StockOpnameList } from "../screens/list/StockOpnameList";
-import { StockTransferList } from "../screens/list/StockTransferList";
-import { BOMList } from "../screens/list/BOMList";
-import { ProductionJobList } from "../screens/list/ProductionJobList";
-import { AssetRegisterList } from "../screens/list/Assets";
-import { FixedAssetList } from "../screens/list/FixedAssetList";
-import { JournalEntryList } from "../screens/list/JournalEntryList";
-import { GeneralLedger } from "../screens/list/GeneralLedger";
-import { JournalRegister } from "../screens/list/JournalRegister";
-import { AuditLogList } from "../screens/list/AuditLogList";
-import { ReportTemplateList } from "../screens/list/ReportTemplateList";
-import { FinancialNotesList } from "../screens/list/FinancialNotesList";
-import { ARAgingList } from "../screens/list/ARAgingList";
-import { APAgingList } from "../screens/list/APAgingList";
-import { JournalEntryForm } from "../screens/entry/JournalEntryForm";
-import { DemoEntryForm } from "../screens/entry/DemoEntryForm";
-import { ChequeList } from "../screens/list/ChequeList";
-import { ChequeForm } from "../screens/entry/ChequeForm";
-import { QuotationForm } from "../screens/entry/QuotationForm";
-import { SalesOrderForm } from "../screens/entry/SalesOrderForm";
-import { DeliveryOrderForm } from "../screens/entry/DeliveryOrderForm";
-import { InvoiceForm } from "../screens/entry/InvoiceForm";
-import { CreditNoteForm } from "../screens/entry/CreditNoteForm";
-import { PurchaseOrderForm } from "../screens/entry/PurchaseOrderForm";
-import { GRNForm } from "../screens/entry/GRNForm";
-import { PurchaseSupplierForm } from "../screens/entry/PurchaseSupplierForm";
-import { CustomerForm } from "../screens/entry/CustomerForm";
-import { SupplierInvoiceForm } from "../screens/entry/SupplierInvoiceForm";
-import { PurchaseReturnForm } from "../screens/entry/PurchaseReturnForm";
-import { StockOpnameForm } from "../screens/entry/StockOpnameForm";
-import { StockTransferForm } from "../screens/entry/StockTransferForm";
-import { ItemForm } from "../screens/entry/ItemForm";
-import { BOMForm } from "../screens/entry/BOMForm";
-import { ProductionJobForm } from "../screens/entry/ProductionJobForm";
-import { BankStatementList } from "../screens/list/BankStatementList";
-import { BankStatementImport } from "../screens/entry/BankStatementImport";
-import { ReconciliationForm } from "../screens/entry/ReconciliationForm";
-import { FixedAssetForm } from "../screens/entry/FixedAssetForm";
-import { AssetDepreciateForm } from "../screens/entry/AssetDepreciateForm";
-import { AssetDisposeForm } from "../screens/entry/AssetDisposeForm";
-import { PPNReconciliation } from "../screens/list/PPNReconciliation";
-import { PPhFinalCalculator } from "../screens/list/PPhFinalCalculator";
-import { ECLCalculator } from "../screens/list/ECLCalculator";
-import { DimensionList } from "../screens/list/DimensionList";
-import { BudgetList } from "../screens/list/BudgetList";
-import { BudgetVsActual } from "../screens/list/BudgetVsActual";
-import { BudgetForm } from "../screens/entry/BudgetForm";
-import { LeaseContractList } from "../screens/list/LeaseContractList";
-import { ConsolidatedReport } from "../screens/list/ConsolidatedReport";
-import { LeaseContractForm } from "../screens/entry/LeaseContractForm";
-import { LeasePaymentSchedule } from "../screens/entry/LeasePaymentSchedule";
-import { FinancialNoteForm } from "../screens/entry/FinancialNoteForm";
-import { ReportTemplateEditor } from "../screens/entry/ReportTemplateEditor";
-import { ApprovalRuleList } from "../screens/list/ApprovalRuleList";
-import { PendingApprovalRequestList } from "../screens/list/PendingApprovalRequestList";
-import { EmailTemplateList } from "../screens/list/EmailTemplateList";
-import { EmailQueueList } from "../screens/list/EmailQueueList";
-import { ApprovalRuleForm } from "../screens/entry/ApprovalRuleForm";
-import { WarehouseList } from "../screens/list/WarehouseList";
-import { UnitList } from "../screens/list/UnitList";
-import { ItemNameMasterList } from "../screens/list/ItemNameMasterList";
-import { TaxMasterList } from "../screens/list/TaxMasterList";
-import { SettingsCompanyScreen } from "../screens/list/SettingsCompanyScreen";
-import { SettingsCurrencyScreen } from "../screens/list/SettingsCurrencyScreen";
-import { SettingsDefaultAccountsScreen } from "../screens/list/SettingsDefaultAccountsScreen";
-import { SettingsPreferencesScreen } from "../screens/list/SettingsPreferencesScreen";
-import { WarehouseForm } from "../screens/entry/WarehouseForm";
 import { defaultEntryTitle, findModule } from "./modules";
+
+const CashEntryList = lazy(() => import("../screens/list/CashEntryList").then((m) => { return { default: m.CashEntryList }; }));
+const CashEntryForm = lazy(() => import("../screens/entry/CashEntryForm").then((m) => { return { default: m.CashEntryForm }; }));
+const TrialBalanceReport = lazy(() => import("../screens/list/Reports").then((m) => { return { default: m.TrialBalanceReport }; }));
+const ProfitLossReport = lazy(() => import("../screens/list/Reports").then((m) => { return { default: m.ProfitLossReport }; }));
+const BalanceSheetReport = lazy(() => import("../screens/list/Reports").then((m) => { return { default: m.BalanceSheetReport }; }));
+const CashFlowReport = lazy(() => import("../screens/list/Reports").then((m) => { return { default: m.CashFlowReport }; }));
+const DueDateReminders = lazy(() => import("../screens/list/DueDateReminders").then((m) => { return { default: m.DueDateReminders }; }));
+const CustomerStatementScreen = lazy(() => import("../screens/list/CustomerStatement").then((m) => { return { default: m.CustomerStatementScreen }; }));
+const DashboardScreen = lazy(() => import("../screens/workbench/DashboardScreen").then((m) => { return { default: m.DashboardScreen }; }));
+const SalesReceiptList = lazy(() => import("../screens/list/Sales").then((m) => { return { default: m.SalesReceiptList }; }));
+const QuotationList = lazy(() => import("../screens/list/Sales").then((m) => { return { default: m.QuotationList }; }));
+const SalesOrderList = lazy(() => import("../screens/list/SalesOrderList").then((m) => { return { default: m.SalesOrderList }; }));
+const DeliveryOrderList = lazy(() => import("../screens/list/DeliveryOrderList").then((m) => { return { default: m.DeliveryOrderList }; }));
+const InvoiceList = lazy(() => import("../screens/list/InvoiceList").then((m) => { return { default: m.InvoiceList }; }));
+const CreditNoteList = lazy(() => import("../screens/list/CreditNoteList").then((m) => { return { default: m.CreditNoteList }; }));
+const PurchaseOrderList = lazy(() => import("../screens/list/PurchaseOrderList").then((m) => { return { default: m.PurchaseOrderList }; }));
+const GRNList = lazy(() => import("../screens/list/GRNList").then((m) => { return { default: m.GRNList }; }));
+const PurchaseSupplierList = lazy(() => import("../screens/list/PurchaseSupplierList").then((m) => { return { default: m.PurchaseSupplierList }; }));
+const CustomerList = lazy(() => import("../screens/list/CustomerList").then((m) => { return { default: m.CustomerList }; }));
+const PurchaseReturnList = lazy(() => import("../screens/list/PurchaseReturnList").then((m) => { return { default: m.PurchaseReturnList }; }));
+const PurchaseInvoiceList = lazy(() => import("../screens/list/Purchases").then((m) => { return { default: m.PurchaseInvoiceList }; }));
+const PurchasePaymentList = lazy(() => import("../screens/list/Purchases").then((m) => { return { default: m.PurchasePaymentList }; }));
+const SupplierInvoiceList = lazy(() => import("../screens/list/SupplierInvoiceList").then((m) => { return { default: m.SupplierInvoiceList }; }));
+const InventoryItemsList = lazy(() => import("../screens/list/Inventory").then((m) => { return { default: m.InventoryItemsList }; }));
+const StockMovementsList = lazy(() => import("../screens/list/Inventory").then((m) => { return { default: m.StockMovementsList }; }));
+const StockOpnameList = lazy(() => import("../screens/list/StockOpnameList").then((m) => { return { default: m.StockOpnameList }; }));
+const StockTransferList = lazy(() => import("../screens/list/StockTransferList").then((m) => { return { default: m.StockTransferList }; }));
+const BOMList = lazy(() => import("../screens/list/BOMList").then((m) => { return { default: m.BOMList }; }));
+const ProductionJobList = lazy(() => import("../screens/list/ProductionJobList").then((m) => { return { default: m.ProductionJobList }; }));
+const AssetRegisterList = lazy(() => import("../screens/list/Assets").then((m) => { return { default: m.AssetRegisterList }; }));
+const FixedAssetList = lazy(() => import("../screens/list/FixedAssetList").then((m) => { return { default: m.FixedAssetList }; }));
+const JournalEntryList = lazy(() => import("../screens/list/JournalEntryList").then((m) => { return { default: m.JournalEntryList }; }));
+const GeneralLedger = lazy(() => import("../screens/list/GeneralLedger").then((m) => { return { default: m.GeneralLedger }; }));
+const JournalRegister = lazy(() => import("../screens/list/JournalRegister").then((m) => { return { default: m.JournalRegister }; }));
+const AuditLogList = lazy(() => import("../screens/list/AuditLogList").then((m) => { return { default: m.AuditLogList }; }));
+const ReportTemplateList = lazy(() => import("../screens/list/ReportTemplateList").then((m) => { return { default: m.ReportTemplateList }; }));
+const FinancialNotesList = lazy(() => import("../screens/list/FinancialNotesList").then((m) => { return { default: m.FinancialNotesList }; }));
+const ARAgingList = lazy(() => import("../screens/list/ARAgingList").then((m) => { return { default: m.ARAgingList }; }));
+const APAgingList = lazy(() => import("../screens/list/APAgingList").then((m) => { return { default: m.APAgingList }; }));
+const JournalEntryForm = lazy(() => import("../screens/entry/JournalEntryForm").then((m) => { return { default: m.JournalEntryForm }; }));
+const DemoEntryForm = lazy(() => import("../screens/entry/DemoEntryForm").then((m) => { return { default: m.DemoEntryForm }; }));
+const ChequeList = lazy(() => import("../screens/list/ChequeList").then((m) => { return { default: m.ChequeList }; }));
+const ChequeForm = lazy(() => import("../screens/entry/ChequeForm").then((m) => { return { default: m.ChequeForm }; }));
+const QuotationForm = lazy(() => import("../screens/entry/QuotationForm").then((m) => { return { default: m.QuotationForm }; }));
+const SalesOrderForm = lazy(() => import("../screens/entry/SalesOrderForm").then((m) => { return { default: m.SalesOrderForm }; }));
+const DeliveryOrderForm = lazy(() => import("../screens/entry/DeliveryOrderForm").then((m) => { return { default: m.DeliveryOrderForm }; }));
+const InvoiceForm = lazy(() => import("../screens/entry/InvoiceForm").then((m) => { return { default: m.InvoiceForm }; }));
+const CreditNoteForm = lazy(() => import("../screens/entry/CreditNoteForm").then((m) => { return { default: m.CreditNoteForm }; }));
+const PurchaseOrderForm = lazy(() => import("../screens/entry/PurchaseOrderForm").then((m) => { return { default: m.PurchaseOrderForm }; }));
+const GRNForm = lazy(() => import("../screens/entry/GRNForm").then((m) => { return { default: m.GRNForm }; }));
+const PurchaseSupplierForm = lazy(() => import("../screens/entry/PurchaseSupplierForm").then((m) => { return { default: m.PurchaseSupplierForm }; }));
+const CustomerForm = lazy(() => import("../screens/entry/CustomerForm").then((m) => { return { default: m.CustomerForm }; }));
+const SupplierInvoiceForm = lazy(() => import("../screens/entry/SupplierInvoiceForm").then((m) => { return { default: m.SupplierInvoiceForm }; }));
+const PurchaseReturnForm = lazy(() => import("../screens/entry/PurchaseReturnForm").then((m) => { return { default: m.PurchaseReturnForm }; }));
+const StockOpnameForm = lazy(() => import("../screens/entry/StockOpnameForm").then((m) => { return { default: m.StockOpnameForm }; }));
+const StockTransferForm = lazy(() => import("../screens/entry/StockTransferForm").then((m) => { return { default: m.StockTransferForm }; }));
+const ItemForm = lazy(() => import("../screens/entry/ItemForm").then((m) => { return { default: m.ItemForm }; }));
+const BOMForm = lazy(() => import("../screens/entry/BOMForm").then((m) => { return { default: m.BOMForm }; }));
+const ProductionJobForm = lazy(() => import("../screens/entry/ProductionJobForm").then((m) => { return { default: m.ProductionJobForm }; }));
+const BankStatementList = lazy(() => import("../screens/list/BankStatementList").then((m) => { return { default: m.BankStatementList }; }));
+const BankStatementImport = lazy(() => import("../screens/entry/BankStatementImport").then((m) => { return { default: m.BankStatementImport }; }));
+const ReconciliationForm = lazy(() => import("../screens/entry/ReconciliationForm").then((m) => { return { default: m.ReconciliationForm }; }));
+const FixedAssetForm = lazy(() => import("../screens/entry/FixedAssetForm").then((m) => { return { default: m.FixedAssetForm }; }));
+const AssetDepreciateForm = lazy(() => import("../screens/entry/AssetDepreciateForm").then((m) => { return { default: m.AssetDepreciateForm }; }));
+const AssetDisposeForm = lazy(() => import("../screens/entry/AssetDisposeForm").then((m) => { return { default: m.AssetDisposeForm }; }));
+const PPNReconciliation = lazy(() => import("../screens/list/PPNReconciliation").then((m) => { return { default: m.PPNReconciliation }; }));
+const PPhFinalCalculator = lazy(() => import("../screens/list/PPhFinalCalculator").then((m) => { return { default: m.PPhFinalCalculator }; }));
+const ECLCalculator = lazy(() => import("../screens/list/ECLCalculator").then((m) => { return { default: m.ECLCalculator }; }));
+const DimensionList = lazy(() => import("../screens/list/DimensionList").then((m) => { return { default: m.DimensionList }; }));
+const BudgetList = lazy(() => import("../screens/list/BudgetList").then((m) => { return { default: m.BudgetList }; }));
+const BudgetVsActual = lazy(() => import("../screens/list/BudgetVsActual").then((m) => { return { default: m.BudgetVsActual }; }));
+const BudgetForm = lazy(() => import("../screens/entry/BudgetForm").then((m) => { return { default: m.BudgetForm }; }));
+const LeaseContractList = lazy(() => import("../screens/list/LeaseContractList").then((m) => { return { default: m.LeaseContractList }; }));
+const ConsolidatedReport = lazy(() => import("../screens/list/ConsolidatedReport").then((m) => { return { default: m.ConsolidatedReport }; }));
+const LeaseContractForm = lazy(() => import("../screens/entry/LeaseContractForm").then((m) => { return { default: m.LeaseContractForm }; }));
+const LeasePaymentSchedule = lazy(() => import("../screens/entry/LeasePaymentSchedule").then((m) => { return { default: m.LeasePaymentSchedule }; }));
+const FinancialNoteForm = lazy(() => import("../screens/entry/FinancialNoteForm").then((m) => { return { default: m.FinancialNoteForm }; }));
+const ReportTemplateEditor = lazy(() => import("../screens/entry/ReportTemplateEditor").then((m) => { return { default: m.ReportTemplateEditor }; }));
+const ApprovalRuleList = lazy(() => import("../screens/list/ApprovalRuleList").then((m) => { return { default: m.ApprovalRuleList }; }));
+const PendingApprovalRequestList = lazy(() => import("../screens/list/PendingApprovalRequestList").then((m) => { return { default: m.PendingApprovalRequestList }; }));
+const EmailTemplateList = lazy(() => import("../screens/list/EmailTemplateList").then((m) => { return { default: m.EmailTemplateList }; }));
+const EmailQueueList = lazy(() => import("../screens/list/EmailQueueList").then((m) => { return { default: m.EmailQueueList }; }));
+const ApprovalRuleForm = lazy(() => import("../screens/entry/ApprovalRuleForm").then((m) => { return { default: m.ApprovalRuleForm }; }));
+const WarehouseList = lazy(() => import("../screens/list/WarehouseList").then((m) => { return { default: m.WarehouseList }; }));
+const UnitList = lazy(() => import("../screens/list/UnitList").then((m) => { return { default: m.UnitList }; }));
+const ItemNameMasterList = lazy(() => import("../screens/list/ItemNameMasterList").then((m) => { return { default: m.ItemNameMasterList }; }));
+const TaxMasterList = lazy(() => import("../screens/list/TaxMasterList").then((m) => { return { default: m.TaxMasterList }; }));
+const SettingsCompanyScreen = lazy(() => import("../screens/list/SettingsCompanyScreen").then((m) => { return { default: m.SettingsCompanyScreen }; }));
+const SettingsCurrencyScreen = lazy(() => import("../screens/list/SettingsCurrencyScreen").then((m) => { return { default: m.SettingsCurrencyScreen }; }));
+const SettingsDefaultAccountsScreen = lazy(() => import("../screens/list/SettingsDefaultAccountsScreen").then((m) => { return { default: m.SettingsDefaultAccountsScreen }; }));
+const SettingsPreferencesScreen = lazy(() => import("../screens/list/SettingsPreferencesScreen").then((m) => { return { default: m.SettingsPreferencesScreen }; }));
+const WarehouseForm = lazy(() => import("../screens/entry/WarehouseForm").then((m) => { return { default: m.WarehouseForm }; }));
 
 export function WorkArea() {
   const workbench = useWorkbench();
@@ -237,8 +230,22 @@ function ModuleContent({ parent }: { parent: ModuleTab }) {
 }
 
 function NestedContent({ tab }: { tab: NestedTab }) {
-  if (tab.kind === "list") return <ListTabContent tab={tab} />;
-  return <EntryTabContent tab={tab} />;
+  const content =
+    tab.kind === "list" ? <ListTabContent tab={tab} /> : <EntryTabContent tab={tab} />;
+  return (
+    <Suspense
+      fallback={
+        <div className="workarea">
+          <p className="loading-state" role="status">
+            <span className="loading-state__spinner" aria-hidden="true" />
+            <span>Memuat layar...</span>
+          </p>
+        </div>
+      }
+    >
+      {content}
+    </Suspense>
+  );
 }
 
 function ListTabContent({ tab }: { tab: ListTab }) {
