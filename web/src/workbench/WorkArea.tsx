@@ -98,6 +98,13 @@ import { EmailTemplateList } from "../screens/list/EmailTemplateList";
 import { EmailQueueList } from "../screens/list/EmailQueueList";
 import { ApprovalRuleForm } from "../screens/entry/ApprovalRuleForm";
 import { WarehouseList } from "../screens/list/WarehouseList";
+import { UnitList } from "../screens/list/UnitList";
+import { ItemNameMasterList } from "../screens/list/ItemNameMasterList";
+import { TaxMasterList } from "../screens/list/TaxMasterList";
+import { SettingsCompanyScreen } from "../screens/list/SettingsCompanyScreen";
+import { SettingsCurrencyScreen } from "../screens/list/SettingsCurrencyScreen";
+import { SettingsDefaultAccountsScreen } from "../screens/list/SettingsDefaultAccountsScreen";
+import { SettingsPreferencesScreen } from "../screens/list/SettingsPreferencesScreen";
 import { WarehouseForm } from "../screens/entry/WarehouseForm";
 import { defaultEntryTitle, findModule } from "./modules";
 
@@ -365,6 +372,22 @@ function ListTabContent({ tab }: { tab: ListTab }) {
       return <PendingApprovalRequestList />;
     case "warehouse-list":
       return <WarehouseList />;
+    case "unit-list":
+      return <UnitList />;
+    case "item-category-list":
+      return <ItemNameMasterList kind="category" />;
+    case "item-brand-list":
+      return <ItemNameMasterList kind="brand" />;
+    case "tax-master-list":
+      return <TaxMasterList />;
+    case "settings-company":
+      return <SettingsCompanyScreen />;
+    case "settings-currency":
+      return <SettingsCurrencyScreen />;
+    case "settings-default-accounts":
+      return <SettingsDefaultAccountsScreen />;
+    case "settings-preferences":
+      return <SettingsPreferencesScreen />;
 
     case "email-templates":
       return <EmailTemplateList />;

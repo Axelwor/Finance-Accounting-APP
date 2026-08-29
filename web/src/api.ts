@@ -48,6 +48,12 @@ import type {
   TransactionInput,
   TransferCommandPayload,
   Business,
+  TenantSettings,
+  Currency,
+  ExchangeRate,
+  UnitMaster,
+  ItemNameMaster,
+  TaxMaster,
   Customer,
   CustomerStatement,
   CreateCustomerInput,
@@ -198,6 +204,7 @@ import type {
   CreateRecurringTransactionInput,
   PostRecurringResult,
 } from "./types";
+import { configureFormatters } from "./lib/format";
 
 /** Reconciliation detail returned by the reconcile endpoints. */
 type Reconciliation = BankReconciliation;
@@ -689,11 +696,14 @@ export const api = {
         auth: true,
       });
       if (tenant && tenant.id) {
+        // SET-001: pull tenant settings (currency + format) for the formatters.
+        const settings = await api.loadTenantSettings();
+        const baseCurrency = settings?.company?.base_currency || "IDR";
         business = {
           id: tenant.id,
           name: tenant.name,
           businessType: tenant.role ?? "owner",
-          currency: "IDR",
+          currency: baseCurrency,
           fiscalYearStart: 1,
         };
       }
@@ -757,11 +767,13 @@ export const api = {
       body: JSON.stringify({ tenant_id: Number(tenant.id), refresh_token: refreshToken }),
     });
     storeSession(response);
+    // SET-001: pull tenant settings (currency + format) for the formatters.
+    const settings = await api.loadTenantSettings();
     const business: Business = {
       id: tenant.id,
       name: tenant.name,
       businessType: tenant.role || "owner",
-      currency: "IDR",
+      currency: settings?.company?.base_currency || "IDR",
       fiscalYearStart: 1,
     };
     saveState({ ...loadState(), business });
@@ -791,6 +803,192 @@ export const api = {
     // Re-bind the session to the new tenant so subsequent calls use it.
     await api.switchTenant({ id: String(tenant.id), name: tenant.name, slug: tenant.slug, role: "owner" });
     return delay({ business });
+  },
+
+  // -------------------------------------------------------------------------
+  // SET-001: Settings, currencies, exchange rates, item/tax master data
+  // -------------------------------------------------------------------------
+
+  /** Loads the tenant settings and applies them to the formatters. */
+  async loadTenantSettings(): Promise<TenantSettings | null> {
+    try {
+      const settings = await http<TenantSettings>("/settings", { auth: true });
+      const symbolByCode: Record<string, string> = {
+        IDR: "Rp", USD: "$", EUR: "€", SGD: "S$", JPY: "¥",
+        CNY: "¥", AUD: "A$", GBP: "£",
+      };
+      configureFormatters({
+        currencyCode: settings.company?.base_currency || "IDR",
+        symbol: symbolByCode[settings.company?.base_currency] || settings.company?.base_currency || "Rp",
+        amountDecimalPlaces: settings.preferences?.amount_decimal_places ?? 2,
+        thousandSeparator: settings.preferences?.thousand_separator || ".",
+        decimalSeparator: settings.preferences?.decimal_separator || ",",
+        dateFormat: settings.preferences?.date_format || "DD/MM/YYYY",
+      });
+      return settings;
+    } catch {
+      return null;
+    }
+  },
+
+  async getSettings(): Promise<TenantSettings> {
+    return http<TenantSettings>("/settings", { auth: true });
+  },
+
+  async updateCompanyProfile(input: Partial<TenantSettings["company"]>): Promise<TenantSettings["company"]> {
+    return http<TenantSettings["company"]>("/settings/company", {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  async updatePreferences(input: Partial<TenantSettings["preferences"]>): Promise<TenantSettings["preferences"]> {
+    return http<TenantSettings["preferences"]>("/settings/preferences", {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  async updateDefaultAccounts(input: TenantSettings["default_accounts"]): Promise<TenantSettings["default_accounts"]> {
+    return http<TenantSettings["default_accounts"]>("/settings/default-accounts", {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  async updateBaseCurrency(currencyCode: string): Promise<TenantSettings["company"]> {
+    return http<TenantSettings["company"]>("/settings/currency", {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify({ currency_code: currencyCode }),
+    });
+  },
+
+  async listCurrencies(): Promise<Currency[]> {
+    try {
+      return await http<Currency[]>("/currencies", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  async listExchangeRates(from?: string): Promise<ExchangeRate[]> {
+    const query = from ? `?from=${encodeURIComponent(from)}` : "";
+    return http<ExchangeRate[]>(`/exchange-rates${query}`, { auth: true });
+  },
+
+  async latestExchangeRate(from: string, to: string): Promise<ExchangeRate | null> {
+    try {
+      return await http<ExchangeRate>(
+        `/exchange-rates/latest?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+        { auth: true },
+      );
+    } catch {
+      return null;
+    }
+  },
+
+  async createExchangeRate(input: Omit<ExchangeRate, "id" | "source">): Promise<ExchangeRate> {
+    return http<ExchangeRate>("/exchange-rates", {
+      method: "POST",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  async updateExchangeRate(id: number, input: Omit<ExchangeRate, "id" | "source">): Promise<ExchangeRate> {
+    return http<ExchangeRate>(`/exchange-rates/${id}`, {
+      method: "PUT",
+      auth: true,
+      body: JSON.stringify(input),
+    });
+  },
+
+  async deleteExchangeRate(id: number): Promise<void> {
+    await http(`/exchange-rates/${id}`, { method: "DELETE", auth: true });
+  },
+
+  async listUnits(): Promise<UnitMaster[]> {
+    try {
+      return await http<UnitMaster[]>("/units", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  async createUnit(input: { code: string; name: string; decimal_places: number }): Promise<UnitMaster> {
+    return http<UnitMaster>("/units", { method: "POST", auth: true, body: JSON.stringify(input) });
+  },
+
+  async updateUnit(id: number, input: { code: string; name: string; decimal_places: number }): Promise<UnitMaster> {
+    return http<UnitMaster>(`/units/${id}`, { method: "PUT", auth: true, body: JSON.stringify(input) });
+  },
+
+  async deactivateUnit(id: number): Promise<void> {
+    await http(`/units/${id}`, { method: "DELETE", auth: true });
+  },
+
+  async listItemCategories(): Promise<ItemNameMaster[]> {
+    try {
+      return await http<ItemNameMaster[]>("/item-categories", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  async createItemCategory(name: string): Promise<ItemNameMaster> {
+    return http<ItemNameMaster>("/item-categories", { method: "POST", auth: true, body: JSON.stringify({ name }) });
+  },
+
+  async updateItemCategory(id: number, name: string): Promise<ItemNameMaster> {
+    return http<ItemNameMaster>(`/item-categories/${id}`, { method: "PUT", auth: true, body: JSON.stringify({ name }) });
+  },
+
+  async deactivateItemCategory(id: number): Promise<void> {
+    await http(`/item-categories/${id}`, { method: "DELETE", auth: true });
+  },
+
+  async listItemBrands(): Promise<ItemNameMaster[]> {
+    try {
+      return await http<ItemNameMaster[]>("/item-brands", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  async createItemBrand(name: string): Promise<ItemNameMaster> {
+    return http<ItemNameMaster>("/item-brands", { method: "POST", auth: true, body: JSON.stringify({ name }) });
+  },
+
+  async updateItemBrand(id: number, name: string): Promise<ItemNameMaster> {
+    return http<ItemNameMaster>(`/item-brands/${id}`, { method: "PUT", auth: true, body: JSON.stringify({ name }) });
+  },
+
+  async deactivateItemBrand(id: number): Promise<void> {
+    await http(`/item-brands/${id}`, { method: "DELETE", auth: true });
+  },
+
+  async listTaxes(): Promise<TaxMaster[]> {
+    try {
+      return await http<TaxMaster[]>("/taxes", { auth: true });
+    } catch {
+      return [];
+    }
+  },
+
+  async createTax(input: { code: string; name: string; rate: number; sales_account_id?: number | null; purchase_account_id?: number | null }): Promise<TaxMaster> {
+    return http<TaxMaster>("/taxes", { method: "POST", auth: true, body: JSON.stringify(input) });
+  },
+
+  async updateTax(id: number, input: { code: string; name: string; rate: number; sales_account_id?: number | null; purchase_account_id?: number | null }): Promise<TaxMaster> {
+    return http<TaxMaster>(`/taxes/${id}`, { method: "PUT", auth: true, body: JSON.stringify(input) });
+  },
+
+  async deactivateTax(id: number): Promise<void> {
+    await http(`/taxes/${id}`, { method: "DELETE", auth: true });
   },
 
   /**

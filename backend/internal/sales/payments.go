@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 
@@ -15,10 +16,18 @@ import (
 	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/db"
 	"finance-accounting-app/backend/internal/httperr"
+	"finance-accounting-app/backend/internal/settings"
 )
 
 // overpaymentAccountCode is the seeded "Customer Overpayment" account (2402).
 const overpaymentAccountCode = "2402"
+
+// fxGainAccountCode / fxLossAccountCode are the seeded FX accounts (4904 /
+// 5905); settings.ResolveAccount overrides them via tenant_settings (SET-001).
+const (
+	fxGainAccountCode = "4904"
+	fxLossAccountCode = "5905"
+)
 
 // errPaymentExceedsReceivable marks a payment whose amount is larger than the
 // invoice's outstanding receivable (QA-06: rejected with a clean 409 instead
@@ -42,21 +51,29 @@ type CreatePaymentRequest struct {
 	AmountCents   int64  `json:"amount_cents"`
 	PaymentDate   string `json:"payment_date"`
 	Description   string `json:"description"`
+	// SET-001 multi-currency: settlement rate for FC invoices. The amount is
+	// still in base-currency cents (converted by the client); the rate is
+	// stored so the FX gain/loss can be computed against the invoice's rate.
+	ExchangeRate float64 `json:"exchange_rate"`
 }
 
 type paymentResponse struct {
-	ID               int64  `json:"id"`
-	Number           string `json:"number"`
-	InvoiceID        int64  `json:"invoice_id"`
-	CustomerID       int64  `json:"customer_id"`
-	JournalEntryID   int64  `json:"journal_entry_id,omitempty"`
-	AmountCents      int64  `json:"amount_cents"`
-	ARAppliedCents   int64  `json:"ar_applied_cents"`
-	OverpaymentCents int64  `json:"overpayment_cents"`
-	CashAccountID    int64  `json:"cash_account_id"`
-	PaymentDate      string `json:"payment_date"`
-	Description      string `json:"description"`
-	Status           string `json:"status"`
+	ID               int64   `json:"id"`
+	Number           string  `json:"number"`
+	InvoiceID        int64   `json:"invoice_id"`
+	CustomerID       int64   `json:"customer_id"`
+	JournalEntryID   int64   `json:"journal_entry_id,omitempty"`
+	AmountCents      int64   `json:"amount_cents"`
+	ARAppliedCents   int64   `json:"ar_applied_cents"`
+	OverpaymentCents int64   `json:"overpayment_cents"`
+	CashAccountID    int64   `json:"cash_account_id"`
+	PaymentDate      string  `json:"payment_date"`
+	Description      string  `json:"description"`
+	Status           string  `json:"status"`
+	CurrencyCode     string  `json:"currency_code"`
+	ExchangeRate     float64 `json:"exchange_rate"`
+	FxGainCents      int64   `json:"fx_gain_cents"`
+	FxLossCents      int64   `json:"fx_loss_cents"`
 }
 
 // CreatePayment posts a customer payment against an invoice.
@@ -117,18 +134,20 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 			return err
 		}
 
-		// Load the invoice.
+		// Load the invoice. FOR UPDATE serializes concurrent payments against
+		// the same invoice's receivable_cents (A-18).
 		var invNumber string
 		var customerID int64
 		var invStatus string
 		var receivable int64
-		// Load the invoice. FOR UPDATE serializes concurrent payments against
-		// the same invoice's receivable_cents (A-18).
+		var invCurrency string
+		var invRate float64
 		err = tx.QueryRow(request.Context(), `
-			SELECT number, customer_id, status, receivable_cents
+			SELECT number, customer_id, status, receivable_cents,
+			       btrim(currency_code)::text, exchange_rate::float8
 			FROM invoices WHERE tenant_id = $1 AND id = $2
 			FOR UPDATE
-		`, tenant, invoiceID).Scan(&invNumber, &customerID, &invStatus, &receivable)
+		`, tenant, invoiceID).Scan(&invNumber, &customerID, &invStatus, &receivable, &invCurrency, &invRate)
 		if err != nil {
 			return err
 		}
@@ -144,6 +163,19 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 			return err
 		}
 
+		// SET-001 FX gain/loss: for a foreign-currency invoice settled at a
+		// different rate than the posting rate, the AR slice is released at
+		// the invoice rate while cash is booked at the payment rate; the
+		// difference goes to the FX gain/loss accounts.
+		paymentRate := req.ExchangeRate
+		if paymentRate <= 0 {
+			paymentRate = invRate
+		}
+		var fxDiff int64
+		if invCurrency != "" && invCurrency != "IDR" && invRate > 0 && paymentRate != invRate {
+			fxDiff = int64(math.Round(float64(arApplied) / invRate * (paymentRate - invRate)))
+		}
+
 		// Resolve accounts.
 		arAccountID, err := resolveAccountByCode(request.Context(), tx, tenant, arAccountCode)
 		if err != nil {
@@ -154,11 +186,40 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 			return err
 		}
 
-		// Build journal lines.
+		// Build journal lines. Cash is debited at the payment rate value
+		// (amount + FX effect on the settled slice); AR is credited at its
+		// booked (invoice) value; the FX difference clears through the mapped
+		// gain/loss account so debit always equals credit.
+		cashDebit := req.AmountCents
+		arCredit := arApplied
 		journalLines := []accounting.Line{
-			{AccountID: cashAccount.ID, DebitCents: req.AmountCents, SourceLineRef: "cash"},
-			{AccountID: arAccountID, CreditCents: arApplied, SourceLineRef: "ar"},
+			{AccountID: cashAccount.ID, DebitCents: cashDebit, SourceLineRef: "cash"},
+			{AccountID: arAccountID, CreditCents: arCredit, SourceLineRef: "ar"},
 		}
+		var fxDelta int64
+		if fxDiff > 0 {
+			// Payment rate > invoice rate: settling costs more base currency
+			// than the AR booked value → FX loss (Dr loss / Cr AR extra).
+			fxDelta = fxDiff
+			fxLossAccountID, err := settings.ResolveAccount(request.Context(), tx, tenant, settings.SettingFxLoss, fxLossAccountCode)
+			if err != nil {
+				return err
+			}
+			journalLines = append(journalLines, accounting.Line{
+				AccountID: fxLossAccountID, DebitCents: fxDiff, SourceLineRef: "fx-loss",
+			})
+		} else if fxDiff < 0 {
+			// Payment rate < invoice rate: FX gain (Dr AR extra / Cr gain).
+			fxDelta = -fxDiff
+			fxGainAccountID, err := settings.ResolveAccount(request.Context(), tx, tenant, settings.SettingFxGain, fxGainAccountCode)
+			if err != nil {
+				return err
+			}
+			journalLines = append(journalLines, accounting.Line{
+				AccountID: fxGainAccountID, CreditCents: -fxDiff, SourceLineRef: "fx-gain",
+			})
+		}
+		_ = fxDelta
 		if err := accounting.BalanceCheck(journalLines); err != nil {
 			return err
 		}
@@ -197,12 +258,13 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 		}
 		var entryID int64
 		err = tx.QueryRow(request.Context(), `
-			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, request_hash)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, request_hash, currency_code, exchange_rate)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 				RETURNING id
 			`, tenant, jrnNumber, journal.EntryDate, periodID, journal.Description,
 			journal.SourceRef, string(journal.IntentType), idem,
-			journal.Hash, journal.PreviousHash, int8Value(userID), textValueOptional(requestHash)).Scan(&entryID)
+			journal.Hash, journal.PreviousHash, int8Value(userID), textValueOptional(requestHash),
+			invCurrency, paymentRate).Scan(&entryID)
 		if err != nil {
 			return err
 		}
@@ -258,13 +320,14 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 			INSERT INTO invoice_payments
 				(tenant_id, number, invoice_id, customer_id, journal_entry_id,
 				 amount_cents, ar_applied_cents, overpayment_cents, cash_account_id,
-				 payment_date, description, status, idempotency_key, source_ref, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'RECEIVED', $12, $13, $14)
+				 payment_date, description, status, idempotency_key, source_ref, created_by,
+				 currency_code, exchange_rate)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'RECEIVED', $12, $13, $14, $15, $16)
 			RETURNING id
 		`, tenant, pmtNumber, invoiceID, customerID, entryID,
 			req.AmountCents, arApplied, 0, req.CashAccountID,
 			pmtDate, textValueOptional(req.Description), idem, sourceRef,
-			int8Value(userID)).Scan(&pmtID)
+			int8Value(userID), invCurrency, paymentRate).Scan(&pmtID)
 		if err != nil {
 			return err
 		}
@@ -280,6 +343,10 @@ func (service *Service) CreatePayment(writer http.ResponseWriter, request *http.
 			PaymentDate:    req.PaymentDate,
 			Description:    req.Description,
 			Status:         "RECEIVED",
+			CurrencyCode:   invCurrency,
+			ExchangeRate:   paymentRate,
+			FxGainCents:    max64(-fxDiff, 0),
+			FxLossCents:    max64(fxDiff, 0),
 		}
 
 		if err := audit.Log(request.Context(), tx, tenant, userID, "invoice_payment", pmtID, audit.ActionPost, nil, map[string]any{
@@ -322,7 +389,8 @@ func (service *Service) ListPayments(writer http.ResponseWriter, request *http.R
 		rows, err := tx.Query(request.Context(), `
 			SELECT id, number, invoice_id, customer_id, journal_entry_id,
 			       amount_cents, ar_applied_cents, overpayment_cents, cash_account_id,
-			       payment_date, description, status
+			       payment_date, description, status,
+			       btrim(currency_code)::text, exchange_rate::float8
 			FROM invoice_payments
 			WHERE tenant_id = $1 AND invoice_id = $2
 			ORDER BY payment_date, id
@@ -339,7 +407,8 @@ func (service *Service) ListPayments(writer http.ResponseWriter, request *http.R
 			var desc pgtype.Text
 			if err := rows.Scan(&pmt.ID, &pmt.Number, &pmt.InvoiceID, &pmt.CustomerID,
 				&journalID, &pmt.AmountCents, &pmt.ARAppliedCents, &pmt.OverpaymentCents,
-				&pmt.CashAccountID, &pmtDate, &desc, &pmt.Status); err != nil {
+				&pmt.CashAccountID, &pmtDate, &desc, &pmt.Status,
+				&pmt.CurrencyCode, &pmt.ExchangeRate); err != nil {
 				return err
 			}
 			pmt.PaymentDate = dateString(pmtDate)
@@ -372,7 +441,18 @@ func validatePaymentRequest(req CreatePaymentRequest) (string, string) {
 	if !validDate(req.PaymentDate) {
 		return "INVALID_REQUEST", "payment_date must be a valid date in YYYY-MM-DD format"
 	}
+	if req.ExchangeRate < 0 {
+		return "INVALID_REQUEST", "exchange_rate must not be negative"
+	}
 	return "", ""
+}
+
+// max64 returns the larger of two int64 values.
+func max64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func paymentErrorFor(err error) (int, string, string) {
@@ -401,12 +481,14 @@ func (service *Service) findPaymentByJournalID(ctx context.Context, tx pgx.Tx, t
 	err := tx.QueryRow(ctx, `
 		SELECT id, number, invoice_id, customer_id, journal_entry_id,
 		       amount_cents, ar_applied_cents, overpayment_cents, cash_account_id,
-		       payment_date, description, status
+		       payment_date, description, status,
+		       btrim(currency_code)::text, exchange_rate::float8
 		FROM invoice_payments
 		WHERE tenant_id = $1 AND journal_entry_id = $2
 	`, tenant, journalID).Scan(&result.ID, &result.Number, &result.InvoiceID, &result.CustomerID,
 		&journalIDOut, &result.AmountCents, &result.ARAppliedCents, &result.OverpaymentCents,
-		&result.CashAccountID, &pmtDate, &desc, &result.Status)
+		&result.CashAccountID, &pmtDate, &desc, &result.Status,
+		&result.CurrencyCode, &result.ExchangeRate)
 	if err != nil {
 		return paymentResponse{}, err
 	}

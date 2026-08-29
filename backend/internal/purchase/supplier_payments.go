@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -13,6 +14,7 @@ import (
 	"finance-accounting-app/backend/internal/accounting"
 	"finance-accounting-app/backend/internal/audit"
 	"finance-accounting-app/backend/internal/db"
+	"finance-accounting-app/backend/internal/settings"
 )
 
 // Supplier invoice statuses (ISSUED / PARTIALLY_PAID / PAID / VOID) are defined
@@ -21,6 +23,10 @@ import (
 const (
 	supplierPaymentDocType   = "PAY"
 	supplierPaymentDocPrefix = "PAY"
+
+	// FX gain/loss seeded accounts (SET-001); overridden via tenant_settings.
+	fxGainAccountCode = "4904"
+	fxLossAccountCode = "5905"
 )
 
 // CreateSupplierPaymentRequest is the POST /supplier-invoices/{id}/payments body.
@@ -29,21 +35,27 @@ type CreateSupplierPaymentRequest struct {
 	AmountCents   int64  `json:"amount_cents"`
 	PaymentDate   string `json:"payment_date"`
 	Description   string `json:"description"`
+	// SET-001 multi-currency: settlement rate for FC invoices.
+	ExchangeRate float64 `json:"exchange_rate"`
 }
 
 type supplierPaymentResponse struct {
-	ID               int64  `json:"id"`
-	Number           string `json:"number"`
-	InvoiceID        int64  `json:"invoice_id"`
-	SupplierID       int64  `json:"supplier_id"`
-	JournalEntryID   int64  `json:"journal_entry_id,omitempty"`
-	AmountCents      int64  `json:"amount_cents"`
-	APAppliedCents   int64  `json:"ap_applied_cents"`
-	OverpaymentCents int64  `json:"overpayment_cents"`
-	CashAccountID    int64  `json:"cash_account_id"`
-	PaymentDate      string `json:"payment_date"`
-	Description      string `json:"description"`
-	Status           string `json:"status"`
+	ID               int64   `json:"id"`
+	Number           string  `json:"number"`
+	InvoiceID        int64   `json:"invoice_id"`
+	SupplierID       int64   `json:"supplier_id"`
+	JournalEntryID   int64   `json:"journal_entry_id,omitempty"`
+	AmountCents      int64   `json:"amount_cents"`
+	APAppliedCents   int64   `json:"ap_applied_cents"`
+	OverpaymentCents int64   `json:"overpayment_cents"`
+	CashAccountID    int64   `json:"cash_account_id"`
+	PaymentDate      string  `json:"payment_date"`
+	Description      string  `json:"description"`
+	Status           string  `json:"status"`
+	CurrencyCode     string  `json:"currency_code"`
+	ExchangeRate     float64 `json:"exchange_rate"`
+	FxGainCents      int64   `json:"fx_gain_cents"`
+	FxLossCents      int64   `json:"fx_loss_cents"`
 }
 
 // CreateSupplierPayment posts a supplier payment against an invoice.
@@ -106,11 +118,14 @@ func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, reques
 		var supplierID int64
 		var invStatus string
 		var payable int64
+		var invCurrency string
+		var invRate float64
 		err = tx.QueryRow(request.Context(), `
-			SELECT number, supplier_id, status, payable_cents
+			SELECT number, supplier_id, status, payable_cents,
+			       btrim(currency_code)::text, exchange_rate::float8
 			FROM supplier_invoices WHERE tenant_id = $1 AND id = $2
 			FOR UPDATE
-		`, tenant, invoiceID).Scan(&invNumber, &supplierID, &invStatus, &payable)
+		`, tenant, invoiceID).Scan(&invNumber, &supplierID, &invStatus, &payable, &invCurrency, &invRate)
 		if err != nil {
 			return err
 		}
@@ -126,6 +141,18 @@ func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, reques
 		}
 		overpayment := int64(0)
 
+		// SET-001 FX gain/loss: for a foreign-currency invoice settled at a
+		// different rate than the posting rate, the AP slice is released at
+		// the invoice rate while cash leaves at the payment rate.
+		paymentRate := req.ExchangeRate
+		if paymentRate <= 0 {
+			paymentRate = invRate
+		}
+		var fxDiff int64
+		if invCurrency != "" && invCurrency != "IDR" && invRate > 0 && paymentRate != invRate {
+			fxDiff = int64(math.Round(float64(apApplied) / invRate * (paymentRate - invRate)))
+		}
+
 		// Resolve accounts.
 		apAccountID, err := resolveAccountByCode(request.Context(), tx, tenant, apAccountCode)
 		if err != nil {
@@ -139,9 +166,30 @@ func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, reques
 		// Build journal lines.
 		//   Dr 2101 AP (ap_applied) — reduce what we owe.
 		//   Cr Cash/Bank (amount) — total cash out.
+		//   FX difference clears through the mapped gain/loss account.
 		journalLines := []accounting.Line{
 			{AccountID: apAccountID, DebitCents: apApplied, SourceLineRef: "ap"},
 			{AccountID: cashAccount.ID, CreditCents: req.AmountCents, SourceLineRef: "cash"},
+		}
+		if fxDiff > 0 {
+			// Payment rate > invoice rate: paying costs more base currency
+			// than the AP booked value → FX loss (Dr loss / Cr cash extra).
+			fxLossAccountID, err := settings.ResolveAccount(request.Context(), tx, tenant, settings.SettingFxLoss, fxLossAccountCode)
+			if err != nil {
+				return err
+			}
+			journalLines = append(journalLines, accounting.Line{
+				AccountID: fxLossAccountID, DebitCents: fxDiff, SourceLineRef: "fx-loss",
+			})
+		} else if fxDiff < 0 {
+			// Payment rate < invoice rate: FX gain (Dr cash extra / Cr gain).
+			fxGainAccountID, err := settings.ResolveAccount(request.Context(), tx, tenant, settings.SettingFxGain, fxGainAccountCode)
+			if err != nil {
+				return err
+			}
+			journalLines = append(journalLines, accounting.Line{
+				AccountID: fxGainAccountID, CreditCents: -fxDiff, SourceLineRef: "fx-gain",
+			})
 		}
 		if err := accounting.BalanceCheck(journalLines); err != nil {
 			return err
@@ -185,12 +233,13 @@ func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, reques
 		// Insert journal entry.
 		var entryID int64
 		err = tx.QueryRow(request.Context(), `
-			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, currency_code, exchange_rate)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 			RETURNING id
 		`, tenant, jrnNumber, journal.EntryDate, periodID, journal.Description,
 			journal.SourceRef, string(journal.IntentType), idem,
-			journal.Hash, journal.PreviousHash, int8Value(uid)).Scan(&entryID)
+			journal.Hash, journal.PreviousHash, int8Value(uid),
+			invCurrency, paymentRate).Scan(&entryID)
 		if err != nil {
 			return err
 		}
@@ -240,13 +289,14 @@ func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, reques
 			INSERT INTO supplier_payments
 				(tenant_id, number, supplier_id, invoice_id, journal_entry_id,
 				 amount_cents, ap_applied_cents, overpayment_cents, cash_account_id,
-				 payment_date, description, status, idempotency_key, source_ref, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'PAID', $12, $13, $14)
+				 payment_date, description, status, idempotency_key, source_ref, created_by,
+				 currency_code, exchange_rate)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'PAID', $12, $13, $14, $15, $16)
 			RETURNING id
 		`, tenant, pmtNumber, supplierID, invoiceID, entryID,
 			req.AmountCents, apApplied, overpayment, req.CashAccountID,
 			pmtDate, textValueOptional(req.Description), idem, sourceRef,
-			int8Value(uid)).Scan(&pmtID)
+			int8Value(uid), invCurrency, paymentRate).Scan(&pmtID)
 		if err != nil {
 			return err
 		}
@@ -263,6 +313,10 @@ func (service *Service) CreateSupplierPayment(writer http.ResponseWriter, reques
 			PaymentDate:      req.PaymentDate,
 			Description:      req.Description,
 			Status:           "PAID",
+			CurrencyCode:     invCurrency,
+			ExchangeRate:     paymentRate,
+			FxGainCents:      maxInt64(-fxDiff, 0),
+			FxLossCents:      maxInt64(fxDiff, 0),
 		}
 
 		if err := audit.Log(request.Context(), tx, tenant, uid, "supplier_payment", pmtID, audit.ActionPost, nil, map[string]any{
@@ -378,7 +432,18 @@ func validateSupplierPaymentRequest(req CreateSupplierPaymentRequest) (string, s
 	if !validDate(req.PaymentDate) {
 		return "INVALID_REQUEST", "payment_date must be a valid date in YYYY-MM-DD format"
 	}
+	if req.ExchangeRate < 0 {
+		return "INVALID_REQUEST", "exchange_rate must not be negative"
+	}
 	return "", ""
+}
+
+// maxInt64 returns the larger of two int64 values.
+func maxInt64(a, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func supplierPaymentErrorFor(err error) (int, string, string) {

@@ -67,6 +67,10 @@ const PARTY_LABEL: Record<EntrySubKind, string> = {
   "pc-voucher-entry": "Petty Cash Voucher",
   "pc-replenish-entry": "Petty Cash Replenish",
   "recurring-transaction-entry": "Recurring Transaction",
+  "unit-entry": "Unit",
+  "item-category-entry": "Item Category",
+  "item-brand-entry": "Item Brand",
+  "tax-master-entry": "Tax",
 };
 
 const HEADER_TITLE: Record<EntrySubKind, string> = {
@@ -114,6 +118,10 @@ const HEADER_TITLE: Record<EntrySubKind, string> = {
   "pc-voucher-entry": "Petty Cash Voucher",
   "pc-replenish-entry": "Petty Cash Replenish",
   "recurring-transaction-entry": "Recurring Transaction",
+  "unit-entry": "Unit",
+  "item-category-entry": "Item Category",
+  "item-brand-entry": "Item Brand",
+  "tax-master-entry": "Tax",
 };
 
 const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
@@ -161,6 +169,10 @@ const PRIMARY_ACCOUNT_HINT: Record<EntrySubKind, { label: string }> = {
   "pc-voucher-entry": { label: "Voucher lines" },
   "pc-replenish-entry": { label: "Replenish amount" },
   "recurring-transaction-entry": { label: "Schedule info" },
+  "unit-entry": { label: "Unit info" },
+  "item-category-entry": { label: "Category info" },
+  "item-brand-entry": { label: "Brand info" },
+  "tax-master-entry": { label: "Tax info" },
 };
 
 /**

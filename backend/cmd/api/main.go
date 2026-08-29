@@ -31,6 +31,7 @@ import (
 	"finance-accounting-app/backend/internal/forecast"
 	"finance-accounting-app/backend/internal/inventory"
 	"finance-accounting-app/backend/internal/item"
+	"finance-accounting-app/backend/internal/itemmaster"
 	"finance-accounting-app/backend/internal/lease"
 	"finance-accounting-app/backend/internal/middleware"
 	"finance-accounting-app/backend/internal/notes"
@@ -44,6 +45,7 @@ import (
 	"finance-accounting-app/backend/internal/reporting"
 	"finance-accounting-app/backend/internal/reports"
 	"finance-accounting-app/backend/internal/sales"
+	"finance-accounting-app/backend/internal/settings"
 	"finance-accounting-app/backend/internal/tax"
 	"finance-accounting-app/backend/internal/tenant"
 	"finance-accounting-app/backend/internal/warehouse"
@@ -138,6 +140,8 @@ func main() {
 	chequeHandler := cheque.NewHandler(pool)
 	costCenterHandler := costcenter.NewHandler(pool)
 	emailHandler := email.NewHandler(pool)
+	settingsHandler := settings.NewHandler(pool)
+	itemMasterHandler := itemmaster.NewHandler(pool)
 
 	router := chi.NewRouter()
 
@@ -283,6 +287,9 @@ func main() {
 				// F-09: Cost/Profit Center
 				costCenterHandler.Routes(router)
 
+				// SET-001: item master data writes (units/categories/brands).
+				itemMasterHandler.Routes(router)
+
 				// N-01..N-10: Report Templates (CRUD)
 				router.Get("/reports/templates", reportsHandler.ListTemplates)
 				router.Post("/reports/templates", reportsHandler.CreateTemplate)
@@ -316,6 +323,9 @@ func main() {
 				// render time (DOMPurify) and deliberately not server-side,
 				// because legitimate templates need a wide tag set.
 				emailHandler.Routes(router)
+
+				// SET-001: settings writes are owner/admin only.
+				settingsHandler.Routes(router)
 			})
 
 			// --- Read-only: all authenticated users (including viewer) ---
@@ -327,6 +337,10 @@ func main() {
 			router.Get("/accounts", coaHandler.List)
 			router.Get("/accounts/export", coaHandler.Export)
 			router.Get("/categories", coaHandler.ListCategories)
+
+			// SET-001: settings + master data reads (all authenticated roles).
+			settingsHandler.RegisterReadRoutes(router)
+			itemMasterHandler.RegisterReadRoutes(router)
 
 			router.Get("/reports/trial-balance", reportingHandler.TrialBalance)
 			router.Get("/reports/profit-loss", reportingHandler.ProfitLoss)

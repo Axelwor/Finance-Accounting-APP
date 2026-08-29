@@ -7,6 +7,7 @@ import { api } from "../../api";
 import { formatIDRFromCents, parseRupiahToCents } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
+import { CurrencyRatePicker } from "../../components/CurrencyRatePicker";
 import { Icon } from "../../components/m3/Icon";
 import type { Customer, Item, SalesOrderLineInput, SalesOrder } from "../../types";
 import type { PrefillRef } from "../../workbench/types";
@@ -74,6 +75,8 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
   const [shipToAddress, setShipToAddress] = useState("");
   const [salespersonId, setSalespersonId] = useState("");
   const [taxRate, setTaxRate] = useState(0);
+  const [currencyCode, setCurrencyCode] = useState("IDR");
+  const [exchangeRate, setExchangeRate] = useState(1);
   const [quotationId, setQuotationId] = useState<number | null>(null);
 
   const isExisting = orderId !== null;
@@ -258,6 +261,8 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
         ship_to_address: shipToAddress.trim() || undefined,
         salesperson_id: salespersonId ? Number(salespersonId) : undefined,
         quotation_id: quotationId ?? undefined,
+        currency_code: currencyCode,
+        exchange_rate: currencyCode === "IDR" ? 1 : exchangeRate,
       });
       workbench.replaceDraft(tabId, created.number, "CONFIRMED");
       workbench.markUnsaved(tabId, false);
@@ -400,6 +405,19 @@ export function SalesOrderForm({ tabId, entryId, initialTitle, prefill }: Props)
                 onChange={setTaxRate}
                 disabled={isExisting}
                 label="Skema PPN"
+              />
+            </div>
+
+            <div className="auth-field">
+              <CurrencyRatePicker
+                value={currencyCode}
+                rate={exchangeRate}
+                onChange={(code, rate) => {
+                  setCurrencyCode(code);
+                  setExchangeRate(rate);
+                }}
+                docDate={date}
+                disabled={isExisting}
               />
             </div>
           </div>

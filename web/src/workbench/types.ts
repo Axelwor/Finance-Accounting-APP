@@ -23,7 +23,8 @@ export type ModuleId =
   | "accountant"
   | "reports"
   | "tax"
-  | "email";
+  | "email"
+  | "settings";
 
 export type NestedTabKind = "list" | "entry";
 

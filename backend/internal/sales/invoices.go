@@ -72,6 +72,11 @@ type CreateInvoiceRequest struct {
 	OtherChargesCents  int64                `json:"other_charges_cents"`
 	RoundingCents      int64                `json:"rounding_cents"`
 	SalespersonID      int64                `json:"salesperson_id"`
+	// SET-001 multi-currency: document currency + rate to base. Amounts in
+	// *_cents stay base currency; the client converted them at entry time.
+	CurrencyCode string  `json:"currency_code"`
+	ExchangeRate float64 `json:"exchange_rate"`
+	TaxID        int64   `json:"tax_id"`
 }
 
 type invoiceLineResponse struct {
@@ -111,6 +116,8 @@ type invoiceResponse struct {
 	OtherChargesCents  int64                 `json:"other_charges_cents"`
 	RoundingCents      int64                 `json:"rounding_cents"`
 	SalespersonID      int64                 `json:"salesperson_id,omitempty"`
+	CurrencyCode       string                `json:"currency_code"`
+	ExchangeRate       float64               `json:"exchange_rate"`
 	Lines              []invoiceLineResponse `json:"lines,omitempty"`
 }
 
@@ -138,6 +145,14 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 		writeError(writer, http.StatusBadRequest, code, message)
 		return
 	}
+	// SET-001: normalize the document currency (default IDR / rate 1).
+	currencyCode, exchangeRate, err := normalizeDocCurrency(req.CurrencyCode, req.ExchangeRate)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_CURRENCY", err.Error())
+		return
+	}
+	req.CurrencyCode = currencyCode
+	req.ExchangeRate = exchangeRate
 	userID := userID(request)
 	requestHash := httperr.ComputeRequestHash(request)
 
@@ -293,12 +308,13 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 		}
 		var revenueEntryID int64
 		err = tx.QueryRow(request.Context(), `
-			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, request_hash)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, request_hash, currency_code, exchange_rate)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 			RETURNING id
 		`, tenant, jrnNumber, revenueJournal.EntryDate, periodID, revenueJournal.Description,
 			revenueJournal.SourceRef, string(revenueJournal.IntentType), idem,
-			revenueJournal.Hash, revenueJournal.PreviousHash, int8Value(userID), textValueOptional(requestHash)).Scan(&revenueEntryID)
+			revenueJournal.Hash, revenueJournal.PreviousHash, int8Value(userID), textValueOptional(requestHash),
+			req.CurrencyCode, req.ExchangeRate).Scan(&revenueEntryID)
 		if err != nil {
 			return err
 		}
@@ -363,12 +379,13 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 				return err
 			}
 			err = tx.QueryRow(request.Context(), `
-				INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, hash, prev_hash, created_by)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+				INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, hash, prev_hash, created_by, currency_code, exchange_rate)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 				RETURNING id
 			`, tenant, dpJrnNumber, dpJournal.EntryDate, periodID, dpJournal.Description,
 				dpJournal.SourceRef, string(dpJournal.IntentType),
-				dpJournal.Hash, dpJournal.PreviousHash, int8Value(userID)).Scan(&dpEntryID)
+				dpJournal.Hash, dpJournal.PreviousHash, int8Value(userID),
+				req.CurrencyCode, req.ExchangeRate).Scan(&dpEntryID)
 			if err != nil {
 				return err
 			}
@@ -426,16 +443,18 @@ func (service *Service) CreateInvoice(writer http.ResponseWriter, request *http.
 				 payment_term_id, notes, status, total_cents, dp_applied_cents,
 				 receivable_cents, revenue_journal_entry_id, dp_journal_entry_id, created_by,
 				 tax_invoice_number, sub_total_cents, discount_total_cents, tax_total_cents,
-				 shipping_fee_cents, other_charges_cents, rounding_cents, salesperson_id)
+				 shipping_fee_cents, other_charges_cents, rounding_cents, salesperson_id,
+				 currency_code, exchange_rate, tax_id)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ISSUED', $9, $10, $11, $12, $13, $14,
-				$15, $16, $17, $18, $19, $20, $21, $22)
+				$15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
 			RETURNING id
 		`, tenant, invNumber, soID, req.CustomerID, invoiceDate, dueDate,
 			optionalInt8(req.PaymentTermID), textValueOptional(req.Notes), totalCents, dpApplied,
 			receivable, int8Value(revenueEntryID), int8Value(dpEntryID), int8Value(userID),
 			textValueOptional(req.TaxInvoiceNumber), totalDPPCents, discountTotalCents,
 			totalPPNCents, req.ShippingFeeCents, req.OtherChargesCents, req.RoundingCents,
-			optionalInt8(req.SalespersonID)).Scan(&invID)
+			optionalInt8(req.SalespersonID), req.CurrencyCode, req.ExchangeRate,
+			optionalInt8(req.TaxID)).Scan(&invID)
 		if err != nil {
 			return err
 		}

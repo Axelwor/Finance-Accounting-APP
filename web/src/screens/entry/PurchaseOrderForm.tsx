@@ -9,6 +9,7 @@ import { formatIDRFromCents, parseRupiahToCents } from "../../lib/format";
 import { openPrintWindow } from "../../lib/print";
 import { draftNumber } from "../../workbench/modules";
 import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
+import { CurrencyRatePicker } from "../../components/CurrencyRatePicker";
 import type { Supplier, Item, PurchaseOrderLineInput } from "../../types";
 import { Button } from "../../components/m3";
 
@@ -51,6 +52,8 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
   const [buyerId, setBuyerId] = useState("");
   const [notes, setNotes] = useState("");
   const [taxRate, setTaxRate] = useState(0);
+  const [currencyCode, setCurrencyCode] = useState("IDR");
+  const [exchangeRate, setExchangeRate] = useState(1);
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -160,6 +163,8 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
         supplier_quote_date: supplierQuoteDate || undefined,
         buyer_id: buyerId ? Number(buyerId) : undefined,
         lines: inputLines,
+        currency_code: currencyCode,
+        exchange_rate: currencyCode === "IDR" ? 1 : exchangeRate,
       });
       replaceDraft(tabId, po.number, po.status);
       markUnsaved(tabId, false);
@@ -245,6 +250,18 @@ export function PurchaseOrderForm({ tabId, entryId, initialTitle }: Props) {
               <input className="input" type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} disabled={isExisting} />
             </label>
             <TaxRateSelector value={taxRate} onChange={setTaxRate} disabled={isExisting} label="PPN Masukan / Tax" />
+            <div className="auth-field">
+              <CurrencyRatePicker
+                value={currencyCode}
+                rate={exchangeRate}
+                onChange={(code: string, rate: number) => {
+                  setCurrencyCode(code);
+                  setExchangeRate(rate);
+                }}
+                docDate={orderDate}
+                disabled={isExisting}
+              />
+            </div>
           </div>
 
           <label className="field">

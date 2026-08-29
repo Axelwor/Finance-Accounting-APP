@@ -21,6 +21,8 @@ interface Props {
   invoiceId: number;
   payableCents: number;
   invoiceStatus?: string;
+  /** SET-001: settlement rate for FC invoices (FX gain/loss). */
+  exchangeRate?: number;
 }
 
 interface CashAccountOption {
@@ -28,7 +30,7 @@ interface CashAccountOption {
   name: string;
 }
 
-export function SupplierPaymentPanel({ invoiceId, payableCents, invoiceStatus }: Props) {
+export function SupplierPaymentPanel({ invoiceId, payableCents, invoiceStatus, exchangeRate }: Props) {
   const [payments, setPayments] = useState<SupplierPayment[]>([]);
   const [cashAccounts, setCashAccounts] = useState<CashAccountOption[]>([]);
   const [amount, setAmount] = useState(0);
@@ -93,6 +95,7 @@ export function SupplierPaymentPanel({ invoiceId, payableCents, invoiceStatus }:
         amount_cents: amount,
         payment_date: paymentDate,
         description: description.trim() || undefined,
+        exchange_rate: exchangeRate && exchangeRate > 0 ? exchangeRate : undefined,
       });
       await loadPayments();
       setAmount(0);

@@ -46,6 +46,9 @@ type CreateSalesOrderRequest struct {
 	SalespersonID         int64                   `json:"salesperson_id"`
 	ShipToAddress         string                  `json:"ship_to_address"`
 	ShippingTerms         string                  `json:"shipping_terms"`
+	// SET-001 multi-currency: document display currency + entry rate.
+	CurrencyCode string  `json:"currency_code"`
+	ExchangeRate float64 `json:"exchange_rate"`
 }
 
 type orderLineResponse struct {
@@ -199,21 +202,28 @@ func (service *Service) createOrderInTx(ctx context.Context, tx pgx.Tx, tenant i
 	}
 
 	var orderID int64
+	// SET-001: normalize the document currency (default IDR / rate 1).
+	currencyCode, exchangeRate, err := normalizeDocCurrency(req.CurrencyCode, req.ExchangeRate)
+	if err != nil {
+		return nil, err
+	}
 	err = tx.QueryRow(ctx, `
 		INSERT INTO sales_orders
 			(tenant_id, number, quotation_id, customer_id, order_date,
 			 payment_term_id, notes, status, total_cents, dp_received_cents, created_by,
 			 customer_po_number, customer_po_date, requested_delivery_date,
-			 salesperson_id, ship_to_address, shipping_terms, idempotency_key)
+			 salesperson_id, ship_to_address, shipping_terms, idempotency_key,
+			 currency_code, exchange_rate)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, 'CONFIRMED', $8, 0, $9,
-			$10, $11, $12, $13, $14, $15, $16)
+			$10, $11, $12, $13, $14, $15, $16, $17, $18)
 		RETURNING id
 	`, tenant, number, quotationID, req.CustomerID, orderDate,
 		optionalInt8(req.PaymentTermID), textValueOptional(req.Notes), totalCents,
 		int8Nullable(actingUser),
 		textValueOptional(req.CustomerPONumber), customerPODate, requestedDeliveryDate,
 		optionalInt8(req.SalespersonID), textValueOptional(req.ShipToAddress),
-		textValueOptional(req.ShippingTerms), pgtypeUUIDOpt(idem)).Scan(&orderID)
+		textValueOptional(req.ShippingTerms), pgtypeUUIDOpt(idem),
+		currencyCode, exchangeRate).Scan(&orderID)
 	if err != nil {
 		return nil, err
 	}

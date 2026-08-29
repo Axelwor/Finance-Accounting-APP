@@ -34,6 +34,9 @@ type CreateQuotationRequest struct {
 	Notes         string                 `json:"notes"`
 	SourceRef     string                 `json:"source_ref"`
 	Lines         []QuotationLineRequest `json:"lines"`
+	// SET-001 multi-currency: document display currency + entry rate.
+	CurrencyCode string  `json:"currency_code"`
+	ExchangeRate float64 `json:"exchange_rate"`
 }
 
 // preparedLine carries a validated line plus its computed line total so the

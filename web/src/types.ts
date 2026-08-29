@@ -67,10 +67,18 @@ export type ListSubKind =
   | "cost-center-pnl"
   | "petty-cash-funds"
   | "petty-cash-vouchers"
-  | "recurring-transactions";
+  | "recurring-transactions"
+  | "settings-company"
+  | "settings-currency"
+  | "settings-default-accounts"
+  | "settings-preferences"
+  | "unit-list"
+  | "item-category-list"
+  | "item-brand-list"
+  | "tax-master-list";
 
-/** The currency code used throughout the app. */
-export type CurrencyCode = "IDR";
+/** The currency code used throughout the app (SET-001: any ISO-4217 code). */
+export type CurrencyCode = string;
 /** Workbench entry sub-kind identifiers (drive the entry tab dispatch). */
 export type EntrySubKind =
   | "money-in"
@@ -116,7 +124,11 @@ export type EntrySubKind =
   | "pc-fund-entry"
   | "pc-voucher-entry"
   | "pc-replenish-entry"
-  | "recurring-transaction-entry";
+  | "recurring-transaction-entry"
+  | "unit-entry"
+  | "item-category-entry"
+  | "item-brand-entry"
+  | "tax-master-entry";
 export interface Business {
   id: string;
   name: string;
@@ -131,6 +143,93 @@ export interface Tenant {
   name: string;
   slug: string;
   role: string;
+}
+
+// ---------------------------------------------------------------------------
+// SET-001: Settings, currencies, exchange rates, item master, tax master
+// ---------------------------------------------------------------------------
+
+/** Company profile + preferences + default account mapping (GET /settings). */
+export interface TenantSettings {
+  company: {
+    id: number;
+    name: string;
+    slug: string;
+    legal_name: string;
+    address: string;
+    city: string;
+    phone: string;
+    email: string;
+    tax_id: string;
+    base_currency: string;
+    fiscal_year_start: string;
+    has_journals: boolean;
+  };
+  preferences: {
+    date_format: "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD";
+    thousand_separator: string;
+    decimal_separator: string;
+    amount_decimal_places: number;
+    qty_decimal_places: number;
+  };
+  default_accounts: {
+    default_sales_account_id?: number | null;
+    default_purchase_account_id?: number | null;
+    default_cogs_account_id?: number | null;
+    default_ar_account_id?: number | null;
+    default_ap_account_id?: number | null;
+    default_cash_account_id?: number | null;
+    default_capital_account_id?: number | null;
+    retained_earnings_account_id?: number | null;
+    opening_balance_equity_account_id?: number | null;
+    fx_gain_account_id?: number | null;
+    fx_loss_account_id?: number | null;
+  };
+}
+
+/** Global currency row (GET /currencies). */
+export interface Currency {
+  code: string;
+  name: string;
+  symbol: string;
+  decimal_places: number;
+}
+
+/** Manual exchange rate row (tenant-scoped). */
+export interface ExchangeRate {
+  id: number;
+  from_currency: string;
+  to_currency: string;
+  rate: number;
+  effective_date: string;
+  source: string;
+}
+
+/** Item master: unit of measure. */
+export interface UnitMaster {
+  id: number;
+  code: string;
+  name: string;
+  decimal_places: number;
+  is_active: boolean;
+}
+
+/** Item master: category / brand (name-only masters). */
+export interface ItemNameMaster {
+  id: number;
+  name: string;
+  is_active: boolean;
+}
+
+/** Tax master row (GET /taxes). */
+export interface TaxMaster {
+  id: number;
+  code: string;
+  name: string;
+  rate: number;
+  sales_account_id?: number | null;
+  purchase_account_id?: number | null;
+  is_active: boolean;
 }
 /** Accounting book period. */
 export interface BookPeriod {
@@ -574,10 +673,14 @@ export interface Item {
   item_type: "goods" | "service";
   is_tracked_stock: boolean;
   is_active: boolean;
-  /** Base unit of measure (backend json: `uom`). */
+  /** Base unit of measure name (joined from units master, SET-001). */
   uom?: string;
   /** Legacy alias for uom kept for older list screens. */
   unit?: string;
+  /** Master FKs (SET-001; backend resolves legacy text by name too). */
+  unit_id?: number | null;
+  category_id?: number | null;
+  brand_id?: number | null;
   costing_method?: ItemCostingMethod | null;
   sale_account_id?: number | null;
   cogs_account_id?: number | null;
@@ -705,6 +808,9 @@ export interface QuotationCreateInput {
   notes?: string;
   source_ref?: string;
   lines: QuotationLineInput[];
+  /** SET-001 multi-currency: document display currency + entry rate. */
+  currency_code?: string;
+  exchange_rate?: number;
 }
 /* ------------------------------------------------------------------ */
 /* Sales Order (SO) + Down Payment (DP)                                */
@@ -783,6 +889,9 @@ export interface SalesOrderCreateInput {
   ship_to_address?: string;
   shipping_terms?: "FOB" | "CIF" | "EXW" | "CFR" | "DAP";
   lines: SalesOrderLineInput[];
+  /** SET-001 multi-currency. */
+  currency_code?: string;
+  exchange_rate?: number;
 }
 /** Payload POST /api/v1/sales-orders/{id}/down-payments. */
 export interface CreateDownPaymentInput {
@@ -909,6 +1018,10 @@ export interface CreateInvoiceInput {
   rounding_cents?: number;
   salesperson_id?: number;
   lines: InvoiceLineInput[];
+  /** SET-001 multi-currency + tax master. */
+  currency_code?: string;
+  exchange_rate?: number;
+  tax_id?: number;
 }
 /* ------------------------------------------------------------------ */
 /* Invoice Payment (Pelunasan)                                         */
@@ -934,6 +1047,8 @@ export interface CreatePaymentInput {
   amount_cents: number;
   payment_date: string;
   description?: string;
+  /** SET-001: settlement rate for FC invoices (FX gain/loss). */
+  exchange_rate?: number;
 }
 /* ------------------------------------------------------------------ */
 /* Credit Note (CN / Sales Return)                                     */
@@ -1103,6 +1218,9 @@ export interface CreatePurchaseOrderInput {
   supplier_quote_date?: string;
   buyer_id?: number;
   lines: PurchaseOrderLineInput[];
+  /** SET-001 multi-currency. */
+  currency_code?: string;
+  exchange_rate?: number;
 }
 /* ------------------------------------------------------------------ */
 /* Goods Received Note (GRN) — posts Dr Inventory / Cr Accrued Payable */
@@ -1166,6 +1284,8 @@ export interface SupplierInvoiceLineInput {
 export interface CreateSupplierInvoiceInput {
   supplier_id: number; grn_id?: number; invoice_date: string; due_date?: string;
   supplier_invoice_number?: string; notes?: string; lines: SupplierInvoiceLineInput[];
+  /** SET-001 multi-currency + tax master. */
+  currency_code?: string; exchange_rate?: number; tax_id?: number;
 }
 /* Supplier Payment (Bayar) */
 export interface SupplierPayment {
@@ -1187,6 +1307,8 @@ export interface CreateSupplierPaymentInput {
   amount_cents: number;
   payment_date: string;
   description?: string;
+  /** SET-001: settlement rate for FC invoices (FX gain/loss). */
+  exchange_rate?: number;
 }
 /* Purchase Return (Retur Pembelian) */
 export interface PurchaseReturnListItem {

@@ -51,6 +51,9 @@ type CreatePurchaseOrderRequest struct {
 	SupplierQuoteNumber string                     `json:"supplier_quote_number"`
 	SupplierQuoteDate   string                     `json:"supplier_quote_date"`
 	BuyerID             int64                      `json:"buyer_id"`
+	// SET-001 multi-currency: document display currency + entry rate.
+	CurrencyCode string  `json:"currency_code"`
+	ExchangeRate float64 `json:"exchange_rate"`
 }
 
 type poLineResponse struct {
@@ -139,14 +142,20 @@ func (service *Service) CreatePurchaseOrder(writer http.ResponseWriter, request 
 			return err
 		}
 		// Insert header.
+		// SET-001: normalize the document currency (default IDR / rate 1).
+		currencyCode, exchangeRate, err := normalizePurchaseDocCurrency(req.CurrencyCode, req.ExchangeRate)
+		if err != nil {
+			return err
+		}
 		err = tx.QueryRow(request.Context(), `
 			INSERT INTO purchase_orders (tenant_id, number, supplier_id, order_date, payment_term_id, notes, status, total_cents,
-				supplier_quote_number, supplier_quote_date, buyer_id)
-			VALUES ($1, $2, $3, $4, $5, $6, 'CONFIRMED', $7, $8, $9, $10)
+				supplier_quote_number, supplier_quote_date, buyer_id, currency_code, exchange_rate)
+			VALUES ($1, $2, $3, $4, $5, $6, 'CONFIRMED', $7, $8, $9, $10, $11, $12)
 			RETURNING id, number
 		`, tenant, number, req.SupplierID, orderDate, optionalInt8(req.PaymentTermID),
 			textValueOptional(req.Notes), total,
-			textValueOptional(req.SupplierQuoteNumber), supplierQuoteDate, optionalInt8(req.BuyerID)).Scan(&result.ID, &result.Number)
+			textValueOptional(req.SupplierQuoteNumber), supplierQuoteDate, optionalInt8(req.BuyerID),
+			currencyCode, exchangeRate).Scan(&result.ID, &result.Number)
 		if err != nil {
 			return err
 		}

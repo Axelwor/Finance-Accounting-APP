@@ -7,6 +7,7 @@ import { api } from "../../api";
 import { formatIDRFromCents, parseRupiahToCents } from "../../lib/format";
 import { draftNumber } from "../../workbench/modules";
 import { TaxRateSelector, taxForLine } from "../../components/TaxRateSelector";
+import { CurrencyRatePicker } from "../../components/CurrencyRatePicker";
 import { Icon } from "../../components/m3/Icon";
 import type { Customer, Item, QuotationLineInput } from "../../types";
 
@@ -64,6 +65,8 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [taxRate, setTaxRate] = useState(0);
+  const [currencyCode, setCurrencyCode] = useState("IDR");
+  const [exchangeRate, setExchangeRate] = useState(1);
   const [sending, setSending] = useState(false);
   const [savedId, setSavedId] = useState<number | null>(
     entryId != null && !Number.isNaN(Number(entryId)) ? Number(entryId) : null
@@ -207,6 +210,8 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
         valid_until: validUntil || undefined,
         notes: notes.trim() || undefined,
         lines: payloadLines,
+        currency_code: currencyCode,
+        exchange_rate: currencyCode === "IDR" ? 1 : exchangeRate,
       });
       workbench.replaceDraft(tabId, created.number, "DRAFT");
       workbench.markUnsaved(tabId, false);
@@ -358,6 +363,19 @@ export function QuotationForm({ tabId, entryId, initialTitle }: Props) {
                 onChange={setTaxRate}
                 disabled={isSaved}
                 label="Skema PPN"
+              />
+            </div>
+
+            <div className="auth-field">
+              <CurrencyRatePicker
+                value={currencyCode}
+                rate={exchangeRate}
+                onChange={(code, rate) => {
+                  setCurrencyCode(code);
+                  setExchangeRate(rate);
+                }}
+                docDate={date}
+                disabled={isSaved}
               />
             </div>
           </div>

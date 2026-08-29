@@ -83,27 +83,32 @@ func (service *Service) PPNSummary(writer http.ResponseWriter, request *http.Req
 	fromDate := normalizeDate(request.URL.Query().Get("from_date"))
 	toDate := normalizeDate(request.URL.Query().Get("to_date"))
 
-	args := []any{tenant, ppnKeluaranCode, ppnMasukanCode}
-	where := "WHERE jl.tenant_id = $1 AND (a.code = $2 OR a.code = $3)"
-	idx := 4
-	if fromDate != "" {
-		where += fmt.Sprintf(" AND je.entry_date >= $%d", idx)
-		args = append(args, fromDate)
-		idx++
-	}
-	if toDate != "" {
-		where += fmt.Sprintf(" AND je.entry_date <= $%d", idx)
-		args = append(args, toDate)
-		idx++
-	}
-
 	var keluaran, masukan int64
-	// Sum credits to 2202 (keluaran) and debits to 1203 (masukan).
+	// Sum credits to the output VAT account (keluaran) and debits to the
+	// input VAT account (masukan). SET-001: the accounts resolve through the
+	// tax master with the legacy 2202/1203 codes as fallback.
 	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		keluaranID, masukanID, err := vatAccountIDs(request.Context(), tx, tenant)
+		if err != nil {
+			return err
+		}
+		args := []any{tenant, keluaranID, masukanID}
+		where := "WHERE jl.tenant_id = $1 AND (a.id = $2 OR a.id = $3)"
+		idx := 4
+		if fromDate != "" {
+			where += fmt.Sprintf(" AND je.entry_date >= $%d", idx)
+			args = append(args, fromDate)
+			idx++
+		}
+		if toDate != "" {
+			where += fmt.Sprintf(" AND je.entry_date <= $%d", idx)
+			args = append(args, toDate)
+			idx++
+		}
 		return tx.QueryRow(request.Context(), `
 			SELECT
-			  COALESCE(SUM(CASE WHEN a.code = $2 THEN jl.credit_cents ELSE 0 END), 0) AS keluaran,
-			  COALESCE(SUM(CASE WHEN a.code = $3 THEN jl.debit_cents  ELSE 0 END), 0) AS masukan
+			  COALESCE(SUM(CASE WHEN a.id = $2 THEN jl.credit_cents ELSE 0 END), 0) AS keluaran,
+			  COALESCE(SUM(CASE WHEN a.id = $3 THEN jl.debit_cents  ELSE 0 END), 0) AS masukan
 			FROM journal_lines jl
 			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
 			JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
@@ -145,20 +150,24 @@ func (service *Service) PPNReconciliation(writer http.ResponseWriter, request *h
 	lines := make([]PPNReconciliationLine, 0)
 	var keluaran, masukan int64
 	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
+		keluaranID, masukanID, err := vatAccountIDs(request.Context(), tx, tenant)
+		if err != nil {
+			return err
+		}
 		rows, err := tx.Query(request.Context(), `
 			SELECT je.id, je.number, je.entry_date, COALESCE(je.description, ''),
 			       COALESCE(je.intent_type, ''), COALESCE(je.source_ref, ''),
 			       a.code, a.name,
-			       CASE WHEN a.code = $2 THEN 'KELUARAN' ELSE 'MASUKAN' END,
+			       CASE WHEN a.id = $2 THEN 'KELUARAN' ELSE 'MASUKAN' END,
 			       jl.debit_cents, jl.credit_cents
 			FROM journal_lines jl
 			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
 			JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-			WHERE jl.tenant_id = $1 AND (a.code = $2 OR a.code = $3)
+			WHERE jl.tenant_id = $1 AND (a.id = $2 OR a.id = $3)
 			  AND je.status = 'POSTED'
 			  AND je.entry_date >= $4 AND je.entry_date <= $5
 			ORDER BY je.entry_date, je.number
-		`, tenant, ppnKeluaranCode, ppnMasukanCode, fromDate, toDate)
+		`, tenant, keluaranID, masukanID, fromDate, toDate)
 		if err != nil {
 			return err
 		}
@@ -230,17 +239,21 @@ func (service *Service) CreatePPNReconciliation(writer http.ResponseWriter, requ
 			return err
 		}
 		var keluaran, masukan int64
+		keluaranID, masukanID, err := vatAccountIDs(request.Context(), tx, tenant)
+		if err != nil {
+			return err
+		}
 		if err := tx.QueryRow(request.Context(), `
 			SELECT
-			  COALESCE(SUM(CASE WHEN a.code = $2 THEN jl.credit_cents ELSE 0 END), 0),
-			  COALESCE(SUM(CASE WHEN a.code = $3 THEN jl.debit_cents  ELSE 0 END), 0)
+			  COALESCE(SUM(CASE WHEN a.id = $2 THEN jl.credit_cents ELSE 0 END), 0),
+			  COALESCE(SUM(CASE WHEN a.id = $3 THEN jl.debit_cents  ELSE 0 END), 0)
 			FROM journal_lines jl
 			JOIN journal_entries je ON je.tenant_id = jl.tenant_id AND je.id = jl.entry_id
 			JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.id = jl.account_id
-			WHERE jl.tenant_id = $1 AND (a.code = $2 OR a.code = $3)
+			WHERE jl.tenant_id = $1 AND (a.id = $2 OR a.id = $3)
 			  AND je.status = 'POSTED'
 			  AND je.entry_date >= $4 AND je.entry_date <= $5
-		`, tenant, ppnKeluaranCode, ppnMasukanCode, fromDate, toDate).Scan(&keluaran, &masukan); err != nil {
+		`, tenant, keluaranID, masukanID, fromDate, toDate).Scan(&keluaran, &masukan); err != nil {
 			return err
 		}
 		net := keluaran - masukan
@@ -294,6 +307,21 @@ func (service *Service) CreatePPNReconciliation(writer http.ResponseWriter, requ
 // ---------------------------------------------------------------------------
 
 // parsePeriod reads period_year and period_month (required) from the query.
+// vatAccountIDs resolves the output (keluaran) and input (masukan) VAT
+// account ids through the tax master (SET-001) with the legacy hardcoded
+// codes as fallback, so unmapped tenants post exactly as before.
+func vatAccountIDs(ctx context.Context, tx pgx.Tx, tenant int64) (int64, int64, error) {
+	keluaranID, err := ResolveVATAccounts(ctx, tx, tenant, nil, true)
+	if err != nil {
+		return 0, 0, err
+	}
+	masukanID, err := ResolveVATAccounts(ctx, tx, tenant, nil, false)
+	if err != nil {
+		return 0, 0, err
+	}
+	return keluaranID, masukanID, nil
+}
+
 func parsePeriod(request *http.Request) (int64, int64, error) {
 	yearStr := request.URL.Query().Get("period_year")
 	monthStr := request.URL.Query().Get("period_month")

@@ -66,6 +66,9 @@ const inventory: Module = {
   items: [
     { id: "in-items", label: "Item List", hint: "ITM", openList: "inventory-items", openEntry: "inventory-item" },
     { id: "in-warehouse", label: "Warehouses", hint: "WH", openList: "warehouse-list", openEntry: "warehouse-entry" },
+    { id: "in-units", label: "Units", hint: "UOM", openList: "unit-list", openEntry: "unit-entry" },
+    { id: "in-categories", label: "Item Categories", hint: "CAT", openList: "item-category-list", openEntry: "item-category-entry" },
+    { id: "in-brands", label: "Item Brands", hint: "BRD", openList: "item-brand-list", openEntry: "item-brand-entry" },
     { id: "in-movements", label: "Stock Movements", hint: "STK", openList: "stock-movements", mockData: true },
     { id: "in-opname", label: "Stock Opnames", hint: "OPN", openList: "stock-opname", openEntry: "stock-opname-entry" },
     { id: "in-transfer", label: "Stock Transfers", hint: "TRF", openList: "stock-transfer", openEntry: "stock-transfer-entry" },
@@ -106,6 +109,7 @@ const tax: Module = {
   label: "Tax",
   icon: "ledger",
   items: [
+    { id: "tx-master", label: "Tax Master", hint: "TAX", openList: "tax-master-list", openEntry: "tax-master-entry" },
     { id: "tx-ppn", label: "PPN Reconciliation", hint: "PPN", openList: "ppn-reconciliation" },
     { id: "tx-pph", label: "PPh Final", hint: "PPH", openList: "pph-final" },
     { id: "tx-ecl", label: "ECL", hint: "ECL", openList: "ecl-calculator" },
@@ -120,6 +124,20 @@ const email: Module = {
   items: [
     { id: "em-templates", label: "Email Templates", hint: "TPL", openList: "email-templates", openEntry: "email-template-entry" },
     { id: "em-queue", label: "Email Queue", hint: "Q", openList: "email-queue" },
+  ],
+};
+
+// Settings module (SET-001): company profile, currency & rates, default
+// accounts, format preferences.
+const settingsModule: Module = {
+  id: "settings",
+  label: "Settings",
+  icon: "ledger",
+  items: [
+    { id: "st-company", label: "Company Info", hint: "CO", openList: "settings-company" },
+    { id: "st-currency", label: "Currency & Rates", hint: "FX", openList: "settings-currency" },
+    { id: "st-accounts", label: "Default Accounts", hint: "ACC", openList: "settings-default-accounts" },
+    { id: "st-preferences", label: "Preferences", hint: "PRF", openList: "settings-preferences" },
   ],
 };
 
@@ -142,7 +160,7 @@ const reports: Module = {
   ],
 };
 
-export const MODULES: Module[] = [cashBank, sales, purchases, production, inventory, fixedAssets, accountant, tax, email, reports];
+export const MODULES: Module[] = [cashBank, sales, purchases, production, inventory, fixedAssets, accountant, tax, email, reports, settingsModule];
 
 export function findModule(id: ModuleId): Module | undefined {
   return MODULES.find((m) => m.id === id);
@@ -281,6 +299,22 @@ export function defaultListTitle(listKind: import("./types").ListSubKind): strin
       return "Petty Cash Vouchers";
     case "recurring-transactions":
       return "Recurring Transactions";
+    case "settings-company":
+      return "Company Info";
+    case "settings-currency":
+      return "Currency & Exchange Rates";
+    case "settings-default-accounts":
+      return "Default Accounts";
+    case "settings-preferences":
+      return "Preferences";
+    case "unit-list":
+      return "Units";
+    case "item-category-list":
+      return "Item Categories";
+    case "item-brand-list":
+      return "Item Brands";
+    case "tax-master-list":
+      return "Tax Master";
     default:
       return listKind;
   }
@@ -361,6 +395,14 @@ export function defaultEntryTitle(entryKind: import("./types").EntrySubKind): st
       return "Warehouse";
     case "email-template-entry":
       return "Email Template";
+    case "unit-entry":
+      return "Unit";
+    case "item-category-entry":
+      return "Item Category";
+    case "item-brand-entry":
+      return "Item Brand";
+    case "tax-master-entry":
+      return "Tax";
     default:
       return "Entry";
   }
@@ -405,6 +447,10 @@ export function draftNumber(entryKind: import("./types").EntrySubKind): string {
     case "approval-rule-entry": return "APR-DRAFT";
     case "cheque-entry": return "CHK-DRAFT";
     case "warehouse-entry": return "WH-DRAFT";
+    case "unit-entry": return "UOM-DRAFT";
+    case "item-category-entry": return "CAT-DRAFT";
+    case "item-brand-entry": return "BRD-DRAFT";
+    case "tax-master-entry": return "TAX-DRAFT";
     default: return "DRAFT";
   }
 }

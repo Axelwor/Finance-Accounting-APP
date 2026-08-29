@@ -240,15 +240,21 @@ func (service *Service) createInTx(ctx context.Context, tx pgx.Tx, tenant int64,
 	}
 
 	var quotationID int64
+	// SET-001: normalize the document currency (default IDR / rate 1).
+	currencyCode, exchangeRate, err := normalizeDocCurrency(req.CurrencyCode, req.ExchangeRate)
+	if err != nil {
+		return nil, err
+	}
 	err = tx.QueryRow(ctx, `
 		INSERT INTO sales_quotations
 			(tenant_id, number, customer_id, quotation_date, valid_until,
-			 payment_term_id, notes, status, total_cents, created_by, idempotency_key)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, 'DRAFT', $8, $9, $10)
+			 payment_term_id, notes, status, total_cents, created_by, idempotency_key,
+			 currency_code, exchange_rate)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 'DRAFT', $8, $9, $10, $11, $12)
 		RETURNING id
 	`, tenant, number, req.CustomerID, quotationDate, validUntil,
 		optionalInt8(req.PaymentTermID), textValueOptional(req.Notes), totalCents,
-		int8Nullable(actingUser), pgtypeUUIDOpt(idem)).Scan(&quotationID)
+		int8Nullable(actingUser), pgtypeUUIDOpt(idem), currencyCode, exchangeRate).Scan(&quotationID)
 	if err != nil {
 		return nil, err
 	}

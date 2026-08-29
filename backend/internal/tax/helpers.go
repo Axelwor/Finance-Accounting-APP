@@ -52,6 +52,9 @@ func (service *Service) Routes(router chi.Router) {
 
 	// Deferred Tax (US-083)
 	router.Post("/deferred-tax/calculate", service.CalculateDeferredTax)
+
+	// Tax master data (SET-001)
+	service.registerMasterDataRoutes(router)
 }
 
 // ---------------------------------------------------------------------------

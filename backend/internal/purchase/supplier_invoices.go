@@ -48,6 +48,11 @@ type CreateSupplierInvoiceRequest struct {
 	DPAppliedCents        int64                        `json:"dp_applied_cents"`
 	Notes                 string                       `json:"notes"`
 	Lines                 []SupplierInvoiceLineRequest `json:"lines"`
+	// SET-001 multi-currency: document currency + entry rate (amounts stay
+	// base-currency cents) and the tax master row used for VAT posting.
+	CurrencyCode string  `json:"currency_code"`
+	ExchangeRate float64 `json:"exchange_rate"`
+	TaxID        int64   `json:"tax_id"`
 }
 
 type supplierInvoiceLineResponse struct {
@@ -152,6 +157,16 @@ func (service *Service) CreateSupplierInvoice(writer http.ResponseWriter, reques
 			return err
 		}
 
+		// SET-001: normalize the document currency (default IDR / rate 1).
+		currencyCode, exchangeRate, err := normalizePurchaseDocCurrency(req.CurrencyCode, req.ExchangeRate)
+		if err != nil {
+			return err
+		}
+		var taxID pgtype.Int8
+		if req.TaxID > 0 {
+			taxID = pgtype.Int8{Int64: req.TaxID, Valid: true}
+		}
+
 		// Prepare lines and compute DPP / VAT / total.
 		lines, dppCents, vatCents, err := prepareSupplierInvoiceLines(req.Lines)
 		if err != nil {
@@ -235,12 +250,13 @@ func (service *Service) CreateSupplierInvoice(writer http.ResponseWriter, reques
 		// Insert journal entry.
 		var entryID int64
 		err = tx.QueryRow(request.Context(), `
-			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, request_hash)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			INSERT INTO journal_entries (tenant_id, number, entry_date, period_id, description, source_ref, intent_type, idempotency_key, hash, prev_hash, created_by, request_hash, currency_code, exchange_rate)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 			RETURNING id
 		`, tenant, jrnNumber, journal.EntryDate, periodID, journal.Description,
 			journal.SourceRef, string(journal.IntentType), idem,
-			journal.Hash, journal.PreviousHash, int8Value(uid), textValueOptional(requestHash)).Scan(&entryID)
+			journal.Hash, journal.PreviousHash, int8Value(uid), textValueOptional(requestHash),
+			currencyCode, exchangeRate).Scan(&entryID)
 		if err != nil {
 			return err
 		}
@@ -306,12 +322,14 @@ func (service *Service) CreateSupplierInvoice(writer http.ResponseWriter, reques
 			INSERT INTO supplier_invoices
 				(tenant_id, number, supplier_id, grn_id, invoice_date, due_date,
 				 supplier_invoice_number, dpp_cents, vat_cents, total_cents,
-				 dp_applied_cents, payable_cents, notes, status, journal_entry_id, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'ISSUED', $14, $15)
+				 dp_applied_cents, payable_cents, notes, status, journal_entry_id, created_by,
+				 currency_code, exchange_rate, tax_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'ISSUED', $14, $15, $16, $17, $18)
 			RETURNING id
 		`, tenant, bilNumber, req.SupplierID, grnID, invoiceDate, dueDate,
 			textValueOptional(req.SupplierInvoiceNumber), dppCents, vatCents, totalCents,
-			dpApplied, payable, textValueOptional(req.Notes), entryID, int8Value(uid)).Scan(&invID)
+			dpApplied, payable, textValueOptional(req.Notes), entryID, int8Value(uid),
+			currencyCode, exchangeRate, taxID).Scan(&invID)
 		if err != nil {
 			return err
 		}

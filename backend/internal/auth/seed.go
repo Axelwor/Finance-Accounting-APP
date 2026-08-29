@@ -68,6 +68,7 @@ func SeedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		{"4201", "Sales Returns", "revenue", "CONTRA_REVENUE"},
 		{"4902", "Applied Overhead", "expense", "EXPENSE"},
 		{"4903", "Gain on Asset Disposal", "revenue", "OTHER_INCOME"},
+		{"4904", "Gain on Foreign Exchange", "revenue", "OTHER_INCOME"},
 		{"4906", "Bad Debt Recovery", "revenue", "OTHER_INCOME"},
 		{"4907", "Inventory Adjustment Gain", "revenue", "OTHER_INCOME"},
 		{"4908", "Production Variance Gain", "revenue", "OTHER_INCOME"},
@@ -80,6 +81,7 @@ func SeedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		{"5206", "Depreciation Expense", "expense", "DEPRECIATION"},
 		{"5207", "Impairment Loss", "expense", "IMPAIRMENT"},
 		{"5903", "Loss on Asset Disposal", "expense", "OTHER_EXPENSE"},
+		{"5905", "Loss on Foreign Exchange", "expense", "OTHER_EXPENSE"},
 		{"5209", "Bad Debt Expense", "expense", "BAD_DEBT"},
 		{"5208", "Income Tax Expense", "expense", "TAX_EXPENSE"},
 		{"5904", "Deferred Tax Expense", "expense", "DEFERRED_TAX"},
@@ -135,6 +137,32 @@ func SeedDefaultCOA(ctx context.Context, tx pgx.Tx, tenantID int64) error {
 		`, tenantID, category.name, category.direction, accountIDs[category.debitCode], accountIDs[category.creditCode]); err != nil {
 			return err
 		}
+	}
+
+	// SET-001: default tenant settings (format preferences + default account
+	// mapping) and the PPN tax master row so the settings screen and the
+	// posting engines have their fallbacks from day one.
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO tenant_settings (tenant_id,
+			default_sales_account_id, default_purchase_account_id, default_cogs_account_id,
+			default_ar_account_id, default_ap_account_id, default_cash_account_id,
+			default_capital_account_id, retained_earnings_account_id,
+			opening_balance_equity_account_id, fx_gain_account_id, fx_loss_account_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		ON CONFLICT (tenant_id) DO NOTHING
+	`, tenantID,
+		accountIDs["4101"], accountIDs["1301"], accountIDs["5101"],
+		accountIDs["1201"], accountIDs["2101"], accountIDs["1101"],
+		accountIDs["3101"], accountIDs["3201"],
+		accountIDs["3101"], accountIDs["4904"], accountIDs["5905"]); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO taxes (tenant_id, code, name, rate, sales_account_id, purchase_account_id)
+		VALUES ($1, 'PPN', 'PPN', 11.00, $2, $3)
+		ON CONFLICT (tenant_id, code) DO NOTHING
+	`, tenantID, accountIDs["2202"], accountIDs["1203"]); err != nil {
+		return err
 	}
 
 	// Open the current calendar year as the default accounting period so the

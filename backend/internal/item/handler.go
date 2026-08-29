@@ -47,10 +47,18 @@ type chiRouter interface {
 // ---------------------------------------------------------------------------
 
 type ItemRequest struct {
-	Code                     string  `json:"code"`
-	Name                     string  `json:"name"`
-	ItemType                 string  `json:"item_type"`
+	Code       string `json:"code"`
+	Name       string `json:"name"`
+	ItemType   string `json:"item_type"`
+	UnitID     *int64 `json:"unit_id"`
+	CategoryID *int64 `json:"category_id"`
+	BrandID    *int64 `json:"brand_id"`
+	// Legacy free-text fields kept for backward compatibility: when the ids
+	// above are absent the handler resolves (or creates) the master row by
+	// name (SET-001).
 	UOM                      string  `json:"uom"`
+	Category                 *string `json:"category"`
+	Brand                    *string `json:"brand"`
 	CostingMethod            *string `json:"costing_method"`
 	SaleAccountID            *int64  `json:"sale_account_id"`
 	CogsAccountID            *int64  `json:"cogs_account_id"`
@@ -59,10 +67,7 @@ type ItemRequest struct {
 	IsTrackedStock           bool    `json:"is_tracked_stock"`
 	MinStockQty              *string `json:"min_stock_qty"`
 	Barcode                  *string `json:"barcode"`
-	SecondaryUOM             *string `json:"secondary_uom"`
 	UOMConversionFactor      *string `json:"uom_conversion_factor"`
-	Brand                    *string `json:"brand"`
-	Category                 *string `json:"category"`
 	WeightGrams              *string `json:"weight_grams"`
 	VolumeCC                 *string `json:"volume_cc"`
 	DescriptionLong          *string `json:"description_long"`
@@ -72,8 +77,6 @@ type ItemRequest struct {
 	LeadTimeDays             *int32  `json:"lead_time_days"`
 	PreferredSupplierID      *int64  `json:"preferred_supplier_id"`
 	ABCClassification        *string `json:"abc_classification"`
-	SaleUOM                  *string `json:"sale_uom"`
-	PurchaseUOM              *string `json:"purchase_uom"`
 }
 
 type PriceRequest struct {
@@ -91,7 +94,12 @@ type itemRow struct {
 	Code                     string  `json:"code"`
 	Name                     string  `json:"name"`
 	ItemType                 string  `json:"item_type"`
-	UOM                      string  `json:"uom"`
+	UnitID                   *int64  `json:"unit_id"`
+	UOM                      *string `json:"uom"`
+	CategoryID               *int64  `json:"category_id"`
+	Category                 *string `json:"category"`
+	BrandID                  *int64  `json:"brand_id"`
+	Brand                    *string `json:"brand"`
 	CostingMethod            *string `json:"costing_method"`
 	SaleAccountID            *int64  `json:"sale_account_id"`
 	CogsAccountID            *int64  `json:"cogs_account_id"`
@@ -101,10 +109,7 @@ type itemRow struct {
 	MinStockQty              *string `json:"min_stock_qty"`
 	IsActive                 bool    `json:"is_active"`
 	Barcode                  *string `json:"barcode"`
-	SecondaryUOM             *string `json:"secondary_uom"`
 	UOMConversionFactor      *string `json:"uom_conversion_factor"`
-	Brand                    *string `json:"brand"`
-	Category                 *string `json:"category"`
 	WeightGrams              *string `json:"weight_grams"`
 	VolumeCC                 *string `json:"volume_cc"`
 	DescriptionLong          *string `json:"description_long"`
@@ -114,8 +119,6 @@ type itemRow struct {
 	LeadTimeDays             *int32  `json:"lead_time_days"`
 	PreferredSupplierID      *int64  `json:"preferred_supplier_id"`
 	ABCClassification        *string `json:"abc_classification"`
-	SaleUOM                  *string `json:"sale_uom"`
-	PurchaseUOM              *string `json:"purchase_uom"`
 }
 
 type priceRow struct {
@@ -144,23 +147,29 @@ func (service *Service) List(writer http.ResponseWriter, request *http.Request) 
 	itemType := strings.TrimSpace(request.URL.Query().Get("type"))
 	includeInactive := request.URL.Query().Get("include_inactive") == "true"
 
-	query := `SELECT id, code, name, item_type, uom, costing_method, sale_account_id,
-		cogs_account_id, inventory_account_id, revenue_recognition_method,
-		is_tracked_stock, min_stock_qty::text, is_active,
-		barcode, secondary_uom, uom_conversion_factor::text, brand, category,
-		weight_grams::text, volume_cc::text, description_long, image_url,
-		reorder_point::text, reorder_qty::text, lead_time_days, preferred_supplier_id,
-		abc_classification, sale_uom, purchase_uom
-		FROM items WHERE tenant_id = $1`
+	query := `SELECT i.id, i.code, i.name, i.item_type, i.unit_id, u.name,
+		i.category_id, c.name, i.brand_id, b.name,
+		i.costing_method, i.sale_account_id,
+		i.cogs_account_id, i.inventory_account_id, i.revenue_recognition_method,
+		i.is_tracked_stock, i.min_stock_qty::text, i.is_active,
+		i.barcode, i.uom_conversion_factor::text,
+		i.weight_grams::text, i.volume_cc::text, i.description_long, i.image_url,
+		i.reorder_point::text, i.reorder_qty::text, i.lead_time_days, i.preferred_supplier_id,
+		i.abc_classification
+		FROM items i
+		LEFT JOIN units u ON u.id = i.unit_id
+		LEFT JOIN item_categories c ON c.id = i.category_id
+		LEFT JOIN item_brands b ON b.id = i.brand_id
+		WHERE i.tenant_id = $1`
 	args := []any{tenant}
 	if itemType != "" {
-		query += ` AND item_type = $2`
+		query += ` AND i.item_type = $2`
 		args = append(args, itemType)
 	}
 	if !includeInactive {
-		query += ` AND is_active = true`
+		query += ` AND i.is_active = true`
 	}
-	query += ` ORDER BY code`
+	query += ` ORDER BY i.code`
 
 	items := []itemRow{}
 	err = db.WithTenantData(request.Context(), service.pool, tenant, func(tx pgx.Tx) error {
@@ -171,13 +180,14 @@ func (service *Service) List(writer http.ResponseWriter, request *http.Request) 
 		defer rows.Close()
 		for rows.Next() {
 			var it itemRow
-			if err := rows.Scan(&it.ID, &it.Code, &it.Name, &it.ItemType, &it.UOM,
+			if err := rows.Scan(&it.ID, &it.Code, &it.Name, &it.ItemType, &it.UnitID, &it.UOM,
+				&it.CategoryID, &it.Category, &it.BrandID, &it.Brand,
 				&it.CostingMethod, &it.SaleAccountID, &it.CogsAccountID, &it.InventoryAccountID,
 				&it.RevenueRecognitionMethod, &it.IsTrackedStock, &it.MinStockQty, &it.IsActive,
-				&it.Barcode, &it.SecondaryUOM, &it.UOMConversionFactor, &it.Brand, &it.Category,
+				&it.Barcode, &it.UOMConversionFactor,
 				&it.WeightGrams, &it.VolumeCC, &it.DescriptionLong, &it.ImageURL,
 				&it.ReorderPoint, &it.ReorderQty, &it.LeadTimeDays, &it.PreferredSupplierID,
-				&it.ABCClassification, &it.SaleUOM, &it.PurchaseUOM); err != nil {
+				&it.ABCClassification); err != nil {
 				return err
 			}
 			items = append(items, it)
@@ -244,26 +254,46 @@ func (service *Service) Create(writer http.ResponseWriter, request *http.Request
 		}
 	}
 
+	// SET-001: resolve the master references. Ids win; legacy free-text values
+	// are resolved (or created) by name for backward compatibility.
+	unitID, err := resolveMasterRef(request.Context(), tx, tenant, "units", req.UnitID, orDefault(req.UOM, "pcs"), true)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "ITEM_INVALID_REFERENCE", err.Error())
+		return
+	}
+	categoryID, err := resolveMasterRef(request.Context(), tx, tenant, "item_categories", req.CategoryID, textValue(req.Category), false)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "ITEM_INVALID_REFERENCE", err.Error())
+		return
+	}
+	brandID, err := resolveMasterRef(request.Context(), tx, tenant, "item_brands", req.BrandID, textValue(req.Brand), false)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "ITEM_INVALID_REFERENCE", err.Error())
+		return
+	}
+
 	var id int64
 	err = tx.QueryRow(request.Context(), `
 		INSERT INTO items
-			(tenant_id, code, name, item_type, uom, costing_method, sale_account_id,
+			(tenant_id, code, name, item_type, unit_id, category_id, brand_id,
+			 costing_method, sale_account_id,
 			 cogs_account_id, inventory_account_id, revenue_recognition_method,
 			 is_tracked_stock, min_stock_qty,
-			 barcode, secondary_uom, uom_conversion_factor, brand, category,
+			 barcode, uom_conversion_factor,
 			 weight_grams, volume_cc, description_long, image_url,
 			 reorder_point, reorder_qty, lead_time_days, preferred_supplier_id,
-			 abc_classification, sale_uom, purchase_uom)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
-			$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
+			 abc_classification)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+			$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
 		RETURNING id`,
-		tenant, req.Code, req.Name, req.ItemType, orDefault(req.UOM, "pcs"),
-		req.CostingMethod, req.SaleAccountID, req.CogsAccountID, req.InventoryAccountID,
+		tenant, req.Code, req.Name, req.ItemType, unitID, categoryID, brandID,
+		req.CostingMethod, req.SaleAccountID,
+		req.CogsAccountID, req.InventoryAccountID,
 		req.RevenueRecognitionMethod, req.IsTrackedStock, req.MinStockQty,
-		req.Barcode, req.SecondaryUOM, req.UOMConversionFactor, req.Brand, req.Category,
+		req.Barcode, req.UOMConversionFactor,
 		req.WeightGrams, req.VolumeCC, req.DescriptionLong, req.ImageURL,
 		req.ReorderPoint, req.ReorderQty, req.LeadTimeDays, req.PreferredSupplierID,
-		req.ABCClassification, req.SaleUOM, req.PurchaseUOM,
+		req.ABCClassification,
 	).Scan(&id)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -557,6 +587,55 @@ func orDefault(v, def string) string {
 		return def
 	}
 	return v
+}
+
+// textValue dereferences a nullable string pointer ("" when nil).
+func textValue(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return strings.TrimSpace(*v)
+}
+
+// resolveMasterRef resolves an item master reference (units, item_categories,
+// item_brands) from either an explicit id or a legacy free-text name. When
+// createIfMissing is true a missing name is inserted as a new master row
+// (used for units so a bare "pcs" still works); otherwise a missing name
+// resolves to NULL.
+func resolveMasterRef(ctx context.Context, tx pgx.Tx, tenant int64, table string, id *int64, name string, createIfMissing bool) (*int64, error) {
+	if id != nil && *id > 0 {
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM `+table+` WHERE tenant_id = $1 AND id = $2)`,
+			tenant, *id).Scan(&exists); err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, fmt.Errorf("%s %d does not belong to this tenant", table, *id)
+		}
+		return id, nil
+	}
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return nil, nil
+	}
+	var resolved int64
+	err := tx.QueryRow(ctx, `SELECT id FROM `+table+` WHERE tenant_id = $1 AND lower(name) = lower($2) LIMIT 1`,
+		tenant, trimmed).Scan(&resolved)
+	if err == nil {
+		return &resolved, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	if !createIfMissing {
+		return nil, nil
+	}
+	if err := tx.QueryRow(ctx,
+		`INSERT INTO `+table+` (tenant_id, code, name) VALUES ($1, $2, $3) ON CONFLICT (tenant_id, name) DO UPDATE SET updated_at = now() RETURNING id`,
+		tenant, strings.ToUpper(trimmed), trimmed).Scan(&resolved); err != nil {
+		return nil, err
+	}
+	return &resolved, nil
 }
 
 // ---------------------------------------------------------------------------

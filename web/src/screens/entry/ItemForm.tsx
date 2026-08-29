@@ -9,7 +9,9 @@ import type {
   CreateItemInput,
   Item,
   ItemCostingMethod,
+  ItemNameMaster,
   SupplierListItem,
+  UnitMaster,
 } from "../../types";
 
 interface Props {
@@ -146,6 +148,15 @@ export function ItemForm({ tabId, entryId, initialTitle }: Props) {
   const isEdit = entryId !== undefined && entryId !== null;
 
   const [form, setForm] = useState<ItemFormState>(EMPTY_FORM);
+  // SET-001: master data pickers (units/categories/brands).
+  const [unitOptions, setUnitOptions] = useState<UnitMaster[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<ItemNameMaster[]>([]);
+  const [brandOptions, setBrandOptions] = useState<ItemNameMaster[]>([]);
+  useEffect(() => {
+    api.listUnits().then(setUnitOptions).catch(() => undefined);
+    api.listItemCategories().then(setCategoryOptions).catch(() => undefined);
+    api.listItemBrands().then(setBrandOptions).catch(() => undefined);
+  }, []);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [existing, setExisting] = useState<Item | null>(null);
   const [accounts, setAccounts] = useState<BackendAccount[]>([]);
@@ -417,13 +428,31 @@ export function ItemForm({ tabId, entryId, initialTitle }: Props) {
               error={errors.itemType}
             />
             <FieldShell label="Base UoM *" hint="Unit all stock is counted in." error={errors.uom}>
-              <input
-                className="input"
-                value={form.uom}
-                onChange={(e) => update("uom", e.target.value)}
-                placeholder="e.g. pcs"
-                disabled={locked}
-              />
+              {unitOptions.length > 0 ? (
+                <select
+                  className="input"
+                  value={form.uom}
+                  onChange={(e) => update("uom", e.target.value)}
+                  disabled={locked}
+                >
+                  {!unitOptions.some((u) => u.name === form.uom) && form.uom ? (
+                    <option value={form.uom}>{form.uom}</option>
+                  ) : null}
+                  {unitOptions.filter((u) => u.is_active).map((u) => (
+                    <option key={u.id} value={u.name}>
+                      {u.code} — {u.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="input"
+                  value={form.uom}
+                  onChange={(e) => update("uom", e.target.value)}
+                  placeholder="e.g. pcs"
+                  disabled={locked}
+                />
+              )}
             </FieldShell>
             <FieldShell label="Sale UoM">
               <input
@@ -654,22 +683,36 @@ export function ItemForm({ tabId, entryId, initialTitle }: Props) {
               placeholder="Not classified"
             />
             <FieldShell label="Category">
-              <input
+              <select
                 className="input"
                 value={form.category}
                 onChange={(e) => update("category", e.target.value)}
-                placeholder="e.g. Bahan Baku"
                 disabled={locked}
-              />
+              >
+                <option value="">— None —</option>
+                {!categoryOptions.some((c) => c.name === form.category) && form.category ? (
+                  <option value={form.category}>{form.category}</option>
+                ) : null}
+                {categoryOptions.filter((c) => c.is_active).map((c) => (
+                  <option key={c.id} value={c.name}>{c.name}</option>
+                ))}
+              </select>
             </FieldShell>
             <FieldShell label="Brand">
-              <input
+              <select
                 className="input"
                 value={form.brand}
                 onChange={(e) => update("brand", e.target.value)}
-                placeholder="Brand name"
                 disabled={locked}
-              />
+              >
+                <option value="">— None —</option>
+                {!brandOptions.some((b) => b.name === form.brand) && form.brand ? (
+                  <option value={form.brand}>{form.brand}</option>
+                ) : null}
+                {brandOptions.filter((b) => b.is_active).map((b) => (
+                  <option key={b.id} value={b.name}>{b.name}</option>
+                ))}
+              </select>
             </FieldShell>
             <FieldShell label="Barcode">
               <input

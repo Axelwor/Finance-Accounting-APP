@@ -32,6 +32,25 @@ func parseDate(raw string) (pgtype.Date, error) {
 	return pgtype.Date{Time: parsed, Valid: true}, nil
 }
 
+// normalizeDocCurrency canonicalizes a document currency + exchange rate
+// (SET-001). Empty/IDR defaults to rate 1; any other rate must be positive.
+func normalizeDocCurrency(code string, rate float64) (string, float64, error) {
+	normalized := strings.ToUpper(strings.TrimSpace(code))
+	if normalized == "" {
+		normalized = "IDR"
+	}
+	if len(normalized) != 3 {
+		return "", 0, fmt.Errorf("currency_code must be a 3-letter ISO code")
+	}
+	if normalized == "IDR" {
+		return normalized, 1, nil
+	}
+	if rate <= 0 {
+		return "", 0, fmt.Errorf("exchange_rate must be positive for currency %s", normalized)
+	}
+	return normalized, rate, nil
+}
+
 // errorResponse is the JSON error envelope used by every sales handler.
 type errorResponse struct {
 	Code    string `json:"code"`

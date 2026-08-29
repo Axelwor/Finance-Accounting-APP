@@ -11,6 +11,7 @@ import { draftNumber } from "../../workbench/modules";
 import type { SupplierListItem, GoodsReceivedNoteListItem, Item, SupplierInvoiceLineInput } from "../../types";
 import type { PrefillRef } from "../../workbench/types";
 import { SupplierPaymentPanel } from "./SupplierPaymentPanel";
+import { CurrencyRatePicker } from "../../components/CurrencyRatePicker";
 import { Button } from "../../components/m3";
 
 interface Props {
@@ -44,6 +45,8 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle, prefill }: P
   const [supplierId, setSupplierId] = useState("");
   const [grnId, setGrnId] = useState(prefill?.kind === "grn" ? String(prefill.id) : "");
   const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState("");
+  const [currencyCode, setCurrencyCode] = useState("IDR");
+  const [exchangeRate, setExchangeRate] = useState(1);
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Line[]>([seedLine()]);
   const [suppliers, setSuppliers] = useState<SupplierListItem[]>([]);
@@ -262,6 +265,8 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle, prefill }: P
         supplier_invoice_number: supplierInvoiceNumber.trim() || undefined,
         notes: notes.trim() || undefined,
         lines: payloadLines,
+        currency_code: currencyCode,
+        exchange_rate: currencyCode === "IDR" ? 1 : exchangeRate,
       });
       setInvId(created.id);
       setInvStatus(created.status);
@@ -361,6 +366,18 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle, prefill }: P
                 <span className="field__label">Due Date</span>
                 <input className="input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} disabled={isExisting} />
               </label>
+              <div className="auth-field">
+                <CurrencyRatePicker
+                  value={currencyCode}
+                  rate={exchangeRate}
+                  onChange={(code: string, rate: number) => {
+                    setCurrencyCode(code);
+                    setExchangeRate(rate);
+                  }}
+                  docDate={date}
+                  disabled={isExisting}
+                />
+              </div>
             </div>
             <div className="entrytab__header-col">
               <label className="field">
@@ -549,7 +566,12 @@ export function SupplierInvoiceForm({ tabId, entryId, initialTitle, prefill }: P
 
           {isExisting && invId !== null && (
             <div ref={paymentsRef}>
-              <SupplierPaymentPanel invoiceId={invId} payableCents={payable} invoiceStatus={invStatus} />
+              <SupplierPaymentPanel
+                invoiceId={invId}
+                payableCents={payable}
+                invoiceStatus={invStatus}
+                exchangeRate={currencyCode === "IDR" ? undefined : exchangeRate}
+              />
             </div>
           )}
         </div>

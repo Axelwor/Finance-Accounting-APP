@@ -6,6 +6,7 @@ import { api } from "../../api";
 import { parseRupiahToCents, formatIDRFromCents, todayISO } from "../../lib/format";
 import { useToast } from "../../components/Toast";
 import { Icon } from "../../components/m3/Icon";
+import { CurrencyRatePicker } from "../../components/CurrencyRatePicker";
 import type { Customer, Item, SalesOrderListItem, Invoice, InvoicePayment } from "../../types";
 import type { PrefillRef } from "../../workbench/types";
 
@@ -57,6 +58,8 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
   const [salesOrderId, setSalesOrderId] = useState("");
   const [notes, setNotes] = useState("");
   const [shippingAddress, setShippingAddress] = useState("");
+  const [currencyCode, setCurrencyCode] = useState("IDR");
+  const [exchangeRate, setExchangeRate] = useState(1);
   const [lines, setLines] = useState<Line[]>([seedLine()]);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -280,6 +283,8 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
         due_date: dueDate || date,
         notes: notes.trim() || undefined,
         sales_order_id: salesOrderId ? Number(salesOrderId) : undefined,
+        currency_code: currencyCode,
+        exchange_rate: currencyCode === "IDR" ? 1 : exchangeRate,
         lines: lines.map((l) => ({
           item_id: Number(l.itemId),
           qty: l.qty,
@@ -331,6 +336,9 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
         amount_cents: amountCents,
         payment_date: payDate,
         description: payMemo.trim() || undefined,
+        // SET-001: settlement rate for FC invoices (backend computes FX
+        // gain/loss against the invoice's posting rate).
+        exchange_rate: currencyCode === "IDR" ? 1 : exchangeRate,
       });
       toast.success(`✓ Pembayaran diterima — ${res.number}`);
       setPayAmountInput("");
@@ -451,6 +459,19 @@ export function InvoiceForm({ tabId, entryId, initialTitle }: Props) {
                   onChange={(e) => setDueDate(e.target.value)}
                 />
               </div>
+            </div>
+
+            <div className="auth-field">
+              <CurrencyRatePicker
+                value={currencyCode}
+                rate={exchangeRate}
+                onChange={(code, rate) => {
+                  setCurrencyCode(code);
+                  setExchangeRate(rate);
+                }}
+                docDate={date}
+                disabled={isDetail || saved}
+              />
             </div>
 
             <div className="auth-field">
